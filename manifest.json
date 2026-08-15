@@ -1,0 +1,16 @@
+{
+  "name": "FPL Edge — Planner & Assistant",
+  "short_name": "FPL Edge",
+  "description": "Fantasy Premier League planner, projections and transfer assistant.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1B0B33",
+  "theme_color": "#1B0B33",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
