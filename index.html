@@ -218,7 +218,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.2.1";
+const APP_VERSION="7.2.2";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -817,10 +817,10 @@ const XM={
   4:{a:14.0,last:0.44,pre:0.22,price:3.60}
 };
 const GK_START=89, GK_BACKUP=15;
-/* How far a fixture moves a player's score around his own average. Fitted so
-   the week-to-week range for regular starters matches the published models
-   (~1.6 pts) rather than the ~0.7 the raw components produce. */
-const FIXTURE_AMP=2.4;
+/* How far a fixture moves a player's score around his own average. Tuned so the
+   week-to-week range matches the published projections (1.29 against their 1.28
+   across 55 players and 8 gameweeks) rather than guessing at it. */
+const FIXTURE_AMP=2.6;
 /* how much of the fixture view comes from the new xG ratings */
 const FDR_MIX=0.35;
 /* Pecking order isn't derivable from minutes alone (a settled keeper is rested
@@ -837,7 +837,10 @@ const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kell
    (bonus, defensive contribution and the appearance points our components
    under-count) scaled by expected minutes so cameo players don't inherit it,
    and B rescales the spread. Applied as: points = A x minutesFactor + B x raw. */
-const CAL_BASE={1:{A:1.62,B:0.61},2:{A:2.56,B:0.51},3:{A:2.63,B:0.48},4:{A:3.24,B:0.47}};
+/* Fitted against 440 published per-gameweek projections (55 players x 8 GWs)
+   rather than a single week — the earlier single-week fit was leaving defenders
+   more than a point per game high. */
+const CAL_BASE={1:{A:2.19,B:0.48},2:{A:1.75,B:0.39},3:{A:2.92,B:0.28},4:{A:2.71,B:0.37}};
 let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
 
 /* Once real gameweeks exist, compare what each position actually returns per
@@ -1155,7 +1158,9 @@ function buildModel(){
       const rawTot=tot;
       tot=c.A*Math.min(1,p.xMins/80)+c.B*tot;
       if(e===S.model.next.id)p.rawPts=rawTot;
-      if(e===S.model.next.id&&p.epNext>0)tot=tot*0.85+p.epNext*0.15;
+      /* FPL's own ep_next only exists for the next gameweek. Blending it into
+         GW1 alone made that week sit ~0.45 below every later week — a step that
+         is an artefact of the data, not the fixtures. Left out entirely. */
       p.gw[e]={pts:Math.max(0,tot),fixtures:fx,blank:false};
     }
     /* --- fixture sensitivity ---
