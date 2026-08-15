@@ -25,6 +25,12 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--ink);color:var(--cream);font-family:'Sora',system-ui,sans-serif;font-size:14px}
 .wrap{max-width:1180px;margin:0 auto;padding:10px}
+.stick{position:sticky;top:0;z-index:60;background:var(--ink);padding-top:6px;
+ box-shadow:0 10px 22px -14px rgba(0,0,0,.9)}
+.gwhead{display:flex;align-items:center;gap:8px;flex:none}
+.gwhead .lbl{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800}
+.navwrap{background:#06070A;border:1px solid var(--ink3);border-radius:12px;padding:7px 9px;
+ display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 h1,h2,h3{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;margin:0;letter-spacing:.03em}
 .mono{font-family:'IBM Plex Mono',monospace}
 .panel{background:var(--ink2);border:1px solid var(--ink3);border-radius:14px;margin-bottom:12px;overflow:hidden}
@@ -49,7 +55,7 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .stat .v{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05}
 .stat .s{font-size:10px;color:var(--mute)}
 .nav{margin-bottom:10px}
-.navbar{display:flex;gap:10px;flex-wrap:wrap}
+.navbar{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 .navgroup{display:flex;align-items:center;gap:8px;background:var(--ink2);border:1px solid var(--ink3);
  border-radius:12px;padding:6px 10px}
 .navlabel{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);font-weight:800}
@@ -148,18 +154,22 @@ td.nm{font-family:'Sora',sans-serif}
 .arrow{color:var(--red);font-size:16px;font-weight:800;flex:none}
 .gain{font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--mint);flex:none;font-size:13px}
 .chipbar{display:flex;gap:5px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--ink3)}
-.dash{border-bottom:1px solid var(--ink3)}
-.dashrow{display:flex;align-items:center;gap:10px;padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--ink3)}
+.dashgrid{display:grid;grid-template-columns:1fr;gap:8px;padding:12px}
+@media(min-width:640px){.dashgrid{grid-template-columns:1fr 1fr}}
+.dashcell{background:var(--ink);border:1px solid var(--ink3);border-radius:11px;overflow:hidden}
+.dashrow{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
 .dashrow:hover{background:rgba(255,255,255,.03)}
-.dkey{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:800;width:130px;flex:none}
+.dkey{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mute);font-weight:800;width:104px;flex:none}
 .dval{flex:1;font-size:12.5px;font-weight:600}
 .dchev{color:var(--mute);font-size:10px}
-.dashbody{padding:6px 13px 12px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--ink3)}
+.dashbody{padding:4px 12px 12px;background:rgba(255,255,255,.02);border-top:1px solid var(--ink3)}
 .dline{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0;font-size:12px}
 .gwbar{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;
  padding:10px 12px;border-bottom:1px solid var(--ink3);background:var(--ink2)}
 .gwsep{width:1px;height:30px;background:var(--ink3)}
-.chipinline{display:flex;gap:5px;flex-wrap:wrap;justify-content:center}
+.chiprow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;
+ padding:9px 12px;border-bottom:1px solid var(--ink3);background:var(--ink)}
+.chipinline{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center}
 .chipinline button{font-size:11px;padding:6px 10px;border-radius:8px}
 .chipinline button.on{background:var(--amber);border-color:var(--amber);color:#20130A}
 .chipzone{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;padding:12px;background:#141820;border-top:1px solid var(--ink3)}
@@ -208,7 +218,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.2.0";
+const APP_VERSION="7.2.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -227,9 +237,11 @@ const SHAPE={1:2,2:5,3:5,4:3};
 
 /* Squad exactly as picked for GW1 */
 const SEED=[["Raya","ARS",1,6.0],["Dubravka","TOT",1,4.0],
- ["Calafiori","ARS",2,5.5],["Maatsen","AVL",2,4.5],["Thomas","COV",2,4.0],["O'Shea","IPS",2,4.0],["Shaw","MUN",2,4.5],
- ["Slater","HUL",3,4.5],["Szoboszlai","LIV",3,7.0],["Foden","MCI",3,7.0],["Fernandes","MUN",3,12.0],["Mbeumo","MUN",3,8.0],
- ["João Pedro","CHE",4,7.5],["Calvert-Lewin","LEE",4,6.0],["Haaland","MCI",4,15.5]];
+ ["Calafiori","ARS",2,5.5],["Maguire","MUN",2,5.0],["F.Kadıoğlu","BHA",2,4.5],
+ ["Ajer","BRE",2,4.5],["O'Shea","IPS",2,4.0],
+ ["B.Fernandes","MUN",3,12.0],["Mbeumo","MUN",3,8.0],["Szoboszlai","LIV",3,7.0],
+ ["Schade","BRE",3,6.0],["Slater","HUL",3,4.5],
+ ["Haaland","MCI",4,15.5],["João Pedro","CHE",4,7.5],["Calvert-Lewin","LEE",4,6.0]];
 const norm=s=>(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");
 
 /* Community chip consensus, gathered Aug 2026 */
@@ -1721,6 +1733,11 @@ function orderBench(list){
    A scratch clone of the squad. Same transfer and substitution behaviour, but
    only the original can be saved; the clone offers to apply its changes across. */
 function compXI(){
+  const C=S.compare;
+  if(C&&C.forceXI&&C.forceXI.length===11){
+    const xi=C.forceXI.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+    if(xi.length===11)return xi;
+  }
   const sq=(S.compare&&S.compare.squad)||[];
   const sp=sq.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   if(!sp.length)return[];
@@ -1760,7 +1777,10 @@ function compareHTML(){
     const f0=q.fixtures[0];
     return `<div class="card">
       <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
-        ${isC?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)">C</span>`:""}
+        <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}"
+          onclick="act('ccap',${p.id})" title="Captain">C</button>
+        <button class="badge" style="top:-2px;left:2px;background:${C.subFrom===p.id?"var(--cyan)":"var(--ink3)"};color:${C.subFrom===p.id?"var(--ink)":"var(--cream)"}"
+          onclick="act('csub',${p.id})" title="Substitute">⇄</button>
         <button class="badge" style="top:-2px;right:2px;background:${(C.flagged||[]).includes(p.id)?"var(--mint)":"var(--ink3)"};color:${(C.flagged||[]).includes(p.id)?"var(--ink)":"var(--cream)"}"
           onclick="act('cflag',${p.id})">✕</button></div>
       <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
@@ -1773,7 +1793,7 @@ function compareHTML(){
   };
   const win=deltas[0].theirs>deltas[0].mine;
   return `<div class="panel" style="border-color:${win?"var(--mint)":"var(--ink3)"}">
-    <div class="phead"><h2 style="${win?"color:var(--mint)":""}">Comparison</h2>
+    <div class="phead"><h2 style="${win?"color:var(--mint)":""}">Compare</h2>
       <span style="display:flex;gap:6px;align-items:center">
         <span class="note">£${(C.bank||0).toFixed(1)} bank</span>
         <button onclick="act('capply')">Apply to my team</button>
@@ -1868,17 +1888,18 @@ function dashHTML(){
   const g=VG();
   const open=k=>!!S.dash[k];
   const row=(k,title,head,body,colour)=>`
-    <div class="dashrow" onclick="act('dash','${k}')">
-      <span class="dkey">${title}</span>
-      <span class="dval" style="${colour||""}">${head}</span>
-      <span class="dchev">${open(k)?"▲":"▼"}</span></div>
-    ${open(k)?`<div class="dashbody">${body}</div>`:""}`;
+    <div class="dashcell">
+      <div class="dashrow" onclick="act('dash','${k}')">
+        <span class="dkey">${title}</span>
+        <span class="dval" style="${colour||""}">${head}</span>
+        <span class="dchev">${open(k)?"▲":"▼"}</span></div>
+      ${open(k)?`<div class="dashbody">${body}</div>`:""}</div>`;
   const posName={1:"GK",2:"DEF",3:"MID",4:"FWD"};
   const weakest=Object.entries(d.strength).sort((a,b)=>a[1].pct-b[1].pct)[0];
   const worst=d.outlook.slice().sort((a,b)=>b.avg-a.avg)[0];
   const bar=v=>`<span style="display:inline-block;width:52px;height:6px;border-radius:3px;background:var(--ink3);vertical-align:middle">
     <span style="display:block;width:${Math.round(v*100)}%;height:6px;border-radius:3px;background:${v>=.9?"var(--mint)":v>=.75?"var(--amber)":"var(--red)"}"></span></span>`;
-  return `<div class="dash">
+  return `<div class="dashgrid">
     ${row("str","Squad strength",
       `${weakest?posName[weakest[0]]+" weakest · "+Math.round(weakest[1].pct*100)+"%":"—"}`,
       [1,2,3,4].map(pos=>{const x=d.strength[pos];if(!x)return"";
@@ -2021,7 +2042,7 @@ function listHTML(){
   return head+a.slice(0,150).map(p=>{
     const own=(S.squad||[]).includes(p.id);
     /* everything stays selectable; unaffordable players are simply dimmed */
-    const afford=p.price<=budget+0.001||own;
+    const afford=!(S.flagged||[]).length || p.price<=budget+0.001 || own;
     /* against whoever is being sold in this position, if any */
     const out=outP.find(o=>o.pos===p.pos);
     const delta=out?hPts(p,g,S.horizon)-hPts(out,g,S.horizon):null;
@@ -2778,16 +2799,26 @@ function navHTML(){
   const label=cur?cur[1]:"Menu";
   return `
   <nav class="nav">
-    <div class="navbar">
-      ${NAV.map(gp=>`<div class="navgroup">
+    <div class="navbar navwrap">
+      ${NAV.map(gp=>`<div class="navgroup" style="border:none;background:none;padding:0">
         <span class="navlabel">${gp.group}</span>
         <span class="navitems">${gp.items.map(([k,n])=>
           `<a class="navlink ${S.tab===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')">${n}</a>`
         ).join("")}</span></div>`).join("")}
+      <span class="gwhead" style="margin-left:auto">
+        <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
+        <span style="text-align:center"><span class="lbl" style="display:block">Showing</span>
+          <b class="mono" style="color:var(--cyan);font-size:12px">GW${VG()}</b></span>
+        <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button></span>
     </div>
     <div class="navmob">
-      <button class="navtoggle" onclick="act('menu')">
-        <span>${esc(label)}</span><span style="color:var(--mute)">${S.menuOpen?"▲":"▼"}</span></button>
+      <span style="display:flex;gap:8px;align-items:center">
+        <button class="navtoggle" onclick="act('menu')" style="flex:1">
+          <span>${esc(label)}</span><span style="color:var(--mute)">${S.menuOpen?"▲":"▼"}</span></button>
+        <span class="gwhead">
+          <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})">←</button>
+          <b class="mono" style="color:var(--cyan);font-size:12px">GW${VG()}</b>
+          <button onclick="act('startgw',${Math.min(38,VG()+1)})">→</button></span></span>
       ${S.menuOpen?`<div class="navsheet">
         ${NAV.map(gp=>`<div class="navlabel" style="padding:8px 12px 4px">${gp.group}</div>
           ${gp.items.map(([k,n])=>`<a class="navlink ${S.tab===k?"on":""}" href="${routeFor(k)}"
@@ -2856,16 +2887,16 @@ function render(){
       <div class="panel"><div class="phead"><h2>Planner</h2>
 
         <span style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="act('opt')">Optimise</button>
-          <button class="${S.compare?"on":""}" onclick="act('compare')">Comparison</button>
+          <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button>
           <button onclick="act('save')">Save</button><button onclick="act('reset')">Reset</button></span></div>
-        ${dashHTML()}
         <div class="gwbar">
           <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
           <span style="text-align:center;min-width:112px">
             <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} predicted</span>
             <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span></span>
           <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button>
-          <span class="gwsep"></span>
+        </div>
+        <div class="chiprow">
           <span class="chipinline">
             <span style="font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800;align-self:center">Chip</span>
             ${[["none","None"],["bboost","Bench Boost"],["3xc","Triple Capt"],["freehit","Free Hit"],["wildcard","Wildcard"]]
@@ -2874,7 +2905,10 @@ function render(){
           </span></div>
         ${pitchHTML()}${legendHTML()}</div>${conf}${flag}</div>
       ${S.compare?`<div>${compareHTML()}</div>`:""}
-      <div><div class="panel"><div class="phead"><h2>Player Pool</h2>
+      <div>
+        <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
+          <span class="note">GW${VG()}</span></div>${dashHTML()}</div>
+        <div class="panel"><div class="phead"><h2>Player Pool</h2>
         <button onclick="act('tab','table')">Full Player Data →</button></div>
         ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
@@ -2944,7 +2978,7 @@ function render(){
       <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div><div class="s">of £100.0</div></div>
       <div class="stat"><div class="k">In the bank</div><div class="v" style="color:${bank<0?"var(--red)":raised>0?"var(--mint)":"var(--cream)"}">£${bank.toFixed(1)}</div><div class="s">${raised>0?`incl. £${raised.toFixed(1)} from sales`:"to spend"}</div></div></div>
    </div>
-   ${navHTML()}
+   <div class="stick">${navHTML()}</div>
    ${main}
    <p class="note" style="text-align:center;padding:14px 0">FPL Edge v${APP_VERSION} · data refreshed ${S.stamp?new Date(S.stamp).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—"}</p>`;
 }
@@ -2970,8 +3004,20 @@ function act(k,a,b){
     case"menu":S.menuOpen=!S.menuOpen;break;
     case"dash":S.dash={...S.dash,[a]:!S.dash[a]};break;
     case"compare":S.compare=S.compare?null:{squad:[...(S.squad||[])],captain:S.captain,
-      vice:S.vice,bank:S.bank,flagged:[]};break;
+      vice:S.vice,bank:S.bank,flagged:[],forceXI:null,subFrom:null};break;
     case"cclose":S.compare=null;break;
+    case"ccap":{const C=S.compare;if(!C)break;C.captain=a;break;}
+    case"csub":{const C=S.compare;if(!C)break;
+      if(C.subFrom===a){C.subFrom=null;break;}
+      if(C.subFrom==null){C.subFrom=a;toast("Now tap who to swap with");break;}
+      const xi=compXI().map(p=>p.id);
+      const aIn=xi.includes(C.subFrom), bIn=xi.includes(a);
+      if(aIn===bIn){toast("Pick one from the pitch and one from the bench");C.subFrom=null;break;}
+      const next=xi.map(i=>i===(aIn?C.subFrom:a)?(aIn?a:C.subFrom):i);
+      const ps=next.map(i=>P(i)).filter(Boolean);
+      const cnt=n=>ps.filter(x=>x.pos===n).length;
+      if(ps.length!==11||cnt(1)!==1||cnt(2)<3||cnt(4)<1){toast("That would break the formation");C.subFrom=null;break;}
+      C.forceXI=next;C.subFrom=null;toast("Substitution made");break;}
     case"cflag":{const C=S.compare;if(!C)break;
       C.flagged=C.flagged.includes(a)?C.flagged.filter(x=>x!==a):[...C.flagged,a];break;}
     case"capply":{const C=S.compare;if(!C)break;
