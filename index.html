@@ -172,6 +172,29 @@ td.nm{font-family:'Sora',sans-serif}
 .chipinline{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center}
 .chipinline button{font-size:11px;padding:6px 10px;border-radius:8px}
 .chipinline button.on{background:var(--amber);border-color:var(--amber);color:#20130A}
+.sqgrid{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:1000px){.sqgrid{grid-template-columns:1fr 1fr}}
+.sqtoggle{display:flex;gap:6px;margin-bottom:12px}
+.sqtoggle button{flex:1;padding:10px}
+@media(min-width:1000px){.sqtoggle{display:none}.hideSm{display:block}}
+@media(max-width:999px){.hideSm{display:none}}
+.chipblock{padding:12px 14px;border-bottom:1px solid var(--ink3)}
+.chiphead{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.chipname{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;text-transform:uppercase;letter-spacing:.04em}
+.chipbest{margin-top:6px;font-size:12px;color:var(--mint)}
+.chiplocked{margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px;
+ background:rgba(255,138,61,.14);border:1px solid var(--amber);border-radius:9px;
+ padding:8px 11px;font-size:12.5px;color:var(--amber);flex-wrap:wrap}
+.tl{display:flex;gap:3px;align-items:flex-end;margin-top:10px;overflow-x:auto;padding-bottom:2px}
+.tlweek{flex:none;width:26px;padding:0;background:none;border:none;cursor:pointer;
+ display:flex;flex-direction:column;align-items:center;gap:3px}
+.tlbar{display:block;width:16px;border-radius:3px;background:var(--ink3)}
+.tlweek:hover .tlbar{background:var(--line)}
+.tlweek.best .tlbar{background:var(--mint)}
+.tlweek.sel .tlbar{background:var(--amber)}
+.tlnum{font-size:8.5px;color:var(--mute);font-family:'IBM Plex Mono',monospace}
+.tlweek.sel .tlnum{color:var(--amber);font-weight:800}
+.tlweek.best .tlnum{color:var(--mint)}
 .chipzone{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;padding:12px;background:#141820;border-top:1px solid var(--ink3)}
 .chipzone button{font-size:13px;padding:10px 14px;border-radius:11px;border:1px solid #303845;
  background:#1C232E;color:#DCE5EF;font-weight:700;letter-spacing:.02em}
@@ -205,7 +228,7 @@ const SEASON="2026-2027", LAST="2025-2026";
 const TEAM_ID="301830", STATE_VERSION=3;
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
 const NAV=[
-  {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["rivals","Rivals"],["chips","Chips"]]},
+  {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["chips","Chips"],["rivals","Rivals"]]},
   {group:"Tools",items:[["table","Player Data"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]}
 ];
 const TABPATH={squad:"team-planner",transfers:"transfers",rivals:"rivals",chips:"chips",
@@ -218,7 +241,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.2.2";
+const APP_VERSION="7.3.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -348,7 +371,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
- outList:[],selected:null,menuOpen:false,compare:null,dash:{}};
+ outList:[],selected:null,menuOpen:false,compare:null,dash:{},chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
 const LS={get(k){try{return JSON.parse(localStorage.getItem("fpl3:"+k));}catch(e){return null;}},
  set(k,v){try{localStorage.setItem("fpl3:"+k,JSON.stringify(v));}catch(e){}}};
 
@@ -2439,63 +2462,217 @@ function fixturesHTML(){
       <button onclick="act('fixgw',${Math.min(38,start+10)})">later →</button></div>`;
   return head+`<div class="panel">${nav}${out||'<div class="pbody"><p class="note">No fixtures in this range.</p></div>'}${nav}</div>`;
 }
+/* ---------- squad builders ----------
+   Free Hit and Wildcard are different problems and get different engines.
+   Free Hit lasts one week: pour everything into the XI and take the cheapest
+   legal bench, because the bench genuinely will not score. A Wildcard squad is
+   kept, so it is judged over five gameweeks and needs a usable bench. */
+const FORMS=[[3,4,3],[3,5,2],[4,4,2],[4,3,3],[4,5,1],[5,3,2],[5,4,1]];
+const _sqCache={};
+function buildSquad(kind,gw,form,budget){
+  const key=kind+"|"+gw+"|"+(form||"auto")+"|"+budget.toFixed(1)+"|"+(S.model?S.model.players.length:0);
+  if(_sqCache[key])return _sqCache[key];
+  const weeks=kind==="wildcard"?5:1;
+  const val=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
+  const pool=S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank&&val(p)>0);
+  if(pool.length<30)return null;
+  const by={1:[],2:[],3:[],4:[]};
+  pool.forEach(p=>by[p.pos]&&by[p.pos].push(p));
+  const rank=(a,b)=>(val(b)-val(a))||(b.owned-a.owned);
+  Object.values(by).forEach(a=>a.sort(rank));
+  const shapes=form?[form.split("-").map(Number)]:FORMS;
+  const need={1:2,2:5,3:5,4:3};
+  /* A Wildcard bench has to be able to come on; a Free Hit bench never will, so
+     it is squeezed harder. The floor is whatever four cheap bodies actually
+     cost — around £17.5 this season — so the cap sits above that. */
+  const benchCap=kind==="wildcard"?21.0:18.5;
+  let best=null;
+  shapes.forEach(([d,m,f])=>{
+    const XI={1:1,2:d,3:m,4:f};
+    const club={},xi=[];
+    const can=p=>!xi.includes(p)&&(club[p.team]||0)<3;
+    const add=p=>{xi.push(p);club[p.team]=(club[p.team]||0)+1;};
+    [4,3,2,1].forEach(pos=>{let n=0;
+      for(const p of by[pos]){if(n>=XI[pos])break;if(!can(p))continue;add(p);n++;}});
+    if(xi.length<11)return;
+    const bench=[];let bspend=0;
+    [1,2,3,4].forEach(pos=>{
+      const want=need[pos]-xi.filter(p=>p.pos===pos).length;
+      const cheap=by[pos].slice().sort((a,b)=>a.price-b.price||rank(a,b));
+      let t=0;
+      for(const p of cheap){if(t>=want)break;
+        if(xi.includes(p)||bench.includes(p))continue;
+        if((club[p.team]||0)>=3)continue;
+        bench.push(p);club[p.team]=(club[p.team]||0)+1;bspend+=p.price;t++;}});
+    if(bench.length!==4||bspend>benchCap)return;
+    const spend=()=>xi.reduce((a,p)=>a+p.price,0)+bspend;
+    let guard=0;
+    while(spend()>budget&&guard++<220){
+      const order=xi.slice().sort((a,b)=>(val(a)/a.price)-(val(b)/b.price));
+      let done=false;
+      for(const out of order){
+        const alt=by[out.pos].find(q=>!xi.includes(q)&&!bench.includes(q)&&q.price<out.price-0.05
+          &&((club[q.team]||0)<3||q.team===out.team));
+        if(alt){club[out.team]--;xi.splice(xi.indexOf(out),1);add(alt);done=true;break;}}
+      if(!done)break;}
+    if(spend()>budget+0.001)return;
+    /* spend whatever is left without lowering the projection */
+    let up=true,g2=0;
+    while(up&&g2++<160){
+      up=false;const spare=budget-spend();if(spare<0.1)break;
+      let pick=null;
+      xi.forEach(out=>{by[out.pos].forEach(q=>{
+        if(xi.includes(q)||bench.includes(q))return;
+        const extra=q.price-out.price;
+        if(extra<=0||extra>spare+1e-9)return;
+        if(q.team!==out.team&&(club[q.team]||0)>=3)return;
+        const dd=val(q)-val(out);
+        if(dd>=-1e-9&&(!pick||dd>pick.dd))pick={out,inn:q,dd};});});
+      if(pick){club[pick.out.team]--;xi.splice(xi.indexOf(pick.out),1);add(pick.inn);up=true;}}
+    const cap=xi.slice().sort(rank)[0];
+    const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0);
+    if(!best||total>best.total)
+      best={xi:xi.slice().sort(rank),bench,cap,total,shape:`${d}-${m}-${f}`,
+        value:+spend().toFixed(1),benchValue:+bspend.toFixed(1),weeks,val};
+  });
+  _sqCache[key]=best;
+  return best;
+}
+function myScore(gw,weeks){
+  const sp=squadPlayers();if(!sp.length)return 0;
+  const v=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
+  const xi=[...sp].sort((a,b)=>v(b)-v(a)).slice(0,11);
+  return xi.reduce((a,p)=>a+v(p),0)+(xi[0]?v(xi[0]):0);
+}
 function chipsHTML(){
-  const set=[["wildcard1","Wildcard",1],["freehit1","Free Hit",1],["3xc1","Triple Captain",1],["bboost1","Bench Boost",1],
-    ["wildcard2","Wildcard",2],["freehit2","Free Hit",2],["3xc2","Triple Captain",2],["bboost2","Bench Boost",2]];
+  const g=VG();
+  const budget=+(squadPlayers().reduce((a,p)=>a+p.price,0)+S.bank).toFixed(1);
+  const half=g>=20?2:1;
+  const openHalf=S.chipHalf||half;                       // active half expands by default
+
+  /* ---- squad card, reusing the Planner pitch ---- */
+  const sqCard=(kind,title,note,formKey)=>{
+    const form=S[formKey]||null;
+    const t=buildSquad(kind,g,form,budget);
+    const weeks=kind==="wildcard"?5:1;
+    const mine=myScore(g,weeks);
+    const delta=t?t.total-mine:0;
+    const label=kind==="wildcard"?`GW${g}–${Math.min(38,g+4)} average`:`GW${g}`;
+    return `<div class="panel">
+      <div class="phead"><h2>${title}</h2>
+        <span style="text-align:right">
+          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;
+            line-height:1;color:${delta>0?"var(--mint)":"var(--mute)"}">${delta>0?"+":""}${delta.toFixed(1)}</span>
+          <span class="note">vs your team · ${label}</span></span></div>
+      <div class="pbody" style="border-bottom:1px solid var(--ink3)">
+        <p class="note" style="margin:0 0 8px">${note}</p>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+          <span class="note" style="width:100%">Formation</span>
+          <button class="chipbtn ${!form?"on":""}" onclick="act('${formKey}','')">Best${t&&!form?` · ${t.shape}`:""}</button>
+          ${FORMS.map(f=>{const k=f.join("-");
+            return `<button class="chipbtn ${form===k?"on":""}" onclick="act('${formKey}','${k}')">${k}</button>`;}).join("")}
+        </div>
+        ${t?`<p class="note" style="margin:8px 0 0">${t.total.toFixed(1)} projected · £${t.value.toFixed(1)} of £${budget.toFixed(1)} · bench £${t.benchValue.toFixed(1)}</p>`:""}
+      </div>
+      ${t?`<div class="pitch">${[1,2,3,4].map(pos=>{const r=t.xi.filter(p=>p.pos===pos);
+        return r.length?`<div class="row">${r.map(p=>chipCard(p,t)).join("")}</div>`:"";}).join("")}</div>
+        <div class="benchbar"><div class="lb">Bench</div>
+          <div class="row">${t.bench.map(p=>chipCard(p,t)).join("")}</div></div>`
+        :`<div class="pbody"><p class="note">Not enough data for this gameweek.</p></div>`}
+    </div>`;
+  };
+
+  /* ---- chip timeline ---- */
   const basis={wildcard:"Worst three-week run — rebuild before it",
     freehit:"Biggest gap between your XI and the best available",
     bboost:"Week your four substitutes score most",
     "3xc":"Week your best player has his highest single score"};
-  /* what a chip is actually worth in the week it's assigned to */
-  const chipEffect=(k,gw)=>{
-    const sp=squadPlayers();if(!sp.length||!gw)return null;
-    const xi=[...sp].sort((a,b)=>(b.gw[gw]?.pts||0)-(a.gw[gw]?.pts||0));
-    const start=xi.slice(0,11), bench=xi.slice(11);
-    const base=start.reduce((a,p)=>a+(p.gw[gw]?.pts||0),0)+(start[0]?.gw[gw]?.pts||0);
-    const kind=chipKind(k);
-    let now=base;
-    if(kind==="bboost")now=base+bench.reduce((a,p)=>a+(p.gw[gw]?.pts||0),0);
-    else if(kind==="3xc")now=base+(start[0]?.gw[gw]?.pts||0);
-    else{const opt=(chipPlan(k)||[]).find(o=>o.e===gw);now=base+(opt?opt.up:0);}
-    return{before:base,after:now,diff:now-base};
-  };
-  const box=(o,ix,k,locked)=>`<button class="${locked===o.e?"on":""}"
-      style="width:200px;height:104px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:2px;text-align:center;padding:8px 9px;${locked===o.e?"":`border-color:${["#00E87A","#04F5FF","#FFB020"][ix]};color:${["#00E87A","#04F5FF","#FFB020"][ix]}`}"
-      onclick="act('setchip','${k}',${o.e})" title="${esc(o.note||"")}">
-      <span style="display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;opacity:.7">Option ${ix+1}</span>
-      <span style="display:block;font-family:'Barlow Condensed';font-weight:700;font-size:17px;line-height:1">GW${o.e}</span>
-      <span class="mono" style="font-size:11px;font-weight:700">+${o.up.toFixed(1)} pts</span>
-      <span style="display:block;font-size:8.5px;opacity:.75;line-height:1.25;max-height:22px;overflow:hidden">${esc(o.note||"")}</span></button>`;
-
-  const card=(k,n)=>{
-    const plan=chipPlan(k),locked=S.chips[k],hist=CHIP_HISTORY[chipKind(k)];
-    const con=CHIP_CONSENSUS[k];
-    const eff=locked?chipEffect(k,locked):null;
-    return `<div style="padding:12px 14px;border-bottom:1px solid var(--ink3)">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
-        <span style="font-family:'Barlow Condensed';font-weight:700;font-size:18px;text-transform:uppercase">${n}</span>
-        <span class="note">${esc(basis[chipKind(k)])} · you average ${hist.toFixed(1)}</span></div>
-      ${con?`<div class="note" style="margin-top:3px;opacity:.8">Consensus: ${esc(con.weeks)}</div>`:""}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;align-items:stretch">
-        ${eff?`<div style="width:200px;height:104px;border-radius:11px;border:1px solid var(--mint);
-            background:rgba(0,232,122,.10);display:flex;flex-direction:column;align-items:center;
-            justify-content:center;gap:1px;text-align:center;padding:8px 9px">
-            <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mint);font-weight:700">Selected GW</span>
-            <span style="font-family:'Barlow Condensed';font-weight:800;font-size:19px;line-height:1;color:var(--mint)">GW${locked}</span>
-            <span class="mono" style="font-size:11px">${eff.after.toFixed(1)} <span style="color:var(--mute)">was ${eff.before.toFixed(1)}</span></span>
-            <span class="mono" style="font-size:12px;font-weight:800;color:var(--mint)">+${eff.diff.toFixed(1)} pts</span>
-            <button style="margin-top:2px;font-size:9px;padding:2px 7px" onclick="event.stopPropagation();act('clearchip','${k}')">Clear</button>
-          </div>`:""}
-        ${plan.length?plan.map((o,ix)=>box(o,ix,k,locked)).join("")
-          :`<span class="note">Load your squad to see recommendations.</span>`}
+  const chipRow=(k,n)=>{
+    const plan=chipPlan(k)||[], locked=S.chips[k], hist=CHIP_HISTORY[chipKind(k)];
+    const isHalf2=k.endsWith("2");
+    const from=isHalf2?Math.max(20,g):g, to=isHalf2?38:19;
+    const byWeek={};plan.forEach(o=>byWeek[o.e]=o.up);
+    const all=chipAllWeeks(k);
+    const max=Math.max(0.1,...Object.values(all));
+    const best=plan[0];
+    return `<div class="chipblock">
+      <div class="chiphead">
+        <span><span class="chipname">${n}</span>
+          <span class="note" style="margin-left:8px">${esc(basis[chipKind(k)])}</span></span>
+        <span class="note">you average ${hist.toFixed(1)}</span></div>
+      ${locked?`<div class="chiplocked">
+        <span><b>GW${locked}</b> selected${byWeek[locked]!=null||all[locked]!=null?` · projected +${(all[locked]||0).toFixed(1)} pts`:""}</span>
+        <button onclick="act('clearchip','${k}')">Clear</button></div>`
+        :best?`<div class="chipbest">Best week — <b>GW${best.e}</b>, +${best.up.toFixed(1)} pts${best.note?` · ${esc(best.note)}`:""}</div>`:""}
+      <div class="tl">
+        ${Object.keys(all).map(Number).sort((a,b)=>a-b).map(e=>{
+          const v=all[e]||0, h=Math.max(3,Math.round(v/max*34));
+          const isBest=best&&best.e===e, isSel=locked===e;
+          return `<button class="tlweek ${isSel?"sel":""} ${isBest&&!isSel?"best":""}"
+            onclick="act('setchip','${k}',${e})" title="GW${e} · +${v.toFixed(1)} pts">
+            <span class="tlbar" style="height:${h}px"></span>
+            <span class="tlnum">${e}</span></button>`;}).join("")}
       </div></div>`;
   };
-  return [1,2].map(half=>`<div class="panel">
-      <div class="phead"><h2>${half===1?"First half · GW1–19":"Second half · GW20–38"}</h2>
-        <span class="note">${half===1?"expire 2 Jan, 13:30 GMT":"reset at GW20"}</span></div>
-      ${set.filter(c=>c[2]===half).map(([k,n])=>card(k,n)).join("")}</div>`).join("");
+  const set=[["wildcard","Wildcard"],["freehit","Free Hit"],["3xc","Triple Captain"],["bboost","Bench Boost"]];
+  const halfPanel=hf=>`<div class="panel">
+      <div class="phead" style="cursor:pointer" onclick="act('chiphalf',${hf})">
+        <h2 style="${openHalf===hf?"color:var(--mint)":""}">${hf===1?"First half · GW1–19":"Second half · GW20–38"}</h2>
+        <span class="note">${hf===1?"expire 2 Jan, 13:30 GMT":"reset at GW20"} ${openHalf===hf?"▲":"▼"}</span></div>
+      ${openHalf===hf?set.map(([k,n])=>chipRow(k+hf,n)).join(""):""}</div>`;
+
+  return `<div class="sqgrid">
+      <div class="${S.chipView==="wc"?"hideSm":""}">${sqCard("freehit","Free Hit team",
+        "One week only, so every penny goes into the XI and the bench is fodder.","fhForm")}</div>
+      <div class="${S.chipView==="fh"||!S.chipView?"hideSm":""}">${sqCard("wildcard","Wildcard squad",
+        "A squad you keep — judged across the next five gameweeks, with a bench that can actually play.","wcForm")}</div>
+    </div>
+    <div class="sqtoggle">
+      <button class="${(S.chipView||"fh")==="fh"?"on":""}" onclick="act('chipview','fh')">Free Hit</button>
+      <button class="${S.chipView==="wc"?"on":""}" onclick="act('chipview','wc')">Wildcard</button>
+    </div>
+    ${halfPanel(half)}${halfPanel(half===1?2:1)}`;
 }
+/* uplift for every legal week, so the timeline has a full row */
+function chipAllWeeks(kind){
+  const sp=squadPlayers();const out={};
+  if(!sp.length||!S.model)return out;
+  const g=VG(),half=kind.endsWith("2");
+  const from=half?Math.max(20,g):g, to=half?38:19;
+  const plan=chipPlan(kind)||[];
+  const known={};plan.forEach(o=>known[o.e]=o.up);
+  const k=chipKind(kind);
+  for(let e=from;e<=to;e++){
+    if(!sp.some(p=>p.gw[e]&&!p.gw[e].blank))continue;
+    if(known[e]!=null){out[e]=known[e];continue;}
+    const xi=[...sp].sort((a,b)=>(b.gw[e]?.pts||0)-(a.gw[e]?.pts||0));
+    if(k==="bboost")out[e]=xi.slice(11).reduce((a,p)=>a+(p.gw[e]?.pts||0),0);
+    else if(k==="3xc")out[e]=xi[0]?.gw[e]?.pts||0;
+    else out[e]=known[e]!=null?known[e]:(plan.length?plan[plan.length-1].up*0.6:0);
+  }
+  return out;
+}
+function chipCard(p,t){
+  const g=VG();
+  const v=t.val(p), isC=t.cap&&t.cap.id===p.id;
+  const q=p.gw[g]||{fixtures:[]};
+  const[bg,fg,elite]=ptsCol(v*(isC?2:1));
+  const f0=q.fixtures[0];
+  const own=(S.squad||[]).includes(p.id);
+  return `<div class="card">
+    <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+      ${isC?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)">C</span>`:""}
+      ${own?`<span class="badge" style="top:-2px;right:2px;background:var(--mint);color:var(--ink)">✓</span>`:""}</div>
+    <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
+    <div class="ptsbar" style="background:${bg};color:${fg};${elite?"box-shadow:0 0 0 2px var(--cyan) inset":""}">
+      <div class="pv">${(v*(isC?2:1)).toFixed(1)}</div>
+      <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
+    <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
+      if(!w||w.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
+      const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
+      h+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}">${esc(f.opp.slice(0,3))}</span>`;}return h;})()}</div></div>`;
+}
+
 function itemHTML(n,score){
   const h=hits(n.title),ago=Math.max(0,Math.round((Date.now()-n.time)/3600000));
   const when=ago<1?"just now":(ago<24?ago+"h ago":Math.round(ago/24)+"d ago");
@@ -3008,6 +3185,10 @@ function act(k,a,b){
     case"tab":S.tab=a;S.menuOpen=false;break;
     case"menu":S.menuOpen=!S.menuOpen;break;
     case"dash":S.dash={...S.dash,[a]:!S.dash[a]};break;
+    case"chipview":S.chipView=a;break;
+    case"chiphalf":S.chipHalf=a;break;
+    case"fhForm":S.fhForm=a||null;break;
+    case"wcForm":S.wcForm=a||null;break;
     case"compare":S.compare=S.compare?null:{squad:[...(S.squad||[])],captain:S.captain,
       vice:S.vice,bank:S.bank,flagged:[],forceXI:null,subFrom:null};break;
     case"cclose":S.compare=null;break;
