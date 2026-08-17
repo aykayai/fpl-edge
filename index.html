@@ -252,7 +252,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.4.1";
+const APP_VERSION="7.4.2";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -930,7 +930,12 @@ const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kell
 /* Fitted against 440 published per-gameweek projections (55 players x 8 GWs)
    rather than a single week — the earlier single-week fit was leaving defenders
    more than a point per game high. */
-const CAL_BASE={1:{A:2.99,B:0.30},2:{A:2.09,B:0.33},3:{A:3.18,B:0.25},4:{A:2.70,B:0.37}};
+/* Fitted per position against 440 published per-gameweek projections.
+   Keepers and defenders are fitted for lowest error; midfielders and forwards
+   are fitted to match how far apart the published projections put players,
+   because minimising error alone pulls every attacker toward the mean and the
+   premiums stop separating from the crowd. */
+const CAL_BASE={1:{A:2.99,B:0.30},2:{A:2.09,B:0.33},3:{A:2.62,B:0.34},4:{A:1.35,B:0.55}};
 let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
 
 /* Once real gameweeks exist, compare what each position actually returns per
