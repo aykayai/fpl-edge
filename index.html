@@ -24,11 +24,18 @@
  --d5:#5C0011;--d4:#E01E37;--d3:#F0A02A;--d2:#3FBF63;--d1:#7DFB9E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--ink);color:var(--cream);font-family:'Sora',system-ui,sans-serif;font-size:14px}
-.wrap{max-width:1180px;margin:0 auto;padding:10px}
+.wrap{max-width:1180px;margin:0 auto;padding:10px;width:100%}
+.wrap>*{max-width:100%}
 .stick{position:sticky;top:0;z-index:60;background:var(--ink);padding-top:6px;
  box-shadow:0 10px 22px -14px rgba(0,0,0,.9)}
 .gwhead{display:flex;align-items:center;gap:8px;flex:none}
 .gwhead .lbl{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800}
+.ministats{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#06070A;
+ border:1px solid var(--ink3);border-radius:12px;padding:7px 11px;margin-bottom:7px}
+.ms{display:flex;flex-direction:column;line-height:1.05}
+.msk{font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800}
+.msv{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:19px}
+@media(max-width:430px){.hideXs{display:none}}
 .navwrap{background:#06070A;border:1px solid var(--ink3);border-radius:12px;padding:7px 9px;
  display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 h1,h2,h3{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;margin:0;letter-spacing:.03em}
@@ -195,6 +202,10 @@ td.nm{font-family:'Sora',sans-serif}
 .tlnum{font-size:8.5px;color:var(--mute);font-family:'IBM Plex Mono',monospace}
 .tlweek.sel .tlnum{color:var(--amber);font-weight:800}
 .tlweek.best .tlnum{color:var(--mint)}
+.gwband{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:9px 13px;
+ background:var(--ink);font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:800;color:var(--mint);
+ border-top:1px solid var(--ink3);border-bottom:1px solid var(--ink3)}
+.gwdl{letter-spacing:.03em;text-transform:none;color:var(--cream);font-weight:600}
 .chipzone{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;padding:12px;background:#141820;border-top:1px solid var(--ink3)}
 .chipzone button{font-size:13px;padding:10px 14px;border-radius:11px;border:1px solid #303845;
  background:#1C232E;color:#DCE5EF;font-weight:700;letter-spacing:.02em}
@@ -241,7 +252,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.3.0";
+const APP_VERSION="7.4.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -389,7 +400,7 @@ async function loadAll(force){
     const cached=LS.get("data");
     if(cached&&!force&&Date.now()-cached.t<1000*60*60*6){
       Object.assign(S,{players:cached.players,teams:cached.teams,fixtures:cached.fixtures,
-        events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
+        events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
       buildModel();S.loading=false;return;
     }
     S.progress="players and prices…";render();
@@ -475,8 +486,11 @@ async function loadAll(force){
           /* richer team signals than goals alone */
           [[H,A,"home"],[A,H,"away"]].forEach(([me,opp,side])=>{
             if(!me)return;
-            const t=tstat[me]=tstat[me]||{n:0,xg:0,xga:0,npxg:0,sp:0,spA:0,bc:0,bcA:0,box:0,boxA:0,xgot:0,xgotA:0};
+            const t=tstat[me]=tstat[me]||{n:0,xg:0,xga:0,npxg:0,sp:0,spA:0,bc:0,bcA:0,box:0,boxA:0,xgot:0,xgotA:0,seq:[]};
             t.n++;
+            t.seq.push({gw:Math.round(num(f.gameweek)),
+              xg:num(side==="home"?f.home_expected_goals_xg:f.away_expected_goals_xg),
+              xga:num(side==="home"?f.away_expected_goals_xg:f.home_expected_goals_xg)});
             t.xg+=num(side==="home"?f.home_expected_goals_xg:f.away_expected_goals_xg);
             t.xga+=num(side==="home"?f.away_expected_goals_xg:f.home_expected_goals_xg);
             t.npxg+=num(side==="home"?f.home_non_penalty_xg:f.away_non_penalty_xg);
@@ -497,6 +511,14 @@ async function loadAll(force){
         lt[f.a].gf+=f.as;lt[f.a].ga+=f.hs;lt[f.a].games++;});
     }catch(e){}
     S.lastTeams=lt;S.lastTeamStats=tstat;
+    /* the closing eight matches of the season, as a recent-form window */
+    const recent={};
+    Object.entries(tstat).forEach(([sh,t])=>{
+      const seq=(t.seq||[]).sort((a,b)=>a.gw-b.gw).slice(-8);
+      if(seq.length)recent[sh]={n:seq.length,
+        xg:seq.reduce((a,x)=>a+x.xg,0),xga:seq.reduce((a,x)=>a+x.xga,0)};
+    });
+    S.lastTeamRecent=recent;
 
     /* ---- per-match player history ----
        63 columns per player per match, which is what makes real rolling windows,
@@ -618,7 +640,7 @@ async function loadAll(force){
       if(fseen.has(k))return false;fseen.add(k);return true;});
     S.events=events;S.last={byName:lastByName};
     S.stamp=Date.now();
-    LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,hist:S.hist,teamMatch:S.teamMatch});
+    LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,hist:S.hist,teamMatch:S.teamMatch});
     buildModel();toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
@@ -669,11 +691,19 @@ function buildRatings(){
     const TS=(S.lastTeamStats||{})[t.short];
     const pm=PROMOTED[t.short];
     let gf,ga;
+    /* Recent form matters more than a season-long average: a side that finished
+       badly should be rated as it finished, not as its May-to-May mean. */
+    const RC=(S.lastTeamRecent||{})[t.short];
     if(TS&&TS.n>=10){
       /* expected goals rather than goals: less noisy and it stabilises faster.
          Set-play xG and big chances are kept alongside for the position lenses. */
-      gf=TS.npxg/TS.n*0.75+TS.xg/TS.n*0.25;
-      ga=TS.xga/TS.n;
+      const seasonGf=TS.npxg/TS.n*0.75+TS.xg/TS.n*0.25, seasonGa=TS.xga/TS.n;
+      if(RC&&RC.n>=6){
+        const w=0.40;                                   // 40% last eight, 60% season
+        gf=seasonGf*(1-w)+(RC.xg/RC.n)*w;
+        ga=seasonGa*(1-w)+(RC.xga/RC.n)*w;
+        t.formGf=RC.xg/RC.n; t.formGa=RC.xga/RC.n;
+      }else{gf=seasonGf;ga=seasonGa;}
       t.spFor=TS.sp/TS.n; t.spAgainst=TS.spA/TS.n;
       t.bcFor=TS.bc/TS.n; t.bcAgainst=TS.bcA/TS.n;
       t.boxFor=TS.box/TS.n; t.boxAgainst=TS.boxA/TS.n;
@@ -688,8 +718,12 @@ function buildRatings(){
          anchored well above the league average because promoted sides concede
          far more against top-flight attacks than their second-tier record
          suggests — the historical shift is roughly +0.45 goals a game. */
-      gf=pm.gf*CHAMP_ATT;
-      ga=PL_GF*1.18+(pm.ga-1.15)*0.55;
+      /* Championship output translated, then pulled back toward the league
+         average. An inference from second-tier goals should not be more extreme
+         than anything we actually measured in the Premier League. */
+      const rawGf=pm.gf*CHAMP_ATT, rawGa=PL_GF*1.18+(pm.ga-1.15)*0.55;
+      gf=rawGf*0.62+PL_GF*0.38;
+      ga=rawGa*0.62+PL_GF*0.38;
       t.ratingSrc="Championship, discounted";
     } else {
       /* fall back to FPL's own 1-5 rating */
@@ -725,6 +759,33 @@ function buildRatings(){
 /* Continuous difficulty, 1 (easiest) to 5 (hardest).
    kind: "att" = how hard for OUR attackers (opponent's defence)
          "def" = how hard to keep a clean sheet (opponent's attack) */
+/* Cut points fitted so the mix of bands matches how the established tickers
+   present: most fixtures 2 or 3, red reserved for genuinely hard trips. */
+const BAND_MIX=[0.10,0.34,0.34,0.16,0.06];      // share of fixtures in bands 1-5
+function buildBands(){
+  const g=S.model?S.model.next.id:1;
+  const att=[],def=[];
+  for(let e=g;e<=38;e++)(S.model.byEv[e]||[]).forEach(f=>{
+    if(!f.ht||!f.at)return;
+    [[f.ht,f.at,true],[f.at,f.ht,false]].forEach(([t,o,home])=>{
+      att.push(fdrCalc(t,o,home,"xgf"));
+      def.push(fdrCalc(t,o,home,"xgc"));});});
+  const cuts=arr=>{const v=arr.slice().sort((a,b)=>a-b);
+    const q=[],out=[];let acc=0;
+    for(let i=0;i<4;i++){acc+=BAND_MIX[i];out.push(v[Math.min(v.length-1,Math.floor(acc*v.length))]);}
+    return out;};
+  S.bandCuts={att:cuts(att),def:cuts(def)};
+}
+function bandOf(v,kind){
+  const c=S.bandCuts&&S.bandCuts[kind];
+  if(!c)return 3;
+  if(kind==="def"){                       // more expected goals against = harder
+    for(let i=0;i<4;i++)if(v<c[i])return i+1;
+    return 5;
+  }
+  for(let i=0;i<4;i++)if(v<c[i])return 5-i;   // more expected goals for = easier
+  return 1;
+}
 function fdrCalc(team,opp,home,kind){
   if(!opp||!S.ratingsReady)return 3;
   const oppAtt=home?opp.attA:opp.attH;      // their attack, at this venue
@@ -734,15 +795,17 @@ function fdrCalc(team,opp,home,kind){
   /* standard multiplicative goal model, normalised to the league average */
   const xGF=(ourAtt*oppDef)/PL_GF;          // goals we expect to score
   const xGC=(oppAtt*ourDef)/PL_GF;          // goals we expect to concede
-  const SPREAD=0.32;                        // goals per band
+
   /* The 1-5 band is for display. Clamping it loses real signal at the extremes —
      every Man City home game pinned to 1 — so callers that feed the projection
      ask for the raw expected goals instead. */
   if(kind==="xgf")return xGF;
   if(kind==="xgc")return xGC;
-  return kind==="def"
-    ? clamp(3+(xGC-PL_GF)/SPREAD,1,5)       // concede more = harder
-    : clamp(3-(xGF-PL_GF)/SPREAD,1,5);      // score more   = easier
+  /* Bands come from where this fixture sits in the season's own distribution,
+     not a fixed goals-per-band step. A linear step cannot be both skewed toward
+     2-3, as the published tickers are, and still reach 5 at the extremes — the
+     spread of expected goals is simply too narrow. Percentiles give both. */
+  return kind==="def" ? bandOf(xGC,"def") : bandOf(xGF,"att");
 }
 /* Backwards-compatible single number, used for the tickers and colours */
 function fdrOf(opp,home,team,kind){
@@ -840,12 +903,16 @@ const XM={
   4:{a:14.0,last:0.44,pre:0.22,price:3.60}
 };
 const GK_START=89, GK_BACKUP=15;
-/* How far a fixture moves a player's score around his own average. Tuned so the
-   week-to-week range matches the published projections (1.29 against their 1.28
-   across 55 players and 8 gameweeks) rather than guessing at it. */
-const FIXTURE_AMP=2.6;
+/* How far a fixture moves a player's score around his own average. Retuned
+   after the xG engine took over the fixture view: 1.26 against the published
+   projections' own 1.28 across 55 players and 8 gameweeks. */
+const FIXTURE_AMP=3.2;
 /* how much of the fixture view comes from the new xG ratings */
-const FDR_MIX=0.35;
+/* The fixture view now comes wholly from the xG engine. The older
+   strength-difference calculation was blended in at 35% as a hedge while the
+   ratings were unproven; refitting across 440 per-gameweek observations shows
+   it no longer adds anything (MAE 0.467 blended vs 0.455 pure), so it is gone. */
+const FDR_MIX=1.00;
 /* Pecking order isn't derivable from minutes alone (a settled keeper is rested
    in pre-season). Taken from the published projections — one per club. */
 const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kelleher","Leno",
@@ -863,7 +930,7 @@ const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kell
 /* Fitted against 440 published per-gameweek projections (55 players x 8 GWs)
    rather than a single week — the earlier single-week fit was leaving defenders
    more than a point per game high. */
-const CAL_BASE={1:{A:2.19,B:0.48},2:{A:1.75,B:0.39},3:{A:2.92,B:0.28},4:{A:2.71,B:0.37}};
+const CAL_BASE={1:{A:2.99,B:0.30},2:{A:2.09,B:0.33},3:{A:3.18,B:0.25},4:{A:2.70,B:0.37}};
 let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
 
 /* Once real gameweeks exist, compare what each position actually returns per
@@ -965,6 +1032,7 @@ function buildModel(){
   /* club price ceilings, needed before the player loop for cold-start scaling */
   S._tmaxRaw={};S.players.forEach(p=>{const c=p.teamCode;
     S._tmaxRaw[c]=Math.max(S._tmaxRaw[c]||0,num(p.stats?.now_cost));});
+  S.bandCuts=null;buildBands();
   const players=S.players.map(p=>{
     const s=p.stats, team=byCode[p.teamCode]||{};
     const price=num(s.now_cost), mins=num(s.minutes), starts=num(s.starts);
@@ -2346,84 +2414,103 @@ function totwCard(p,cap){
       <div class="fx">${f0?esc(f0.opp+" ("+(f0.home?"H":"A")+")"):"No fixture"}</div></div></div>`;
 }
 function fixturesHTML(){
-  const g=S.model.next.id, teams=S.model.teams;
-  const mode=S.fixMode||"gw";
-  /* clubs with three or more kind fixtures inside the next five */
-  const runs=[];
-  S.model.teams.forEach(t=>{
-    const seq=[];
-    for(let e=g;e<g+5&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{
-      const home=f.ht===t,opp=home?f.at:f.ht;
-      seq.push({e,opp:opp?.short||"?",home,d:fdrOf(opp,home,t,S.fdrLens)});});
-    let bestRun=[],cur=[];
-    seq.forEach(x=>{if(x.d<=2){cur.push(x);if(cur.length>bestRun.length)bestRun=cur.slice();}else cur=[];});
-    if(bestRun.length>=3)runs.push({t,run:bestRun});
-  });
-  runs.sort((a,b)=>b.run.length-a.run.length||
-    (a.run.reduce((s2,x)=>s2+x.d,0)/a.run.length)-(b.run.reduce((s2,x)=>s2+x.d,0)/b.run.length));
-  const runPanel=runs.length?`<div class="panel"><div class="phead">
-      <h2 style="color:var(--mint)">Kind runs · next 5</h2><span class="note">${runs.length} clubs</span></div>
-    ${runs.slice(0,8).map(({t,run})=>`<div class="fixrow">
-      <span class="fixteam" style="gap:8px;flex:none;width:150px">${shirtSVG(t.short.toUpperCase(),false,20)}
-        <b>${esc(t.name||t.short)}</b></span>
-      <span class="note" style="flex:none;width:88px">GW${run[0].e}–${run[run.length-1].e}</span>
-      <span style="display:flex;gap:4px;flex-wrap:wrap">${run.map(x=>fdrPill(x.opp,x.home,x.d,{short:true})).join("")}</span></div>`).join("")}</div>`:"";
-  const head=runPanel+`<div class="panel"><div class="phead"><h2>Fixtures</h2>
-     <span style="display:flex;gap:6px;flex-wrap:wrap">
-       <button class="${mode==="gw"?"on":""}" onclick="act('fixmode','gw')">By gameweek</button>
-       <button class="${mode==="team"?"on":""}" onclick="act('fixmode','team')">By team</button>
-       <span style="width:10px"></span>
-       ${[["all","Overall"],["att","For attackers"],["def","For defenders"]].map(([k,n])=>
-         `<button class="${(S.fdrLens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}
-     </span></div>
+  const g=VG(), teams=S.model.teams;
+  const mode=S.fixMode||"team";
+  const lens=S.fdrLens||null;
+  const span=S.expand.allFix?39-g:10;
+  const start=Math.max(g,Math.min(S.fixGW||g,38));
+
+  /* ---- targets: clubs whose strength meets a weak opposite number ---- */
+  const targets=(kind)=>{
+    const out=[];
+    teams.forEach(t=>{
+      const runs=[];
+      for(let e=g;e<g+5&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{
+        const home=f.ht===t, opp=home?f.at:f.ht;
+        const d=fdrOf(opp,home,t,kind==="att"?"att":"def");
+        runs.push({e,opp:opp.short,home,d});});
+      const good=runs.filter(r=>r.d<=2).length;
+      if(good<3||runs.length<3)return;
+      const rating=kind==="att"?t.att:(2.6-t.def);      // higher is better either way
+      const avg=runs.reduce((a,r)=>a+r.d,0)/runs.length;
+      out.push({t,runs,good,rating,avg});
+    });
+    /* strong side meeting weak opposition — rank on both, cap at five */
+    return out.filter(x=>x.rating>=(kind==="att"?1.30:1.12))
+      .sort((a,b)=>(b.good-a.good)||(a.avg-b.avg)||(b.rating-a.rating)).slice(0,5);
+  };
+  const targetPanel=(kind,title,note)=>{
+    const list=targets(kind);
+    return `<div class="panel">
+      <div class="phead"><h2 style="color:${kind==="att"?"var(--mint)":"var(--cyan)"}">${title}</h2>
+        <span class="note">${list.length?list.length+" clubs":"none right now"}</span></div>
+      <div class="pbody" style="border-bottom:1px solid var(--ink3)"><p class="note" style="margin:0">${note}</p></div>
+      ${list.length?list.map(x=>`<div class="fixrow">
+        <span class="fixteam" style="flex:none;width:148px;gap:8px">${shirtSVG(x.t.short.toUpperCase(),false,20)}
+          <b>${esc(x.t.name||x.t.short)}</b></span>
+        <span class="note" style="flex:none;width:74px">${x.good} of ${x.runs.length}</span>
+        <span style="display:flex;gap:4px;flex-wrap:wrap">${x.runs.map(r=>
+          fdrPill(r.opp,r.home,r.d,{short:true})).join("")}</span></div>`).join("")
+        :`<div class="pbody"><p class="note">No club has three kind fixtures in the next five on this measure.</p></div>`}
     </div>`;
+  };
+
+  const head=`<div class="panel"><div class="phead"><h2>Fixtures</h2>
+     <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+       <button class="${mode==="team"?"on":""}" onclick="act('fixmode','team')">By club</button>
+       <button class="${mode==="gw"?"on":""}" onclick="act('fixmode','gw')">By gameweek</button>
+       <span style="width:8px"></span>
+       ${[["all","Overall"],["att","For attackers"],["def","For defenders"]].map(([k,n])=>
+         `<button class="${(lens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}
+     </span></div>
+    <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <span class="note" style="flex:1;min-width:220px">Away fixtures are shown in <i>italics</i>. A defender's rating reads the opponent's attack; an attacker's reads their defence.</span>
+      <span style="display:flex;gap:4px;align-items:center">
+        ${[1,2,3,4,5].map(d=>{const[b,c]=fdrCol(d);
+          return `<span class="fdrpill" style="background:${b};color:${c};min-width:20px">${d}</span>`;}).join("")}</span>
+    </div></div>`;
 
   if(mode==="team"){
-    const span=S.expand.allFix?39-g:10;
-    const scored=teams.map(t=>{let sum=0,n=0;
-      for(let e=g;e<g+5&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t)
-        .forEach(f=>{sum+=fdrOf(f.ht===t?f.at:f.ht,f.ht===t,t,S.fdrLens);n++;});
-      return{t,avg5:n?sum/n:5};});
     const windowAvg=(t,n)=>{let s2=0,c=0;
       for(let e=g;e<g+n&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t)
-        .forEach(f=>{s2+=fdrOf(f.ht===t?f.at:f.ht,f.ht===t,t,S.fdrLens);c++;});
+        .forEach(f=>{s2+=fdrOf(f.ht===t?f.at:f.ht,f.ht===t,t,lens);c++;});
       return c?s2/c:5;};
-    const sortKey=S.fixSort||"d5", dir=S.fixDir||"asc";
-    scored.forEach(o=>{o.d1=windowAvg(o.t,1);o.d3=windowAvg(o.t,3);o.d5=o.avg5;});
-    scored.sort((a,b)=>dir==="asc"?a[sortKey]-b[sortKey]:b[sortKey]-a[sortKey]);
+    const scored=teams.map(t=>({t,d1:windowAvg(t,1),d3:windowAvg(t,3),d5:windowAvg(t,5)}));
+    const sk=S.fixSort||"d5", dir=S.fixDir||"asc";
+    scored.sort((a,b)=>dir==="asc"?a[sk]-b[sk]:b[sk]-a[sk]);
     const best3=scored.slice(0,3).map(x=>x.t);
-    const rows=scored.map(({t,avg5,d1,d3})=>{
+    const arrow=k=>sk===k?(dir==="asc"?" ↑":" ↓"):"";
+    let th=`<th style="text-align:left">Club</th>`
+      +[["d1","1 GW"],["d3","3 GW"],["d5","5 GW"]].map(([k,n])=>
+        `<th class="${sk===k?"act":""}" style="text-align:right" onclick="act('fixsort','${k}')">${n}${arrow(k)}</th>`).join("");
+    for(let e=start;e<start+span&&e<=38;e++)th+=`<th style="text-align:center">GW${e}</th>`;
+    const rows=scored.map(({t,d1,d3,d5})=>{
       let cells="";
-      for(let e=g;e<g+span&&e<=38;e++){
+      for(let e=start;e<start+span&&e<=38;e++){
         const fx=(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t);
         if(!fx.length){cells+=`<td style="text-align:center"><span class="fdrpill" style="background:var(--ink3);color:var(--mute)">—</span></td>`;continue;}
-        cells+=`<td style="text-align:center">${fx.map(f=>{
-          const home=f.ht===t,opp=home?f.at:f.ht;
-          const d=fdrOf(opp,home,t,S.fdrLens);
-          const[b,c]=fdrCol(d);
-          return `<span class="fdrpill" style="background:${b};color:${c}">${esc(opp?.short||"?")}${home?"":" ·"}</span>`;
-        }).join(" ")}</td>`;
-      }
+        cells+=`<td style="text-align:center;white-space:nowrap">${fx.map(f=>{
+          const home=f.ht===t, opp=home?f.at:f.ht;
+          return fdrPill(opp?.short||"?",home,fdrOf(opp,home,t,lens),{short:true});}).join(" ")}</td>`;}
       const hot=best3.includes(t);
-      return `<tr style="${hot?"background:rgba(0,232,122,.09)":""}"><td class="nm" style="white-space:nowrap">
-        <span style="display:flex;align-items:center;gap:6px">${shirtSVG(t.short.toUpperCase(),false,20)}
-        <b>${esc(t.short)}</b>${hot?'<span class="sig" style="border-color:var(--mint);color:var(--mint)">F</span>':""}</span></td>
-        <td style="text-align:right" class="mono">${d1.toFixed(1)}</td>
-        <td style="text-align:right" class="mono">${d3.toFixed(2)}</td>
-        <td style="text-align:right;font-weight:700;color:${avg5<=2.4?"var(--mint)":avg5>=3.6?"var(--red)":"var(--cream)"}">${avg5.toFixed(2)}</td>${cells}</tr>`;
-    }).join("");
-    const sk=S.fixSort||"d5";
-    const arrow=k=>sk===k?(S.fixDir==="asc"?" ↑":" ↓"):"";
-    let th=`<th style="text-align:left">Team</th>`
-      +`<th class="${sk==="d1"?"act":""}" style="text-align:right" onclick="act('fixsort','d1')">1 GW${arrow("d1")}</th>`
-      +`<th class="${sk==="d3"?"act":""}" style="text-align:right" onclick="act('fixsort','d3')">3 GW${arrow("d3")}</th>`
-      +`<th class="${sk==="d5"?"act":""}" style="text-align:right" onclick="act('fixsort','d5')">5 GW${arrow("d5")}</th>`;
-    for(let e=g;e<g+span&&e<=38;e++)th+=`<th style="text-align:center">GW${e}</th>`;
-    return head+`<div class="panel"><div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      const col=v=>v<=2.2?"var(--mint)":v>=3.6?"var(--red)":"var(--cream)";
+      return `<tr style="${hot?"background:rgba(45,220,135,.07)":""}">
+        <td class="nm" style="white-space:nowrap"><span style="display:flex;align-items:center;gap:7px">
+          ${shirtSVG(t.short.toUpperCase(),false,20)}<b>${esc(t.short)}</b>
+          ${hot?'<span class="sig" style="border-color:var(--mint);color:var(--mint)">🏃</span>':""}</span></td>
+        <td class="mono" style="text-align:right;color:${col(d1)}">${d1.toFixed(1)}</td>
+        <td class="mono" style="text-align:right;color:${col(d3)}">${d3.toFixed(2)}</td>
+        <td class="mono" style="text-align:right;font-weight:700;color:${col(d5)}">${d5.toFixed(2)}</td>${cells}</tr>`;});
+    return targetPanel("att","Attack to target",
+        "Clubs with a strong attack meeting weak defences in at least three of the next five.")
+      +targetPanel("def","Defence to target",
+        "Solid defences meeting weak attacks in at least three of the next five.")
+      +head+`<div class="panel">${navFix(start,span,g)}
+        <div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
+        ${navFix(start,span,g)}</div>`;
   }
 
-  const start=Math.max(g,S.fixGW||g);
-  const span=S.expand.allFix?39-start:10;
+  /* ---- by gameweek ---- */
   let out="";
   for(let e=start;e<start+span&&e<=38;e++){
     const fx=(S.model.byEv[e]||[]).slice().sort((a,b)=>String(a.kickoff).localeCompare(String(b.kickoff)));
@@ -2431,20 +2518,16 @@ function fixturesHTML(){
     const ev=(S.events||[]).find(x=>x.id===e);
     const dl=ev&&ev.deadline?new Date(ev.deadline).toLocaleString("en-GB",
       {weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"";
-    out+=`<div style="padding:8px 13px;background:var(--ink);display:flex;justify-content:space-between;
-      gap:8px;flex-wrap:wrap;font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;
-      color:${e===g?"var(--mint)":"var(--mute)"}">
-      <span>Gameweek ${e}${e===g?" · next":""}</span>
-      ${dl?`<span style="letter-spacing:.04em;text-transform:none;color:var(--cream)">Deadline ${esc(dl)}</span>`:""}</div>`;
+    out+=`<div class="gwband"><span>Gameweek ${e}${e===g?" · next":""}</span>
+      ${dl?`<span class="gwdl">Deadline ${esc(dl)}</span>`:""}</div>`;
     fx.forEach(f=>{
       const h=f.ht,a=f.at;if(!h||!a)return;
-      const hd=fdrOf(a,true,h,S.fdrLens), ad=fdrOf(h,false,a,S.fdrLens);
-      const[hb,hc]=fdrCol(hd),[ab,ac]=fdrCol(ad);
+      const hd=fdrOf(a,true,h,lens), ad=fdrOf(h,false,a,lens);
       const dt=f.kickoff?new Date(f.kickoff):null;
       const d=dt?dt.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}):"";
       const tm=dt?dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"";
       out+=`<div class="fixrow">
-        <span class="fixteam" style="gap:8px">${shirtSVG(h.short.toUpperCase(),false,20)}
+        <span class="fixteam" style="gap:8px">${shirtSVG(h.short.toUpperCase(),false,22)}
           <span style="font-weight:600">${esc(h.name||h.short)}</span>
           ${fdrPill(a.short,true,hd,{short:true})}</span>
         <span style="flex:none;width:112px;text-align:center;line-height:1.25">
@@ -2452,21 +2535,19 @@ function fixturesHTML(){
           <span style="display:block;color:var(--mute);font-size:9px">${esc(d)}</span></span>
         <span class="fixteam away" style="gap:8px">${fdrPill(h.short,false,ad,{short:true})}
           <span style="font-weight:600;font-style:italic">${esc(a.name||a.short)}</span>
-          ${shirtSVG(a.short.toUpperCase(),false,20)}</span></div>`;
+          ${shirtSVG(a.short.toUpperCase(),false,22)}</span></div>`;
     });
   }
-  const nav=`<div class="pbody" style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
-      <button class="${S.expand.allFix?"on":""}" onclick="act('expand','allFix')">${S.expand.allFix?"Ten at a time":"Show all remaining"}</button>
-      <button onclick="act('fixgw',${Math.max(S.model.next.id,start-10)})">← earlier</button>
-      <span class="note">GW${start}–${Math.min(38,start+span-1)}</span>
-      <button onclick="act('fixgw',${Math.min(38,start+10)})">later →</button></div>`;
-  return head+`<div class="panel">${nav}${out||'<div class="pbody"><p class="note">No fixtures in this range.</p></div>'}${nav}</div>`;
+  return head+`<div class="panel">${navFix(start,span,g)}${out||'<div class="pbody"><p class="note">No fixtures in this range.</p></div>'}${navFix(start,span,g)}</div>`;
 }
-/* ---------- squad builders ----------
-   Free Hit and Wildcard are different problems and get different engines.
-   Free Hit lasts one week: pour everything into the XI and take the cheapest
-   legal bench, because the bench genuinely will not score. A Wildcard squad is
-   kept, so it is judged over five gameweeks and needs a usable bench. */
+function navFix(start,span,g){
+  return `<div class="pbody" style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
+    <button class="${S.expand.allFix?"on":""}" onclick="act('expand','allFix')">${S.expand.allFix?"Ten at a time":"Show all 38"}</button>
+    <button onclick="act('fixgw',${Math.max(g,start-10)})" ${start<=g?"disabled":""}>← earlier</button>
+    <span class="note">GW${start}–${Math.min(38,start+span-1)}</span>
+    <button onclick="act('fixgw',${Math.min(38,start+10)})" ${start+span>38?"disabled":""}>later →</button></div>`;
+}
+
 const FORMS=[[3,4,3],[3,5,2],[4,4,2],[4,3,3],[4,5,1],[5,3,2],[5,4,1]];
 const _sqCache={};
 function buildSquad(kind,gw,form,budget){
@@ -2987,20 +3068,12 @@ function navHTML(){
         <span class="navitems">${gp.items.map(([k,n])=>
           `<a class="navlink ${S.tab===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')">${n}</a>`
         ).join("")}</span></div>`).join("")}
-      <span class="gwhead" style="margin-left:auto">
-        <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
-        <span style="text-align:center"><span class="lbl" style="display:block">Showing</span>
-          <b class="mono" style="color:var(--cyan);font-size:12px">GW${VG()}</b></span>
-        <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button></span>
     </div>
     <div class="navmob">
       <span style="display:flex;gap:8px;align-items:center">
         <button class="navtoggle" onclick="act('menu')" style="flex:1">
           <span>${esc(label)}</span><span style="color:var(--mute)">${S.menuOpen?"▲":"▼"}</span></button>
-        <span class="gwhead">
-          <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})">←</button>
-          <b class="mono" style="color:var(--cyan);font-size:12px">GW${VG()}</b>
-          <button onclick="act('startgw',${Math.min(38,VG()+1)})">→</button></span></span>
+</span>
       ${S.menuOpen?`<div class="navsheet">
         ${NAV.map(gp=>`<div class="navlabel" style="padding:8px 12px 4px">${gp.group}</div>
           ${gp.items.map(([k,n])=>`<a class="navlink ${S.tab===k?"on":""}" href="${routeFor(k)}"
@@ -3160,7 +3233,19 @@ function render(){
       <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div><div class="s">of £100.0</div></div>
       <div class="stat"><div class="k">In the bank</div><div class="v" style="color:${bank<0?"var(--red)":raised>0?"var(--mint)":"var(--cream)"}">£${bank.toFixed(1)}</div><div class="s">${raised>0?`incl. £${raised.toFixed(1)} from sales`:"to spend"}</div></div></div>
    </div>
-   <div class="stick">${navHTML()}</div>
+   <div class="stick">
+     <div class="ministats">
+       ${LOGO}
+       <span class="ms"><span class="msk">GW${VG()}</span><span class="msv" style="color:var(--mint)">${weekPts().toFixed(1)}</span></span>
+       <span class="ms"><span class="msk">Rating</span><span class="msv" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</span></span>
+       <span class="ms hideXs"><span class="msk">Bank</span><span class="msv">£${bank.toFixed(1)}</span></span>
+       <span class="ms hideXs"><span class="msk">FT</span><span class="msv">${S.ft}</span></span>
+       <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+         <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})">←</button>
+         <b class="mono" style="color:var(--cyan);font-size:12px">GW${VG()}</b>
+         <button onclick="act('startgw',${Math.min(38,VG()+1)})">→</button></span>
+     </div>
+     ${navHTML()}</div>
    ${main}
    <p class="note" style="text-align:center;padding:14px 0">FPL Edge v${APP_VERSION} · data refreshed ${S.stamp?new Date(S.stamp).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—"}</p>`;
 }
@@ -3375,11 +3460,20 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
   S.leagueId=LS.get("leagueId")||"391690";
   const c=LS.get("data");
   if(c&&c.players){Object.assign(S,{players:c.players,teams:c.teams,fixtures:c.fixtures,
-    events:c.events,last:c.last,pre:c.pre||{},preMax:c.preMax||1,lastTeams:c.lastTeams||{},lastTeamStats:c.lastTeamStats||{},hist:c.hist||{},teamMatch:c.teamMatch||{},stamp:c.t});buildModel();}
+    events:c.events,last:c.last,pre:c.pre||{},preMax:c.preMax||1,lastTeams:c.lastTeams||{},lastTeamStats:c.lastTeamStats||{},lastTeamRecent:c.lastTeamRecent||{},hist:c.hist||{},teamMatch:c.teamMatch||{},stamp:c.t});buildModel();}
   applyHash();
   if(!location.hash)history.replaceState({},"",routeFor(S.tab));
   else render();
 })();
+</script>
+<script>
+/* Registering a service worker is what turns this from a bookmark into an
+   installable app on Android, and keeps it usable without a connection. */
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
