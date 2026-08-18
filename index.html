@@ -252,7 +252,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.5.0";
+const APP_VERSION="7.6.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -959,7 +959,7 @@ const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kell
    week by week — which pull in opposite directions, so these sit between them
    rather than fitting either alone. Midfielders and forwards keep a wider
    slope than least squares gives, or the premiums stop separating. */
-const CAL_BASE={1:{A:2.99,B:0.30},2:{A:2.09,B:0.33},3:{A:2.62,B:0.39},4:{A:1.35,B:0.55}};
+const CAL_BASE={1:{A:0.46,B:0.77},2:{A:1.87,B:0.33},3:{A:2.40,B:0.39},4:{A:1.13,B:0.55}};
 let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
 
 /* Once real gameweeks exist, compare what each position actually returns per
@@ -1154,19 +1154,38 @@ function buildModel(){
       const offBench=benchMins.length?benchMins.reduce((a,x)=>a+x,0)/benchMins.length:16;
       /* 0.80 rather than a full 88: a regular starter still misses matches for
          knocks, suspensions and rotation that last season's record cannot show */
-      xMins=startRate*whenStarts*0.92+(1-startRate)*offBench;
-      /* price is a live signal where last season's record is stale — a player
-         who has moved or fallen down the order is priced accordingly */
-      xMins=xMins*0.85+rel*72*0.15;
+      /* Fitted per position against 215 published expected-minutes figures.
+         The exponent on start rate matters: below 1 for outfield defenders and
+         midfielders, because an occasional starter still starts more often than
+         his raw rate suggests; above 1 for forwards, where rotation is harsher
+         and last season's starts overstate this season's role. */
+      const MP={1:{pw:0.60,fl:55,sc:1.15},2:{pw:0.60,fl:80,sc:1.05},
+                3:{pw:0.60,fl:80,sc:1.05},4:{pw:1.25,fl:55,sc:1.05}}[p.pos]
+                ||{pw:1,fl:70,sc:1};
+      const srP=Math.pow(clamp(startRate,0,1),MP.pw);
+      const ws2=Math.max(MP.fl,whenStarts);
+      xMins=clamp((srP*ws2+(1-srP)*offBench)*MP.sc,0,90);
       minsSrc="appearances";
     }
     else if(gwPlayed>2&&mins>0){xMins=clamp(mins/gwPlayed,0,90);minsSrc="this season";}
     else{
-      /* no Premier League history at all */
+      /* No Premier League history. For a player signed from abroad, pre-season
+         is the only evidence of his role and is worth using once he has 180+
+         minutes of it. Promoted clubs are excluded: their whole squad lacks
+         history, so pre-season minutes there reflect a second-tier pecking
+         order rather than a Premier League one. */
       const preMinsRaw=pr?pr.mins:0, preAppsRaw=pr?pr.apps:0;
-      const preSignal=preAppsRaw>=2?clamp(preMinsRaw/preAppsRaw,0,90):0;
-      xMins=clamp(rel*66+preSignal*0.22, 6, 86);
-      minsSrc="no history";
+      const promotedClub=!!PROMOTED[(team&&team.short)||""];
+      if(!promotedClub&&preMinsRaw>=180&&preAppsRaw>=3){
+        const perApp=clamp(preMinsRaw/preAppsRaw,0,90);
+        const trust=clamp((preMinsRaw-180)/240,0,1)*0.45+0.45;
+        xMins=clamp(perApp*trust+rel*66*(1-trust),8,88);
+        minsSrc="pre-season";
+      }else{
+        const preSignal=preAppsRaw>=2?clamp(preMinsRaw/preAppsRaw,0,90):0;
+        xMins=clamp(rel*66+preSignal*0.22, 6, 86);
+        minsSrc="no history";
+      }
     }
     if(av===0)xMins=0; else xMins*=clamp(av,0,1);
 
@@ -1185,6 +1204,15 @@ function buildModel(){
     const dc90=pick(s.defensive_contribution_per_90,L&&L.defensive_contribution_per_90,{1:0,2:7.5,3:5.5,4:2.5}[p.pos],22);
     const gc90=clamp(pick(s.expected_goals_conceded_per_90,L&&L.expected_goals_conceded_per_90,1.35),.3,3.5);
     const sv90=p.pos===1?clamp(pick(s.saves_per_90,L&&L.saves_per_90,2.6),0,7):0;
+    /* shot-stopping above expectation, per 90 — separates the keeper from
+       the defence in front of him */
+    /* share of matches in which he actually cleared the DefCon threshold */
+    let dcHitRate=null;
+    if(p.pos>1){const wd=ws(String(p.code||""),p.pos,38,price,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100);
+      if(wd&&!wd.estimated&&wd.apps>=8)dcHitRate=clamp(wd.dcHit,0,0.85);}
+    let gpRate=0;
+    if(p.pos===1){const wq=ws(String(p.code||""),1,38,price,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100);
+      if(wq&&wq.mins>600)gpRate=clamp((wq.gp/(wq.mins/90))*0.35,-0.3,0.3);}
     const bonus90=mins>180?num(s.bonus)*90/mins:(L&&num(L.minutes)>500?num(L.bonus)*90/num(L.minutes):.15);
     const penOrder=num(s.penalties_order)||99;
     const setOrder=Math.min(num(s.corners_and_indirect_freekicks_order)||99,num(s.direct_freekicks_order)||99);
@@ -1197,7 +1225,7 @@ function buildModel(){
       form,formSrc,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
       priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,ppg:num(s.points_per_game),total:num(s.total_points),
       owned:num(s.selected_by_percent),minutes:mins,status:st,news:s.news||"",back,
-      minsSrc,xg90,xa90,dc90,gc90,sv90,bonus90,penBoost,setBoost,epNext,avail:av,xMins,
+      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost,setBoost,epNext,avail:av,xMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),
       pensSaved:num(s.penalties_saved),ownGoals:num(s.own_goals),
       spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
@@ -1207,7 +1235,11 @@ function buildModel(){
   const gkClub={};
   players.filter(p=>p.pos===1).forEach(p=>{(gkClub[p.team]=gkClub[p.team]||[]).push(p);});
   Object.values(gkClub).forEach(list=>{
-    const rank=p=>(GK_FIRST.includes(norm(p.web_name))?1e7:0)
+    /* An unavailable first choice does not keep the shirt — the deputy starts.
+       Hull's pinned keeper was injured and the club ended up with nobody
+       projected to play at all. */
+    const rank=p=>(p.avail>0?1e9:0)
+      +(GK_FIRST.includes(norm(p.web_name))?1e7:0)
       +p.lastMins*3+p.price*400+(p.preMinPerApp||0)*4;
     list.sort((a,b)=>rank(b)-rank(a));
     list.forEach((p,i)=>{if(p.avail<=0){p.xMins=0;return;}
@@ -1232,6 +1264,29 @@ function buildModel(){
     const pPlay=clamp(p.xMins/17,0,.97);
     const p60=clamp((p.xMins-25)/50,0,.97);
     const share=clamp(p.xMins/90,0,1);
+    /* An injury suppresses the next few weeks, not the whole season. A player
+       with a known return date misses until then and resumes his normal role
+       after; without one, he is assumed out about four gameweeks then eased in. */
+    const outUntil=(()=>{
+      if(p.avail>0)return 0;
+      if(p.back&&p.back!=="unknown"){
+        const m=/^(\d{2})-([A-Za-z]{3})$/.exec(p.back);
+        if(m){
+          const mi=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].indexOf(m[2]);
+          if(mi>=0){
+            const now=new Date();
+            let yr=now.getFullYear();
+            if(mi<now.getMonth()-3)yr++;
+            const back=new Date(yr,mi,+m[1]);
+            const ev=(S.events||[]).filter(x=>x.deadline).sort((a,b)=>a.id-b.id);
+            const first=ev.find(x=>new Date(x.deadline)>=back);
+            return first?first.id:S.model.next.id+4;
+          }
+        }
+        return S.model.next.id+8;
+      }
+      return S.model.next.id+4;
+    })();
     for(let e=S.model.next.id;e<=38;e++){
       const fx=teamFix(team,e);
       if(!fx.length){p.gw[e]={pts:0,fixtures:[],blank:true};continue;}
@@ -1266,15 +1321,39 @@ function buildModel(){
         }
         const xGC=clamp(p.gc90/def,.25,3.2);
         const app=p60*2+(pPlay-p60);
-        const attack=p.pos===1?(p.sv90*(xGC/1.35))/3*share
-          :(p.xg90*(GOAL_PTS[p.pos]||4)+p.xa90*3)*share*atk;
-        const cs=(CS_PTS[p.pos]||0)*Math.exp(-xGC)*p60;
+        /* Keepers score almost entirely from clean sheets and concessions;
+           saves pay only one point per three, and a busy keeper behind a poor
+           defence loses more to goals than he gains in saves. Validated against
+           the published projections, where the best-rated keepers sit behind the
+           best defences rather than making the most saves. */
+        const attack=p.pos===1
+          ? (p.sv90*(xGC/1.35))/3*share*0.55
+          : (p.xg90*(GOAL_PTS[p.pos]||4)+p.xa90*3)*share*atk;
+        /* Poisson clean-sheet probability. For keepers this is the dominant
+           term, so it carries a shot-quality adjustment: a defence that concedes
+           few high-quality chances keeps more clean sheets than raw xGC implies. */
+        let csP=Math.exp(-xGC);
+        if(p.pos===1&&p.gpRate)csP=clamp(csP*(1+clamp(p.gpRate,-0.25,0.25)),0.02,0.75);
+        const cs=(CS_PTS[p.pos]||0)*csP*p60;
         const conc=p.pos<=2?-0.5*clamp(xGC/2,0,1.6)*p60:0;
-        const hit=DC_THRESH[p.pos]>50?0:clamp(p.dc90/DC_THRESH[p.pos],0,1.15);
-        const defcon=Math.min(2,2*Math.pow(hit,2.2))*p60;
+        /* DefCon pays only when a player clears the threshold in that match.
+           Modelling it from his average badly overstates it — Tielemans averages
+           9.8 actions, which the old curve scored as 1.29 points a game, when he
+           actually clears 12 in one match in ten. The per-match hit rate from
+           last season's records is the honest number. */
+        const defcon=p.dcHitRate!=null
+          ? 2*p.dcHitRate*p60*clamp(1/Math.max(.6,def),0.75,1.3)
+          : Math.min(2,2*Math.pow(clamp(p.dc90/(DC_THRESH[p.pos]||99),0,1.15),2.6))*p60*0.55;
         const bon=p.bonus90*share*clamp(atk,.8,1.2);
         const extras=(p.penBoost*atk+p.setBoost)*share;
-        tot+=(app+attack+cs+conc+defcon+bon+extras)*clamp(p.avail,0,1);
+        /* availability for THIS gameweek rather than for the season */
+        let availE=p.avail;
+        if(outUntil){
+          if(e<outUntil)availE=0;
+          else if(e<outUntil+2)availE=0.55+0.25*(e-outUntil);   // easing back in
+          else availE=1;
+        }
+        tot+=(app+attack+cs+conc+defcon+bon+extras)*clamp(availE,0,1);
       });
       const c=CAL[p.pos]||{A:0,B:1};
       const rawTot=tot;
