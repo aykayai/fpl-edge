@@ -252,7 +252,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.6.0";
+const APP_VERSION="7.6.2";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -712,7 +712,16 @@ function buildRatings(){
     if(TS&&TS.n>=10){
       /* expected goals rather than goals: less noisy and it stabilises faster.
          Set-play xG and big chances are kept alongside for the position lenses. */
-      const seasonGf=TS.npxg/TS.n*0.75+TS.xg/TS.n*0.25, seasonGa=TS.xga/TS.n;
+      /* Expected goals alone miss persistent finishing and goalkeeping quality.
+         Man City conceded 0.92 goals a game against an xGA of 1.18 — a keeper
+         effect that recurs season to season — so rating them purely on xGA made
+         them look a softer fixture than Everton, which is plainly wrong. FPL
+         Form blend actual goals with xGA for the same reason. */
+      const seasonGf0=TS.npxg/TS.n*0.75+TS.xg/TS.n*0.25, seasonGa0=TS.xga/TS.n;
+      const realGf=L&&L.games>=10?L.gf/L.games:seasonGf0;
+      const realGa=L&&L.games>=10?L.ga/L.games:seasonGa0;
+      const seasonGf=seasonGf0*0.62+realGf*0.38;
+      const seasonGa=seasonGa0*0.62+realGa*0.38;
       if(RC&&RC.n>=6){
         const w=0.40;                                   // 40% last eight, 60% season
         gf=seasonGf*(1-w)+(RC.xg/RC.n)*w;
@@ -737,8 +746,8 @@ function buildRatings(){
          average. An inference from second-tier goals should not be more extreme
          than anything we actually measured in the Premier League. */
       const rawGf=pm.gf*CHAMP_ATT, rawGa=PL_GF*1.18+(pm.ga-1.15)*0.55;
-      gf=rawGf*0.62+PL_GF*0.38;
-      ga=rawGa*0.62+PL_GF*0.38;
+      gf=rawGf*0.80+PL_GF*0.20;
+      ga=rawGa*0.80+PL_GF*0.20;
       t.ratingSrc="Championship, discounted";
     } else {
       /* fall back to FPL's own 1-5 rating */
@@ -776,7 +785,16 @@ function buildRatings(){
          "def" = how hard to keep a clean sheet (opponent's attack) */
 /* Cut points fitted so the mix of bands matches how the established tickers
    present: most fixtures 2 or 3, red reserved for genuinely hard trips. */
-const BAND_MIX=[0.10,0.34,0.34,0.16,0.06];      // share of fixtures in bands 1-5
+/* Attack and defence need different distributions, not one shared mix. Clean
+   sheets are rarer than goals, so the published tickers rate defensive fixtures
+   harder on average (mean 3.36) than attacking ones (2.72). Using one mix for
+   both had our levels inverted — attacking fixtures reading harder than
+   defensive ones, the opposite of every reference. */
+/* Both arrays run from the lowest expected-goals fixtures upward. For defence
+   that means easiest first; for attack the mapping inverts, so the same
+   ordering runs hardest first. Written out per lens to avoid the confusion. */
+const BAND_MIX_ATT=[0.06,0.18,0.32,0.29,0.15];   // low xGF = hard for attackers
+const BAND_MIX_DEF=[0.05,0.16,0.32,0.30,0.17];   // low xGC = easy for defenders
 function buildBands(){
   const g=S.model?S.model.next.id:1;
   const att=[],def=[];
@@ -785,11 +803,11 @@ function buildBands(){
     [[f.ht,f.at,true],[f.at,f.ht,false]].forEach(([t,o,home])=>{
       att.push(fdrCalc(t,o,home,"xgf"));
       def.push(fdrCalc(t,o,home,"xgc"));});});
-  const cuts=arr=>{const v=arr.slice().sort((a,b)=>a-b);
-    const q=[],out=[];let acc=0;
-    for(let i=0;i<4;i++){acc+=BAND_MIX[i];out.push(v[Math.min(v.length-1,Math.floor(acc*v.length))]);}
+  const cuts=(arr,mix)=>{const v=arr.slice().sort((a,b)=>a-b);
+    const out=[];let acc=0;
+    for(let i=0;i<4;i++){acc+=mix[i];out.push(v[Math.min(v.length-1,Math.floor(acc*v.length))]);}
     return out;};
-  S.bandCuts={att:cuts(att),def:cuts(def)};
+  S.bandCuts={att:cuts(att,BAND_MIX_ATT),def:cuts(def,BAND_MIX_DEF)};
 }
 function bandOf(v,kind){
   const c=S.bandCuts&&S.bandCuts[kind];
