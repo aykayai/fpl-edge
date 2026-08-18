@@ -115,11 +115,13 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .lhead span[data-k]{cursor:pointer}
 .lhead span.act{color:var(--mint)}
 .lc{width:38px;text-align:right;flex:none}
-.sigs{display:inline-flex;gap:3px;flex:none}
-.spice{width:15px;height:15px;border-radius:50%;font-size:9px;font-weight:900;
- display:inline-flex;align-items:center;justify-content:center;line-height:1;
- box-shadow:0 0 0 1.5px rgba(255,255,255,.25) inset}
-.sig{width:16px;height:16px;border:1px solid;border-radius:5px;font-size:9.5px;font-weight:800;
+.sigrow{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:3px;min-height:18px}
+@media(max-width:520px){.sig{width:16px;height:16px}.sigs{gap:3px}}
+@media(min-width:1000px){.sig{width:19px;height:19px}}
+.sigs{display:inline-flex;gap:4px;flex-wrap:wrap;flex:none}
+.bdg{width:100%;height:100%;display:block}
+.sig{width:18px;height:18px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+ filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));font-size:9.5px;font-weight:800;
  display:inline-flex;align-items:center;justify-content:center;line-height:1;background:rgba(0,0,0,.25)}
 .pricebox{display:flex;gap:6px;align-items:center}
 .pricebox input[type=number]{width:68px;padding:5px 7px;font-size:12px}
@@ -211,6 +213,12 @@ td.nm{font-family:'Sora',sans-serif}
  background:#1C232E;color:#DCE5EF;font-weight:700;letter-spacing:.02em}
 .chipzone button.on{background:var(--amber);border-color:var(--amber);color:#241000}
 .repl{background:rgba(4,245,255,.07);border-bottom:1px solid var(--ink3)}
+.fbtn{display:inline-flex;align-items:center;gap:7px;padding:6px 12px 6px 8px;border-radius:999px;
+ border:1px solid var(--ink3);background:var(--ink2);color:var(--cream);font-size:11.5px;
+ font-weight:600;cursor:pointer;transition:border-color .12s,background .12s}
+.fbtn:hover{border-color:var(--line)}
+.fbtn.on{border-color:var(--fc);background:color-mix(in srgb,var(--fc) 18%,var(--ink2));color:#fff}
+@media(max-width:520px){.fbtn{padding:5px 10px 5px 7px;font-size:11px;gap:5px}}
 .chipbtn{font-size:10.5px;padding:5px 9px}
 .fixrow{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--ink3);font-size:11.5px}
 .fixteam{flex:1;display:flex;align-items:center;gap:5px;min-width:0}
@@ -252,7 +260,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.8.0";
+const APP_VERSION="7.9.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -900,10 +908,13 @@ function windowStats(code,n,pos,price,teamMax){
   const mins=sum("mins");
   const per90=k=>mins>0?sum(k)*90/mins:0;
   const apps=take.length;
-  const starts=take.filter(r=>r.start===0).length;
+  /* start_min is 0 both for a player who kicked off and for one who never came
+     on, so a start only counts when he actually played. */
+  const played=take.filter(r=>r.mins>0);
+  const starts=played.filter(r=>r.start===0).length;
   return{
-    apps,mins,starts,
-    startPct:apps?starts/apps:0,
+    apps:played.length,mins,starts,
+    startPct:played.length?starts/played.length:0,
     minsPerApp:apps?mins/apps:0,
     g:sum("g"),a:sum("a"),
     xg90:per90("xg"),xa90:per90("xa"),
@@ -990,7 +1001,7 @@ const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kell
    week by week — which pull in opposite directions, so these sit between them
    rather than fitting either alone. Midfielders and forwards keep a wider
    slope than least squares gives, or the premiums stop separating. */
-const CAL_BASE={1:{A:0.46,B:0.77},2:{A:1.87,B:0.33},3:{A:2.40,B:0.39},4:{A:1.13,B:0.55}};
+const CAL_BASE={1:{A:0.51,B:0.77},2:{A:1.92,B:0.33},3:{A:2.45,B:0.39},4:{A:1.18,B:0.55}};
 let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
 
 /* Once real gameweeks exist, compare what each position actually returns per
@@ -1090,8 +1101,15 @@ function buildModel(){
     return M[k]||null;
   };
   /* club price ceilings, needed before the player loop for cold-start scaling */
-  S._tmaxRaw={};S.players.forEach(p=>{const c=p.teamCode;
-    S._tmaxRaw[c]=Math.max(S._tmaxRaw[c]||0,num(p.stats?.now_cost));});
+  /* keyed by both club id and code — the player record carries teamCode, but a
+     mismatch here silently returned 0 and made every fringe player look like
+     his club's most expensive */
+  S._tmaxRaw={};
+  S.players.forEach(p=>{
+    const v=num(p.stats?.now_cost);if(!v)return;
+    const t=S.teams.find(x=>x.code===p.teamCode||x.id===p.teamCode);
+    [p.teamCode,t&&t.code,t&&t.id].forEach(k=>{if(k!=null)S._tmaxRaw[k]=Math.max(S._tmaxRaw[k]||0,v);});
+  });
   S.bandCuts=null;buildBands();
   const players=S.players.map(p=>{
     const s=p.stats, team=byCode[p.teamCode]||{};
@@ -1175,10 +1193,10 @@ function buildModel(){
        the same units, or the term saturates and every player gets the same lift */
     const clubMax=(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||price||10;
     const rel=clamp(price/Math.max(4,clubMax),0.25,1.0);
-    if(rows.length>=4){
-      const recent=rows.slice(-12);
+    if(rows.filter(r=>r.mins>0).length>=10){
+      const recent=rows.filter(r=>r.mins>0).slice(-12);
       const startRate=recent.filter(r=>r.start===0).length/recent.length;
-      const startedMins=recent.filter(r=>r.start===0).map(r=>r.mins);
+      const startedMins=recent.filter(r=>r.start===0&&r.mins>0).map(r=>r.mins);
       const whenStarts=startedMins.length
         ? clamp(startedMins.reduce((a,x)=>a+x,0)/startedMins.length,55,90) : 78;
       const benchMins=recent.filter(r=>r.start!==0&&r.mins>0).map(r=>r.mins);
@@ -1224,8 +1242,11 @@ function buildModel(){
        weighting the public component models converge on. `form` already is
        FPL's own ~30-day rolling average, so it stands in for the recent window. */
     const recentW=gwPlayed>0?clamp(gwPlayed/6,0,1)*0.40:0;
+    /* Shrink a rate toward the prior in proportion to how much evidence backs
+       it, rather than switching abruptly at 900 minutes. A player with 450
+       minutes keeps roughly two-thirds of his own rate instead of half. */
     const pick=(a,b,fb,lim)=>{const cur=num(a);let v;
-      const rel=clamp(lastMins/900,0,1);
+      const rel=clamp(lastMins/(lastMins+420),0,0.95);
       if(cur>0&&mins>270)v=cur;
       else{const y=L?num(b):0;v=y>0?(y*rel+fb*(1-rel)):(cur>0?cur*.6+fb*.4:fb);}
       return lim?clamp(v,0,lim):v;};
@@ -1298,8 +1319,12 @@ function buildModel(){
     const team=p._team;
     /* Appearance behaviour is what gives cameo players their floor: a 15-minute
        average means he features most weeks, just briefly. */
-    const pPlay=clamp(p.xMins/17,0,.97);
-    const p60=clamp((p.xMins-25)/50,0,.97);
+    /* These used to saturate at 75 and 80 minutes, so two-thirds of the active
+       pool were treated identically however many minutes they were expected to
+       play — a player on 81 scored exactly like one on 90. Extended so the
+       75-90 band still separates, which is where most regulars sit. */
+    const pPlay=clamp(p.xMins/17,0,.985);
+    const p60=clamp((p.xMins-22)/62,0,.985);
     const share=clamp(p.xMins/90,0,1);
     /* An injury suppresses the next few weeks, not the whole season. A player
        with a known return date misses until then and resumes his normal role
@@ -1399,7 +1424,9 @@ function buildModel(){
       });
       const c=CAL[p.pos]||{A:0,B:1};
       const rawTot=tot;
-      tot=c.A*Math.min(1,p.xMins/80)+c.B*tot;
+      /* the flat term scales with minutes too, and capping it at 80 meant every
+         regular shared an identical floor regardless of expected minutes */
+      tot=c.A*clamp(p.xMins/88,0,1.02)+c.B*tot;
       if(e===S.model.next.id)p.rawPts=rawTot;
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
@@ -1470,7 +1497,7 @@ const SETPIECE={
  NFO:["Wood","Gibbs-White","Hutchinson"], SUN:["Diarra","Xhaka","Xhaka"],
  TOT:["Solanke","Porro","Porro"]
 };
-const SPCOL={P:["#FF4757","#fff"],F:["#04F5FF","#04202A"],C:["#B478FF","#1B0A2A"]};
+const SPCOL={P:["#FF5C7A","#FFC2CE"],F:["#4ADE80","#B7F5CE"],C:["#F472B6","#FBCFE8"]};
 function setPieceHTML(p){
   const duty=SETPIECE[(p.teamName||"").toUpperCase()];
   if(!duty)return"";
@@ -1480,33 +1507,35 @@ function setPieceHTML(p){
     const t=norm(nm);
     if(t&&(me===t||me.includes(t)||t.includes(me))){
       const[b,c]=SPCOL[k];
-      out.push(`<span class="spice" style="background:${b};color:${c}"
-        title="${k==="P"?"Penalties":k==="F"?"Direct free kicks":"Corners"}">${k}</span>`);}
+      out.push(`<span class="sig" title="${k==="P"?"Penalties":k==="F"?"Direct free kicks":"Corners"}">
+        ${badge(G(k,k.length>1?8.4:11),b,c)}</span>`);}
   });
   return out.length?`<span class="sigs">${out.join("")}</span>`:"";
 }
 /* Shield-D marks a defence worth targeting, star-A an attack worth targeting.
    Both are drawn rather than emoji so the letter stays legible at 16px. */
-const ICON_DEF=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
- <path d="M12 2 L21 5.5v6c0 5.2-3.8 8.6-9 10.5C6.8 20.1 3 16.7 3 11.5v-6Z" fill="#04B4E0" stroke="#7FE8FF" stroke-width="1.4"/>
- <text x="12" y="15.5" font-family="Arial Black,Arial,sans-serif" font-size="10" font-weight="900"
-   fill="#04202A" text-anchor="middle">D</text></svg>`;
-const ICON_ATT=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
- <path d="M12 1.8 14.9 8l6.8 1-4.9 4.8 1.2 6.8L12 17.4 5.9 20.6l1.2-6.8L2.2 9l6.8-1Z" fill="#FF8A3D" stroke="#FFC79A" stroke-width="1.1"/>
- <text x="12" y="14.6" font-family="Arial Black,Arial,sans-serif" font-size="8.5" font-weight="900"
-   fill="#2A1000" text-anchor="middle">A</text></svg>`;
-const ICON_DC=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
- <circle cx="12" cy="12" r="10" fill="#7C4DFF" stroke="#C6B0FF" stroke-width="1.3"/>
- <text x="12" y="15.6" font-family="Arial Black,Arial,sans-serif" font-size="9.5" font-weight="900"
-   fill="#12061F" text-anchor="middle">DC</text></svg>`;
-const ICON_MIN=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
- <rect x="9.6" y="1.4" width="4.8" height="2.3" rx="1" fill="#EAF2FF"/>
- <circle cx="12" cy="13.6" r="8.4" fill="#2E3846" stroke="#EAF2FF" stroke-width="1.5"/>
- <path d="M12 8.6 v5 h3.4" fill="none" stroke="#EAF2FF" stroke-width="1.8" stroke-linecap="round"/>
- <path d="M17.8 4.4 l2 2" stroke="#EAF2FF" stroke-width="1.8" stroke-linecap="round"/></svg>`;
-const SIGDEF=[["❄","var(--cyan)","Differential"],
- ["🔥","var(--amber)","Hot streak"],
- [ICON_ATT,"var(--amber)","Attack to target"],
+/* One badge shape throughout — an 18px disc with a coloured ring — so the set
+   reads as a family. Only the glyph and hue differ, which keeps them distinct
+   without the size and shape jumble the mixed emoji/SVG set had. */
+function badge(glyph,fill,ring,ink){
+  return `<svg viewBox="0 0 24 24" class="bdg" aria-hidden="true">
+    <circle cx="12" cy="12" r="10.4" fill="${fill}" stroke="${ring}" stroke-width="1.6"/>${glyph}</svg>`;
+}
+const G=(t,size)=>`<text x="12" y="${size>=10?15.9:15.4}" font-family="Inter,Arial,sans-serif"
+  font-size="${size}" font-weight="800" fill="#0B0E13" text-anchor="middle" letter-spacing="-0.3">${t}</text>`;
+const ICON_DIFF=badge(`<path d="M12 5.6v12.8M6.6 8.8l10.8 6.4M17.4 8.8L6.6 15.2" stroke="#06222B"
+   stroke-width="2" stroke-linecap="round"/>`,"#3ED8F0","#A6EEFA");
+const ICON_HOT=badge(`<path d="M12 4.6c2.6 2.7 4.4 4.9 4.4 7.6a4.4 4.4 0 1 1-8.8 0c0-1.5.7-2.7 1.7-3.9.5 1 1.1 1.6 1.9 1.9-.1-2 .3-3.9.8-5.6Z"
+   fill="#2A1000"/>`,"#FF8A3D","#FFC79A");
+const ICON_ATT=badge(G("A",11),"#FFB020","#FFE0A8");
+const ICON_DEF=badge(G("D",11),"#3ED8F0","#A6EEFA");
+const ICON_DC=badge(G("DC",8.4),"#A78BFA","#DCCEFF");
+const ICON_MIN=badge(`<path d="M12 7.4v5.1l3.2 1.9" stroke="#0B0E13" stroke-width="2"
+   stroke-linecap="round" fill="none"/><path d="M9.8 3.6h4.4" stroke="#0B0E13" stroke-width="2"
+   stroke-linecap="round"/>`,"#8FA3BC","#D6E2F0");
+const SIGDEF=[[ICON_DIFF,"#3ED8F0","Differential"],
+ [ICON_HOT,"#FF8A3D","Hot streak"],
+ [ICON_ATT,"#FFB020","Attack to target"],
  [ICON_DEF,"var(--sky)","Defence to target"],
  [ICON_DC,"#7C4DFF","Clears DefCon often"],
  [ICON_MIN,"#EAF2FF","Nailed — 85+ minutes"]];
@@ -1556,9 +1585,7 @@ function targetClubs(){
   });
   return _tcCache={g,n:(S.model?S.model.teams.length:0),att,def};
 }
-const sigIcon=(l,c,t)=>l.startsWith("<svg")
-  ? `<span class="sig" style="border:none;padding:0;width:16px;height:16px" title="${t}">${l}</span>`
-  : `<span class="sig" style="border-color:${c};color:${c}" title="${t}">${l}</span>`;
+const sigIcon=(l,c,t)=>`<span class="sig" title="${t}">${l}</span>`;
 const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
   `<span class="sigs">${s.map(([l,c,t])=>sigIcon(l,c,t)).join("")}</span>`:"");};
 
@@ -3382,12 +3409,15 @@ function render(){
     ${filtersHTML(false,'list')}
     <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--ink3)">
       <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700">Show only</span>
-      ${SIGDEF.map(([l,c,t],ix)=>`<button class="chipbtn ${S.iconF.includes(ix)?"on":""}"
-        onclick="act('iconf',${ix})" title="${esc(t)}"><span style="color:${S.iconF.includes(ix)?"var(--ink)":c}">${l}</span> ${esc(t)}</button>`).join("")}
+      ${SIGDEF.map(([l,c,t],ix)=>`<button class="fbtn ${S.iconF.includes(ix)?"on":""}"
+        onclick="act('iconf',${ix})" title="${esc(t)}" style="--fc:${c}">
+        <span class="sig">${l}</span><span>${esc(t)}</span></button>`).join("")}
       ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
-        return `<button class="chipbtn ${S.spF===k?"on":""}" onclick="act('spf','${k}')">
-          <span class="spice" style="background:${b};color:${c}">${k}</span> ${t}</button>`;}).join("")}
-      <button class="chipbtn ${S.starOnly?"on":""}" onclick="act('staronly')">★ Shortlist ${S.stars.length?"("+S.stars.length+")":""}</button>
+        return `<button class="fbtn ${S.spF===k?"on":""}" onclick="act('spf','${k}')" style="--fc:${b}">
+          <span class="sig">${badge(G(k,11),b,c)}</span><span>${t}</span></button>`;}).join("")}
+      <button class="fbtn ${S.starOnly?"on":""}" onclick="act('staronly')" style="--fc:#FFB020">
+        <span class="sig" style="color:#FFB020;font-size:14px">★</span>
+        <span>Shortlist${S.stars.length?" ("+S.stars.length+")":""}</span></button>
     </div>
     <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
       <span style="flex:1;min-width:200px">
