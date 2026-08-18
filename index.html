@@ -252,7 +252,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.6.2";
+const APP_VERSION="7.8.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -618,7 +618,14 @@ async function loadAll(force){
         const mins=rows.reduce((a,x)=>a+x.mins,0);
         if(mins<400)return;
         const per90=k=>rows.reduce((a,x)=>a+(x[k]||0),0)*90/mins;
-        (profile[ps]=profile[ps]||[]).push({
+        /* the share of matches in which he actually cleared the DefCon
+           threshold — not his average expressed as a fraction of it, which is
+           what the cold-start path used to derive and which put promoted
+           defenders above the best in the league */
+        const thr=ps===2?10:12;
+        const elig=rows.filter(x=>x.mins>=60);
+        const dcHitReal=elig.length?elig.filter(x=>x.dc>=thr).length/elig.length:0;
+        (profile[ps]=profile[ps]||[]).push({dcHitReal,
           mins,xg90:per90("xg"),xa90:per90("xa"),dc90:per90("dc"),cbit90:per90("cbit"),
           cc90:per90("cc"),box90:per90("box"),sh90:per90("sh"),sot90:per90("sot"),
           aer90:per90("aer"),sv90:per90("sv"),
@@ -631,7 +638,7 @@ async function loadAll(force){
       S.coldStart={};
       Object.entries(profile).forEach(([ps,a])=>{
         S.coldStart[ps]={};
-        ["xg90","xa90","dc90","cbit90","cc90","box90","sh90","sot90","aer90","sv90","gc90","minsPerApp","startPct"]
+        ["xg90","xa90","dc90","cbit90","cc90","box90","sh90","sot90","aer90","sv90","gc90","minsPerApp","startPct","dcHitReal"]
           .forEach(k=>S.coldStart[ps][k]=med(a,k));
         S.coldStart[ps].n=a.length;
       });
@@ -882,7 +889,8 @@ function windowStats(code,n,pos,price,teamMax){
       sh90:cs.sh90*k,sot90:cs.sot90*k,cc90:cs.cc90*k,box90:cs.box90*k,
       f390:0,drb90:0,aer90:cs.aer90,bcm:0,
       dc90:cs.dc90,cbit90:cs.cbit90,
-      dcHit:clamp(cs.dc90/((pos===2?10:12)*1.25),0,0.85),
+      /* measured from the analogue squads rather than derived from an average */
+      dcHit:clamp(cs.dcHitReal!=null?cs.dcHitReal*rel:0.18,0,0.70),
       sv90:cs.sv90,gc90:cs.gc90,xgot90:0,gp:0,cs:0,
       csRate:Math.exp(-clamp(cs.gc90,0.3,3.2))};
   }
@@ -939,7 +947,12 @@ const GK_START=89, GK_BACKUP=15;
 /* How far a fixture moves a player's score around his own average. Retuned
    after the xG engine took over the fixture view: 1.26 against the published
    projections' own 1.28 across 55 players and 8 gameweeks. */
-const FIXTURE_AMP=3.2;
+/* Stretching each player around his own season average was reordering players:
+   a weak player in a relatively good week outranked a strong player in a
+   relatively poor one, because the stretch is blind to how good he is. With the
+   xG engine now supplying genuine fixture swing this only needs to be a light
+   touch, not the heavy correction it was before that engine existed. */
+const FIXTURE_AMP=1.45;
 /* how much of the fixture view comes from the new xG ratings */
 /* The fixture view now comes wholly from the xG engine. The older
    strength-difference calculation was blended in at 35% as a hedge while the
@@ -1234,7 +1247,13 @@ function buildModel(){
     const bonus90=mins>180?num(s.bonus)*90/mins:(L&&num(L.minutes)>500?num(L.bonus)*90/num(L.minutes):.15);
     const penOrder=num(s.penalties_order)||99;
     const setOrder=Math.min(num(s.corners_and_indirect_freekicks_order)||99,num(s.direct_freekicks_order)||99);
-    const penBoost=penOrder===1?1.0:(penOrder===2?0.25:0);
+    /* A side wins roughly 0.15 penalties a game, converted about 79% of the
+       time. For a forward that is worth ~0.47 points, not the flat 1.0 this
+       carried — which was handing Hull's taker almost as much as his entire
+       attacking output. Scaled by the club's attacking strength, since a weak
+       team wins far fewer penalties, and trimmed because a player's xG per 90
+       already contains the penalties he took. */
+    const penRate=penOrder===1?0.45:(penOrder===2?0.11:0);
     const setBoost=setOrder===1?0.35:(setOrder===2?0.12:0);
     const epNext=num(s.ep_next);
 
@@ -1243,7 +1262,7 @@ function buildModel(){
       form,formSrc,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
       priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,ppg:num(s.points_per_game),total:num(s.total_points),
       owned:num(s.selected_by_percent),minutes:mins,status:st,news:s.news||"",back,
-      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost,setBoost,epNext,avail:av,xMins,
+      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),
       pensSaved:num(s.penalties_saved),ownGoals:num(s.own_goals),
       spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
@@ -1327,8 +1346,11 @@ function buildModel(){
         if(S.ratingsReady&&f.xgf!=null){
           /* straight from expected goals, so elite sides still separate a weak
              opponent from a merely average one */
-          const nA=clamp(f.xgf/PL_GF,.35,2.10);
-          const nD=clamp(PL_GF/Math.max(.35,f.xgc),.40,2.00);
+          /* Raised to a power so a kind fixture separates properly from a hard
+             one. Multiplying scales every player by the same factor, so unlike
+             the old stretch it cannot reorder two players in the same match. */
+          const nA=clamp(Math.pow(f.xgf/PL_GF,1.9),.30,2.40);
+          const nD=clamp(Math.pow(PL_GF/Math.max(.35,f.xgc),1.9),.35,2.30);
           atk=atk*(1-FDR_MIX)+nA*FDR_MIX;
           def=def*(1-FDR_MIX)+nD*FDR_MIX;
         }
@@ -1363,7 +1385,9 @@ function buildModel(){
           ? 2*p.dcHitRate*p60*clamp(1/Math.max(.6,def),0.75,1.3)
           : Math.min(2,2*Math.pow(clamp(p.dc90/(DC_THRESH[p.pos]||99),0,1.15),2.6))*p60*0.55;
         const bon=p.bonus90*share*clamp(atk,.8,1.2);
-        const extras=(p.penBoost*atk+p.setBoost)*share;
+        /* penalties earned scale with how often the side attacks */
+        const teamAtk=clamp((team.att||PL_GF)/PL_GF,0.55,1.45);
+        const extras=(p.penBoost*teamAtk*atk+p.setBoost)*share;
         /* availability for THIS gameweek rather than for the season */
         let availE=p.avail;
         if(outUntil){
@@ -1461,13 +1485,35 @@ function setPieceHTML(p){
   });
   return out.length?`<span class="sigs">${out.join("")}</span>`:"";
 }
+/* Shield-D marks a defence worth targeting, star-A an attack worth targeting.
+   Both are drawn rather than emoji so the letter stays legible at 16px. */
+const ICON_DEF=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
+ <path d="M12 2 L21 5.5v6c0 5.2-3.8 8.6-9 10.5C6.8 20.1 3 16.7 3 11.5v-6Z" fill="#04B4E0" stroke="#7FE8FF" stroke-width="1.4"/>
+ <text x="12" y="15.5" font-family="Arial Black,Arial,sans-serif" font-size="10" font-weight="900"
+   fill="#04202A" text-anchor="middle">D</text></svg>`;
+const ICON_ATT=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
+ <path d="M12 1.8 14.9 8l6.8 1-4.9 4.8 1.2 6.8L12 17.4 5.9 20.6l1.2-6.8L2.2 9l6.8-1Z" fill="#FF8A3D" stroke="#FFC79A" stroke-width="1.1"/>
+ <text x="12" y="14.6" font-family="Arial Black,Arial,sans-serif" font-size="8.5" font-weight="900"
+   fill="#2A1000" text-anchor="middle">A</text></svg>`;
+const ICON_DC=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
+ <circle cx="12" cy="12" r="10" fill="#7C4DFF" stroke="#C6B0FF" stroke-width="1.3"/>
+ <text x="12" y="15.6" font-family="Arial Black,Arial,sans-serif" font-size="9.5" font-weight="900"
+   fill="#12061F" text-anchor="middle">DC</text></svg>`;
+const ICON_MIN=`<svg viewBox="0 0 24 24" width="15" height="15" style="display:block">
+ <rect x="9.6" y="1.4" width="4.8" height="2.3" rx="1" fill="#EAF2FF"/>
+ <circle cx="12" cy="13.6" r="8.4" fill="#2E3846" stroke="#EAF2FF" stroke-width="1.5"/>
+ <path d="M12 8.6 v5 h3.4" fill="none" stroke="#EAF2FF" stroke-width="1.8" stroke-linecap="round"/>
+ <path d="M17.8 4.4 l2 2" stroke="#EAF2FF" stroke-width="1.8" stroke-linecap="round"/></svg>`;
 const SIGDEF=[["❄","var(--cyan)","Differential"],
  ["🔥","var(--amber)","Hot streak"],
- ["🏃","var(--mint)","Easy run"]];
+ [ICON_ATT,"var(--amber)","Attack to target"],
+ [ICON_DEF,"var(--sky)","Defence to target"],
+ [ICON_DC,"#7C4DFF","Clears DefCon often"],
+ [ICON_MIN,"#EAF2FF","Nailed — 85+ minutes"]];
 function legendHTML(){
   return `<div style="display:flex;gap:14px;flex-wrap:wrap;padding:9px 12px;justify-content:center;border-bottom:1px solid var(--ink3)">
     ${SIGDEF.map(([l,c,t])=>`<span style="display:flex;gap:5px;align-items:center;font-size:10.5px;color:var(--mute)">
-      <span class="sig" style="border-color:${c};color:${c}">${l}</span>${esc(t)}</span>`).join("")}
+      ${sigIcon(l,c,t)}${esc(t)}</span>`).join("")}
     ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
       return `<span style="display:flex;gap:5px;align-items:center;font-size:10.5px;color:var(--mute)">
         <span class="spice" style="background:${b};color:${c}">${k}</span>${t}</span>`;}).join("")}</div>`;
@@ -1476,12 +1522,45 @@ function signals(p,g){
   const out=[];
   if(p.owned>0&&p.owned<8&&(p.gw[g]?.pts||0)>3.4)out.push(SIGDEF[0]);
   if(p.form-p.ppg>0.7&&p.ppg>0)out.push(SIGDEF[1]);
-  let sum=0,n=0;for(let e=g;e<g+3;e++){const q=p.gw[e];if(q&&!q.blank)q.fixtures.forEach(f=>{sum+=f.diff;n++;});}
-  if(n&&sum/n<=2.4)out.push(SIGDEF[2]);
+  /* the two target flags come from the club shortlists, so a player's badge and
+     the Fixtures page always agree */
+  /* Each target badge only goes to the players it can actually help: the star
+     to midfielders and forwards, who score from attacking returns, and the
+     shield to keepers and defenders, who score from clean sheets. */
+  const T=targetClubs();
+  if(p.pos>=3&&T.att.has(p.team))out.push(SIGDEF[2]);
+  if(p.pos<=2&&T.def.has(p.team))out.push(SIGDEF[3]);
+  /* DefCon is only a route to points for defenders and midfielders, and only
+     worth flagging where he clears the threshold in a decent share of matches */
+  if((p.pos===2||p.pos===3)&&p.dcHitRate!=null
+     &&p.dcHitRate>=(p.pos===2?0.45:0.22))out.push(SIGDEF[4]);
+  if(p.xMins>=85)out.push(SIGDEF[5]);
   return out;
 }
+/* Clubs whose next five contain at least four kind fixtures on that lens.
+   Cached per gameweek — signals() runs for every player on every render. */
+let _tcCache=null;
+function targetClubs(){
+  const g=VG();
+  if(_tcCache&&_tcCache.g===g&&_tcCache.n===(S.model?S.model.teams.length:0))return _tcCache;
+  const att=new Set(),def=new Set();
+  (S.model?S.model.teams:[]).forEach(t=>{
+    let ga=0,gd=0,n=0;
+    for(let e=g;e<g+5&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{
+      const home=f.ht===t,o=home?f.at:f.ht;
+      if(fdrOf(o,home,t,"att")<=2)ga++;
+      if(fdrOf(o,home,t,"def")<=2)gd++;
+      n++;});
+    if(n>=4&&ga>=4&&(t.att||0)>=1.30)att.add(t.id);
+    if(n>=4&&gd>=4&&(2.6-(t.def||1.4))>=1.12)def.add(t.id);
+  });
+  return _tcCache={g,n:(S.model?S.model.teams.length:0),att,def};
+}
+const sigIcon=(l,c,t)=>l.startsWith("<svg")
+  ? `<span class="sig" style="border:none;padding:0;width:16px;height:16px" title="${t}">${l}</span>`
+  : `<span class="sig" style="border-color:${c};color:${c}" title="${t}">${l}</span>`;
 const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
-  `<span class="sigs">${s.map(([l,c,t])=>`<span class="sig" style="border-color:${c};color:${c}" title="${t}">${l}</span>`).join("")}</span>`:"");};
+  `<span class="sigs">${s.map(([l,c,t])=>sigIcon(l,c,t)).join("")}</span>`:"");};
 
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
@@ -2558,7 +2637,7 @@ function fixturesHTML(){
         const d=fdrOf(opp,home,t,kind==="att"?"att":"def");
         runs.push({e,opp:opp.short,home,d});});
       const good=runs.filter(r=>r.d<=2).length;
-      if(good<3||runs.length<3)return;
+      if(good<4||runs.length<4)return;
       const rating=kind==="att"?t.att:(2.6-t.def);      // higher is better either way
       const avg=runs.reduce((a,r)=>a+r.d,0)/runs.length;
       out.push({t,runs,good,rating,avg});
@@ -2579,7 +2658,7 @@ function fixturesHTML(){
         <span class="note" style="flex:none;width:74px">${x.good} of ${x.runs.length}</span>
         <span style="display:flex;gap:4px;flex-wrap:wrap">${x.runs.map(r=>
           fdrPill(r.opp,r.home,r.d,{short:true})).join("")}</span></div>`).join("")
-        :`<div class="pbody"><p class="note">No club has three kind fixtures in the next five on this measure.</p></div>`}
+        :`<div class="pbody"><p class="note">No club has four kind fixtures in the next five on this measure.</p></div>`}
     </div>`;
   };
 
@@ -2630,9 +2709,9 @@ function fixturesHTML(){
         <td class="mono" style="text-align:right;color:${col(d3)}">${d3.toFixed(2)}</td>
         <td class="mono" style="text-align:right;font-weight:700;color:${col(d5)}">${d5.toFixed(2)}</td>${cells}</tr>`;});
     return targetPanel("att","Attack to target",
-        "Clubs with a strong attack meeting weak defences in at least three of the next five.")
+        "Clubs with a strong attack meeting weak defences in at least four of the next five.")
       +targetPanel("def","Defence to target",
-        "Solid defences meeting weak attacks in at least three of the next five.")
+        "Solid defences meeting weak attacks in at least four of the next five.")
       +head+`<div class="panel">${navFix(start,span,g)}
         <div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
         ${navFix(start,span,g)}</div>`;
