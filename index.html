@@ -260,7 +260,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.9.0";
+const APP_VERSION="7.10.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -1457,6 +1457,25 @@ function buildModel(){
     if(n>20&&b>0){const f=a/b;players.forEach(p=>{const q=p.gw[w];
       if(q&&!q.blank)q.pts=Math.max(0,q.pts*f);});}
   }
+  /* A club can only field so many players in a position. Where the projected
+     minutes across a club's midfield or defence add up to far more than the
+     eleven shirts allow, somebody is going to be rotated — and last season's
+     record cannot say who. Flag the ones most at risk rather than silently
+     adjusting them, because nothing in the data says by how much. */
+  const SLOTS={1:1,2:4.3,3:4.3,4:2.0};
+  const byClubPos={};
+  players.forEach(p=>{(byClubPos[p.team+"|"+p.pos]=byClubPos[p.team+"|"+p.pos]||[]).push(p);});
+  Object.entries(byClubPos).forEach(([k,list])=>{
+    const pos=+k.split("|")[1];
+    const capacity=(SLOTS[pos]||3)*90;
+    const claimed=list.reduce((a,p)=>a+(p.avail>0?p.xMins:0),0);
+    if(claimed<=capacity*1.18)return;                 // squad fits, no risk
+    /* the surplus falls on whoever the club has invested least in */
+    const contenders=list.filter(p=>p.avail>0&&p.xMins>=70)
+      .sort((a,b)=>b.price-a.price);
+    const keep=Math.max(1,Math.round(capacity/88));
+    contenders.slice(keep).forEach(p=>{p.staleRole=true;});
+  });
   const bestByPos={};[1,2,3,4].forEach(k=>{bestByPos[k]=Math.max(0.1,
     ...players.filter(p=>p.pos===k).map(p=>p.gw[S.model.next.id]?.pts||0));});
   S.model.bestByPos=bestByPos;
@@ -1530,6 +1549,8 @@ const ICON_HOT=badge(`<path d="M12 4.6c2.6 2.7 4.4 4.9 4.4 7.6a4.4 4.4 0 1 1-8.8
 const ICON_ATT=badge(G("A",11),"#FFB020","#FFE0A8");
 const ICON_DEF=badge(G("D",11),"#3ED8F0","#A6EEFA");
 const ICON_DC=badge(G("DC",8.4),"#A78BFA","#DCCEFF");
+const ICON_STALE=badge(`<text x="12" y="16.4" font-family="Inter,Arial,sans-serif" font-size="13"
+   font-weight="900" fill="#2A1000" text-anchor="middle">!</text>`,"#F2C14E","#FBE3A6");
 const ICON_MIN=badge(`<path d="M12 7.4v5.1l3.2 1.9" stroke="#0B0E13" stroke-width="2"
    stroke-linecap="round" fill="none"/><path d="M9.8 3.6h4.4" stroke="#0B0E13" stroke-width="2"
    stroke-linecap="round"/>`,"#8FA3BC","#D6E2F0");
@@ -1538,7 +1559,8 @@ const SIGDEF=[[ICON_DIFF,"#3ED8F0","Differential"],
  [ICON_ATT,"#FFB020","Attack to target"],
  [ICON_DEF,"var(--sky)","Defence to target"],
  [ICON_DC,"#7C4DFF","Clears DefCon often"],
- [ICON_MIN,"#EAF2FF","Nailed — 85+ minutes"]];
+ [ICON_MIN,"#8FA3BC","Nailed — 85+ minutes"],
+ [ICON_STALE,"#F2C14E","Role may have changed — minutes are last season's"]];
 function legendHTML(){
   return `<div style="display:flex;gap:14px;flex-wrap:wrap;padding:9px 12px;justify-content:center;border-bottom:1px solid var(--ink3)">
     ${SIGDEF.map(([l,c,t])=>`<span style="display:flex;gap:5px;align-items:center;font-size:10.5px;color:var(--mute)">
@@ -1550,7 +1572,11 @@ function legendHTML(){
 function signals(p,g){
   const out=[];
   if(p.owned>0&&p.owned<8&&(p.gw[g]?.pts||0)>3.4)out.push(SIGDEF[0]);
-  if(p.form-p.ppg>0.7&&p.ppg>0)out.push(SIGDEF[1]);
+  /* Only meaningful when both sides of the comparison come from actual
+     matches. A synthetic form estimate minus a two-game sample is noise, and
+     a player projected not to play cannot be in form at all. */
+  const realForm=p.formSrc==="this season"||/25\/26|2025/.test(p.formSrc||"");
+  if(realForm&&p.ppg>=1.5&&p.xMins>=45&&p.form-p.ppg>0.7)out.push(SIGDEF[1]);
   /* the two target flags come from the club shortlists, so a player's badge and
      the Fixtures page always agree */
   /* Each target badge only goes to the players it can actually help: the star
@@ -1564,6 +1590,7 @@ function signals(p,g){
   if((p.pos===2||p.pos===3)&&p.dcHitRate!=null
      &&p.dcHitRate>=(p.pos===2?0.45:0.22))out.push(SIGDEF[4]);
   if(p.xMins>=85)out.push(SIGDEF[5]);
+  if(p.staleRole)out.push(SIGDEF[6]);
   return out;
 }
 /* Clubs whose next five contain at least four kind fixtures on that lens.
@@ -1717,6 +1744,7 @@ function applySwap(oid,iid){
   S.flagged=S.flagged.filter(x=>x!==oid);S.forceXI=null;saveState();
 }
 /* Historical returns for this manager, shown alongside each projection */
+const TRANSFER_MIN=1.0;   // a suggestion has to be worth the transfer
 const CHIP_HISTORY={wildcard:10.2,bboost:23.7,freehit:10.7,"3xc":14.2};
 const chipKind=k=>k.replace(/[12]$/,"");
 
@@ -2595,19 +2623,26 @@ function transfersHTML(){
           <span class="gain" style="font-size:16px">+${combo.gain.toFixed(1)} pts</span></div>
         <button style="margin-top:9px;width:100%" onclick="act('docombo')">Make these transfers</button>
       </div></div>`:"";
-  const headScout=(top&&pool.length)?`<div class="panel" style="border-color:var(--amber);background:#33240B">
+  const headScout=(top&&pool.length&&top.gain>=TRANSFER_MIN)?`<div class="panel" style="border-color:var(--amber);background:#33240B">
       <div class="phead" style="border-color:#5A3F10"><h2 style="color:var(--amber)">Head Scout</h2>
       <span class="note">GW${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span></div>
     <div class="pbody">
       <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700;margin-bottom:8px">Top target</div>
-      ${top.gain>=1.0?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers — the best available move is worth only +${top.gain.toFixed(1)} points.</p>`}</div></div>`
+      ${top.gain>=TRANSFER_MIN?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers — the best available move is worth only +${top.gain.toFixed(1)} points.</p>`}</div></div>`
     :`<div class="panel"><div class="phead"><h2>Head Scout</h2></div><div class="pbody">
       <p class="note">No transfer improves your predicted total within budget and the three-per-club limit.</p></div></div>`;
 
   const suggestTitle=`<div class="panel"><div class="phead"><h2>Head Scout suggestions</h2>
       <span class="note">best four per position</span></div></div>`;
   const byPos=[1,2,3,4].map(pos=>{
-    const list=pool.filter(m=>m.inn.pos===pos&&!(S.squad||[]).includes(m.inn.id)).slice(0,4);
+    /* One recommendation per player being sold, not a list of near-identical
+       alternatives, and only where the gain is worth a transfer. */
+    const seen=new Set();
+    const list=pool.filter(m=>{
+      if(m.inn.pos!==pos||(S.squad||[]).includes(m.inn.id))return false;
+      if(m.gain<TRANSFER_MIN)return false;
+      if(seen.has(m.out.id))return false;
+      seen.add(m.out.id);return true;}).slice(0,4);
     return `<div class="panel"><div class="phead"><h2>${posName[pos]}</h2>
         <span class="note">${list.length?"top "+list.length:""}</span></div>
       <div class="pbody">${list.length?`<div class="tgrid">${list.map(m=>swapCardHTML(m,g)).join("")}</div>`
