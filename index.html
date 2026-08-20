@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.14.1";
+const APP_VERSION="8.0.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -452,7 +452,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},activeChip:null,horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
  outList:[],selected:null,menuOpen:false,compare:null,dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
@@ -3314,6 +3314,186 @@ const CREATORS=[["Ben Crellin","Blanks, doubles and fixture swings","https://x.c
 /* ---------- Odds ----------
    Bookmaker prices are a live consensus model — they price form, team news,
    penalties and venue in one number. Needs a free key from odds-api.io. */
+/* ---------- reading the market ----------
+   Both available bookmakers are soft books, so their prices carry a wider
+   margin than a sharp book's. Everything below is de-vigged before use. */
+function devig(prices){
+  const inv=prices.map(p=>p>0?1/p:0);
+  const sum=inv.reduce((a,x)=>a+x,0);
+  return sum>0?inv.map(x=>x/sum):inv.map(()=>0);
+}
+/* one price on its own still carries roughly half the book's margin */
+const devig1=(price,margin)=>price>0?clamp((1/price)/(1+(margin||0.06)),0,0.99):0;
+
+/* The feed uses full club names while FPL uses abbreviations — "Manchester
+   City" against "Man City", "Tottenham Hotspur" against "Spurs" — so a
+   substring test fails on exactly the clubs that matter. Mapped explicitly. */
+const CLUB_ALIAS={
+  arsenal:"ARS", astonvilla:"AVL", afcbournemouth:"BOU", bournemouth:"BOU",
+  brentford:"BRE", brentfordfc:"BRE", brightonhovealbion:"BHA", brightonandhovealbion:"BHA",
+  brighton:"BHA", chelsea:"CHE", chelseafc:"CHE", coventrycity:"COV", coventry:"COV",
+  crystalpalace:"CRY", everton:"EVE", evertonfc:"EVE", fulham:"FUL", fulhamfc:"FUL",
+  hullcity:"HUL", hull:"HUL", ipswichtown:"IPS", ipswich:"IPS",
+  leedsunited:"LEE", leeds:"LEE", liverpool:"LIV", liverpoolfc:"LIV",
+  manchestercity:"MCI", mancity:"MCI", manchesterunited:"MUN", manutd:"MUN",
+  manchesterutd:"MUN", newcastleunited:"NEW", newcastle:"NEW",
+  nottinghamforest:"NFO", nottmforest:"NFO", forest:"NFO",
+  tottenhamhotspur:"TOT", tottenham:"TOT", spurs:"TOT",
+  sunderland:"SUN", sunderlandafc:"SUN", wolverhamptonwanderers:"WOL", wolves:"WOL",
+  westhamunited:"WHU", westham:"WHU", burnley:"BUR", burnleyfc:"BUR"
+};
+function clubFromName(n){
+  const teams=S.model?S.model.teams:[];
+  const q=norm(n||"");if(!q)return null;
+  const code=CLUB_ALIAS[q]
+    ||CLUB_ALIAS[q.replace(/^(afc|fc)/,"").replace(/(afc|fc)$/,"")];
+  if(code){const t=teams.find(x=>x.short===code);if(t)return t;}
+  return teams.find(x=>norm(x.name)===q)
+    ||teams.find(x=>q.includes(norm(x.name))||norm(x.name).includes(q))
+    ||teams.find(x=>norm(x.short)===q)||null;
+}
+function marketsFor(ev){
+  const out={};
+  (ev.bookmakers||[]).forEach(b=>{
+    (b.markets||[]).forEach(m=>{
+      const k=String(m.key||"").toLowerCase();
+      (out[k]=out[k]||[]).push({...m,book:b.key});
+    });
+  });
+  return out;
+}
+/* Correct Score gives the joint distribution, so a clean sheet is an exact sum
+   rather than a Poisson guess: add every scoreline where they concede nothing. */
+function fromCorrectScore(mk){
+  const cs=(mk["correct score"]||[]);
+  if(!cs.length)return null;
+  const line=cs[0];
+  const raw=[],labels=[];
+  (line.outcomes||[]).forEach(o=>{
+    const m=/(\d+)\s*[-–:]\s*(\d+)/.exec(String(o.name));
+    if(!m||!o.price)return;
+    labels.push([+m[1],+m[2]]);raw.push(o.price);
+  });
+  if(raw.length<6)return null;
+  const p=devig(raw);
+  let csHome=0,csAway=0,xgHome=0,xgAway=0;
+  labels.forEach(([h,a],i)=>{
+    if(a===0)csHome+=p[i];
+    if(h===0)csAway+=p[i];
+    xgHome+=h*p[i];xgAway+=a*p[i];
+  });
+  return{csHome,csAway,xgHome,xgAway,n:raw.length};
+}
+/* fall back to the totals and both-teams markets where Correct Score is absent */
+function fromTotals(mk){
+  const btts=(mk["btts"]||mk["both teams to score"]||[])[0];
+  const tot=(mk["totals"]||[]).filter(m=>m.hdp===2.5)[0]||(mk["totals"]||[])[0];
+  const ml=(mk["h2h"]||[])[0];
+  if(!ml)return null;
+  const pick=(m,n)=>(m&&m.outcomes||[]).find(o=>String(o.name).toLowerCase()===n);
+  const oH=pick(ml,"home"),oD=pick(ml,"draw"),oA=pick(ml,"away");
+  if(!oH||!oD||!oA)return null;
+  const [pH,,pA]=devig([oH.price,oD.price,oA.price]);
+  let total=2.7;
+  if(tot){const ov=pick(tot,"over"),un=pick(tot,"under");
+    if(ov&&un){const q=devig([ov.price,un.price]);
+      total=(tot.hdp||2.5)+(q[0]-0.5)*2.4;}}
+  const tilt=clamp(0.5+(pH-pA)*0.55,0.2,0.8);
+  const xgHome=total*tilt,xgAway=total*(1-tilt);
+  let csHome=Math.exp(-xgAway),csAway=Math.exp(-xgHome);
+  if(btts){const y=pick(btts,"yes"),n=pick(btts,"no");
+    if(y&&n){const q=devig([y.price,n.price]);
+      /* scale both to agree with the priced probability of a shut-out */
+      const f=q[1]/Math.max(0.05,csHome+csAway-csHome*csAway);
+      csHome*=clamp(f,0.6,1.6);csAway*=clamp(f,0.6,1.6);}}
+  return{csHome:clamp(csHome,0,0.8),csAway:clamp(csAway,0,0.8),xgHome,xgAway,n:0};
+}
+/* every priced fixture, reduced to what matters for FPL */
+function oddsFixtures(){
+  const findTeam=clubFromName;
+  return (S.odds||[]).map(ev=>{
+    const mk=marketsFor(ev);
+    const goals=fromCorrectScore(mk)||fromTotals(mk);
+    if(!goals)return null;
+    return{ev,mk,goals,ht:findTeam(ev.home),at:findTeam(ev.away),
+      home:ev.home,away:ev.away,date:ev.commence||ev.date};
+  }).filter(Boolean);
+}
+/* player prices, keyed to our own player records */
+function oddsPlayers(){
+  const out={};
+  const P=S.model?S.model.players:[];
+  const byTeam={};P.forEach(p=>{(byTeam[p.team]=byTeam[p.team]||[]).push(p);});
+  /* Score every candidate rather than taking the first loose hit: a plain
+     substring test matched "Rayan Cherki" to a Bournemouth player called Rayan.
+     Surname agreement is what actually identifies a footballer. */
+  const match=(name,teamIds)=>{
+    const q=norm(name);if(!q)return null;
+    const pool=teamIds.flatMap(id=>byTeam[id]||[]);
+    let best=null,bestScore=0;
+    pool.forEach(p=>{
+      const web=norm(p.web_name), full=norm((p.first||"")+" "+(p.last||"")), last=norm(p.last||"");
+      let sc=0;
+      if(full&&full===q)sc=100;
+      else if(web===q)sc=90;
+      else if(last&&last.length>=4&&q.endsWith(last))sc=70+last.length;
+      else if(last&&last.length>=4&&q.includes(last))sc=55+last.length;
+      else if(web.length>=5&&q.includes(web))sc=40+web.length;
+      if(sc>bestScore){bestScore=sc;best=p;}
+    });
+    return bestScore>=40?best:null;};
+  const MK={"player to score or assist":"ret","anytime goalscorer":"goal",
+    "player to assist":"assist","player shots on target":"sot",
+    "player shots":"shots","player to be booked":"card"};
+  oddsFixtures().forEach(fx=>{
+    const ids=[fx.ht&&fx.ht.id,fx.at&&fx.at.id].filter(Boolean);
+    Object.entries(MK).forEach(([raw,key])=>{
+      (fx.mk[raw]||[]).forEach(m=>{
+        /* one-sided markets: strip roughly half the book's margin */
+        const margin=Math.max(0,(m.outcomes||[]).reduce((a,o)=>a+1/o.price,0)/
+          Math.max(1,(m.outcomes||[]).length)*0-0)+0.06;
+        (m.outcomes||[]).forEach(o=>{
+          if(!o.price)return;
+          const pl=match(o.name,ids);if(!pl)return;
+          const rec=out[pl.id]=out[pl.id]||{p:pl,fx};
+          const prob=devig1(o.price,margin);
+          if(key==="sot"||key==="shots"){
+            if(!rec[key]||prob>rec[key])rec[key]=prob;
+          }else if(!rec[key]||prob>rec[key])rec[key]=prob;
+        });
+      });
+    });
+  });
+  return out;
+}
+/* the market's own view of a player's FPL score */
+function marketPoints(p,rec,fx){
+  if(!rec&&!fx)return null;
+  const GOAL={1:10,2:6,3:5,4:4}[p.pos]||4, CS={1:4,2:4,3:1,4:0}[p.pos]||0;
+  const mins=clamp(p.xMins/90,0,1);
+  const app=p.xMins>=60?2:(p.xMins>0?1:0);
+  let pts=app;
+  if(rec){
+    if(rec.goal)pts+=rec.goal*GOAL;
+    if(rec.assist)pts+=rec.assist*3;
+    else if(rec.ret&&rec.goal)pts+=Math.max(0,rec.ret-rec.goal)*3;
+    if(rec.card)pts-=rec.card*1;
+  }
+  if(fx&&p.pos<=3){
+    const mine=fx.ht&&fx.ht.id===p.team, theirs=mine?fx.goals.csHome:fx.goals.csAway;
+    const cs=mine?fx.goals.csHome:(fx.at&&fx.at.id===p.team?fx.goals.csAway:0);
+    pts+=cs*CS;
+    if(p.pos<=2){
+      const conceded=mine?fx.goals.xgAway:fx.goals.xgHome;
+      pts-=Math.floor(conceded/2)*0.5;
+    }
+  }
+  if(p.pos===1&&fx){
+    const shots=(fx.ht&&fx.ht.id===p.team?fx.goals.xgAway:fx.goals.xgHome)*3.4;
+    pts+=shots/3*0.6;
+  }
+  return pts*clamp(p.avail,0,1)*(0.55+0.45*mins);
+}
 /* Turn match prices into expected goals per side, margin removed. */
 function buildOddsTeams(){
   const M={};
@@ -3339,12 +3519,7 @@ function buildOddsTeams(){
     const teams=S.model?S.model.teams:S.teams;
     /* the feed gives full club names ("Brentford FC", "Tottenham Hotspur"),
        so match on the longest overlapping token rather than an exact string */
-    const find=n=>{
-      const q=norm(n);if(!q)return null;
-      return teams.find(t=>norm(t.name)===q)
-        ||teams.find(t=>q.includes(norm(t.name))||norm(t.name).includes(q))
-        ||teams.find(t=>q.startsWith(norm(t.short)))
-        ||null;};
+    const find=clubFromName;
     const th=find(h),ta=find(a);
     if(!th||!ta)return;
     M[th.short+"|"+ta.short+"|H"]={xg:total*tilt,xgc:total*(1-tilt)};
@@ -3508,6 +3683,11 @@ function normaliseBooks(row){
       const raw=String(m&&m.name||"").trim();
       const key=MARKET[raw.toLowerCase()]||raw.toLowerCase();
       const lines=Array.isArray(m&&m.odds)?m.odds:[];
+      /* A market arrives as an array of lines. Two-sided markets put both
+         prices on one line; Correct Score and the player markets put one
+         selection per line, so those are merged into a single market rather
+         than discarded for having a lone outcome. */
+      const merged=[];
       lines.forEach(line=>{
         if(!line||typeof line!=="object")return;
         const outcomes=[];
@@ -3516,9 +3696,14 @@ function normaliseBooks(row){
           const price=num(v);
           if(price)outcomes.push({name:k,price});
         });
-        if(outcomes.length>=2)
+        if(!outcomes.length)return;
+        if(line.hdp!==undefined&&outcomes.length>=2)
           out.push({key,hdp:line.hdp,outcomes,updated:m.updatedAt});
+        else if(outcomes.length>=2&&merged.length===0)
+          out.push({key,hdp:line.hdp,outcomes,updated:m.updatedAt});
+        else merged.push(...outcomes);
       });
+      if(merged.length)out.push({key,outcomes:merged,updated:m.updatedAt});
     });
     if(out.length)books.push({key:bookName,markets:out});
   });
@@ -3534,100 +3719,177 @@ function sampleJSON(o){
 }
 
 function oddsHTML(){
-  const pct=o=>o>0?(100/o):0;
+  const g=VG();
   const head=`<div class="panel"><div class="phead"><h2>Odds</h2>
      <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button>
        <button onclick="act('oddsreset')" title="Clear the cached league and refetch">Reset</button></span></div>
     <div class="pbody">
-      <p class="note" style="margin:0 0 8px">Bookmaker prices are a live consensus model — they price form, team news, penalties and venue in one number. Shown as implied probability with the margin left in.</p>
-      <span class="pricebox"><input type="password" placeholder="odds-api.io key" value="${esc(S.oddsKey||"")}"
+      <p class="note" style="margin:0 0 8px">Uses <a href="https://odds-api.io" target="_blank" style="color:var(--cyan)">odds-api.io</a>. Your key stays in this browser. Prices are cached for four hours and shown with the bookmaker's margin removed — both available books are recreational, so treat these as a second opinion rather than truth.</p>
+      <span class="pricebox"><input type="password" placeholder="Paste your odds API key" value="${esc(S.oddsKey||"")}"
         onchange="act('oddskey',this.value)" style="flex:1"></span></div></div>`;
-  if(S.oddsState==="loading")return head+`<div class="panel"><div class="pbody"><p class="note">Fetching prices…</p></div></div>`;
-  if((S.oddsState==="fail"||S.oddsState==="empty")&&!S.oddsDemo)
-    return head+`<div class="panel"><div class="pbody">
-      <div class="warn">${S.oddsErr
-        ? `<b>${esc(S.oddsErr)}</b><br><span class="note">If that mentions a network or CORS failure, odds-api.io is refusing browser requests and nothing in the app can work around it.</span>`
-        : "The feed responded but returned nothing usable."}
-        ${(S.oddsLog||[]).length?`<div class="mono" style="font-size:10.5px;margin-top:10px;opacity:.9;line-height:1.6">
-          ${S.oddsLog.map(x=>esc(x)).join("<br>")}</div>`
-          :`<div class="note" style="margin-top:8px">No trace recorded — press Fetch to run the lookup and capture one.</div>`}</div>
-      <span style="display:flex;gap:6px;margin-top:10px">
-        <button class="pri" onclick="act('odds')">↻ Fetch now</button>
-        <button onclick="act('oddsreset')">Reset league cache</button>
-        <button onclick="act('oddsdemo')">Sample layout</button></span></div></div>`;
-  if(S.oddsDemo&&S.oddsState!=="ok"){
-    const demo={
-      cs:[["Arsenal clean sheet","Arsenal v Coventry",1.62],["Man City clean sheet","Man City v Bournemouth",1.85],
-          ["Liverpool clean sheet","Newcastle v Liverpool",2.40],["Under 2.5 goals","Everton v Fulham",1.95]],
-      gs:[["Haaland","Man City v Bournemouth",1.55],["Gyökeres","Arsenal v Coventry",1.90],
-          ["Isak","Newcastle v Liverpool",2.35],["Watkins","Brighton v Aston Villa",2.60],
-          ["Mbeumo","Hull v Man Utd",3.10]],
-      as:[["B.Fernandes","Hull v Man Utd",3.75],["Saka","Arsenal v Coventry",4.20],
-          ["Szoboszlai","Newcastle v Liverpool",5.00]],
-      misc:[["Arsenal win","Arsenal v Coventry",1.28],["Man City win","Man City v Bournemouth",1.36]]};
-    const sec=(title,list,note)=>`<div class="panel"><div class="phead"><h2>${title}</h2>
-        <span class="note">sample data</span></div>
-      ${list.map(([lab,match,price])=>`<div class="fixrow">
-        <span class="fixteam" style="flex:2"><b>${esc(lab)}</b></span>
-        <span class="note" style="flex:2">${esc(match)}</span>
-        <span class="mono" style="flex:none;width:64px;text-align:right;color:var(--mint);font-weight:700">${(100/price).toFixed(0)}%</span>
-        <span class="mono" style="flex:none;width:52px;text-align:right;color:var(--mute)">${price.toFixed(2)}</span></div>`).join("")}</div>`;
-    return head+`<div class="panel"><div class="pbody"><div class="info">Sample figures so the layout can be checked. Real prices replace these once bookmakers post the markets.</div></div></div>`
-      +sec("Clean sheets &amp; goals",demo.cs)+sec("Goalscorers",demo.gs)
-      +sec("Assists",demo.as)+sec("Other markets",demo.misc);
-  }
-  if(S.oddsState==="fail"||S.oddsState==="empty")
+  if(S.oddsState==="idle")
+    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching current prices…</p></div></div>`;
+  if(S.oddsState==="nokey"||!S.oddsKey)
+    return head+`<div class="panel"><div class="pbody"><p class="note">No key set — everything else in the app works without one.</p></div></div>`;
+  if(S.oddsState==="loading")
+    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching prices…</p></div></div>`;
+  if(S.oddsState!=="ok")
     return head+`<div class="panel"><div class="pbody"><div class="warn">${S.oddsErr
       ? `<b>${esc(S.oddsErr)}</b>` : "The feed responded but returned nothing usable."}
       ${(S.oddsLog||[]).length?`<div class="mono" style="font-size:10.5px;margin-top:10px;opacity:.9;line-height:1.6">
-        ${S.oddsLog.map(x=>esc(x)).join("<br>")}</div>`:""}</div></div></div>`;
-  if(S.oddsState!=="ok")return head;
+        ${S.oddsLog.map(x=>esc(x)).join("<br>")}</div>`:""}</div>
+      <span style="display:flex;gap:6px;margin-top:10px">
+        <button class="pri" onclick="act('odds')">↻ Fetch now</button>
+        <button onclick="act('oddsreset')">Reset league cache</button></span></div></div>`;
 
-  /* group whatever markets the feed returns into FPL-relevant sections */
-  const rows={cs:[],gs:[],as:[],misc:[]};
-  (S.odds||[]).forEach(ev=>{
-    const h=ev.home||ev.home_team||ev.homeTeam||"?", a=ev.away||ev.away_team||ev.awayTeam||"?";
-    (ev.bookmakers||[]).slice(0,1).forEach(bm=>{
-      (bm.markets||[]).forEach(m=>{
-        const k=(m.key||"").toLowerCase();
-        const bucket=/btts|clean|total/.test(k)?"cs"
-          :/scorer/.test(k)?"gs":/assist/.test(k)?"as":"misc";
-        (m.outcomes||[]).forEach(o=>{
-          if(!o.price)return;
-          const lbl=(k==="h2h"?({home:h,draw:"Draw",away:a}[String(o.name).toLowerCase()]||o.name)
-            :`${o.name}${m.hdp!==undefined?" "+m.hdp:""} · ${k}`);
-          rows[bucket].push({match:`${h} v ${a}`,label:lbl,price:o.price,p:pct(o.price)});
-        });
-      });
-    });
+  const fixtures=oddsFixtures();
+  const players=oddsPlayers();
+  const pct=v=>Math.round(v*100)+"%";
+  const owned=id=>(S.squad||[]).includes(id);
+
+  /* ---- squad: what the market makes of your fifteen ---- */
+  const sp=squadPlayers(), xi=startingXI();
+  const teamFx={};fixtures.forEach(f=>{
+    if(f.ht)teamFx[f.ht.id]=f;if(f.at)teamFx[f.at.id]=f;});
+  const rows=sp.map(p=>{
+    const fx=teamFx[p.team]||null;
+    const rec=players[p.id]||null;
+    const mkt=(fx||rec)?marketPoints(p,rec,fx):null;
+    return{p,fx,rec,model:p.gw[g]?.pts||0,mkt,start:xi.includes(p)};
   });
-  const section=(title,list,note)=>{
-    const top=list.sort((x,y)=>x.price-y.price).slice(0,15);
-    return `<div class="panel"><div class="phead"><h2>${title}</h2><span class="note">${top.length?"shortest prices first":"nothing posted yet"}</span></div>
-      ${top.length?top.map(r=>`<div class="fixrow">
-        <span class="fixteam" style="flex:2"><b>${esc(r.label)}</b></span>
-        <span class="note" style="flex:2">${esc(r.match)}</span>
-        <span class="mono" style="flex:none;width:64px;text-align:right;color:var(--mint);font-weight:700">${r.p.toFixed(0)}%</span>
-        <span class="mono" style="flex:none;width:52px;text-align:right;color:var(--mute)">${r.price.toFixed(2)}</span></div>`).join("")
-        :`<div class="pbody"><p class="note">${esc(note)}</p></div>`}</div>`;
-  };
+  const capId=S.captain;
+  const sum=k=>rows.filter(r=>r.start).reduce((a,r)=>a+(k==="model"?r.model:(r.mkt||0)),0)
+    +(()=>{const c=rows.find(r=>r.p.id===capId&&r.start);
+      return c?(k==="model"?c.model:(c.mkt||0)):0;})();
+  const mdl=sum("model"), mkt=sum("mkt");
+  const priced=rows.filter(r=>r.mkt!=null).length;
+  const big=(v,c)=>`<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;line-height:1;color:${c}">${v}</span>`;
+  const delta=mkt-mdl;
+  const squadPanel=`<div class="panel">
+    <div class="phead"><h2>Your squad · market vs model</h2>
+      <span class="note">GW${g} · ${priced} of 15 priced · captain doubled</span></div>
+    <div class="pbody" style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--ink3)">
+      <span><span class="note" style="display:block">Model</span>${big(mdl.toFixed(1),"var(--mint)")}</span>
+      <span><span class="note" style="display:block">Market</span>${big(mkt.toFixed(1),"var(--cyan)")}</span>
+      <span><span class="note" style="display:block">Difference</span>
+        ${big((delta>0?"+":"")+delta.toFixed(1),delta>0.5?"var(--mint)":delta<-0.5?"var(--red)":"var(--cream)")}</span>
+      <span class="note" style="flex:1;min-width:180px">Sorted by disagreement — where the two views differ most is where a second look pays.</span>
+    </div>
+    <div class="scroll"><table class="sqtable"><thead><tr>
+      <th style="text-align:left">Player</th><th style="text-align:right">Model</th>
+      <th style="text-align:right">Market</th><th style="text-align:right">Diff</th>
+      <th style="text-align:right">Score</th><th style="text-align:right">Assist</th>
+      <th style="text-align:right">CS</th><th style="text-align:center">Fixture</th></tr></thead><tbody>
+      ${rows.slice().sort((a,b)=>Math.abs((b.mkt??b.model)-b.model)-Math.abs((a.mkt??a.model)-a.model))
+        .map(r=>{
+        const d=r.mkt==null?null:r.mkt-r.model;
+        const cs=r.fx&&r.p.pos<=3
+          ? (r.fx.ht&&r.fx.ht.id===r.p.team?r.fx.goals.csHome:r.fx.goals.csAway) : null;
+        const f0=r.p.gw[g]?.fixtures?.[0];
+        return `<tr class="${r.start?"":"sub"}">
+          <td class="nm"><span style="display:flex;align-items:center;gap:7px">
+            ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,20)}
+            <span><b>${esc(r.p.web_name)}</b>${r.p.id===capId?'<span class="tag c">C</span>':""}
+            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]}</span></span></span></td>
+          <td class="mono" style="text-align:right;color:var(--mint)">${r.model.toFixed(1)}</td>
+          <td class="mono" style="text-align:right;color:${r.mkt==null?"var(--mute)":"var(--cyan)"}">${r.mkt==null?"—":r.mkt.toFixed(1)}</td>
+          <td class="mono" style="text-align:right;font-weight:700;color:${d==null?"var(--mute)":d>0.4?"var(--mint)":d<-0.4?"var(--red)":"var(--cream)"}">${d==null?"—":(d>0?"+":"")+d.toFixed(1)}</td>
+          <td class="mono" style="text-align:right">${r.rec&&r.rec.goal?pct(r.rec.goal):"—"}</td>
+          <td class="mono" style="text-align:right">${r.rec&&r.rec.assist?pct(r.rec.assist):"—"}</td>
+          <td class="mono" style="text-align:right">${cs!=null?pct(cs):"—"}</td>
+          <td style="text-align:center;white-space:nowrap">${f0?fdrPill(f0.opp,f0.home,posDiff(r.p,f0),{short:true}):"—"}</td></tr>`;}).join("")}
+    </tbody></table></div></div>`;
+
+  /* ---- attack ---- */
+  const teamAtt=[];
+  fixtures.forEach(f=>{
+    if(f.ht)teamAtt.push({t:f.ht,xg:f.goals.xgHome,opp:f.at,home:true,f});
+    if(f.at)teamAtt.push({t:f.at,xg:f.goals.xgAway,opp:f.ht,home:false,f});});
+  teamAtt.sort((a,b)=>b.xg-a.xg);
+  const plist=Object.values(players).filter(r=>r.ret||r.goal||r.assist)
+    .sort((a,b)=>(b.ret||b.goal||0)-(a.ret||a.goal||0));
+  const attCol=`<div class="panel"><div class="phead"><h2 style="color:var(--amber)">Attack</h2>
+      <span class="note">${teamAtt.length} teams · ${plist.length} players priced</span></div>
+    <div class="dashrow" onclick="act('dash','oxg')"><span class="dkey">Team goals</span>
+      <span class="dval">${teamAtt.length?esc(teamAtt[0].t.short)+" "+teamAtt[0].xg.toFixed(2):"—"}</span>
+      <span class="dchev">${S.dash.oxg?"▲":"▼"}</span></div>
+    ${S.dash.oxg?`<div class="dashbody">${teamAtt.map(x=>`<div class="dline">
+      <span>${shirtSVG(x.t.short.toUpperCase(),false,18)} <b>${esc(x.t.short)}</b>
+        <span class="note">${x.home?"v":"at"} ${esc(x.opp?x.opp.short:"?")}</span></span>
+      <span class="mono" style="color:var(--amber);font-weight:700">${x.xg.toFixed(2)}</span></div>`).join("")}</div>`:""}
+    <div class="dashrow" onclick="act('dash','oret')"><span class="dkey">Score or assist</span>
+      <span class="dval">${plist.length?esc(plist[0].p.web_name)+" "+pct(plist[0].ret||plist[0].goal):"—"}</span>
+      <span class="dchev">${S.dash.oret?"▲":"▼"}</span></div>
+    ${S.dash.oret!==false?`<div class="dashbody">
+      <table class="sqtable"><thead><tr><th style="text-align:left">Player</th>
+        <th style="text-align:right">Ret</th><th style="text-align:right">Goal</th>
+        <th style="text-align:right">Asst</th><th style="text-align:right">SoT</th></tr></thead><tbody>
+      ${plist.slice(0,40).map(r=>`<tr class="${owned(r.p.id)?"":""}" style="${owned(r.p.id)?"background:rgba(45,220,135,.08)":""}">
+        <td class="nm"><span style="display:flex;align-items:center;gap:6px">
+          ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,18)}
+          <span><b>${esc(r.p.web_name)}</b>${owned(r.p.id)?' <span class="tag c">✓</span>':""}
+          <span style="display:block;font-size:9px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
+        <td class="mono" style="text-align:right;color:var(--amber);font-weight:700">${r.ret?pct(r.ret):"—"}</td>
+        <td class="mono" style="text-align:right">${r.goal?pct(r.goal):"—"}</td>
+        <td class="mono" style="text-align:right">${r.assist?pct(r.assist):"—"}</td>
+        <td class="mono" style="text-align:right;color:var(--mute)">${r.sot?pct(r.sot):"—"}</td></tr>`).join("")}
+      </tbody></table></div>`:""}</div>`;
+
+  /* ---- defence ---- */
+  const cs=[];
+  fixtures.forEach(f=>{
+    if(f.ht)cs.push({t:f.ht,p:f.goals.csHome,conc:f.goals.xgAway,opp:f.at,home:true});
+    if(f.at)cs.push({t:f.at,p:f.goals.csAway,conc:f.goals.xgHome,opp:f.ht,home:false});});
+  cs.sort((a,b)=>b.p-a.p);
+  const keepers=cs.map(x=>{
+    const gk=(S.model.players||[]).filter(p=>p.pos===1&&p.team===x.t.id&&p.xMins>50)[0];
+    return gk?{...x,gk}:null;}).filter(Boolean);
+  const cards=Object.values(players).filter(r=>r.card).sort((a,b)=>b.card-a.card);
+  const defCol=`<div class="panel"><div class="phead"><h2 style="color:var(--sky)">Defence</h2>
+      <span class="note">${cs.length} teams priced</span></div>
+    <div class="dashrow" onclick="act('dash','ocs')"><span class="dkey">Clean sheet</span>
+      <span class="dval">${cs.length?esc(cs[0].t.short)+" "+pct(cs[0].p):"—"}</span>
+      <span class="dchev">${S.dash.ocs!==false?"▲":"▼"}</span></div>
+    ${S.dash.ocs!==false?`<div class="dashbody">${cs.map(x=>`<div class="dline">
+      <span>${shirtSVG(x.t.short.toUpperCase(),false,18)} <b>${esc(x.t.short)}</b>
+        <span class="note">${x.home?"v":"at"} ${esc(x.opp?x.opp.short:"?")} · concede ${x.conc.toFixed(2)}</span></span>
+      <span class="mono" style="color:var(--sky);font-weight:700">${pct(x.p)}</span></div>`).join("")}</div>`:""}
+    <div class="dashrow" onclick="act('dash','ogk')"><span class="dkey">Goalkeepers</span>
+      <span class="dval">${keepers.length?esc(keepers[0].gk.web_name)+" "+pct(keepers[0].p):"—"}</span>
+      <span class="dchev">${S.dash.ogk?"▲":"▼"}</span></div>
+    ${S.dash.ogk?`<div class="dashbody">${keepers.map(x=>`<div class="dline">
+      <span><b>${esc(x.gk.web_name)}</b>${owned(x.gk.id)?' <span class="tag c">✓</span>':""}
+        <span class="note">${esc(x.t.short)} · £${x.gk.price.toFixed(1)} · faces ${x.conc.toFixed(2)} xG</span></span>
+      <span class="mono" style="color:var(--sky);font-weight:700">${pct(x.p)}</span></div>`).join("")}</div>`:""}
+    <div class="dashrow" onclick="act('dash','ocard')"><span class="dkey">Booking risk</span>
+      <span class="dval">${cards.length?esc(cards[0].p.web_name)+" "+pct(cards[0].card):"none priced"}</span>
+      <span class="dchev">${S.dash.ocard?"▲":"▼"}</span></div>
+    ${S.dash.ocard?`<div class="dashbody">${cards.slice(0,20).map(r=>`<div class="dline">
+      <span><b>${esc(r.p.web_name)}</b>${owned(r.p.id)?' <span class="tag c">✓</span>':""}
+        <span class="note">${esc(r.p.teamName)} · ${POS[r.p.pos]}</span></span>
+      <span class="mono" style="color:var(--red)">${pct(r.card)}</span></div>`).join("")
+        ||`<p class="note" style="margin:0">Not priced by your bookmakers.</p>`}</div>`:""}</div>`;
+
   const cat=S.oddsMarkets&&Object.keys(S.oddsMarkets).length
-    ? `<div class="panel"><div class="phead"><h2>Markets returned</h2>
-        <span class="note">${Object.keys(S.oddsMarkets).length} from your bookmakers</span></div>
-      <div class="pbody"><div style="display:flex;gap:6px;flex-wrap:wrap">
+    ? `<div class="panel"><div class="phead" style="cursor:pointer" onclick="act('dash','omk')">
+        <h2>Markets returned</h2><span class="note">${Object.keys(S.oddsMarkets).length} ${S.dash.omk?"▲":"▼"}</span></div>
+      ${S.dash.omk?`<div class="pbody"><div style="display:flex;gap:6px;flex-wrap:wrap">
         ${Object.entries(S.oddsMarkets).sort().map(([n,bks])=>{
-          const player=/scorer|to score|assist|player|shots|card|anytime/i.test(n);
-          return `<span class="chipbtn" style="${player?"border-color:var(--mint);color:var(--mint)":""}"
-            title="${esc(bks.join(", "))}">${esc(n)}</span>`;}).join("")}
+          const pl=/scorer|to score|assist|player|shots|card|anytime/i.test(n);
+          return `<span class="chipbtn" style="${pl?"border-color:var(--mint);color:var(--mint)":""}"
+            title="${esc(bks.join(", "))}">${esc(n)}</span>`;}).join("")}</div></div>`:""}</div>` : "";
+
+  return head+squadPanel
+    +`<div class="sqgrid">
+        <div class="${S.oddsView==="def"?"hideSm":""}">${attCol}</div>
+        <div class="${S.oddsView==="att"||!S.oddsView?"hideSm":""}">${defCol}</div>
       </div>
-      <p class="note" style="margin:9px 0 0">Green marks a player-level market. Hover for which bookmaker offers it.</p>
-      </div></div>` : "";
-  return head+cat
-    +section("Clean sheets &amp; goals",rows.cs,"Clean-sheet and total-goals markets aren't posted this far out.")
-    +section("Goalscorers",rows.gs,"Anytime-scorer markets usually appear two or three days before kick-off.")
-    +section("Assists",rows.as,"Assist markets are rarely offered outside the biggest fixtures.")
-    +section("Other markets",rows.misc,"Nothing else returned.");
+      <div class="sqtoggle">
+        <button class="${(S.oddsView||"att")==="att"?"on":""}" onclick="act('oddsview','att')">Attack</button>
+        <button class="${S.oddsView==="def"?"on":""}" onclick="act('oddsview','def')">Defence</button>
+      </div>`+cat;
 }
+
 function rivalsHTML(){
   const g=S.model.next.id;
   const list=(S.rivals||[]);
@@ -4159,6 +4421,7 @@ function act(k,a,b){
     case"plf":S.playerFilter=a||null;break;
     case"odds":loadOdds();return;
     case"oddsdemo":S.oddsDemo=!S.oddsDemo;break;
+    case"oddsview":S.oddsView=a;break;
     case"oddsreset":LS.set("oddsLeague","");LS.set("oddsBooks",null);LS.set("oddsCache",null);loadOdds();return;
     case"oddskey":S.oddsKey=a.trim();LS.set("oddsKey",S.oddsKey);if(S.oddsKey)loadOdds();return;
     case"addrival":{const n=document.getElementById("rvName")?.value?.trim();
