@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.13.5";
+const APP_VERSION="7.14.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -3321,20 +3321,30 @@ function buildOddsTeams(){
     const h=ev.home||ev.home_team||ev.homeTeam,a=ev.away||ev.away_team||ev.awayTeam;
     if(!h||!a)return;
     const bm=(ev.bookmakers||[])[0];if(!bm)return;
-    const h2h=(bm.markets||[]).find(m=>/h2h|1x2|moneyline/i.test(m.key||m.name||""));
-    const tot=(bm.markets||[]).find(m=>/total/i.test(m.key||m.name||""));
+    const h2h=(bm.markets||[]).find(m=>m.key==="h2h");
+    const tot=(bm.markets||[]).find(m=>/^totals$/i.test(m.key||"")&&m.hdp===2.5)
+      ||(bm.markets||[]).find(m=>/goals? totals|^totals$/i.test(m.key||""));
     if(!h2h)return;
-    const out=(h2h.outcomes||[]).map(o=>+(o.price||o.odds||0)).filter(Boolean);
-    if(out.length<3)return;
-    const inv=out.map(o=>1/o),sum=inv.reduce((s2,x)=>s2+x,0);
+    const pick=n=>(h2h.outcomes||[]).find(o=>String(o.name).toLowerCase()===n);
+    const oH=pick("home"),oD=pick("draw"),oA=pick("away");
+    if(!oH||!oD||!oA)return;
+    const inv=[oH,oD,oA].map(o=>1/o.price),sum=inv.reduce((s2,x)=>s2+x,0);
     const pH=inv[0]/sum,pA=inv[2]/sum;
     let total=2.7;
-    if(tot){const o=(tot.outcomes||[]).map(x=>+(x.price||x.odds||0)).filter(Boolean);
-      if(o.length>=2){const i2=o.map(x=>1/x),s3=i2.reduce((s4,x)=>s4+x,0);
-        total=2.5+(i2[0]/s3-0.5)*2.2;}}
+    if(tot){const ov=(tot.outcomes||[]).find(x=>/over/i.test(x.name));
+      const un=(tot.outcomes||[]).find(x=>/under/i.test(x.name));
+      if(ov&&un){const i2=[1/ov.price,1/un.price],s3=i2[0]+i2[1];
+        total=(tot.hdp||2.5)+(i2[0]/s3-0.5)*2.2;}}
     const tilt=clamp(0.5+(pH-pA)*0.55,0.2,0.8);
     const teams=S.model?S.model.teams:S.teams;
-    const find=n=>teams.find(t=>norm(t.name)===norm(n)||norm(n).includes(norm(t.short)));
+    /* the feed gives full club names ("Brentford FC", "Tottenham Hotspur"),
+       so match on the longest overlapping token rather than an exact string */
+    const find=n=>{
+      const q=norm(n);if(!q)return null;
+      return teams.find(t=>norm(t.name)===q)
+        ||teams.find(t=>q.includes(norm(t.name))||norm(t.name).includes(q))
+        ||teams.find(t=>q.startsWith(norm(t.short)))
+        ||null;};
     const th=find(h),ta=find(a);
     if(!th||!ta)return;
     M[th.short+"|"+ta.short+"|H"]={xg:total*tilt,xgc:total*(1-tilt)};
@@ -3438,11 +3448,8 @@ async function loadOdds(){
         const ev=chunk.find(e=>String(e.id||e.eventId)===String(id))||{};
         const books=normaliseBooks(rw);
         if(!books.length)return;
-        out.push({
-          home:ev.home||ev.homeTeam||ev.home_team||rw.home||(ev.participants||[])[0],
-          away:ev.away||ev.awayTeam||ev.away_team||rw.away||(ev.participants||[])[1],
-          commence:ev.start||ev.commenceTime||ev.date,
-          bookmakers:books});
+        out.push({home:rw.home||ev.home,away:rw.away||ev.away,
+          commence:rw.date||ev.date,bookmakers:books});
       });
     }
     log(`usable fixtures with prices: ${out.length}`);
@@ -3461,46 +3468,40 @@ async function loadOdds(){
    find, so rather than assume a shape this walks the response looking for what
    a price actually is: a number between 1.01 and 100 sitting under a key that
    names a match outcome. That survives the payload being reorganised. */
+/* Written against a real odds-api.io response rather than inferred:
+     bookmakers: { "Paddy Power": [ { name:"ML", odds:[ {home:"2.40",draw:"3.50",away:"2.75"} ] }, … ] }
+   Prices arrive as strings, and each market is an array of odds lines — a
+   handicap market has one line per line value. */
 function normaliseBooks(row){
-  const OUTCOME=/^(home|away|draw|1|x|2|home_?win|away_?win|tie|w1|w2)$/i;
-  const isPrice=v=>typeof v==="number"&&v>1.005&&v<100;
-  const found=[];
-  const walk=(node,path,depth)=>{
-    if(!node||typeof node!=="object"||depth>7)return;
-    if(Array.isArray(node)){
-      /* an array of {name, price} outcomes is itself a market */
-      const outs=node.filter(v=>v&&typeof v==="object"&&
-        isPrice(v.price??v.odd??v.odds??v.value??v.decimal)&&
-        (v.name||v.label||v.outcome||v.selection));
-      if(outs.length>=2)found.push({path,outcomes:outs.map(v=>({
-        name:v.name||v.label||v.outcome||v.selection,
-        price:v.price??v.odd??v.odds??v.value??v.decimal}))});
-      node.forEach(n=>walk(n,path,depth+1));return;}
-    /* an object whose keys are outcome names and values are prices */
-    const keys=Object.keys(node);
-    const direct=keys.filter(k=>OUTCOME.test(k)&&isPrice(node[k]));
-    if(direct.length>=2){
-      found.push({path,outcomes:direct.map(k=>({name:k,price:node[k]}))});
-    }
-    /* or a list of outcome objects, each with a name and a price */
-    const named=keys.filter(k=>{
-      const v=node[k];
-      return v&&typeof v==="object"&&!Array.isArray(v)&&
-        isPrice(v.price??v.odd??v.odds??v.value??v.decimal);
+  const num=v=>{const n=parseFloat(v);return isFinite(n)&&n>1.005&&n<200?n:0;};
+  const MARKET={ml:"h2h","1x2":"h2h","match odds":"h2h","moneyline":"h2h",
+    "both teams to score":"btts","totals":"totals","over/under":"totals",
+    "draw no bet":"dnb","double chance":"dc"};
+  const books=[];
+  const src=row&&row.bookmakers;
+  if(!src||typeof src!=="object")return books;
+  Object.entries(src).forEach(([bookName,markets])=>{
+    if(!Array.isArray(markets))return;
+    const out=[];
+    markets.forEach(m=>{
+      const raw=String(m&&m.name||"").trim();
+      const key=MARKET[raw.toLowerCase()]||raw.toLowerCase();
+      const lines=Array.isArray(m&&m.odds)?m.odds:[];
+      lines.forEach(line=>{
+        if(!line||typeof line!=="object")return;
+        const outcomes=[];
+        Object.entries(line).forEach(([k,v])=>{
+          if(k==="hdp")return;                 // the handicap or total, not a price
+          const price=num(v);
+          if(price)outcomes.push({name:k,price});
+        });
+        if(outcomes.length>=2)
+          out.push({key,hdp:line.hdp,outcomes,updated:m.updatedAt});
+      });
     });
-    if(named.length>=2){
-      found.push({path,outcomes:named.map(k=>({name:k,
-        price:node[k].price??node[k].odd??node[k].odds??node[k].value??node[k].decimal}))});
-    }
-    keys.forEach(k=>walk(node[k],path?path+"."+k:k,depth+1));
-  };
-  walk(row,"",0);
-  if(!found.length)return[];
-  /* prefer whichever cluster looks most like a match-result market */
-  found.sort((a,b)=>{
-    const sc=x=>(/1x2|match|result|winner|moneyline|h2h|full/i.test(x.path)?10:0)+x.outcomes.length;
-    return sc(b)-sc(a);});
-  return[{key:"book",markets:[{key:"h2h",outcomes:found[0].outcomes}]}];
+    if(out.length)books.push({key:bookName,markets:out});
+  });
+  return books;
 }
 /* keep a trimmed sample of the raw response so an unfamiliar shape can be
    inspected rather than guessed at */
@@ -3567,12 +3568,14 @@ function oddsHTML(){
     const h=ev.home||ev.home_team||ev.homeTeam||"?", a=ev.away||ev.away_team||ev.awayTeam||"?";
     (ev.bookmakers||[]).slice(0,1).forEach(bm=>{
       (bm.markets||[]).forEach(m=>{
-        const k=(m.key||m.name||"").toLowerCase();
-        const bucket=/clean|btts|both.teams|total/.test(k)?"cs"
-          :/scorer|goal/.test(k)?"gs":/assist/.test(k)?"as":"misc";
+        const k=(m.key||"").toLowerCase();
+        const bucket=/btts|clean|total/.test(k)?"cs"
+          :/scorer/.test(k)?"gs":/assist/.test(k)?"as":"misc";
         (m.outcomes||[]).forEach(o=>{
-          const price=+(o.price||o.odds||0);if(!price)return;
-          rows[bucket].push({match:`${h} v ${a}`,label:o.name||o.description||k,price,p:pct(price)});
+          if(!o.price)return;
+          const lbl=(k==="h2h"?({home:h,draw:"Draw",away:a}[String(o.name).toLowerCase()]||o.name)
+            :`${o.name}${m.hdp!==undefined?" "+m.hdp:""} · ${k}`);
+          rows[bucket].push({match:`${h} v ${a}`,label:lbl,price:o.price,p:pct(o.price)});
         });
       });
     });
