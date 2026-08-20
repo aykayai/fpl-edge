@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.12.0";
+const APP_VERSION="7.12.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -1552,6 +1552,11 @@ function buildModel(){
   S.model.players=players;
   S.model.teamById=teams;
   learnFromResults();
+  /* Prices change through the week, so refresh on load rather than waiting for
+     the tab to be opened — the projections use them, not just the display. */
+  if(S.oddsKey&&(S.oddsState==="idle"||S.oddsState==="nokey")&&!S._oddsTried){
+    S._oddsTried=true;setTimeout(()=>loadOdds(),400);
+  }
   if(!S.seeded&&(!S.squad||!S.squad.length)){S.seeded=true;resolveSeed(true);}
   render();
 }
@@ -3355,7 +3360,10 @@ async function loadOdds(){
         buildOddsTeams();buildModel();render();return;}
     }catch(e){S.oddsErr=String(e.message);}
   }
-  S.oddsState="empty";render();
+  /* A browser fetch to a bookmaker API fails when the API sends no
+     Access-Control-Allow-Origin header — indistinguishable from a network
+     error, so say so rather than reporting an empty market. */
+  S.oddsState=S.oddsErr?"fail":"empty";render();
 }
 function devig(list){
   const inv=list.map(o=>o>0?1/o:0);
@@ -3993,6 +4001,7 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
   applyLearning();
   S.oddsKey=LS.get("oddsKey")||"b9a8e93ceb8ec15b61ff2639537d99e600bc43c2b9dd0cca4b489e5518cadc17";
   S.ignored=LS.get("ignored")||[];
+  if(S.oddsKey)S.oddsState="idle";
   S.stars=LS.get("stars")||[];
   S.rivals=LS.get("rivals")||[];
   S.leagueId=LS.get("leagueId")||"391690";
