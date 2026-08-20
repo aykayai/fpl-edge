@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.13.2";
+const APP_VERSION="7.13.3";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -3371,18 +3371,48 @@ async function loadOdds(){
       if(lj===null){S.oddsState="fail";render();return;}
       const leagues=Array.isArray(lj)?lj:(lj.data||lj.leagues||[]);
       log(`leagues: ${leagues.length} returned`);
-      const hit=leagues.find(l=>{
-        const n=(l.name||l.title||"")+" "+(l.slug||l.id||"")+" "+(l.country||"");
-        return /premier\s*league/i.test(n)&&/england|english|\bgb\b|united kingdom/i.test(n);
-      })||leagues.find(l=>/^england-premier-league$|^epl$/i.test(l.slug||l.id||""));
+      /* 892 leagues come back and dozens contain "Premier League" — the loose
+         match landed on an amateur northern division. Score candidates instead,
+         rejecting anything amateur, regional or age-group, and require the name
+         to be the Premier League rather than merely contain it. */
+      const BAD=/amateur|women|u1[6-9]|u2[0-3]|youth|reserve|northern|southern|isthmian|county|regional|division\s*[a-z0-9]|cup|friendly|qualif/i;
+      const score=l=>{
+        const name=String(l.name||l.title||"");
+        const slug=String(l.slug||l.id||l.key||"");
+        const hay=`${name} ${slug} ${l.country||""}`;
+        if(BAD.test(hay))return -1;
+        let sc=0;
+        if(/^(england[- ])?premier league$/i.test(name.trim()))sc+=10;
+        if(/^england-premier-league$|^epl$/i.test(slug))sc+=10;
+        if(/premier league/i.test(name))sc+=3;
+        if(/england|english/i.test(hay))sc+=3;
+        if(/^premier league$/i.test(name.trim()))sc+=4;
+        return sc;
+      };
+      const ranked=leagues.map(l=>({l,sc:score(l)})).filter(x=>x.sc>=6)
+        .sort((a,b)=>b.sc-a.sc);
+      const hit=ranked.length?ranked[0].l:null;
       if(!hit){
         S.oddsErr="Couldn't find a Premier League entry among "+leagues.length+" football leagues";
         S.oddsState="fail";render();return;
       }
       slug=hit.slug||hit.id||hit.key;
       LS.set("oddsLeague",slug);
-      log(`league matched: ${hit.name||hit.title||slug} → ${slug}`);
+      log(`league matched: ${hit.name||hit.title||slug} → ${slug}`+(ranked.length>1?` (from ${ranked.length} candidates)`:""));
     }
+
+    /* /odds rejects a call with no bookmakers, so establish the account's own
+       selection first and fall back to a couple of mainstream UK books. */
+    let books=LS.get("oddsBooks");
+    if(!books){
+      const bj=await get(`/bookmakers/selected?apiKey=${key}`,"bookmakers");
+      const list=bj?(Array.isArray(bj)?bj:(bj.data||bj.bookmakers||[])):[];
+      books=list.map(b=>(typeof b==="string"?b:(b.name||b.key||b.id))).filter(Boolean);
+      if(!books.length)books=["Bet365","PaddyPower"];
+      LS.set("oddsBooks",books);
+      log(`bookmakers: ${books.join(", ")}`);
+    }
+    const bParam="&bookmakers="+encodeURIComponent(books.join(","));
 
     const ej=await get(`/events?sport=football&league=${encodeURIComponent(slug)}&apiKey=${key}`,"events");
     if(ej===null){S.oddsState="fail";render();return;}
@@ -3396,7 +3426,7 @@ async function loadOdds(){
       const chunk=events.slice(i2,i2+10);
       const ids=chunk.map(e=>e.id||e.eventId).filter(Boolean);
       if(!ids.length)continue;
-      const oj=await get(`/odds/multi?eventIds=${encodeURIComponent(ids.join(","))}&apiKey=${key}`,"odds");
+      const oj=await get(`/odds/multi?eventIds=${encodeURIComponent(ids.join(","))}${bParam}&apiKey=${key}`,"odds");
       if(oj===null)break;
       const rows=Array.isArray(oj)?oj:(oj.data||Object.values(oj||{}));
       log(`odds: ${rows.length} rows for ${ids.length} events`);
@@ -4060,7 +4090,7 @@ function act(k,a,b){
     case"plf":S.playerFilter=a||null;break;
     case"odds":loadOdds();return;
     case"oddsdemo":S.oddsDemo=!S.oddsDemo;break;
-    case"oddsreset":LS.set("oddsLeague","");LS.set("oddsCache",null);loadOdds();return;
+    case"oddsreset":LS.set("oddsLeague","");LS.set("oddsBooks",null);LS.set("oddsCache",null);loadOdds();return;
     case"oddskey":S.oddsKey=a.trim();LS.set("oddsKey",S.oddsKey);if(S.oddsKey)loadOdds();return;
     case"addrival":{const n=document.getElementById("rvName")?.value?.trim();
       const id=document.getElementById("rvId")?.value?.trim();
