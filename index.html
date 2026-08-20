@@ -167,11 +167,13 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .pcbar .op{font-size:9.5px;color:var(--cream)}
 .pcbar .gw{font-size:8.5px;color:var(--mute)}
 @media(max-width:520px){.pcard{padding:14px;max-width:340px}}
-.cardsigs{display:flex;justify-content:center;align-items:center;gap:4px;flex-wrap:wrap;padding:5px 2px 0;min-height:22px}
-/* the set-piece and signal groups are separate spans, so the gap has to come
-   from the container or the join between them reads wider than the rest */
-.cardsigs .sigs{gap:4px;display:inline-flex}
-.cardsigs>*{display:inline-flex;gap:4px}
+/* The set-piece and signal groups are separate spans, so nesting flex gaps
+   made the join between the two groups wider than the gaps inside them.
+   Flattening with `display:contents` puts every badge in one flex row. */
+.cardsigs{display:flex;justify-content:center;align-items:center;gap:4px;flex-wrap:wrap;
+ padding:5px 2px 0;min-height:22px}
+.cardsigs .sigs,.cardsigs>span{display:contents}
+.cardsigs .sig{margin:0}
 .benchslot{display:flex;flex-direction:column;align-items:center;gap:4px}
 .benchmv{display:flex;gap:4px;align-items:center}
 .benchmv button{padding:2px 7px;font-size:10px;border-radius:6px;line-height:1.1}
@@ -268,9 +270,12 @@ td.nm{font-family:'Sora',sans-serif}
 .dchev{color:var(--mute);font-size:10px}
 .dashbody{padding:10px 14px 14px;background:rgba(0,0,0,.22);border-top:1px solid var(--ink3)}
 .dline{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0;font-size:12px}
-.gwbar{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;
+.gwbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;
  padding:10px 12px;border-bottom:1px solid var(--ink3);background:var(--ink2)}
 .gwsep{width:1px;height:30px;background:var(--ink3)}
+.chippanel{background:linear-gradient(180deg,#0C1119,#06090D);border-color:var(--line);
+ box-shadow:0 8px 24px -14px rgba(0,0,0,.9)}
+.chippanel .chiprow{border-bottom:none;background:none;padding:14px}
 .chiplbl{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--amber);font-weight:900;align-self:center}
 .chiprow{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;
  padding:9px 12px;border-bottom:1px solid var(--ink3);background:var(--ink)}
@@ -309,7 +314,8 @@ td.nm{font-family:'Sora',sans-serif}
  background:#1C232E;color:#DCE5EF;font-weight:700;letter-spacing:.02em}
 .chipzone button.on{background:var(--amber);border-color:var(--amber);color:#241000}
 .repl{background:rgba(4,245,255,.07);border-bottom:1px solid var(--ink3)}
-.poolsigs{display:block;margin-top:3px}
+.poolsigs{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px}
+.poolsigs .sigs,.poolsigs>span{display:contents}
 .poolsigs .sig{width:14px;height:15.1px}
 .poolsigs .sigs{gap:3px}
 .fbtn{display:inline-flex;align-items:center;gap:7px;padding:6px 12px 6px 8px;border-radius:999px;
@@ -317,10 +323,7 @@ td.nm{font-family:'Sora',sans-serif}
  font-weight:600;cursor:pointer;transition:border-color .12s,background .12s}
 .fbtn:hover{border-color:var(--line)}
 .fbtn.on{border-color:var(--fc);background:color-mix(in srgb,var(--fc) 18%,var(--ink2));color:#fff}
-@media(max-width:520px){.poolsigs{display:block;margin-top:3px}
-.poolsigs .sig{width:14px;height:15.1px}
-.poolsigs .sigs{gap:3px}
-.fbtn{padding:5px 10px 5px 7px;font-size:11px;gap:5px}}
+@media(max-width:520px){.fbtn{padding:5px 10px 5px 7px;font-size:11px;gap:5px}}
 .chipbtn{font-size:10.5px;padding:5px 9px}
 .fixrow{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--ink3);font-size:11.5px}
 .fixteam{flex:1;display:flex;align-items:center;gap:5px;min-width:0}
@@ -362,7 +365,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="8.1.0";
+const APP_VERSION="8.2.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -2231,15 +2234,15 @@ function cardHTML(p){
     n3+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${e} · ${f.home?"home":"away"} · difficulty ${posDiff(p,f)}">${esc(f.opp.slice(0,3))}</span>`;}
   const sub=S.subFrom===p.id;
   return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
-   <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+   <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
     ${p.avail<1?`<span class="dot" style="top:-2px;left:8px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
     <button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('flag',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
     <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="act('sub',${p.id})" title="Substitute">⇄</button>
     <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('cap',${p.id})" title="Captain">C</button>
     <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('vice',${p.id})" title="Vice-captain">V</button></div>
-   <div class="namebar" onclick="act('pick',${p.id})"><span class="nm">${esc(p.web_name)}</span>
+   <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
-   <div class="ptsbar" style="background:${bg};color:${fg}${elite?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" onclick="act('pick',${p.id})">
+   <div class="ptsbar" style="background:${bg};color:${fg}${elite?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" onclick="act('card',${p.id})">
     <div class="pv">${shownPts.toFixed(1)}</div><div class="fx">${fixTxtHtml}</div></div>
    <div class="next3">${n3}</div>
    <div style="display:flex;justify-content:center;margin-top:3px">${sigHTML(p,g)}</div></div>`;
@@ -2440,10 +2443,15 @@ function dashHTML(){
     for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];if(!q||q.blank)continue;
       q.fixtures.forEach(f=>{if(posDiff(p,f)<=2)good++;n++;});}
     return{good,n};};
-  const runFor=list=>list.map(p=>({p,...kind(p)}))
-    .filter(x=>x.n>=4&&x.good>=4).sort((a,b)=>b.good-a.good||b.p.gw[g]?.pts-a.p.gw[g]?.pts);
-  const att=runFor(sp.filter(p=>p.pos>=3));
-  const def=runFor(sp.filter(p=>p.pos<=2));
+  const rated=list=>list.map(p=>{const k=kind(p);
+    return{p,...k,bad:k.n-k.good};}).filter(x=>x.n>=4);
+  const bestOf=list=>rated(list).filter(x=>x.good>=4)
+    .sort((a,b)=>b.good-a.good||(b.p.gw[g]?.pts||0)-(a.p.gw[g]?.pts||0)).slice(0,3);
+  const worstOf=list=>rated(list).filter(x=>x.bad>=3)
+    .sort((a,b)=>b.bad-a.bad||(a.p.gw[g]?.pts||0)-(b.p.gw[g]?.pts||0)).slice(0,3);
+  const attP=sp.filter(p=>p.pos>=3), defP=sp.filter(p=>p.pos<=2);
+  const att=bestOf(attP), attBad=worstOf(attP);
+  const def=bestOf(defP), defBad=worstOf(defP);
   const byForm=[...sp].sort((a,b)=>b.form-a.form);
   const line=(l,r,c)=>`<div class="dline"><span>${l}</span><span class="mono" style="${c||""}">${r}</span></div>`;
   const plLine=(p,right,c)=>`<div class="dline">
@@ -2472,27 +2480,10 @@ function dashHTML(){
          `${st[k].got.toFixed(1)} / ${st[k].best.toFixed(1)}`,
          st[k].pct<0.75?"color:var(--red)":st[k].pct>=0.9?"color:var(--mint)":"")).join("")}`,
       barPct>=88?"color:var(--mint)":barPct>=75?"color:var(--amber)":"color:var(--red)")}
-
-    ${cell("aout","Attack outlook",att.length?`${att.length} with kind runs`:"none",
-      att.length?att.map(x=>plLine(x.p,`${x.good}/${x.n}`,"color:var(--amber)")).join("")
-        :`<p class="note" style="margin:0">No forward or midfielder has four kind fixtures in the next five.</p>`,
-      att.length>=3?"color:var(--amber)":"")}
-
-    ${cell("dout","Defence outlook",def.length?`${def.length} with kind runs`:"none",
-      def.length?def.map(x=>plLine(x.p,`${x.good}/${x.n}`,"color:var(--sky)")).join("")
-        :`<p class="note" style="margin:0">No keeper or defender has four kind fixtures in the next five.</p>`,
-      def.length>=3?"color:var(--sky)":"")}
-
-    ${cell("form","Form",byForm.length?`${esc(byForm[0].web_name)} ${byForm[0].form.toFixed(1)}`:"—",
-      `<p class="dsub">Best</p>${byForm.slice(0,3).map(p=>plLine(p,p.form.toFixed(1),"color:var(--mint)")).join("")}
-       <p class="dsub">Worst</p>${byForm.slice(-3).reverse().map(p=>plLine(p,p.form.toFixed(1),"color:var(--red)")).join("")}`,
-      "color:var(--mint)")}
-
     ${cell("caps","Captain",d.caps.length?`${esc(d.caps[0].p.web_name)} ${(d.caps[0].pts*2).toFixed(1)}`:"—",
       d.caps.map(c=>plLine(c.p,(c.pts*2).toFixed(1),"color:var(--mint)")).join("")
       +`<p class="note" style="margin:8px 0 0">Doubled score for GW${g}.</p>`,
       "color:var(--mint)")}
-
     ${cell("risk","Points at risk",
       `${d.riskPts.toFixed(1)} of ${d.xiPts.toFixed(1)}`,
       d.risky.length?d.risky.map(p=>plLine(p,(p.gw[g]?.pts||0).toFixed(1),
@@ -2500,6 +2491,24 @@ function dashHTML(){
         +`<p class="note" style="margin:8px 0 0">Amber marks a squad place that may have changed hands.</p>`
         :`<p class="note" style="margin:0">Nothing flagged.</p>`,
       d.riskPts/Math.max(1,d.xiPts)>0.25?"color:var(--red)":d.riskPts>0?"color:var(--amber)":"")}
+    ${cell("form","Form",byForm.length?`${esc(byForm[0].web_name)} ${byForm[0].form.toFixed(1)}`:"—",
+      `<p class="dsub">Best</p>${byForm.slice(0,3).map(p=>plLine(p,p.form.toFixed(1),"color:var(--mint)")).join("")}
+       <p class="dsub">Worst</p>${byForm.slice(-3).reverse().map(p=>plLine(p,p.form.toFixed(1),"color:var(--red)")).join("")}`,
+      "color:var(--mint)")}
+    ${cell("aout","Attack outlook",
+      att.length?`${esc(att[0].p.web_name)} ${att[0].good}/${att[0].n}`:"none kind",
+      `<p class="dsub">Kind runs</p>${att.length?att.map(x=>plLine(x.p,`${x.good}/${x.n}`,"color:var(--amber)")).join("")
+        :`<p class="note" style="margin:0">No forward or midfielder has four kind fixtures in the next five.</p>`}
+       <p class="dsub">Hard runs</p>${attBad.length?attBad.map(x=>plLine(x.p,`${x.bad}/${x.n} hard`,"color:var(--red)")).join("")
+        :`<p class="note" style="margin:0">None with three or more hard fixtures.</p>`}`,
+      att.length?"color:var(--amber)":"color:var(--mute)")}
+    ${cell("dout","Defence outlook",
+      def.length?`${esc(def[0].p.web_name)} ${def[0].good}/${def[0].n}`:"none kind",
+      `<p class="dsub">Kind runs</p>${def.length?def.map(x=>plLine(x.p,`${x.good}/${x.n}`,"color:var(--sky)")).join("")
+        :`<p class="note" style="margin:0">No keeper or defender has four kind fixtures in the next five.</p>`}
+       <p class="dsub">Hard runs</p>${defBad.length?defBad.map(x=>plLine(x.p,`${x.bad}/${x.n} hard`,"color:var(--red)")).join("")
+        :`<p class="note" style="margin:0">None with three or more hard fixtures.</p>`}`,
+      def.length?"color:var(--sky)":"color:var(--mute)")}
   </div>`;
 }
 
@@ -2726,7 +2735,7 @@ function listHTML(){
     const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
   const budget=+(S.bank+raised).toFixed(1);
   const outP=(S.flagged||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  const cols=[["price","£"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
+  const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
     ${cols.map(([k,n])=>`<span class="lc ${S.lSort===k?"act":""}" data-k="${k}" onclick="act('lsort','${k}')">${n}</span>`).join("")}</div>`;
   return head+a.slice(0,150).map(p=>{
@@ -2743,10 +2752,12 @@ function listHTML(){
       <span style="flex:1;min-width:0">
         <span style="display:flex;align-items:center;gap:5px">
           <span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.web_name)}</span>
-          ${INJ(p)}${sigHTML(p,g)}</span>
+          ${INJ(p)}</span>
         <span style="display:block;font-size:9.5px;color:var(--mute);margin-top:1px">${esc(p.teamName)} · ${POS[p.pos]}${own?' · <span style="color:var(--mint)">in squad</span>':""}</span>
+        <span class="poolsigs">${sigHTML(p,g)}</span>
         <span style="display:block;margin-top:2px">${fix3(p,g)}</span></span>
       <span class="lc mono" style="font-size:11px">£${p.price.toFixed(1)}${arw(p.priceChange)}</span>
+      <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.xMins}′</span>
       <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.form.toFixed(1)}</span>
       <span class="lc mono" style="font-size:12px;font-weight:700;color:${
         delta==null?"var(--mint)":(delta<0?"var(--red)":"var(--mint)")}">${
@@ -4194,26 +4205,30 @@ function render(){
           
           <button onclick="act('reset')" style="background:var(--amber);color:#20130A;border-color:var(--amber);font-weight:800">Reset</button><button onclick="act('save')" style="background:var(--mint);color:var(--ink);border-color:var(--mint);font-weight:800">Save</button></span></div>
         <div class="gwbar">
+          <span class="pseg" style="margin-right:auto">
+            <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
+            <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
           <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
           <span style="text-align:center;min-width:112px">
             <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} predicted</span>
             <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span></span>
           <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button>
+          <span class="pseg" style="margin-left:auto">
+            <button class="${S.pendingOpt?"on":""}" onclick="act('optimise')">Optimise</button>
+            <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button></span>
         </div>
 
-        ${S.sqView==="list"?`<div class="pbody" style="display:flex;gap:6px;border-bottom:1px solid var(--ink3)">
-            <span class="pseg"><button onclick="act('sqview','pitch')">Pitch</button>
-              <button class="on" onclick="act('sqview','list')">List</button></span>
-            <span class="pseg"><button class="${S.pendingOpt?"on":""}" onclick="act('optimise')">Optimise</button>
-              <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button></span>
-          </div>${squadListHTML()}`:pitchHTML()}
+        ${S.sqView==="list"?squadListHTML():pitchHTML()}
+        </div>
+      <div class="panel chippanel">
         <div class="chiprow">
           <span class="chipinline">
             <span class="chiplbl">Chips</span>
             ${[["none","None"],["bboost","Bench Boost"],["3xc","Triple Capt"],["freehit","Free Hit"],["wildcard","Wildcard"]]
               .map(([k,n])=>{const on=k==="none"?!chipForWeek(VG()):chipForWeek(VG())===k;
                 return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
-          </span></div>${legendHTML()}</div>
+          </span></div></div>
+      <div class="panel">${legendHTML()}</div>
       <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
         <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
       ${S.compare?`<div>${compareHTML()}</div>`:""}
