@@ -30,12 +30,24 @@ body{margin:0;background:var(--ink);color:var(--cream);font-family:'Sora',system
  box-shadow:0 10px 22px -14px rgba(0,0,0,.9)}
 .gwhead{display:flex;align-items:center;gap:8px;flex:none}
 .gwhead .lbl{font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800}
-.ministats{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#06070A;
- border:1px solid var(--ink3);border-radius:12px;padding:7px 11px;margin-bottom:7px}
-.ms{display:flex;flex-direction:column;line-height:1.05}
-.msk{font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800}
-.msv{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:19px}
-@media(max-width:430px){.hideXs{display:none}}
+.ministats{display:flex;gap:10px;align-items:center;background:#06070A;
+ border:1px solid var(--ink3);border-radius:14px;padding:8px 10px;margin-bottom:7px}
+.msrow{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;flex:1;min-width:0}
+.mspill{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+ background:var(--ink2);border:1px solid var(--ink3);border-radius:10px;padding:6px 4px;min-width:0}
+.msk{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:800;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.msv{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;line-height:1;white-space:nowrap}
+.gwpill{display:flex;align-items:center;gap:6px;flex:none;background:rgba(255,138,61,.14);
+ border:1px solid var(--amber);border-radius:12px;padding:5px 7px}
+.gwpill button{background:var(--amber);border:none;color:#20130A;font-weight:900;
+ padding:5px 9px;border-radius:8px;font-size:12px;line-height:1}
+.gwpill button:hover{filter:brightness(1.12)}
+.gwv{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;color:var(--amber);
+ letter-spacing:.02em;min-width:46px;text-align:center}
+@media(max-width:820px){.msrow{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:430px){.ministats{flex-wrap:wrap}.msrow{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .gwpill{width:100%;justify-content:center}.msv{font-size:16px}}
 .navwrap{background:#06070A;border:1px solid var(--ink3);border-radius:12px;padding:7px 9px;
  display:flex;gap:14px;align-items:center;flex-wrap:wrap}
 h1,h2,h3{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;margin:0;letter-spacing:.03em}
@@ -99,6 +111,10 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .badge{position:absolute;width:15px;height:15px;border-radius:50%;font-size:8.5px;font-weight:800;
  display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3}
 .dot{position:absolute;width:10px;height:10px;border-radius:50%;border:1.5px solid rgba(0,0,0,.55);z-index:3}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px 12px;
+ padding:12px 14px;border-bottom:1px solid var(--ink3);background:rgba(255,255,255,.015)}
+.lgi{display:flex;gap:7px;align-items:center;font-size:10.5px;color:var(--mute);min-width:0}
+.lgi span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .seg{display:inline-flex;border:1px solid var(--ink3);border-radius:9px;overflow:hidden}
 .seg button{border:none;border-radius:0;padding:7px 12px;font-size:11.5px}
 .sqtable{width:100%;border-collapse:collapse;font-size:12px}
@@ -133,6 +149,8 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .pcbar .op{font-size:9.5px;color:var(--cream)}
 .pcbar .gw{font-size:8.5px;color:var(--mute)}
 @media(max-width:520px){.pcard{padding:14px}.pcimg{width:54px;height:70px}}
+.cardsigs{display:flex;justify-content:center;gap:5px;flex-wrap:wrap;padding:4px 2px 0;min-height:20px}
+.cardsigs .sigs{gap:5px}
 .benchslot{display:flex;flex-direction:column;align-items:center;gap:4px}
 .benchmv{display:flex;gap:4px;align-items:center}
 .benchmv button{padding:2px 7px;font-size:10px;border-radius:6px;line-height:1.1}
@@ -155,12 +173,12 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .lhead span.act{color:var(--mint)}
 .lc{width:38px;text-align:right;flex:none}
 .sigrow{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-top:3px;min-height:18px}
-@media(max-width:520px){.sig{width:16px;height:16px}.sigs{gap:3px}}
-@media(min-width:1000px){.sig{width:19px;height:19px}}
-.sigs{display:inline-flex;gap:4px;flex-wrap:wrap;flex:none}
+@media(max-width:520px){.sig{width:17px;height:17px}.sigs{gap:4px}}
+@media(min-width:1000px){.sig{width:20px;height:20px}}
+.sigs{display:inline-flex;gap:5px;flex-wrap:wrap;align-items:center;justify-content:center;flex:none}
 .bdg{width:100%;height:100%;display:block}
-.sig{width:18px;height:18px;flex:none;display:inline-flex;align-items:center;justify-content:center;
- filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));font-size:9.5px;font-weight:800;
+.sig{width:19px;height:19px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+ filter:drop-shadow(0 1.5px 2.5px rgba(0,0,0,.55));font-size:9.5px;font-weight:800;
  display:inline-flex;align-items:center;justify-content:center;line-height:1;background:rgba(0,0,0,.25)}
 .pricebox{display:flex;gap:6px;align-items:center}
 .pricebox input[type=number]{width:68px;padding:5px 7px;font-size:12px}
@@ -188,7 +206,11 @@ td.nm{font-family:'Sora',sans-serif}
 .toast{position:fixed;left:12px;right:12px;bottom:14px;max-width:460px;margin:0 auto;background:var(--mint);
  color:var(--ink);padding:12px 14px;border-radius:10px;font-size:12.5px;font-weight:600;z-index:99;
  box-shadow:0 10px 34px rgba(0,0,0,.55)}
-.grid2{display:grid;grid-template-columns:1fr;gap:12px}
+.grid2{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
+.poolcol{display:flex;flex-direction:column;min-height:0}
+@media(min-width:1000px){.poolcol{position:sticky;top:150px;max-height:calc(100vh - 170px)}
+ .poolpanel{display:flex;flex-direction:column;min-height:0;flex:1}
+ .poolpanel .plist{flex:1;overflow-y:auto;max-height:none}}
 .grid3{display:grid;grid-template-columns:1fr;gap:12px}
 @media(min-width:1280px){.grid3{grid-template-columns:1fr 1fr 340px}}
 @media(min-width:900px){.grid2{grid-template-columns:1fr 380px}}
@@ -202,13 +224,14 @@ td.nm{font-family:'Sora',sans-serif}
 .arrow{color:var(--red);font-size:16px;font-weight:800;flex:none}
 .gain{font-family:'IBM Plex Mono',monospace;font-weight:700;color:var(--mint);flex:none;font-size:13px}
 .chipbar{display:flex;gap:5px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--ink3)}
-.dashgrid{display:grid;grid-template-columns:1fr;gap:8px;padding:12px}
-@media(min-width:640px){.dashgrid{grid-template-columns:1fr 1fr}}
+.dashgrid{display:grid;grid-template-columns:1fr;gap:10px;padding:14px}
+@media(min-width:760px){.dashgrid{grid-template-columns:1fr 1fr}}
+@media(min-width:1180px){.dashgrid{grid-template-columns:repeat(3,1fr)}}
 .dashcell{background:var(--ink);border:1px solid var(--ink3);border-radius:11px;overflow:hidden}
-.dashrow{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
+.dashrow{display:flex;align-items:center;gap:10px;padding:12px 13px;cursor:pointer}
 .dashrow:hover{background:rgba(255,255,255,.03)}
-.dkey{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mute);font-weight:800;width:104px;flex:none}
-.dval{flex:1;font-size:12.5px;font-weight:600}
+.dkey{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mute);font-weight:800;flex:none}
+.dval{flex:1;font-size:12.5px;font-weight:600;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .dchev{color:var(--mute);font-size:10px}
 .dashbody{padding:4px 12px 12px;background:rgba(255,255,255,.02);border-top:1px solid var(--ink3)}
 .dline{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0;font-size:12px}
@@ -299,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.11.0";
+const APP_VERSION="7.12.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -1558,23 +1581,39 @@ const avgFP=(p,g,h)=>(p.form+hPts(p,g,h))/2;
 /* One badge shape throughout — an 18px disc with a coloured ring — so the set
    reads as a family; only the glyph and hue differ. */
 function badge(glyph,fill,ring){
-  return `<svg viewBox="0 0 24 24" class="bdg" aria-hidden="true">
-    <circle cx="12" cy="12" r="10.4" fill="${fill}" stroke="${ring}" stroke-width="1.6"/>${glyph}</svg>`;
+  return `<svg viewBox="0 0 26 26" class="bdg" aria-hidden="true">
+    <defs><linearGradient id="bg${(badge._i=(badge._i||0)+1)}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${ring}"/><stop offset="1" stop-color="${fill}"/></linearGradient></defs>
+    <circle cx="13" cy="13" r="11.2" fill="url(#bg${badge._i})" stroke="${ring}" stroke-width="1.5"/>
+    <circle cx="13" cy="13" r="11.2" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="0.7"/>
+    ${glyph}</svg>`;
 }
-const G=(t,size)=>`<text x="12" y="${size>=10?15.9:15.4}" font-family="Inter,Arial,sans-serif"
-  font-size="${size}" font-weight="800" fill="#0B0E13" text-anchor="middle" letter-spacing="-0.3">${t}</text>`;
-const ICON_DIFF=badge(`<path d="M12 5.6v12.8M6.6 8.8l10.8 6.4M17.4 8.8L6.6 15.2" stroke="#06222B"
-   stroke-width="2" stroke-linecap="round"/>`,"#3ED8F0","#A6EEFA");
-const ICON_HOT=badge(`<path d="M12 4.6c2.6 2.7 4.4 4.9 4.4 7.6a4.4 4.4 0 1 1-8.8 0c0-1.5.7-2.7 1.7-3.9.5 1 1.1 1.6 1.9 1.9-.1-2 .3-3.9.8-5.6Z"
-   fill="#2A1000"/>`,"#FF8A3D","#FFC79A");
-const ICON_ATT=badge(G("A",11),"#FFB020","#FFE0A8");
-const ICON_DEF=badge(G("D",11),"#3ED8F0","#A6EEFA");
-const ICON_DC=badge(G("DC",8.4),"#A78BFA","#DCCEFF");
-const ICON_MIN=badge(`<path d="M12 7.4v5.1l3.2 1.9" stroke="#0B0E13" stroke-width="2"
-   stroke-linecap="round" fill="none"/><path d="M9.8 3.6h4.4" stroke="#0B0E13" stroke-width="2"
-   stroke-linecap="round"/>`,"#8FA3BC","#D6E2F0");
-const ICON_STALE=badge(`<text x="12" y="16.4" font-family="Inter,Arial,sans-serif" font-size="13"
-   font-weight="900" fill="#2A1000" text-anchor="middle">!</text>`,"#F2C14E","#FBE3A6");
+const G=(t,size)=>`<text x="13" y="${size>=11?17.4:16.9}" font-family="Inter,Segoe UI,Arial,sans-serif"
+  font-size="${size}" font-weight="900" fill="#0A0D12" text-anchor="middle" letter-spacing="-0.4">${t}</text>`;
+/* Differential — a diamond, the odd one out */
+const ICON_DIFF=badge(`<path d="M13 6.2 19.4 13 13 19.8 6.6 13Z" fill="#06222B" opacity=".85"/>
+  <path d="M13 9.4 16.4 13 13 16.6 9.6 13Z" fill="#8FF0FF"/>`,"#22C3E6","#8FEAFB");
+/* Hot streak — flame */
+const ICON_HOT=badge(`<path d="M13 5.4c2.9 3 4.9 5.4 4.9 8.4a4.9 4.9 0 0 1-9.8 0c0-1.7.8-3 1.9-4.3.5 1.1 1.2 1.8 2.1 2.1-.1-2.2.3-4.3.9-6.2Z"
+  fill="#2A1000"/><path d="M13 11.6c1.2 1.4 2 2.5 2 3.7a2 2 0 0 1-4 0c0-.9.5-1.6 1.1-2.3.3.5.6.8 1 .9Z" fill="#FFD9B8"/>`,"#FF7A2F","#FFC08A");
+/* Attack to target — upward chevrons */
+const ICON_ATT=badge(`<path d="M13 6.6 18 12h-3.1v6.8h-3.8V12H8Z" fill="#2A1000"/>`,"#FFB020","#FFDFA6");
+/* Defence to target — shield */
+const ICON_DEF=badge(`<path d="M13 6 18.4 8v5c0 3.4-2.3 5.6-5.4 6.8-3.1-1.2-5.4-3.4-5.4-6.8V8Z" fill="#06222B"/>
+  <path d="M10.6 13.2l1.8 1.9 3.2-3.6" stroke="#8FEAFB" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,"#22C3E6","#8FEAFB");
+/* DefCon — interlocking blocks */
+const ICON_DC=badge(`<rect x="7.6" y="10.4" width="5" height="7.4" rx="1.4" fill="#150A28"/>
+  <rect x="13.4" y="7.6" width="5" height="10.2" rx="1.4" fill="#150A28"/>
+  <rect x="9.1" y="12" width="2" height="4.2" rx="1" fill="#DCCEFF"/>
+  <rect x="14.9" y="9.2" width="2" height="7" rx="1" fill="#DCCEFF"/>`,"#9B7BFF","#D6C6FF");
+/* Nailed — stopwatch */
+const ICON_MIN=badge(`<path d="M10.6 4.4h4.8" stroke="#0A0D12" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="13" cy="14.2" r="6.2" fill="#101922" stroke="#DCE8F5" stroke-width="1.4"/>
+  <path d="M13 10.4v4.1l2.8 1.7" stroke="#DCE8F5" stroke-width="1.8" fill="none" stroke-linecap="round"/>`,"#93A8C2","#DCE8F5");
+/* Stats caution — exclamation in a triangle */
+const ICON_STALE=badge(`<path d="M13 6.4 19.6 18H6.4Z" fill="#2A1000"/>
+  <path d="M13 10.6v3.6" stroke="#FFE7B0" stroke-width="1.9" stroke-linecap="round"/>
+  <circle cx="13" cy="16.1" r="1.05" fill="#FFE7B0"/>`,"#F2B33D","#FFE2A0");
 const SPCOL={P:["#FF5C7A","#FFC2CE"],F:["#4ADE80","#B7F5CE"],C:["#F472B6","#FBCFE8"]};
 const SETPIECE={
  ARS:{P:["Saka"],            F:["Saka","Rice"],            C:["Rice","Saka"]},
@@ -1614,18 +1653,16 @@ function setPieceHTML(p){
 
 const SIGDEF=[[ICON_DIFF,"#3ED8F0","Differential"],
  [ICON_HOT,"#FF8A3D","Hot streak"],
- [ICON_ATT,"#FFB020","Attack to target"],
- [ICON_DEF,"var(--sky)","Defence to target"],
- [ICON_DC,"#7C4DFF","Clears DefCon often"],
- [ICON_MIN,"#8FA3BC","Nailed — 85+ minutes"],
- [ICON_STALE,"#F2C14E","Role may have changed — minutes are last season's"]];
+ [ICON_ATT,"#FFB020","Attack"],
+ [ICON_DEF,"var(--sky)","Defence"],
+ [ICON_DC,"#7C4DFF","DefCon"],
+ [ICON_MIN,"#8FA3BC","Nailed 85+"],
+ [ICON_STALE,"#F2C14E","Stats caution"]];
 function legendHTML(){
-  return `<div style="display:flex;gap:14px;flex-wrap:wrap;padding:9px 12px;justify-content:center;border-bottom:1px solid var(--ink3)">
-    ${SIGDEF.map(([l,c,t])=>`<span style="display:flex;gap:5px;align-items:center;font-size:10.5px;color:var(--mute)">
-      ${sigIcon(l,c,t)}${esc(t)}</span>`).join("")}
+  return `<div class="legend">
+    ${SIGDEF.map(([l,c,t])=>`<span class="lgi">${sigIcon(l,c,t)}<span>${esc(t)}</span></span>`).join("")}
     ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
-      return `<span style="display:flex;gap:5px;align-items:center;font-size:10.5px;color:var(--mute)">
-        <span class="spice" style="background:${b};color:${c}">${k}</span>${t}</span>`;}).join("")}</div>`;
+      return `<span class="lgi"><span class="sig">${badge(G(k,11),b,c)}</span><span>${t}</span></span>`;}).join("")}</div>`;
 }
 function signals(p,g){
   const out=[];
@@ -2192,7 +2229,7 @@ function compareHTML(){
     const[bg,fg]=ptsCol(q.pts*(isC?2:1));
     const f0=q.fixtures[0];
     return `<div class="card">
-      <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+      <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
         <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}"
           onclick="act('ccap',${p.id})" title="Captain">C</button>
         <button class="badge" style="top:-2px;left:2px;background:${C.subFrom===p.id?"var(--cyan)":"var(--ink3)"};color:${C.subFrom===p.id?"var(--ink)":"var(--cream)"}"
@@ -2202,7 +2239,8 @@ function compareHTML(){
       <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
       <div class="ptsbar" style="background:${bg};color:${fg}"><div class="pv">${(q.pts*(isC?2:1)).toFixed(1)}</div>
         <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
-      <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w2=p.gw[e];
+      <div class="cardsigs">${sigHTML(p,g)}</div>
+    <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w2=p.gw[e];
         if(!w2||w2.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
         const f=w2.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
         h+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}">${esc(f.opp.slice(0,3))}</span>`;}return h;})()}</div></div>`;
@@ -2527,7 +2565,10 @@ function filtered(scope){
     const g=S.model.next.id;
     if(S.starOnly)out=out.filter(p=>S.stars.includes(p.id));
     if(S.iconF.length)out=out.filter(p=>{const ic=signals(p,g).map(x=>x[0]);
-      return S.iconF.every(ix=>ic.includes(SIGDEF[ix][0]));});
+      return S.iconF.every(ix=>{
+        /* the caution flag is an exclusion: selecting it hides those players */
+        if(SIGDEF[ix][2]==="Stats caution")return !ic.includes(SIGDEF[ix][0]);
+        return ic.includes(SIGDEF[ix][0]);});});
     if(S.spF)out=out.filter(p=>setPieceHTML(p).includes(">"+S.spF+"<"));
   }
   return out;
@@ -2878,7 +2919,7 @@ function totwCard(p,cap){
   const[bg,fg,elite]=ptsCol(q.pts);
   const own=(S.squad||[]).includes(p.id);
   return `<div class="card">
-    <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+    <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
       ${cap&&cap.id===p.id?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)">C</span>`:""}
       ${own?`<span class="badge" style="top:-2px;right:2px;background:var(--mint);color:var(--ink)">✓</span>`:""}</div>
     <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
@@ -2973,9 +3014,9 @@ function fixturesHTML(){
         <td class="mono" style="text-align:right;color:${col(d1)}">${d1.toFixed(1)}</td>
         <td class="mono" style="text-align:right;color:${col(d3)}">${d3.toFixed(2)}</td>
         <td class="mono" style="text-align:right;font-weight:700;color:${col(d5)}">${d5.toFixed(2)}</td>${cells}</tr>`;});
-    return targetPanel("att","Attack to target",
+    return targetPanel("att","Attack",
         "Clubs with a strong attack meeting weak defences in at least four of the next five.")
-      +targetPanel("def","Defence to target",
+      +targetPanel("def","Defence",
         "Solid defences meeting weak attacks in at least four of the next five.")
       +head+`<div class="panel">${navFix(start,span,g)}
         <div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
@@ -3213,13 +3254,14 @@ function chipCard(p,t){
   const f0=q.fixtures[0];
   const own=(S.squad||[]).includes(p.id);
   return `<div class="card">
-    <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+    <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
       ${isC?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)">C</span>`:""}
       ${own?`<span class="badge" style="top:-2px;right:2px;background:var(--mint);color:var(--ink)">✓</span>`:""}</div>
     <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
     <div class="ptsbar" style="background:${bg};color:${fg};${elite?"box-shadow:0 0 0 2px var(--cyan) inset":""}">
       <div class="pv">${(v*(isC?2:1)).toFixed(1)}</div>
       <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
+    <div class="cardsigs">${sigHTML(p,g)}</div>
     <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
       if(!w||w.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
       const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
@@ -3631,12 +3673,12 @@ function render(){
               .map(([k,n])=>{const on=k==="none"?!chipForWeek(VG()):chipForWeek(VG())===k;
                 return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
           </span></div>
-        ${S.sqView==="list"?squadListHTML():pitchHTML()}${legendHTML()}</div>${conf}${flag}</div>
+        ${S.sqView==="list"?squadListHTML():pitchHTML()}${legendHTML()}</div>
+      <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
+        <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
       ${S.compare?`<div>${compareHTML()}</div>`:""}
-      <div>
-        <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
-          <span class="note">GW${VG()}</span></div>${dashHTML()}</div>
-        <div class="panel"><div class="phead"><h2>Player Pool</h2>
+      <div class="poolcol">
+        <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
         <button onclick="act('tab','table')">Full Player Data →</button></div>
         ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
@@ -3649,8 +3691,8 @@ function render(){
     <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--ink3)">
       <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700">Show only</span>
       ${SIGDEF.map(([l,c,t],ix)=>`<button class="fbtn ${S.iconF.includes(ix)?"on":""}"
-        onclick="act('iconf',${ix})" title="${esc(t)}" style="--fc:${c}">
-        <span class="sig">${l}</span><span>${esc(t)}</span></button>`).join("")}
+        onclick="act('iconf',${ix})" title="${t==="Stats caution"?"Hide players whose stats may be unreliable":esc(t)}" style="--fc:${c}">
+        <span class="sig">${l}</span><span>${t==="Stats caution"?"Hide caution":esc(t)}</span></button>`).join("")}
       ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
         return `<button class="fbtn ${S.spF===k?"on":""}" onclick="act('spf','${k}')" style="--fc:${b}">
           <span class="sig">${badge(G(k,11),b,c)}</span><span>${t}</span></button>`;}).join("")}
@@ -3713,14 +3755,21 @@ function render(){
    <div class="stick">
      <div class="ministats">
        ${LOGO}
-       <span class="ms"><span class="msk">GW${VG()}</span><span class="msv" style="color:var(--mint)">${weekPts().toFixed(1)}</span></span>
-       <span class="ms"><span class="msk">Rating</span><span class="msv" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</span></span>
-       <span class="ms hideXs"><span class="msk">Bank</span><span class="msv">£${bank.toFixed(1)}</span></span>
-       <span class="ms hideXs"><span class="msk">FT</span><span class="msv">${S.ft}</span></span>
-       <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
-         <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})">←</button>
-         <b class="mono" style="color:var(--cyan);font-size:12px">GW${VG()}</b>
-         <button onclick="act('startgw',${Math.min(38,VG()+1)})">→</button></span>
+       <span class="msrow">
+         ${[["Predicted",weekPts().toFixed(1),"var(--mint)"],
+            ["Rating",rating?rating.pct:"—",rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"],
+            ["Transfers",S.ft,"var(--cream)"],
+            ["Rank",S.entryRank?S.entryRank.toLocaleString():"—","var(--cream)"],
+            ["Value","£"+sv.toFixed(1),"var(--cream)"],
+            ["Bank","£"+bank.toFixed(1),bank<0?"var(--red)":"var(--cream)"]]
+           .map(([k,v,c])=>`<span class="mspill"><span class="msk">${k}</span>
+             <span class="msv" style="color:${c}">${v}</span></span>`).join("")}
+       </span>
+       <span class="gwpill">
+         <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" aria-label="Earlier">←</button>
+         <span class="gwv">GW${VG()}</span>
+         <button onclick="act('startgw',${Math.min(38,VG()+1)})" aria-label="Later">→</button>
+       </span>
      </div>
      ${navHTML()}</div>
    ${main}
