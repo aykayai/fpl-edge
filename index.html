@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.12.1";
+const APP_VERSION="7.13.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -1555,7 +1555,13 @@ function buildModel(){
   /* Prices change through the week, so refresh on load rather than waiting for
      the tab to be opened — the projections use them, not just the display. */
   if(S.oddsKey&&(S.oddsState==="idle"||S.oddsState==="nokey")&&!S._oddsTried){
-    S._oddsTried=true;setTimeout(()=>loadOdds(),400);
+    S._oddsTried=true;
+    /* free tiers are capped at a few hundred calls a month, so reuse a recent
+       response rather than refetching on every visit */
+    const c=LS.get("oddsCache");
+    if(c&&c.t&&Date.now()-c.t<4*3600*1000&&(c.odds||[]).length){
+      S.odds=c.odds;S.oddsState="ok";buildOddsTeams();
+    }else setTimeout(()=>loadOdds(),400);
   }
   if(!S.seeded&&(!S.squad||!S.squad.length)){S.seeded=true;resolveSeed(true);}
   render();
@@ -3339,37 +3345,81 @@ function buildOddsTeams(){
 }
 async function loadOdds(){
   if(!S.oddsKey){S.oddsState="nokey";render();return;}
-  S.oddsState="loading";render();
+  S.oddsState="loading";S.oddsErr="";render();
   const key=encodeURIComponent(S.oddsKey);
-  const tries=[
-    `https://api.odds-api.io/v2/odds?apiKey=${key}&sport=football&league=england-premier-league`,
-    `https://api.odds-api.io/v2/odds?apiKey=${key}&sport=soccer&league=epl`,
-    `https://api.the-odds-api.com/v4/sports/soccer_epl/odds/?apiKey=${key}&regions=uk&markets=h2h,totals&oddsFormat=decimal`,
-    /* nothing posted for the Premier League yet? show whatever football is priced,
-       so the tab can be checked before the season starts */
-    `https://api.odds-api.io/v2/odds?apiKey=${key}&sport=football`,
-    `https://api.the-odds-api.com/v4/sports/upcoming/odds/?apiKey=${key}&regions=uk&markets=h2h&oddsFormat=decimal`
-  ];
-  for(const u of tries){
-    try{
-      const r=await fetch(u);
-      if(!r.ok)continue;
-      const j=await r.json();
-      const arr=Array.isArray(j)?j:(j.data||j.events||j.matches||[]);
-      if(arr.length){S.odds=arr;S.oddsState="ok";S.oddsErr="";
-        buildOddsTeams();buildModel();render();return;}
-    }catch(e){S.oddsErr=String(e.message);}
+  const base="https://api.odds-api.io/v3";
+  const readErr=async r=>{try{const e=await r.json();return e.message||e.error||"";}catch(_){return "";}};
+  try{
+    /* Step one: the fixtures. odds-api.io splits events from prices, unlike the
+       single-call APIs — so a gameweek costs one events call plus one per match. */
+    const evUrl=`${base}/events?apiKey=${key}&sport=football&league=england-premier-league`;
+    const er=await fetch(evUrl);
+    if(!er.ok){
+      const why=await readErr(er);
+      S.oddsErr=er.status===401||/invalid[_ ]?key/i.test(why)
+        ? "Key rejected by odds-api.io"+(why?" — "+why.split(".")[0]:"")
+        : er.status===429 ? "Rate limit reached — the free tier allows 100 requests an hour"
+        : "HTTP "+er.status+" from odds-api.io"+(why?" — "+why:"");
+      S.oddsState="fail";render();return;
+    }
+    const ej=await er.json();
+    const events=(Array.isArray(ej)?ej:(ej.data||ej.events||[])).slice(0,12);
+    if(!events.length){S.oddsState="empty";render();return;}
+
+    /* Step two: prices per fixture. Kept to a dozen so a gameweek costs about
+       thirteen of the free tier's hundred hourly requests. */
+    const out=[];
+    for(const ev of events){
+      const id=ev.id||ev.eventId;if(!id)continue;
+      try{
+        const or=await fetch(`${base}/odds?apiKey=${key}&eventId=${encodeURIComponent(id)}`);
+        if(!or.ok){if(or.status===429){S.oddsErr="Rate limit reached part-way through";break;}continue;}
+        const oj=await or.json();
+        const d=oj.data||oj;
+        out.push({
+          home:ev.home||ev.homeTeam||ev.home_team||(ev.participants||[])[0],
+          away:ev.away||ev.awayTeam||ev.away_team||(ev.participants||[])[1],
+          commence:ev.start||ev.commenceTime||ev.date,
+          bookmakers:normaliseBooks(d)
+        });
+      }catch(e){}
+    }
+    if(out.length){
+      S.odds=out;S.oddsState="ok";
+      LS.set("oddsCache",{t:Date.now(),odds:out});
+      buildOddsTeams();buildModel();render();return;
+    }
+    S.oddsState=S.oddsErr?"fail":"empty";render();
+  }catch(e){
+    /* A browser fetch that never completes is almost always CORS: odds-api.io's
+       own documentation says to call it from a server, not client-side code. */
+    S.oddsErr=String(e.message||e)+" — odds-api.io does not appear to allow browser requests";
+    S.oddsState="fail";render();
   }
-  /* A browser fetch to a bookmaker API fails when the API sends no
-     Access-Control-Allow-Origin header — indistinguishable from a network
-     error, so say so rather than reporting an empty market. */
-  S.oddsState=S.oddsErr?"fail":"empty";render();
 }
-function devig(list){
-  const inv=list.map(o=>o>0?1/o:0);
-  const sum=inv.reduce((a,x)=>a+x,0);
-  return sum>0?inv.map(x=>x/sum):inv.map(()=>0);
+/* The v3 odds payload nests markets by bookmaker; flatten it to the shape the
+   rest of the app already understands. */
+function normaliseBooks(d){
+  const books=[];
+  const src=d&&(d.bookmakers||d.odds||d.markets)||[];
+  const list=Array.isArray(src)?src:Object.entries(src).map(([k,v])=>({key:k,markets:v}));
+  list.forEach(b=>{
+    const markets=[];
+    const ms=b.markets||b.odds||b;
+    const entries=Array.isArray(ms)?ms:Object.entries(ms).map(([k,v])=>({key:k,outcomes:v}));
+    entries.forEach(m=>{
+      const key=String(m.key||m.name||m.market||"").toLowerCase();
+      let outs=m.outcomes||m.values||m.prices||[];
+      if(!Array.isArray(outs))outs=Object.entries(outs).map(([k,v])=>({name:k,price:+v}));
+      outs=outs.map(o=>({name:o.name||o.label||o.outcome,
+        price:+(o.price||o.odd||o.odds||o.value||0)})).filter(o=>o.price>0);
+      if(outs.length)markets.push({key:/1x2|match|winner|moneyline|h2h/.test(key)?"h2h":key,outcomes:outs});
+    });
+    if(markets.length)books.push({key:b.key||b.name||"book",markets});
+  });
+  return books;
 }
+
 function oddsHTML(){
   const pct=o=>o>0?(100/o):0;
   const head=`<div class="panel"><div class="phead"><h2>Odds</h2>
@@ -3999,7 +4049,10 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
     vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null,
     activeChip:st.activeChip||null});S.seeded=!!(st.squad&&st.squad.length);}
   applyLearning();
-  S.oddsKey=LS.get("oddsKey")||"b9a8e93ceb8ec15b61ff2639537d99e600bc43c2b9dd0cca4b489e5518cadc17";
+  /* Not defaulted to a key: this file is public on GitHub Pages, and a free-tier
+     key committed to a public repo gets scraped and its quota drained. Entered
+     once in the Odds tab and kept in this browser only. */
+  S.oddsKey=LS.get("oddsKey")||"";
   S.ignored=LS.get("ignored")||[];
   if(S.oddsKey)S.oddsState="idle";
   S.stars=LS.get("stars")||[];
