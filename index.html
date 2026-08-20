@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.13.0";
+const APP_VERSION="7.13.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -452,7 +452,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},activeChip:null,horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
  outList:[],selected:null,menuOpen:false,compare:null,dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
@@ -3345,45 +3345,74 @@ function buildOddsTeams(){
 }
 async function loadOdds(){
   if(!S.oddsKey){S.oddsState="nokey";render();return;}
-  S.oddsState="loading";S.oddsErr="";render();
+  S.oddsState="loading";S.oddsErr="";S.oddsLog=[];render();
   const key=encodeURIComponent(S.oddsKey);
   const base="https://api.odds-api.io/v3";
+  const log=m=>{S.oddsLog.push(m);};
   const readErr=async r=>{try{const e=await r.json();return e.message||e.error||"";}catch(_){return "";}};
-  try{
-    /* Step one: the fixtures. odds-api.io splits events from prices, unlike the
-       single-call APIs — so a gameweek costs one events call plus one per match. */
-    const evUrl=`${base}/events?apiKey=${key}&sport=football&league=england-premier-league`;
-    const er=await fetch(evUrl);
-    if(!er.ok){
-      const why=await readErr(er);
-      S.oddsErr=er.status===401||/invalid[_ ]?key/i.test(why)
-        ? "Key rejected by odds-api.io"+(why?" — "+why.split(".")[0]:"")
-        : er.status===429 ? "Rate limit reached — the free tier allows 100 requests an hour"
-        : "HTTP "+er.status+" from odds-api.io"+(why?" — "+why:"");
-      S.oddsState="fail";render();return;
+  const get=async(path,label)=>{
+    const r=await fetch(base+path);
+    if(!r.ok){
+      const why=await readErr(r);
+      log(`${label}: HTTP ${r.status}${why?" — "+why:""}`);
+      if(r.status===401||/invalid[_ ]?key/i.test(why))S.oddsErr="Key rejected by odds-api.io";
+      else if(r.status===429)S.oddsErr="Rate limit reached";
+      return null;
     }
-    const ej=await er.json();
-    const events=(Array.isArray(ej)?ej:(ej.data||ej.events||[])).slice(0,12);
+    const j=await r.json();
+    return j;
+  };
+  try{
+    /* The league slug is looked up rather than guessed — the previous build
+       assumed "england-premier-league" and silently got back nothing. */
+    let slug=LS.get("oddsLeague");
+    if(!slug){
+      const lj=await get(`/leagues?sport=football&apiKey=${key}`,"leagues");
+      if(lj===null){S.oddsState="fail";render();return;}
+      const leagues=Array.isArray(lj)?lj:(lj.data||lj.leagues||[]);
+      log(`leagues: ${leagues.length} returned`);
+      const hit=leagues.find(l=>{
+        const n=(l.name||l.title||"")+" "+(l.slug||l.id||"")+" "+(l.country||"");
+        return /premier\s*league/i.test(n)&&/england|english|\bgb\b|united kingdom/i.test(n);
+      })||leagues.find(l=>/^england-premier-league$|^epl$/i.test(l.slug||l.id||""));
+      if(!hit){
+        S.oddsErr="Couldn't find a Premier League entry among "+leagues.length+" football leagues";
+        S.oddsState="fail";render();return;
+      }
+      slug=hit.slug||hit.id||hit.key;
+      LS.set("oddsLeague",slug);
+      log(`league matched: ${hit.name||hit.title||slug} → ${slug}`);
+    }
+
+    const ej=await get(`/events?sport=football&league=${encodeURIComponent(slug)}&apiKey=${key}`,"events");
+    if(ej===null){S.oddsState="fail";render();return;}
+    const events=(Array.isArray(ej)?ej:(ej.data||ej.events||[])).slice(0,20);
+    log(`events: ${events.length} for ${slug}`);
     if(!events.length){S.oddsState="empty";render();return;}
 
-    /* Step two: prices per fixture. Kept to a dozen so a gameweek costs about
-       thirteen of the free tier's hundred hourly requests. */
+    /* /odds/multi takes up to ten event ids at a time */
     const out=[];
-    for(const ev of events){
-      const id=ev.id||ev.eventId;if(!id)continue;
-      try{
-        const or=await fetch(`${base}/odds?apiKey=${key}&eventId=${encodeURIComponent(id)}`);
-        if(!or.ok){if(or.status===429){S.oddsErr="Rate limit reached part-way through";break;}continue;}
-        const oj=await or.json();
-        const d=oj.data||oj;
+    for(let i2=0;i2<events.length;i2+=10){
+      const chunk=events.slice(i2,i2+10);
+      const ids=chunk.map(e=>e.id||e.eventId).filter(Boolean);
+      if(!ids.length)continue;
+      const oj=await get(`/odds/multi?eventIds=${encodeURIComponent(ids.join(","))}&apiKey=${key}`,"odds");
+      if(oj===null)break;
+      const rows=Array.isArray(oj)?oj:(oj.data||Object.values(oj||{}));
+      log(`odds: ${rows.length} rows for ${ids.length} events`);
+      rows.forEach(rw=>{
+        const id=rw.eventId||rw.id;
+        const ev=chunk.find(e=>String(e.id||e.eventId)===String(id))||{};
+        const books=normaliseBooks(rw);
+        if(!books.length)return;
         out.push({
-          home:ev.home||ev.homeTeam||ev.home_team||(ev.participants||[])[0],
-          away:ev.away||ev.awayTeam||ev.away_team||(ev.participants||[])[1],
+          home:ev.home||ev.homeTeam||ev.home_team||rw.home||(ev.participants||[])[0],
+          away:ev.away||ev.awayTeam||ev.away_team||rw.away||(ev.participants||[])[1],
           commence:ev.start||ev.commenceTime||ev.date,
-          bookmakers:normaliseBooks(d)
-        });
-      }catch(e){}
+          bookmakers:books});
+      });
     }
+    log(`usable fixtures with prices: ${out.length}`);
     if(out.length){
       S.odds=out;S.oddsState="ok";
       LS.set("oddsCache",{t:Date.now(),odds:out});
@@ -3391,9 +3420,7 @@ async function loadOdds(){
     }
     S.oddsState=S.oddsErr?"fail":"empty";render();
   }catch(e){
-    /* A browser fetch that never completes is almost always CORS: odds-api.io's
-       own documentation says to call it from a server, not client-side code. */
-    S.oddsErr=String(e.message||e)+" — odds-api.io does not appear to allow browser requests";
+    S.oddsErr=String(e.message||e)+" — this looks like a network or CORS failure";
     S.oddsState="fail";render();
   }
 }
@@ -3423,7 +3450,8 @@ function normaliseBooks(d){
 function oddsHTML(){
   const pct=o=>o>0?(100/o):0;
   const head=`<div class="panel"><div class="phead"><h2>Odds</h2>
-     <button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button></div>
+     <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button>
+       <button onclick="act('oddsreset')" title="Clear the cached league and refetch">Reset</button></span></div>
     <div class="pbody">
       <p class="note" style="margin:0 0 8px">Bookmaker prices are a live consensus model — they price form, team news, penalties and venue in one number. Shown as implied probability with the margin left in.</p>
       <span class="pricebox"><input type="password" placeholder="odds-api.io key" value="${esc(S.oddsKey||"")}"
@@ -4021,6 +4049,7 @@ function act(k,a,b){
     case"plf":S.playerFilter=a||null;break;
     case"odds":loadOdds();return;
     case"oddsdemo":S.oddsDemo=!S.oddsDemo;break;
+    case"oddsreset":LS.set("oddsLeague","");LS.set("oddsCache",null);loadOdds();return;
     case"oddskey":S.oddsKey=a.trim();LS.set("oddsKey",S.oddsKey);if(S.oddsKey)loadOdds();return;
     case"addrival":{const n=document.getElementById("rvName")?.value?.trim();
       const id=document.getElementById("rvId")?.value?.trim();
