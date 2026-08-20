@@ -99,6 +99,45 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .badge{position:absolute;width:15px;height:15px;border-radius:50%;font-size:8.5px;font-weight:800;
  display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3}
 .dot{position:absolute;width:10px;height:10px;border-radius:50%;border:1.5px solid rgba(0,0,0,.55);z-index:3}
+.seg{display:inline-flex;border:1px solid var(--ink3);border-radius:9px;overflow:hidden}
+.seg button{border:none;border-radius:0;padding:7px 12px;font-size:11.5px}
+.sqtable{width:100%;border-collapse:collapse;font-size:12px}
+.sqtable th{position:sticky;top:0;background:var(--ink2);padding:8px 7px;font-size:9.5px;
+ letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:800;cursor:pointer;white-space:nowrap}
+.sqtable th.act{color:var(--mint)}
+.sqtable td{padding:7px;border-top:1px solid var(--ink3);vertical-align:middle}
+.sqtable tr.sub{background:rgba(255,255,255,.025)}
+.lname{background:none;border:none;padding:0;color:var(--cream);font-weight:700;font-size:12.5px;cursor:pointer}
+.lname:hover{color:var(--mint);text-decoration:underline}
+.tag{font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:5px;margin-left:5px;vertical-align:middle}
+.tag.c{background:var(--cream);color:var(--ink)}.tag.v{background:var(--cyan);color:var(--ink)}
+.tag.s{background:var(--ink3);color:var(--mute)}
+.mini{padding:3px 7px;font-size:10.5px;border-radius:6px;margin-left:3px}
+.pcwrap{position:fixed;inset:0;z-index:200;background:rgba(4,6,9,.78);display:flex;
+ align-items:center;justify-content:center;padding:14px;backdrop-filter:blur(3px)}
+.pcard{position:relative;width:100%;max-width:560px;max-height:88vh;overflow:auto;
+ background:var(--ink2);border:1px solid var(--line);border-radius:16px;padding:18px;
+ box-shadow:0 24px 60px rgba(0,0,0,.65)}
+.pcx{position:absolute;top:12px;right:12px;padding:4px 10px;border-radius:8px}
+.pchead{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.pcimg{width:64px;height:82px;object-fit:cover;border-radius:10px;background:var(--ink3);flex:none}
+.pcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin-top:14px}
+.pcs{background:var(--ink);border:1px solid var(--ink3);border-radius:10px;padding:8px 9px}
+.pcs .k{display:block;font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mute);font-weight:800}
+.pcs .v{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;margin-top:2px}
+.pclab{margin-top:16px;font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800}
+.pcbars{display:flex;gap:8px;align-items:flex-end;margin-top:8px}
+.pcbar{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px}
+.pcbar .pv{font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:var(--cream)}
+.pcbar .bar{width:100%;border-radius:5px 5px 0 0;min-height:4px}
+.pcbar .op{font-size:9.5px;color:var(--cream)}
+.pcbar .gw{font-size:8.5px;color:var(--mute)}
+@media(max-width:520px){.pcard{padding:14px}.pcimg{width:54px;height:70px}}
+.benchslot{display:flex;flex-direction:column;align-items:center;gap:4px}
+.benchmv{display:flex;gap:4px;align-items:center}
+.benchmv button{padding:2px 7px;font-size:10px;border-radius:6px;line-height:1.1}
+.benchmv button:disabled{opacity:.3;cursor:default}
+.bnum{font-size:10px;color:var(--mute);font-family:'IBM Plex Mono',monospace;min-width:10px;text-align:center}
 .benchbar{background:var(--ink);padding:8px 4px 4px}
 .benchbar .lb{font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);
  font-weight:700;text-align:center;margin-bottom:6px}
@@ -260,7 +299,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.10.0";
+const APP_VERSION="7.11.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -278,12 +317,15 @@ const posOf=v=>POSNAME[String(v||"").trim()]||POSNAME[String(v||"").trim().repla
 const SHAPE={1:2,2:5,3:5,4:3};
 
 /* Squad exactly as picked for GW1 */
+/* purchase prices, so the list can show what each player cost against what he
+   would now sell for */
 const SEED=[["Raya","ARS",1,6.0],["Dubravka","TOT",1,4.0],
  ["Calafiori","ARS",2,5.5],["Maguire","MUN",2,5.0],["F.Kadıoğlu","BHA",2,4.5],
  ["Ajer","BRE",2,4.5],["O'Shea","IPS",2,4.0],
  ["B.Fernandes","MUN",3,12.0],["Mbeumo","MUN",3,8.0],["Szoboszlai","LIV",3,7.0],
  ["Schade","BRE",3,6.0],["Slater","HUL",3,4.5],
  ["Haaland","MCI",4,15.5],["João Pedro","CHE",4,7.5],["Calvert-Lewin","LEE",4,6.0]];
+const REAL_PRICE={};SEED.forEach(([n,,,pr])=>{REAL_PRICE[n]=pr;});
 const norm=s=>(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");
 
 /* Community chip consensus, gathered Aug 2026 */
@@ -390,7 +432,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
- outList:[],selected:null,menuOpen:false,compare:null,dash:{},chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
+ outList:[],selected:null,menuOpen:false,compare:null,dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
 const LS={get(k){try{return JSON.parse(localStorage.getItem("fpl3:"+k));}catch(e){return null;}},
  set(k,v){try{localStorage.setItem("fpl3:"+k,JSON.stringify(v));}catch(e){}}};
 
@@ -1274,8 +1316,13 @@ function buildModel(){
        attacking output. Scaled by the club's attacking strength, since a weak
        team wins far fewer penalties, and trimmed because a player's xG per 90
        already contains the penalties he took. */
-    const penRate=penOrder===1?0.45:(penOrder===2?0.11:0);
-    const setBoost=setOrder===1?0.35:(setOrder===2?0.12:0);
+    /* published duties override the dataset's order, which lags transfers */
+    const duty=SETPIECE[(team.short||"").toUpperCase()];
+    const isNamed=(k)=>{const me=norm(p.web_name);
+      return !!(duty&&(duty[k]||[]).some(nm=>{const t=norm(nm);
+        return t&&(me===t||me.includes(t)||t.includes(me));}));};
+    const penRate=isNamed("P")?0.45:(penOrder===1?0.30:(penOrder===2?0.08:0));
+    const setBoost=(isNamed("F")||isNamed("C"))?0.30:(setOrder===1?0.22:(setOrder===2?0.08:0));
     const epNext=num(s.ep_next);
 
     return{id:p.id,code:String(p.code||""),web_name:p.web_name,first:p.first,last:p.last,pos:p.pos,
@@ -1505,38 +1552,12 @@ const avgFP=(p,g,h)=>(p.form+hPts(p,g,h))/2;
 
 /* ---------- signals ---------- */
 /* First name on each club's list is the recognised taker */
-const SETPIECE={
- ARS:["Saka","Rice","Rice"], AVL:["Buendía","Buendía","Cash"], BOU:["Kluivert","Unal","Tavernier"],
- BRE:["Thiago","Lewis-Potter","Jensen"], BHA:["Welbeck","De Cuyper","Groß"],
- CHE:["Palmer","James","James"], COV:["Wright","Torp","Grimes"], CRY:["Mateta","Pino","Johnson"],
- EVE:["Ndiaye","Garner","Garner"], FUL:["Robinson","","Iwobi"], HUL:["McBurnie","","Slater"],
- IPS:["Clarke","Núñez","Davis"], LEE:["Calvert-Lewin","Stach","Stach"],
- LIV:["Szoboszlai","Szoboszlai","Szoboszlai"], MCI:["Haaland","Marmoush","Cherki"],
- MUN:["Fernandes","Fernandes","Fernandes"], NEW:["Bruno G.","Hall","Hall"],
- NFO:["Wood","Gibbs-White","Hutchinson"], SUN:["Diarra","Xhaka","Xhaka"],
- TOT:["Solanke","Porro","Porro"]
-};
-const SPCOL={P:["#FF5C7A","#FFC2CE"],F:["#4ADE80","#B7F5CE"],C:["#F472B6","#FBCFE8"]};
-function setPieceHTML(p){
-  const duty=SETPIECE[(p.teamName||"").toUpperCase()];
-  if(!duty)return"";
-  const me=norm(p.web_name), out=[];
-  [["P",duty[0]],["F",duty[1]],["C",duty[2]]].forEach(([k,nm])=>{
-    if(!nm)return;
-    const t=norm(nm);
-    if(t&&(me===t||me.includes(t)||t.includes(me))){
-      const[b,c]=SPCOL[k];
-      out.push(`<span class="sig" title="${k==="P"?"Penalties":k==="F"?"Direct free kicks":"Corners"}">
-        ${badge(G(k,k.length>1?8.4:11),b,c)}</span>`);}
-  });
-  return out.length?`<span class="sigs">${out.join("")}</span>`:"";
-}
-/* Shield-D marks a defence worth targeting, star-A an attack worth targeting.
-   Both are drawn rather than emoji so the letter stays legible at 16px. */
+/* 26/27 duties: first penalty taker, first two on free kicks and corners.
+   Players marked with an asterisk in the source (injury or transfer doubt) are
+   skipped in favour of the next name. */
 /* One badge shape throughout — an 18px disc with a coloured ring — so the set
-   reads as a family. Only the glyph and hue differ, which keeps them distinct
-   without the size and shape jumble the mixed emoji/SVG set had. */
-function badge(glyph,fill,ring,ink){
+   reads as a family; only the glyph and hue differ. */
+function badge(glyph,fill,ring){
   return `<svg viewBox="0 0 24 24" class="bdg" aria-hidden="true">
     <circle cx="12" cy="12" r="10.4" fill="${fill}" stroke="${ring}" stroke-width="1.6"/>${glyph}</svg>`;
 }
@@ -1549,11 +1570,48 @@ const ICON_HOT=badge(`<path d="M12 4.6c2.6 2.7 4.4 4.9 4.4 7.6a4.4 4.4 0 1 1-8.8
 const ICON_ATT=badge(G("A",11),"#FFB020","#FFE0A8");
 const ICON_DEF=badge(G("D",11),"#3ED8F0","#A6EEFA");
 const ICON_DC=badge(G("DC",8.4),"#A78BFA","#DCCEFF");
-const ICON_STALE=badge(`<text x="12" y="16.4" font-family="Inter,Arial,sans-serif" font-size="13"
-   font-weight="900" fill="#2A1000" text-anchor="middle">!</text>`,"#F2C14E","#FBE3A6");
 const ICON_MIN=badge(`<path d="M12 7.4v5.1l3.2 1.9" stroke="#0B0E13" stroke-width="2"
    stroke-linecap="round" fill="none"/><path d="M9.8 3.6h4.4" stroke="#0B0E13" stroke-width="2"
    stroke-linecap="round"/>`,"#8FA3BC","#D6E2F0");
+const ICON_STALE=badge(`<text x="12" y="16.4" font-family="Inter,Arial,sans-serif" font-size="13"
+   font-weight="900" fill="#2A1000" text-anchor="middle">!</text>`,"#F2C14E","#FBE3A6");
+const SPCOL={P:["#FF5C7A","#FFC2CE"],F:["#4ADE80","#B7F5CE"],C:["#F472B6","#FBCFE8"]};
+const SETPIECE={
+ ARS:{P:["Saka"],            F:["Saka","Rice"],            C:["Rice","Saka"]},
+ AVL:{P:["Buendía"],         F:["Buendía","McGinn"],       C:["Cash","McGinn"]},
+ BOU:{P:["Kluivert"],        F:["Tavernier","Scott"],      C:["Tavernier","Scott"]},
+ BRE:{P:["Thiago"],          F:["Lewis-Potter","Jensen"],  C:["Jensen","Damsgaard"]},
+ BHA:{P:["Groß"],            F:["Groß","De Cuyper"],       C:["Groß","De Cuyper"]},
+ CHE:{P:["Palmer"],          F:["James","Neto"],           C:["James","Neto"]},
+ COV:{P:["Awoniyi"],         F:["Grimes","Rudoni"],        C:["Grimes","Torp"]},
+ CRY:{P:["Mateta"],          F:["Pino","Wharton"],         C:["Wharton","Pino"]},
+ EVE:{P:["Ndiaye"],          F:["Dewsbury-Hall"],          C:["Dewsbury-Hall"]},
+ FUL:{P:["García"],          F:["Iwobi"],                  C:["Iwobi","Bobb"]},
+ HUL:{P:["McBurnie"],        F:["Giles","Belloumi"],       C:["Giles","Belloumi"]},
+ IPS:{P:["Hirst"],           F:["Núñez","Davis"],          C:["Núñez","Davis"]},
+ LEE:{P:["Calvert-Lewin"],   F:["Stach","Wilson"],         C:["Stach","Wilson"]},
+ LIV:{P:["Isak"],            F:["Szoboszlai","Wirtz"],     C:["Szoboszlai","Wirtz"]},
+ MCI:{P:["Haaland"],         F:["Cherki","Foden"],         C:["Cherki","Foden"]},
+ MUN:{P:["Fernandes"],       F:["Fernandes","Mbeumo"],     C:["Fernandes","Mbeumo"]},
+ NEW:{P:["Woltemade"],       F:["Hall","Schär"],           C:["Hall","Elanga"]},
+ NFO:{P:["Gibbs-White"],     F:["Gibbs-White","Murillo"],  C:["N.Williams","Hutchinson"]},
+ SUN:{P:["Le Fée"],          F:["Xhaka","Le Fée"],         C:["Xhaka","Le Fée"]},
+ TOT:{P:["Richarlison"],     F:["Porro","Tonali"],         C:["Porro","Tonali"]}
+};
+function setPieceHTML(p){
+  const duty=SETPIECE[(p.teamName||"").toUpperCase()];
+  if(!duty)return "";
+  const me=norm(p.web_name), out=[];
+  const hit=list=>(list||[]).some(nm=>{const t=norm(nm);
+    return t&&(me===t||me.includes(t)||t.includes(me));});
+  [["P","Penalties"],["F","Free kicks"],["C","Corners"]].forEach(([k,label])=>{
+    if(!hit(duty[k]))return;
+    const[b,c]=SPCOL[k];
+    out.push(`<span class="sig" title="${label}">${badge(G(k,11),b,c)}</span>`);
+  });
+  return out.length?`<span class="sigs">${out.join("")}</span>`:"";
+}
+
 const SIGDEF=[[ICON_DIFF,"#3ED8F0","Differential"],
  [ICON_HOT,"#FF8A3D","Hot streak"],
  [ICON_ATT,"#FFB020","Attack to target"],
@@ -1618,7 +1676,7 @@ const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
 
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
-  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,forceXI:S.forceXI,activeChip:S.activeChip});}
+  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,forceXI:S.forceXI,activeChip:S.activeChip,benchOrder:S.benchOrder});}
 function resolveSeed(quiet){
   if(!S.model)return;
   const used=new Set(),ids=[],miss=[];
@@ -2236,10 +2294,31 @@ function dashData(){
         fix:f?`${f.opp}${f.home?" (H)":" (A)"}`:"—"};});
   /* bench, which is what Bench Boost is worth */
   const benchPts=bench.reduce((a,p)=>a+(p.gw[g]?.pts||0),0);
-  /* price movement */
-  const movers=sp.filter(p=>Math.abs(p.priceChange)>0.001)
-    .sort((a,b)=>Math.abs(b.priceChange)-Math.abs(a.priceChange));
-  return{strength,outlook,risks,conc:top,bench,benchPts,movers,xi};
+  /* captaincy — the highest-leverage call each week */
+  const caps=[...xi].sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0)).slice(0,3)
+    .map(p=>({p,pts:p.gw[g]?.pts||0,f:p.gw[g]?.fixtures?.[0]}));
+  /* how much of the projection rests on players whose role may have moved */
+  const risky=sp.filter(p=>p.staleRole||(xi.includes(p)&&p.xMins<60));
+  const riskPts=risky.filter(p=>xi.includes(p)).reduce((a,p)=>a+(p.gw[g]?.pts||0),0);
+  const xiPts=xi.reduce((a,p)=>a+(p.gw[g]?.pts||0),0);
+  /* template versus contrarian */
+  const diffs=xi.filter(p=>p.owned<10);
+  const diffPts=diffs.reduce((a,p)=>a+(p.gw[g]?.pts||0),0);
+  /* fixture runs across the squad — which clubs swing your score */
+  const runs={};
+  sp.forEach(p=>{
+    let good=0,bad=0,n=0;
+    for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];if(!q||q.blank)continue;
+      q.fixtures.forEach(f=>{const d=posDiff(p,f);if(d<=2)good++;else if(d>=4)bad++;n++;});}
+    if(!n)return;
+    const t=p.teamName;
+    runs[t]=runs[t]||{good:0,bad:0,n:0,players:0};
+    runs[t].good+=good;runs[t].bad+=bad;runs[t].n+=n;runs[t].players++;
+  });
+  const runList=Object.entries(runs).map(([t,v])=>({t,
+    score:(v.good-v.bad)/Math.max(1,v.n),players:v.players/1,good:v.good,bad:v.bad}))
+    .sort((a,b)=>b.score-a.score);
+  return{strength,outlook,risks,conc:top,bench,benchPts,caps,risky,riskPts,xiPts,diffs,diffPts,runList,xi};
 }
 function dashHTML(){
   const d=dashData();if(!d)return "";
@@ -2277,7 +2356,32 @@ function dashHTML(){
         ${esc(r.who)}</span><span class="note">${esc(r.what)}</span></div>`).join("")
         :`<p class="note" style="margin:0">Nothing flagged.</p>`,
       d.risks.some(r=>r.sev>=3)?"color:var(--red)":d.risks.some(r=>r.sev===2)?"color:var(--amber)":"")}
-    ${row("conc","Club concentration",
+    ${row("caps","Captain",
+      d.caps.length?`${esc(d.caps[0].p.web_name)} · ${d.caps[0].pts.toFixed(1)}`:"—",
+      d.caps.map((c,i)=>`<div class="dline"><span>${i+1}. ${esc(c.p.web_name)}
+        <span class="note">${esc(c.p.teamName)}${c.f?` v ${esc(c.f.opp)}${c.f.home?" (H)":" (A)"}`:""}</span></span>
+        <span class="mono">${c.pts.toFixed(1)} → ${(c.pts*2).toFixed(1)}</span></div>`).join("")
+        +`<p class="note" style="margin:6px 0 0">Doubled score shown second.</p>`,
+      "color:var(--mint)")}
+    ${row("runs","Fixture runs",
+      d.runList.length?`${d.runList[0].t} best · ${d.runList[d.runList.length-1].t} worst`:"—",
+      d.runList.map(r=>`<div class="dline"><span>${esc(r.t)} <span class="note">${r.players} player${r.players>1?"s":""}</span></span>
+        <span><span class="mono" style="color:var(--mint)">${r.good} kind</span>
+        <span class="mono" style="color:var(--red);margin-left:8px">${r.bad} hard</span></span></div>`).join(""),
+      d.runList.length&&d.runList[0].score>0.3?"color:var(--mint)":"")}
+    ${row("risk2","Points at risk",
+      `${d.riskPts.toFixed(1)} of ${d.xiPts.toFixed(1)} (${Math.round(100*d.riskPts/Math.max(1,d.xiPts))}%)`,
+      d.risky.length?d.risky.map(p=>`<div class="dline"><span>${esc(p.web_name)}
+        <span class="note">${p.staleRole?"role may have changed":"low minutes"}</span></span>
+        <span class="mono">${(p.gw[g]?.pts||0).toFixed(1)}</span></div>`).join("")
+        :`<p class="note" style="margin:0">Nothing flagged.</p>`,
+      d.riskPts/Math.max(1,d.xiPts)>0.25?"color:var(--red)":d.riskPts>0?"color:var(--amber)":"")}
+    ${row("diff","Differentials",
+      `${d.diffs.length} under 10% · ${d.diffPts.toFixed(1)} pts`,
+      d.diffs.length?d.diffs.map(p=>`<div class="dline"><span>${esc(p.web_name)}</span>
+        <span class="note">${p.owned.toFixed(1)}% owned · ${(p.gw[g]?.pts||0).toFixed(1)}</span></div>`).join("")
+        :`<p class="note" style="margin:0">Your XI is entirely template.</p>`)}
+    ${row("concOLD","Club concentration",
       d.conc.length?`${d.conc[0].team} ${d.conc[0].n} of ${d.xi.length}`:"well spread",
       d.conc.length?d.conc.map(c=>`<div class="dline"><span>${esc(c.team)} — ${c.n} starters</span>
         <span class="note">${c.pct}% of your XI · ${esc(c.fix)}</span></div>`).join("")
@@ -2289,12 +2393,111 @@ function dashHTML(){
         <span class="mono">${(p.gw[g]?.pts||0).toFixed(1)}</span></div>`).join("")
         +`<p class="note" style="margin:6px 0 0">This is what a Bench Boost is worth this week.</p>`,
       d.benchPts<6?"color:var(--red)":d.benchPts<10?"color:var(--amber)":"color:var(--mint)")}
-    ${row("price","Price movement",
-      d.movers.length?`${d.movers.filter(p=>p.priceChange>0).length} rising · ${d.movers.filter(p=>p.priceChange<0).length} falling`:"steady",
-      d.movers.length?d.movers.map(p=>`<div class="dline"><span>${esc(p.web_name)}</span>
-        <span class="mono">£${p.price.toFixed(1)} ${arw(p.priceChange)}</span></div>`).join("")
-        :`<p class="note" style="margin:0">No changes this gameweek.</p>`)}
   </div>`;
+}
+/* ---------- squad list view ----------
+   Sortable across the whole 15 by position, so a weak starter and a strong
+   substitute sit next to each other rather than in separate blocks. */
+function squadListHTML(){
+  const g=VG(), xi=startingXI();
+  const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
+  const all=squadPlayers();
+  const key=S.sqSort||"pos", dir=S.sqDir||"asc";
+  const val={
+    pos:p=>p.pos*100-(xi.includes(p)?50:0),
+    name:p=>p.web_name.toLowerCase(),
+    buy:p=>REAL_PRICE[p.web_name]??p.price,
+    sell:p=>sellPrice(p),
+    form:p=>p.form, xmins:p=>p.xMins,
+    pred:p=>p.gw[g]?.pts||0, p3:p=>hPts(p,g,3), p5:p=>hPts(p,g,5)
+  }[key]||(p=>p.pos);
+  const rows=[...all].sort((a,b)=>{
+    const x=val(a),y=val(b);
+    const c=typeof x==="string"?x.localeCompare(y):x-y;
+    return dir==="asc"?c:-c;});
+  const cols=[["name","Player"],["buy","Bought"],["sell","Sells"],["form","Form"],
+    ["xmins","xMins"],["pred","xFPL"],["p3","3GW"],["p5","5GW"]];
+  const arrow=k=>key===k?(dir==="asc"?" ↑":" ↓"):"";
+  const head=`<tr>${cols.map(([k,n])=>`<th class="${key===k?"act":""}"
+      style="text-align:${k==="name"?"left":"right"}" onclick="act('sqsort','${k}')">${n}${arrow(k)}</th>`).join("")}
+    <th style="text-align:center">Next 3</th><th></th></tr>`;
+  const body=rows.map(p=>{
+    const starting=xi.includes(p);
+    const q=p.gw[g]||{fixtures:[]};
+    const buy=REAL_PRICE[p.web_name]??p.price;
+    const sell=sellPrice(p);
+    return `<tr class="${starting?"":"sub"}">
+      <td class="nm"><span style="display:flex;align-items:center;gap:8px">
+        ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
+        <span style="min-width:0">
+          <button class="lname" onclick="act('card',${p.id})">${esc(p.web_name)}</button>
+          ${S.captain===p.id?'<span class="tag c">C</span>':""}${S.vice===p.id?'<span class="tag v">V</span>':""}
+          ${starting?"":'<span class="tag s">SUB</span>'}
+          <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]}</span>
+        </span></span></td>
+      <td class="mono" style="text-align:right">£${buy.toFixed(1)}</td>
+      <td class="mono" style="text-align:right;color:${sell>buy?"var(--mint)":sell<buy?"var(--red)":"var(--cream)"}">£${sell.toFixed(1)}</td>
+      <td class="mono" style="text-align:right">${p.form.toFixed(1)}</td>
+      <td class="mono" style="text-align:right">${p.xMins}′</td>
+      <td class="mono" style="text-align:right;color:var(--mint);font-weight:700">${(q.pts||0).toFixed(1)}</td>
+      <td class="mono" style="text-align:right;color:var(--cyan)">${hPts(p,g,3).toFixed(1)}</td>
+      <td class="mono" style="text-align:right;color:var(--cyan)">${hPts(p,g,5).toFixed(1)}</td>
+      <td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="mini" onclick="act('sub',${p.id})" title="Substitute">⇄</button>
+        <button class="mini" onclick="act('cap',${p.id})" title="Captain">C</button>
+        <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button></td></tr>`;}).join("");
+  return `<div class="scroll"><table class="sqtable"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+/* ---------- player detail card ---------- */
+function playerCardHTML(){
+  const p=S.model.players.find(x=>x.id===S.cardId);
+  if(!p)return "";
+  const g=VG();
+  const w=ws(String(p.code||""),p.pos,38,p.price,teamMaxPrice(p.team));
+  const buy=REAL_PRICE[p.web_name]??p.price;
+  const five=[];for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];
+    five.push({e,pts:q&&!q.blank?q.pts:0,f:q&&q.fixtures[0]});}
+  const mx=Math.max(1,...five.map(x=>x.pts));
+  const stat=(k,v,c)=>`<div class="pcs"><span class="k">${k}</span><span class="v" style="${c||""}">${v}</span></div>`;
+  return `<div class="pcwrap" onclick="act('card',0)">
+    <div class="pcard" onclick="event.stopPropagation()">
+      <button class="pcx" onclick="act('card',0)">✕</button>
+      <div class="pchead">
+        <img class="pcimg" alt="" src="https://resources.premierleague.com/premierleague/photos/players/110x140/p${esc(String(p.code||""))}.png"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <span style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,64)}</span>
+        <div style="min-width:0">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05">${esc(p.web_name)}</div>
+          <div class="note">${esc(p.teamFull||p.teamName)} · ${POS[p.pos]} · ${p.owned.toFixed(1)}% owned</div>
+          <div style="margin-top:6px">${sigHTML(p,g)}</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;color:var(--mint)">${(p.gw[g]?.pts||0).toFixed(1)}</div>
+          <div class="note">GW${g} projected</div></div>
+      </div>
+      ${p.avail<1?`<div class="warn" style="margin:10px 0">${esc(p.news||"Fitness doubt")}${p.back?` · back ${esc(p.back)}`:""}</div>`:""}
+      <div class="pcgrid">
+        ${stat("Price",`£${p.price.toFixed(1)}`)}
+        ${stat("Bought",`£${buy.toFixed(1)}`)}
+        ${stat("Sells for",`£${sellPrice(p).toFixed(1)}`)}
+        ${stat("Form",p.form.toFixed(1))}
+        ${stat("xMins",p.xMins+"′")}
+        ${stat("Start %",w?(w.estimated?"~":"")+Math.round(w.startPct*100)+"%":"—")}
+        ${stat("xG/90",p.xg90.toFixed(2))}
+        ${stat("xA/90",p.xa90.toFixed(2))}
+        ${p.pos>1?stat("DefCon %",p.dcHitRate!=null?Math.round(p.dcHitRate*100)+"%":"—"):stat("Saves/90",p.sv90.toFixed(2))}
+        ${stat("Bonus/90",p.bonus90.toFixed(2))}
+      </div>
+      <div class="pclab">Next five</div>
+      <div class="pcbars">${five.map(x=>{
+        const h=Math.max(4,Math.round(x.pts/mx*46));
+        const[b,c]=x.f?fdrCol(posDiff(p,x.f)):["var(--ink3)","var(--mute)"];
+        return `<span class="pcbar"><span class="pv">${x.pts.toFixed(1)}</span>
+          <span class="bar" style="height:${h}px;background:${b}"></span>
+          <span class="op" style="${x.f&&!x.f.home?"font-style:italic":""}">${x.f?esc(x.f.opp):"—"}</span>
+          <span class="gw">GW${x.e}</span></span>`;}).join("")}</div>
+    </div></div>`;
 }
 function pitchHTML(){
   const xi=startingXI();
@@ -3411,6 +3614,7 @@ function render(){
       <div class="panel"><div class="phead"><h2>Planner</h2>
 
         <span style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="act('opt')">Optimise</button>
+          <span class="seg"><button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button><button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
           <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button>
           <button onclick="act('save')">Save</button><button onclick="act('reset')">Reset</button></span></div>
         <div class="gwbar">
@@ -3427,7 +3631,7 @@ function render(){
               .map(([k,n])=>{const on=k==="none"?!chipForWeek(VG()):chipForWeek(VG())===k;
                 return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
           </span></div>
-        ${pitchHTML()}${legendHTML()}</div>${conf}${flag}</div>
+        ${S.sqView==="list"?squadListHTML():pitchHTML()}${legendHTML()}</div>${conf}${flag}</div>
       ${S.compare?`<div>${compareHTML()}</div>`:""}
       <div>
         <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
@@ -3505,6 +3709,7 @@ function render(){
       <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div><div class="s">of £100.0</div></div>
       <div class="stat"><div class="k">In the bank</div><div class="v" style="color:${bank<0?"var(--red)":raised>0?"var(--mint)":"var(--cream)"}">£${bank.toFixed(1)}</div><div class="s">${raised>0?`incl. £${raised.toFixed(1)} from sales`:"to spend"}</div></div></div>
    </div>
+   ${S.cardId?playerCardHTML():""}
    <div class="stick">
      <div class="ministats">
        ${LOGO}
@@ -3550,6 +3755,18 @@ function act(k,a,b){
       vice:S.vice,bank:S.bank,flagged:[],forceXI:null,subFrom:null};break;
     case"cclose":S.compare=null;break;
     case"ccap":{const C=S.compare;if(!C)break;C.captain=a;break;}
+    case"sqview":S.sqView=a;break;
+    case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
+      else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
+    case"card":S.cardId=a||null;break;
+    case"benchmove":{
+      const xi=startingXI();
+      const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
+      const ids=bench.map(p=>p.id);
+      const i0=ids.indexOf(a), j0=i0+(b==="up"?-1:1);
+      if(i0<0||j0<0||j0>=ids.length)break;
+      [ids[i0],ids[j0]]=[ids[j0],ids[i0]];
+      S.benchOrder=ids;saveState();break;}
     case"csub":{const C=S.compare;if(!C)break;
       if(C.subFrom===a){C.subFrom=null;break;}
       if(C.subFrom==null){C.subFrom=a;toast("Now tap who to swap with");break;}
