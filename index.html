@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.13.4";
+const APP_VERSION="7.13.5";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -3345,7 +3345,7 @@ function buildOddsTeams(){
 }
 async function loadOdds(){
   if(!S.oddsKey){S.oddsState="nokey";render();return;}
-  S.oddsState="loading";S.oddsErr="";S._sampled=false;S.oddsLog=["started "+new Date().toLocaleTimeString("en-GB")];render();
+  S.oddsState="loading";S.oddsErr="";S._sampled=false;S.oddsLog=["v"+APP_VERSION+" · started "+new Date().toLocaleTimeString("en-GB")];render();
   const key=encodeURIComponent(S.oddsKey);
   const base="https://api.odds-api.io/v3";
   const log=m=>{S.oddsLog.push(m);};
@@ -3430,7 +3430,9 @@ async function loadOdds(){
       if(oj===null)break;
       const rows=Array.isArray(oj)?oj:(oj.data||Object.values(oj||{}));
       log(`odds: ${rows.length} rows for ${ids.length} events`);
-      if(rows.length&&!S._sampled){S._sampled=true;log("sample row: "+sampleJSON(rows[0]));}
+      if(rows.length&&!S._sampled){S._sampled=true;
+        log("keys on row: "+Object.keys(rows[0]||{}).join(", "));
+        log("sample row: "+sampleJSON(rows[0]));}
       rows.forEach(rw=>{
         const id=rw.eventId||rw.id;
         const ev=chunk.find(e=>String(e.id||e.eventId)===String(id))||{};
