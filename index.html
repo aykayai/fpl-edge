@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.13.1";
+const APP_VERSION="7.13.2";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -3345,7 +3345,7 @@ function buildOddsTeams(){
 }
 async function loadOdds(){
   if(!S.oddsKey){S.oddsState="nokey";render();return;}
-  S.oddsState="loading";S.oddsErr="";S.oddsLog=[];render();
+  S.oddsState="loading";S.oddsErr="";S.oddsLog=["started "+new Date().toLocaleTimeString("en-GB")];render();
   const key=encodeURIComponent(S.oddsKey);
   const base="https://api.odds-api.io/v3";
   const log=m=>{S.oddsLog.push(m);};
@@ -3459,8 +3459,16 @@ function oddsHTML(){
   if(S.oddsState==="loading")return head+`<div class="panel"><div class="pbody"><p class="note">Fetching prices…</p></div></div>`;
   if((S.oddsState==="fail"||S.oddsState==="empty")&&!S.oddsDemo)
     return head+`<div class="panel"><div class="pbody">
-      <div class="warn">No Premier League prices came back — bookmakers usually post markets two or three days before kick-off, so this is likely too early for GW1.</div>
-      <button class="pri" style="margin-top:10px" onclick="act('oddsdemo')">Show sample layout</button></div></div>`;
+      <div class="warn">${S.oddsErr
+        ? `<b>${esc(S.oddsErr)}</b><br><span class="note">If that mentions a network or CORS failure, odds-api.io is refusing browser requests and nothing in the app can work around it.</span>`
+        : "The feed responded but returned nothing usable."}
+        ${(S.oddsLog||[]).length?`<div class="mono" style="font-size:10.5px;margin-top:10px;opacity:.9;line-height:1.6">
+          ${S.oddsLog.map(x=>esc(x)).join("<br>")}</div>`
+          :`<div class="note" style="margin-top:8px">No trace recorded — press Fetch to run the lookup and capture one.</div>`}</div>
+      <span style="display:flex;gap:6px;margin-top:10px">
+        <button class="pri" onclick="act('odds')">↻ Fetch now</button>
+        <button onclick="act('oddsreset')">Reset league cache</button>
+        <button onclick="act('oddsdemo')">Sample layout</button></span></div></div>`;
   if(S.oddsDemo&&S.oddsState!=="ok"){
     const demo={
       cs:[["Arsenal clean sheet","Arsenal v Coventry",1.62],["Man City clean sheet","Man City v Bournemouth",1.85],
@@ -3483,7 +3491,10 @@ function oddsHTML(){
       +sec("Assists",demo.as)+sec("Other markets",demo.misc);
   }
   if(S.oddsState==="fail"||S.oddsState==="empty")
-    return head+`<div class="panel"><div class="pbody"><div class="warn">No Premier League prices came back${S.oddsErr?" ("+esc(S.oddsErr)+")":""}. Bookmakers usually post match odds a few days before kick-off, so this may simply be too early for GW1.</div></div></div>`;
+    return head+`<div class="panel"><div class="pbody"><div class="warn">${S.oddsErr
+      ? `<b>${esc(S.oddsErr)}</b>` : "The feed responded but returned nothing usable."}
+      ${(S.oddsLog||[]).length?`<div class="mono" style="font-size:10.5px;margin-top:10px;opacity:.9;line-height:1.6">
+        ${S.oddsLog.map(x=>esc(x)).join("<br>")}</div>`:""}</div></div></div>`;
   if(S.oddsState!=="ok")return head;
 
   /* group whatever markets the feed returns into FPL-relevant sections */
