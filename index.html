@@ -322,7 +322,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="7.14.0";
+const APP_VERSION="7.14.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -3355,7 +3355,7 @@ function buildOddsTeams(){
 }
 async function loadOdds(){
   if(!S.oddsKey){S.oddsState="nokey";render();return;}
-  S.oddsState="loading";S.oddsErr="";S._sampled=false;S.oddsLog=["v"+APP_VERSION+" · started "+new Date().toLocaleTimeString("en-GB")];render();
+  S.oddsState="loading";S.oddsErr="";S._sampled=false;S._markets={};S.oddsLog=["v"+APP_VERSION+" · started "+new Date().toLocaleTimeString("en-GB")];render();
   const key=encodeURIComponent(S.oddsKey);
   const base="https://api.odds-api.io/v3";
   const log=m=>{S.oddsLog.push(m);};
@@ -3440,9 +3440,19 @@ async function loadOdds(){
       if(oj===null)break;
       const rows=Array.isArray(oj)?oj:(oj.data||Object.values(oj||{}));
       log(`odds: ${rows.length} rows for ${ids.length} events`);
+      /* Catalogue every market the feed actually returns. Player-level markets
+         are often gated behind paid tiers, and the design of the Odds tab
+         depends on whether they come through, so this is worth knowing exactly
+         rather than assuming from the bookmaker's own website. */
+      rows.forEach(rw=>{
+        Object.entries(rw&&rw.bookmakers||{}).forEach(([bk,ms])=>{
+          (Array.isArray(ms)?ms:[]).forEach(m=>{
+            const n=String(m&&m.name||"").trim();if(!n)return;
+            S._markets=S._markets||{};
+            (S._markets[n]=S._markets[n]||new Set()).add(bk);
+          });});});
       if(rows.length&&!S._sampled){S._sampled=true;
-        log("keys on row: "+Object.keys(rows[0]||{}).join(", "));
-        log("sample row: "+sampleJSON(rows[0]));}
+        log("keys on row: "+Object.keys(rows[0]||{}).join(", "));}
       rows.forEach(rw=>{
         const id=rw.eventId||rw.id;
         const ev=chunk.find(e=>String(e.id||e.eventId)===String(id))||{};
@@ -3452,8 +3462,19 @@ async function loadOdds(){
           commence:rw.date||ev.date,bookmakers:books});
       });
     }
+    /* report the catalogue, flagging anything player-level */
+    const mk=S._markets||{};
+    const names=Object.keys(mk).sort();
+    log(`markets available (${names.length}):`);
+    const PLAYER=/scorer|to score|assist|player|shots|card|anytime|first goal|goalscorer/i;
+    const players=names.filter(n=>PLAYER.test(n));
+    names.forEach(n=>log(`   ${PLAYER.test(n)?"★ ":"  "}${n}  [${[...mk[n]].join(", ")}]`));
+    log(players.length?`player-level markets: ${players.length} — ${players.join(" | ")}`
+      :"player-level markets: NONE returned by this tier");
     log(`usable fixtures with prices: ${out.length}`);
     if(out.length){
+      S.oddsMarkets=Object.fromEntries(Object.entries(S._markets||{})
+        .map(([k,v])=>[k,[...v]]));
       S.odds=out;S.oddsState="ok";
       LS.set("oddsCache",{t:Date.now(),odds:out});
       buildOddsTeams();buildModel();render();return;
@@ -3590,7 +3611,18 @@ function oddsHTML(){
         <span class="mono" style="flex:none;width:52px;text-align:right;color:var(--mute)">${r.price.toFixed(2)}</span></div>`).join("")
         :`<div class="pbody"><p class="note">${esc(note)}</p></div>`}</div>`;
   };
-  return head
+  const cat=S.oddsMarkets&&Object.keys(S.oddsMarkets).length
+    ? `<div class="panel"><div class="phead"><h2>Markets returned</h2>
+        <span class="note">${Object.keys(S.oddsMarkets).length} from your bookmakers</span></div>
+      <div class="pbody"><div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${Object.entries(S.oddsMarkets).sort().map(([n,bks])=>{
+          const player=/scorer|to score|assist|player|shots|card|anytime/i.test(n);
+          return `<span class="chipbtn" style="${player?"border-color:var(--mint);color:var(--mint)":""}"
+            title="${esc(bks.join(", "))}">${esc(n)}</span>`;}).join("")}
+      </div>
+      <p class="note" style="margin:9px 0 0">Green marks a player-level market. Hover for which bookmaker offers it.</p>
+      </div></div>` : "";
+  return head+cat
     +section("Clean sheets &amp; goals",rows.cs,"Clean-sheet and total-goals markets aren't posted this far out.")
     +section("Goalscorers",rows.gs,"Anytime-scorer markets usually appear two or three days before kick-off.")
     +section("Assists",rows.as,"Assist markets are rarely offered outside the biggest fixtures.")
