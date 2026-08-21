@@ -3,10 +3,15 @@
    dropped connection. Deliberately network-first for the page itself, so a new
    version published to GitHub Pages is picked up on the next load rather than
    being pinned to a stale cache. */
-const CACHE = "fpl-edge-v8.1.0";
+const CACHE = "fpl-edge-v8.3.0";
 const SHELL = [
   "./",
   "./index.html",
+  "./app-core.js",
+  "./app-squad.js",
+  "./app-render.js",
+  "./app-odds.js",
+  "./app-main.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
@@ -45,6 +50,19 @@ self.addEventListener("fetch", e => {
           return res;
         })
         .catch(() => caches.match("./index.html").then(r => r || caches.match("./")))
+    );
+    return;
+  }
+
+  /* The script files change with every release, so they follow the page rather
+     than the icons: network first, cache only as a fallback. */
+  if(url.pathname.endsWith(".js") && !url.pathname.endsWith("sw.js")){
+    e.respondWith(
+      fetch(req).then(res=>{
+        const copy=res.clone();
+        caches.open(CACHE).then(c=>c.put(req,copy));
+        return res;
+      }).catch(()=>caches.match(req))
     );
     return;
   }
