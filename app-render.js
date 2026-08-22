@@ -297,11 +297,29 @@ function tableHTML(){
     POSCOLS[S.lPos].forEach(c=>POSKEY.add(c[0]));
     genOrange.forEach(k=>POSKEY.add(k));POSKEY.add("xmins");
   }
+  const TDESC={name:"Player name, club and position",price:"Current price",
+    signals:"Signals: differential, hot streak, attack/defence threat, nailed starter, caution",
+    next:"Next 3 fixtures — colour shows difficulty",form:"Average points over recent gameweeks",
+    pred:"Projected points, next gameweek (xFPL)",pred3:"Projected points, next 3 GWs",
+    pred5:"Projected points, next 5 GWs",owned:"% of managers who own him",
+    startpct:"Estimated chance of starting",xmins:"Expected minutes next GW",
+    xgi:"Expected goal involvements per 90",npxg:"Non-penalty xG per 90",xa:"Expected assists per 90",
+    dchit:"% of games hitting the defensive-contribution points threshold",
+    csp:"Clean-sheet probability",cc:"Chances created per 90",box:"Touches in the box per 90",
+    bonus:"Bonus points so far",bps:"Bonus-point-system score per 90",tin:"Transfers in this GW",
+    total:"Total points so far",oppatt:"Opponent attack strength (next fixture)",
+    teamdef:"His team's defensive rating",cbit:"Clearances, blocks, interceptions, tackles per 90",
+    spthreat:"Set-piece goal threat",aer:"Aerial duels won per 90",xg:"Expected goals per 90",
+    gc90:"Goals conceded per 90",penord:"Penalty-taker order (1 = first)",shbox:"Shots in the box per 90",
+    sh90:"Shots per 90",f3:"Final-third passes per 90",drb:"Successful dribbles per 90",
+    bcm:"Big chances missed",conv:"Goal conversion vs xG",sot:"Shots on target per 90",
+    sv90:"Saves per 90",xgot:"xG on target faced per 90",gprev:"Goals prevented vs xGoT",
+    pensv:"Penalties saved",og:"Own goals"};
   const head=cols.map(([k,n])=>{
-    if(k==="signals")return `<th style="text-align:center">Signals</th>`;
+    if(k==="signals")return `<th style="text-align:center" title="${TDESC.signals}">Signals</th>`;
     const hl=POSKEY.has(k)?"color:var(--amber)"          // relevant to the filtered position
       :(KEY[k]&&S.sortKey!==k?"color:var(--cyan)":"");
-    return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')"
+    return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')" title="${TDESC[k]||n}"
       style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("");
   const iconCell=p=>{
     const s=signals(p,g).map(([l,c,t])=>sigIcon(l,c,t)).join("");
@@ -462,6 +480,65 @@ function swapCardHTML(m,g){
       <button style="flex:1" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button>
       <button onclick="act('ignore',${m.inn.id})" title="Stop suggesting this player">Ignore</button></span></div>`;
 }
+/* ---------- player comparison radar (Transfers page) ---------- */
+function radarHTML(){
+  const g=VG();
+  const ids=S.radarIds||[null,null,null];
+  const own=new Set(S.squad||[]);
+  const byPred=[...S.model.players].sort((a,b)=>hPts(b,g,S.horizon)-hPts(a,g,S.horizon));
+  const cand=[],seen=new Set();
+  S.model.players.filter(p=>own.has(p.id)).forEach(p=>{cand.push(p);seen.add(p.id);});
+  byPred.forEach(p=>{if(cand.length<180&&!seen.has(p.id)){cand.push(p);seen.add(p.id);}});
+  cand.sort((a,b)=>a.web_name.localeCompare(b.web_name));
+  const opts=sel=>[1,2,3,4].map(pos=>`<optgroup label="${POS[pos]}">${cand.filter(p=>p.pos===pos)
+    .map(p=>`<option value="${p.id}" ${sel===p.id?"selected":""}>${esc(p.web_name)} · ${esc(p.teamName)}</option>`).join("")}</optgroup>`).join("");
+  const selects=[0,1,2].map(i=>`<select class="rsel" onchange="act('radarpick',${i},this.value)">
+    <option value="">Player ${i+1}…</option>${opts(ids[i])}</select>`).join("");
+
+  const W=p=>ws(String(p.code||""),p.pos,S.lWin||38)||{};
+  const AXF={
+    "xFPL":p=>hPts(p,g,S.horizon),"Form":p=>p.form||0,
+    "xGI/90":p=>{const w=W(p);return (w.xg90||0)+(w.xa90||0);},"xMins":p=>p.xMins||0,
+    "npxG/90":p=>W(p).npxg90||0,"xA/90":p=>W(p).xa90||0,"CC/90":p=>W(p).cc90||0,
+    "xG/90":p=>W(p).xg90||0,"Shots/90":p=>W(p).sh90||0,"DefCon/90":p=>W(p).dc90||W(p).cbit90||0,
+    "CS %":p=>(p.csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,"G prevented":p=>W(p).gp||0};
+  const AXSET={gen:["xFPL","Form","xGI/90","npxG/90","xA/90","xMins"],
+    1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
+    2:["xFPL","Form","DefCon/90","CS %","xGI/90","Aerials/90"],
+    3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
+    4:["xFPL","Form","npxG/90","xG/90","Shots/90","xGI/90"]};
+
+  const active=ids.map(id=>id?S.model.players.find(p=>p.id===id):null).filter(Boolean);
+  const COL=["var(--cyan)","var(--amber)","var(--mint)"];
+  let body;
+  if(!active.length){
+    body=`<p class="note" style="margin:0">Pick up to three players above to compare them across xFPL, form and the stats that matter for their position.</p>`;
+  }else{
+    const positions=[...new Set(active.map(p=>p.pos))];
+    const axes=(positions.length===1&&AXSET[positions[0]])?AXSET[positions[0]]:AXSET.gen;
+    const maxes=axes.map(ax=>Math.max(1e-6,...active.map(p=>AXF[ax](p))));
+    const cx=150,cy=150,R=104,N=axes.length;
+    const ang=i=>(-90+i*360/N)*Math.PI/180;
+    const pt=(i,f)=>[(cx+Math.cos(ang(i))*R*f).toFixed(1),(cy+Math.sin(ang(i))*R*f).toFixed(1)];
+    const rings=[0.25,0.5,0.75,1].map(f=>`<polygon points="${axes.map((_,i)=>pt(i,f).join(",")).join(" ")}" fill="none" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
+    const spokes=axes.map((_,i)=>`<line x1="${cx}" y1="${cy}" x2="${pt(i,1)[0]}" y2="${pt(i,1)[1]}" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
+    const labels=axes.map((ax,i)=>{const[x,y]=pt(i,1.16);
+      return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="var(--mute)">${ax}</text>`;}).join("");
+    const polys=active.map((p,j)=>{const pts=axes.map((ax,i)=>pt(i,Math.min(1,AXF[ax](p)/maxes[i])).join(",")).join(" ");
+      return `<polygon points="${pts}" fill="${COL[j]}" fill-opacity=".14" stroke="${COL[j]}" stroke-width="2"/>`;}).join("");
+    const svg=`<svg viewBox="0 0 300 300" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto">
+      ${rings}${spokes}${labels}${polys}</svg>`;
+    const legend=active.map((p,j)=>`<span class="tlegend"><span class="tdot" style="background:${COL[j]};height:8px;width:8px;border-radius:50%"></span>${esc(p.web_name)}</span>`).join("");
+    body=`<div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:6px">${legend}</div>
+      ${svg}
+      <p class="note" style="margin:8px 0 0;text-align:center">Each axis is scaled to the strongest of the compared players${positions.length>1?" · mixed positions, so general stats are shown":""}.</p>`;
+  }
+  return `<div class="panel"><div class="phead"><h2>Compare players</h2><span class="note">up to 3</span></div>
+    <div class="pbody">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${selects}</div>
+      ${body}
+    </div></div>`;
+}
 function transfersHTML(){
   const g=VG();
   const outIds=S.outList.length?S.outList:null;
@@ -472,7 +549,6 @@ function transfersHTML(){
     : S.bank;
   const top=pool[0];
   const posName={1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
-  const t=teamOfWeek();
   const chosen=S.outList.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
 
   const picker=`<div class="panel"><div class="phead"><h2>Plan your transfers</h2>
@@ -531,24 +607,7 @@ function transfersHTML(){
         :`<p class="note" style="margin:0">Head Scout recommends no transfers in this position.</p>`}</div></div>`;
   }).join("");
 
-  const totw=t?`<div class="panel"><div class="phead"><h2>Team of the Week</h2>
-      <span style="text-align:center;flex:1">
-      <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;
-        letter-spacing:.06em;text-transform:uppercase;color:var(--mint)">${t.total.toFixed(1)} pts</span></span>
-    <span style="display:flex;gap:6px;align-items:center">
-      <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})">←</button>
-      <span class="mono" style="font-size:12px;color:var(--cyan)">GW${VG()}</span>
-      <button onclick="act('startgw',${Math.min(38,VG()+1)})">→</button>
-      <span class="note">£${t.value.toFixed(1)}</span></span></div>
-    <div class="pbody"><p class="note" style="margin:0">Best legal 15 for GW${VG()} — every formation tested, £100 budget, max three per club. Shape: <b style="color:var(--cream)">${t.shape}</b>.</p></div>
-    <div class="pitch">
-      ${[1,2,3,4].map(pos=>{const r=t.xi.filter(p=>p.pos===pos);
-        return r.length?`<div class="row">${r.map(p=>totwCard(p,t.cap)).join("")}</div>`:"";}).join("")}
-    </div>
-    <div class="benchbar"><div class="lb">Bench</div>
-      <div class="row">${t.bench.map(p=>totwCard(p,null)).join("")}</div></div></div>`:"";
-
-  return picker+comboPanel+headScout+suggestTitle+byPos+totw;
+  return radarHTML()+picker+comboPanel+headScout+suggestTitle+byPos;
 }
 function totwCard(p,cap){
   const isCap=cap&&cap.id===p.id;

@@ -810,9 +810,15 @@ function render(){
           <button onclick="act('reset')" style="background:var(--amber);color:#20130A;border-color:var(--amber);font-weight:800">Reset</button><button onclick="act('save')" style="background:var(--mint);color:var(--ink);border-color:var(--mint);font-weight:800">Save</button></span></div>
         <div class="gwbar">
           <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
-          <span style="text-align:center;min-width:112px">
+          <span style="text-align:center;min-width:130px">
+            ${(S.actuals&&S.actuals[VG()]!=null)?`
+            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} actual</span>
+            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+S.actuals[VG()]).toFixed(0)}</span>
+            <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">pred ${weekPts().toFixed(1)} · <span style="font-weight:700;color:${S.actuals[VG()]-weekPts()>=0?"var(--mint)":"var(--red)"}">${S.actuals[VG()]-weekPts()>=0?"+":""}${(S.actuals[VG()]-weekPts()).toFixed(1)}</span></span>`
+            :`
             <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} predicted</span>
-            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span></span>
+            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>`}
+          </span>
           <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button>
         </div>
 
@@ -827,6 +833,7 @@ function render(){
           ${S.sqView==="list"?`<div style="padding-top:34px">${squadListHTML()}</div>`:pitchHTML()}
         </div>
         </div>
+      ${S.compare?compareHTML():""}
       <div class="panel chippanel">
         <div class="chiprow">
           <span class="chipinline">
@@ -844,7 +851,7 @@ function render(){
         ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
-          <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>${S.compare?compareHTML():""}`;
+          <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>`;
   }
   else if(S.tab==="table")main=`<div class="panel"><div class="phead"><h2>Player Data</h2>
       <span class="note">${filtered("list").length} players · tap any column to sort</span></div>

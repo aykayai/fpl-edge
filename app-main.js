@@ -36,6 +36,7 @@ function act(k,a,b){
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
+    case"radarpick":{S.radarIds=S.radarIds||[null,null,null];S.radarIds[a]=b?+b:null;break;}
     case"trkstat":S.trkStat=a;break;
     case"trkgw":
       if(a==="next")S.trkGwStart=Math.min((S.trkGwStart||0)+10,30),S.trkGwAll=false;
