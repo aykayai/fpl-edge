@@ -596,7 +596,7 @@ function toast(m){let el=document.getElementById("toast");
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 
-function cardHTML(p,benchSlot){
+function cardHTML(p,bench){
   const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
   const isC=S.captain===p.id,isV=S.vice===p.id,fl=S.flagged.includes(p.id);
 
@@ -610,13 +610,15 @@ function cardHTML(p,benchSlot){
     const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
     n3+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${e} · ${f.home?"home":"away"} · difficulty ${posDiff(p,f)}">${esc(f.opp.slice(0,3))}</span>`;}
   const sub=S.subFrom===p.id;
-  /* On the bench the ⇄ button doubles as bench-order control: when no swap is in
-     progress it cycles this player's substitute priority; when a pitch player is
-     awaiting a partner it receives the substitution. On the pitch it just starts
-     a swap as before. */
-  const subOnclick=benchSlot?`act(S.subFrom!=null?'sub':'benchcycle',${p.id})`:`act('sub',${p.id})`;
-  const subGlyph=benchSlot?(S.subFrom==null?benchSlot:"⇄"):"⇄";
-  const subTitle=benchSlot?`Bench ${benchSlot} · tap to change order (or to receive a substitution)`:"Substitute";
+  /* Bench players show their sub-order number; tapping ⇄ mid-substitution receives
+     the swap. Outfield subs also cycle their order when idle (benchcycle); the
+     keeper is fixed at position 1 and does not cycle. */
+  const isBench=!!bench,slot=isBench?bench.slot:0,cyc=isBench&&bench.cycle;
+  const subOnclick=isBench
+    ? (cyc?`act(S.subFrom!=null?'sub':'benchcycle',${p.id})`:`act('sub',${p.id})`)
+    : `act('sub',${p.id})`;
+  const subGlyph=isBench?(S.subFrom==null?slot:"⇄"):"⇄";
+  const subTitle=isBench?(cyc?`Bench ${slot} · tap to change order (or to receive a substitution)`:`Bench ${slot} · goalkeeper (fixed)`):"Substitute";
   return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
    <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
     ${p.avail<1?`<span class="dot" style="top:-2px;left:8px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
@@ -634,11 +636,13 @@ function cardHTML(p,benchSlot){
 /* keep any explicit bench order the optimiser set, else best first */
 function orderBench(list){
   const g=VG();
-  if(S.benchOrder&&S.benchOrder.length){
-    const idx={};S.benchOrder.forEach((id,i)=>idx[id]=i);
-    return list.slice().sort((a,b)=>(idx[a.id]??99)-(idx[b.id]??99));
-  }
-  return list.slice().sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0));
+  const gk=list.filter(p=>p.pos===1);
+  const out=list.filter(p=>p.pos!==1);
+  const ordered=(S.benchOrder&&S.benchOrder.length)
+    ?out.slice().sort((a,b)=>{const idx={};S.benchOrder.forEach((id,i)=>idx[id]=i);
+        return (idx[a.id]??99)-(idx[b.id]??99);})
+    :out.slice().sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0));
+  return [...gk,...ordered];
 }
 /* ---------- squad dashboard ----------
    Six forward-looking readings. Everything here answers "what should I do

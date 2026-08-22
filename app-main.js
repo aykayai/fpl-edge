@@ -37,13 +37,15 @@ function act(k,a,b){
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
     case"benchcycle":{
-      /* Tapping ⇄ on a benched player cycles its bench order (1st→2nd→3rd→1st),
-         the way the official app lets you set substitute priority. */
+      /* Tapping ⇄ on an outfield sub cycles its order (2nd→3rd→…→2nd). The keeper
+         stays at bench position 1 and is never part of the cycle. */
       const xi=startingXI();
-      const ids=orderBench(squadPlayers().filter(p=>!xi.includes(p))).map(p=>p.id);
-      const i=ids.indexOf(a);if(i<0||ids.length<2)break;
-      const L=ids.length;ids.splice(i,1);ids.splice((i+1)%L,0,a);
-      S.benchOrder=ids;saveState();toast("Bench order updated");break;}
+      const notXI=squadPlayers().filter(p=>!xi.includes(p));
+      const out=orderBench(notXI.filter(p=>p.pos!==1)).map(p=>p.id);
+      const i=out.indexOf(a);if(i<0||out.length<2)break;
+      const L=out.length;out.splice(i,1);out.splice((i+1)%L,0,a);
+      const gk=notXI.filter(p=>p.pos===1).map(p=>p.id);
+      S.benchOrder=[...gk,...out];saveState();toast("Bench order updated");break;}
     case"benchmove":{
       const xi=startingXI();
       const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));

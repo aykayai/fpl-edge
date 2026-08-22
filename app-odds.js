@@ -807,8 +807,6 @@ function render(){
       <div class="panel"><div class="phead"><h2>Planner</h2>
 
         <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button>
-          <button onclick="act('opt')">Optimise</button>
           <button onclick="act('reset')" style="background:var(--amber);color:#20130A;border-color:var(--amber);font-weight:800">Reset</button><button onclick="act('save')" style="background:var(--mint);color:var(--ink);border-color:var(--mint);font-weight:800">Save</button></span></div>
         <div class="gwbar">
           <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
@@ -819,9 +817,13 @@ function render(){
         </div>
 
         <div style="position:relative">
-          <span class="pitchctl"><span class="pseg">
-            <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
-            <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span></span>
+          <span class="pitchctl" style="left:8px;right:8px;justify-content:space-between">
+            <span class="pseg">
+              <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
+              <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
+            <span class="pseg">
+              <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button>
+              <button onclick="act('opt')">Optimise</button></span></span>
           ${S.sqView==="list"?`<div style="padding-top:34px">${squadListHTML()}</div>`:pitchHTML()}
         </div>
         </div>
@@ -896,7 +898,7 @@ function render(){
         <div><div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700">FPL Edge · Gameweek ${g}</div>
         <h1 style="font-size:29px">Armitage Shanks</h1>
         <div style="font-size:11px;color:var(--mute)">Andrew Kenny · team ${TEAM_ID}</div></div></div>
-      <button class="pri" onclick="act('load')">${S.loading?esc(S.progress||"…"):"↻ Refresh"}</button></div>
+      </div>
     <div class="stats">
       <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
         <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
@@ -925,6 +927,7 @@ function render(){
            .map(([k,v,c])=>`<span class="mspill"><span class="msk">${k}</span>
              <span class="msv" style="color:${c}">${v}</span></span>`).join("")}
        </span>
+       <button class="gwrefresh" onclick="act('load')" title="Refresh data">${S.loading?esc(S.progress||"…"):"↻ Refresh"}</button>
        <span class="gwpill">
          <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" aria-label="Earlier">←</button>
          <span class="gwv">GW${VG()}</span>

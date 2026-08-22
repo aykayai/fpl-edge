@@ -17,7 +17,8 @@ const TEAM_ID="301830", STATE_VERSION=3;
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
 const NAV=[
   {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["chips","Chips"],["rivals","Rivals"]]},
-  {group:"Tools",items:[["table","Player Data"],["xfpl","xFPL Model"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]}
+  {group:"Tools",items:[["table","Player Data"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]},
+  {group:"Models",items:[["xfpl","xFPL Model"]]}
 ];
 const TABPATH={squad:"team-planner",transfers:"transfers",rivals:"rivals",chips:"chips",
   table:"player-data",xfpl:"xfpl-model",odds:"odds",fixtures:"fixtures",news:"news"};
@@ -29,7 +30,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="9.0.0";
+const APP_VERSION="9.1.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>

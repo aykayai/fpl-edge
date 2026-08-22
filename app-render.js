@@ -81,7 +81,7 @@ function pitchHTML(){
   [1,2,3,4].forEach(pos=>{const r=xi.filter(p=>p.pos===pos);
     if(r.length)h+=`<div class="row">${r.map(p=>cardHTML(p)).join("")}</div>`;});
   h+=`</div>`;
-  if(bench.length)h+=`<div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map((p,i)=>cardHTML(p,i+1)).join("")}</div></div>`;
+  if(bench.length)h+=`<div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map((p,i)=>cardHTML(p,{slot:i+1,cycle:p.pos!==1})).join("")}</div></div>`;
   return h;
 }
 /* The two pages keep their own filters — changing one never moves the other */
@@ -155,6 +155,7 @@ function replHTML(){
       .filter(q=>q.pos===o.pos&&!(S.squad||[]).includes(q.id)&&q.avail>0
         &&q.price<=budget+0.001&&(clubs[q.team]||0)<3&&!(S.ignored||[]).includes(q.id))
       .map(q=>({out:o,inn:q,gain:hPts(q,g,S.horizon)-hPts(o,g,S.horizon)}))
+      .filter(m=>m.gain>=0.1)
       .sort((a,b)=>b.gain-a.gain).slice(0,3);
     return `<div class="repl"><div style="padding:9px 12px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
       <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--cyan)">
@@ -166,7 +167,7 @@ function replHTML(){
           <span style="display:flex;align-items:center;gap:5px"><span style="font-size:12.5px;font-weight:600">${esc(m.inn.web_name)}</span>${sigHTML(m.inn,g)}</span>
           <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${m.inn.xMins}′ xMins</span></span>
         <span class="mono" style="color:var(--mint);font-weight:700">+${m.gain.toFixed(1)}</span></button>`).join("")
-        :`<div class="pbody"><p class="note">Nothing available in budget.</p></div>`}</div>`;
+        :`<div class="pbody"><p class="note">No option improves this pick by +0.1 or more.</p></div>`}</div>`;
   }).join("");
 }
 const backTag=p=>p.back?`<span class="src" style="background:#4A1220;color:#FFC9D2" title="${esc(p.news)}">${p.back==="unknown"?"no date":esc(p.back)}</span>`:"";
@@ -264,7 +265,7 @@ function tableHTML(){
   const a=sortList(filtered("list"),S.sortKey,S.sortDir,g);
   const W=S.lWin||38;
   const w=p=>ws(String(p.code||""),p.pos,W,p.price,teamMaxPrice(p.team));
-  const cols=[["name","Player"],["price","Price"],["next","Next 3"],["form","Form"],["pred","xFPL"],
+  const cols=[["name","Player"],["price","Price"],["signals","Signals"],["next","Next 3"],["form","Form"],["pred","xFPL"],
     ["pred3","3GW"],["pred5","5GW"],["owned","Own %"],["startpct","Start %"],
     ["xmins","xMins"],["xgi","xGI/90"],["npxg","npxG/90"],["xa","xA/90"],["dchit","DefCon %"],
     ["csp","CS %"],["cc","CC/90"],["box","Box/90"],["bonus","Bonus"],["bps","BPS/90"],
@@ -284,23 +285,24 @@ function tableHTML(){
   };
   const POSKEY=new Set();
   if(S.lPos&&POSCOLS[S.lPos]){
-    /* orange position stats sit together immediately after the xMins column,
-       most important first, rather than trailing at the far right */
+    /* Every orange column for this position — the position-specific stats AND the
+       highlighted general ones (CS %, DefCon %, Start %, …) — sits together right
+       after xMins, position-specific first. */
+    const genOrange=({1:["startpct","csp"],2:["dchit","csp","startpct"],
+      3:["xgi","npxg","xa","cc"],4:["npxg","xgi","box"]}[S.lPos]||[]);
+    const pulled=[];
+    genOrange.forEach(k=>{const i=cols.findIndex(c=>c[0]===k);if(i>-1)pulled.push(cols.splice(i,1)[0]);});
     const at=cols.findIndex(c=>c[0]==="xmins")+1;
-    cols.splice(at,0,...POSCOLS[S.lPos]);
+    cols.splice(at,0,...POSCOLS[S.lPos],...pulled);
     POSCOLS[S.lPos].forEach(c=>POSKEY.add(c[0]));
-    /* general columns that matter most for this position also get highlighted */
-    ({1:["startpct","xmins","csp"],2:["dchit","csp","startpct"],
-      3:["xgi","npxg","xa","cc"],4:["npxg","xgi","box"]}[S.lPos]||[]).forEach(k=>POSKEY.add(k));
+    genOrange.forEach(k=>POSKEY.add(k));POSKEY.add("xmins");
   }
-  const headCells=cols.map(([k,n])=>{
+  const head=cols.map(([k,n])=>{
+    if(k==="signals")return `<th style="text-align:center">Signals</th>`;
     const hl=POSKEY.has(k)?"color:var(--amber)"          // relevant to the filtered position
       :(KEY[k]&&S.sortKey!==k?"color:var(--cyan)":"");
     return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')"
-      style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;});
-  /* Signals get their own column, ordered like the filter bar: signals then set pieces */
-  headCells.splice(1,0,`<th style="text-align:center;width:1%;white-space:nowrap">Signals</th>`);
-  const head=headCells.join("");
+      style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("");
   const iconCell=p=>{
     const s=signals(p,g).map(([l,c,t])=>sigIcon(l,c,t)).join("");
     const sp=setPieceHTML(p).replace(/^<span class="sigs">/,"").replace(/<\/span>$/,"");
@@ -358,15 +360,15 @@ function tableHTML(){
         <span style="font-weight:600;font-size:12px">${esc(p.web_name)}</span>${INJ(p)}
         ${own?"":`<button onclick="act('addplan',${p.id})" title="Add to Team Planner"
           style="border:none;background:none;padding:0 2px;cursor:pointer;font-size:14px;line-height:1;color:var(--ink3)">+</button>`}</span>
-      <span style="display:flex;gap:4px;align-items:center;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>
-      <td style="text-align:center">${iconCell(p)}</td>`;
+      <span style="display:flex;gap:4px;align-items:center;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>`;
     cols.slice(1).forEach(([k])=>{
+      if(k==="signals"){tds+=`<td style="text-align:center">${iconCell(p)}</td>`;return;}
       if(k==="next"){tds+=`<td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>`;return;}
       const hot=(k==="pred"||k==="pred5"||k==="pred3")?"color:var(--mint);font-weight:700;"
         :(POSKEY.has(k)?"color:var(--amber);":(KEY[k]?"color:var(--cyan);":""));
       tds+=`<td style="text-align:right;${hot}">${CELL[k]?CELL[k](p):""}</td>`;});
     return `<tr style="${p.avail===0?"opacity:.4;":""}${own?"opacity:.45":""}" title="${own?"Already in your squad":""}">${tds}</tr>`;}).join("");
-  return `<div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function xfplHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
