@@ -36,6 +36,7 @@ function act(k,a,b){
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
+    case"trkstat":S.trkStat=a;break;
     case"benchcycle":{
       /* Tapping ⇄ on an outfield sub cycles its order (2nd→3rd→…→2nd). The keeper
          stays at bench position 1 and is never part of the cycle. */

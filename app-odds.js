@@ -882,6 +882,7 @@ function render(){
           <input type="range" min="1" max="8" step="1" value="${S.lHorizon}" oninput="act('lhorizon',this.value)" style="flex:1"></span>
       </span></div>
     ${tableHTML()}</div>`;
+  else if(S.tab==="tracker")main=trackerHTML();
   else if(S.tab==="xfpl")main=xfplHTML();
   else if(S.tab==="chips")main=chipsHTML();
   else if(S.tab==="transfers")main=transfersHTML();
@@ -898,7 +899,7 @@ function render(){
         <div><div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700">FPL Edge · Gameweek ${g}</div>
         <h1 style="font-size:29px">Armitage Shanks</h1>
         <div style="font-size:11px;color:var(--mute)">Andrew Kenny · team ${TEAM_ID}</div></div></div>
-      </div>
+      <button class="pri" style="background:var(--amber);border-color:var(--amber);color:#20130A" onclick="act('load')">${S.loading?esc(S.progress||"…"):"↻ Refresh"}</button></div>
     <div class="stats">
       <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
         <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
@@ -927,7 +928,6 @@ function render(){
            .map(([k,v,c])=>`<span class="mspill"><span class="msk">${k}</span>
              <span class="msv" style="color:${c}">${v}</span></span>`).join("")}
        </span>
-       <button class="gwrefresh" onclick="act('load')" title="Refresh data">${S.loading?esc(S.progress||"…"):"↻ Refresh"}</button>
        <span class="gwpill">
          <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" aria-label="Earlier">←</button>
          <span class="gwv">GW${VG()}</span>

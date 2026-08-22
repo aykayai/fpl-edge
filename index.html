@@ -38,11 +38,8 @@ body{margin:0;background:var(--ink);color:var(--cream);font-family:'Sora',system
 .msk{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:800;
  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .msv{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;line-height:1;white-space:nowrap}
-.gwpill{display:flex;align-items:center;justify-content:center;gap:6px;flex:none;background:rgba(255,138,61,.14);
- border:1px solid var(--amber);border-radius:12px;padding:5px 7px;min-width:132px}
-.gwrefresh{flex:none;min-width:132px;background:var(--amber);border:1px solid var(--amber);color:#20130A;
- font-weight:900;border-radius:12px;padding:6px 10px;font-size:13px;line-height:1;cursor:pointer}
-.gwrefresh:hover{filter:brightness(1.12)}
+.gwpill{display:flex;align-items:center;gap:6px;flex:none;background:rgba(255,138,61,.14);
+ border:1px solid var(--amber);border-radius:12px;padding:5px 7px}
 .gwpill button{background:var(--amber);border:none;color:#20130A;font-weight:900;
  padding:5px 9px;border-radius:8px;font-size:12px;line-height:1}
 .gwpill button:hover{filter:brightness(1.12)}
@@ -50,7 +47,7 @@ body{margin:0;background:var(--ink);color:var(--cream);font-family:'Sora',system
  letter-spacing:.02em;min-width:46px;text-align:center}
 @media(max-width:820px){.msrow{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:430px){.ministats{flex-wrap:wrap}.msrow{grid-template-columns:repeat(3,minmax(0,1fr))}
- .gwpill{width:100%;justify-content:center}.gwrefresh{width:100%}.msv{font-size:16px}}
+ .gwpill{width:100%;justify-content:center}.msv{font-size:16px}}
 .navwrap .lbl{color:var(--amber)}
 .navwrap{background:#06070A;border:1px solid var(--ink3);border-radius:12px;padding:7px 9px;
  display:flex;gap:14px;align-items:center;flex-wrap:wrap}
@@ -343,6 +340,23 @@ details[open]>summary::after{content:" ▴"}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:var(--ink)}
 ::-webkit-scrollbar-thumb{background:var(--ink3);border-radius:4px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* Tracker */
+.trkband-title{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:800;margin:16px 2px 8px;text-align:center}
+.trkband{padding:0;overflow:hidden}
+.trkband-h{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;letter-spacing:.08em;text-transform:uppercase;text-align:center;padding:7px;border-bottom:1px solid var(--ink3)}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px;padding:10px}
+.tcard{background:var(--ink2);border:1px solid var(--ink3);border-radius:11px;padding:9px 10px}
+.tcard-h{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--cream);font-weight:800;text-align:center;margin-bottom:6px}
+.trow{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0}
+.trow+.trow{border-top:1px solid rgba(255,255,255,.05)}
+.tlbl{font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
+.tval{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;color:var(--cream)}
+.tsumrow{display:flex;gap:8px;flex-wrap:wrap}
+.tsum{flex:1;min-width:96px;background:var(--ink2);border:1px solid var(--ink3);border-radius:10px;padding:9px 10px;text-align:center}
+.tsum b{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;color:var(--cream)}
+.tsum span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.tlegend{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--mute)}
+.tdot{width:12px;height:3px;border-radius:2px;display:inline-block}
 </style>
 </head>
 <body>
@@ -351,6 +365,7 @@ details[open]>summary::after{content:" ▴"}
 <script src="./app-squad.js"></script>
 <script src="./app-render.js"></script>
 <script src="./app-odds.js"></script>
+<script src="./app-tracker.js"></script>
 <script src="./app-main.js"></script>
 
 <script>
