@@ -36,6 +36,14 @@ function act(k,a,b){
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
+    case"benchcycle":{
+      /* Tapping ⇄ on a benched player cycles its bench order (1st→2nd→3rd→1st),
+         the way the official app lets you set substitute priority. */
+      const xi=startingXI();
+      const ids=orderBench(squadPlayers().filter(p=>!xi.includes(p))).map(p=>p.id);
+      const i=ids.indexOf(a);if(i<0||ids.length<2)break;
+      const L=ids.length;ids.splice(i,1);ids.splice((i+1)%L,0,a);
+      S.benchOrder=ids;saveState();toast("Bench order updated");break;}
     case"benchmove":{
       const xi=startingXI();
       const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
@@ -93,8 +101,13 @@ function act(k,a,b){
     case"fmin":S.fMin=Math.min(Math.max(3.5,+a||3.5),S.fMax);break;
     case"fmax":S.fMax=Math.max(Math.min(16,+a||16),S.fMin);break;
     case"search":S.fSearch=a;break;
-    case"sort":if(S.sortKey===a)S.sortDir=S.sortDir==="desc"?"asc":"desc";else{S.sortKey=a;S.sortDir="desc";}break;
-    case"lsort":if(S.lSort===a)S.lDir=S.lDir==="desc"?"asc":"desc";else{S.lSort=a;S.lDir="desc";}break;
+    /* Stats always sort high→low on a header tap; only the name column toggles.
+       Previously a same-column tap flipped to ascending, which read as "the sort
+       broke" once other filters were applied. */
+    case"sort":{if(a==="name")S.sortDir=(S.sortKey==="name"&&S.sortDir==="asc")?"desc":"asc";
+      else S.sortDir="desc";S.sortKey=a;break;}
+    case"lsort":{if(a==="name")S.lDir=(S.lSort==="name"&&S.lDir==="asc")?"desc":"asc";
+      else S.lDir="desc";S.lSort=a;break;}
     case"cap":S.captain=a;if(S.vice===a)S.vice=null;saveState();break;
     case"vice":S.vice=a;if(S.captain===a)S.captain=null;saveState();break;
     case"flag":{

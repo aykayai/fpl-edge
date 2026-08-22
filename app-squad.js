@@ -596,7 +596,7 @@ function toast(m){let el=document.getElementById("toast");
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 
-function cardHTML(p){
+function cardHTML(p,benchSlot){
   const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
   const isC=S.captain===p.id,isV=S.vice===p.id,fl=S.flagged.includes(p.id);
 
@@ -610,19 +610,26 @@ function cardHTML(p){
     const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
     n3+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${e} · ${f.home?"home":"away"} · difficulty ${posDiff(p,f)}">${esc(f.opp.slice(0,3))}</span>`;}
   const sub=S.subFrom===p.id;
+  /* On the bench the ⇄ button doubles as bench-order control: when no swap is in
+     progress it cycles this player's substitute priority; when a pitch player is
+     awaiting a partner it receives the substitution. On the pitch it just starts
+     a swap as before. */
+  const subOnclick=benchSlot?`act(S.subFrom!=null?'sub':'benchcycle',${p.id})`:`act('sub',${p.id})`;
+  const subGlyph=benchSlot?(S.subFrom==null?benchSlot:"⇄"):"⇄";
+  const subTitle=benchSlot?`Bench ${benchSlot} · tap to change order (or to receive a substitution)`:"Substitute";
   return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
-   <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+   <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
     ${p.avail<1?`<span class="dot" style="top:-2px;left:8px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
     <button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('flag',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
-    <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="act('sub',${p.id})" title="Substitute">⇄</button>
+    <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="${subOnclick}" title="${subTitle}">${subGlyph}</button>
     <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('cap',${p.id})" title="Captain">C</button>
     <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('vice',${p.id})" title="Vice-captain">V</button></div>
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
-   <div class="ptsbar" style="background:${bg};color:${fg}${elite?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" onclick="act('card',${p.id})">
+   <div class="ptsbar" style="background:${bg};color:${fg}${elite?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}">
     <div class="pv">${shownPts.toFixed(1)}</div><div class="fx">${fixTxtHtml}</div></div>
    <div class="next3">${n3}</div>
-   <div style="display:flex;justify-content:center;margin-top:3px">${sigHTML(p,g)}</div></div>`;
+   <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }
 /* keep any explicit bench order the optimiser set, else best first */
 function orderBench(list){
@@ -683,14 +690,14 @@ function compareHTML(){
     const[bg,fg]=ptsCol(q.pts*(isC?2:1));
     const f0=q.fixtures[0];
     return `<div class="card">
-      <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+      <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
         <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}"
           onclick="act('ccap',${p.id})" title="Captain">C</button>
         <button class="badge" style="top:-2px;left:2px;background:${C.subFrom===p.id?"var(--cyan)":"var(--ink3)"};color:${C.subFrom===p.id?"var(--ink)":"var(--cream)"}"
           onclick="act('csub',${p.id})" title="Substitute">⇄</button>
         <button class="badge" style="top:-2px;right:2px;background:${(C.flagged||[]).includes(p.id)?"var(--mint)":"var(--ink3)"};color:${(C.flagged||[]).includes(p.id)?"var(--ink)":"var(--cream)"}"
           onclick="act('cflag',${p.id})">✕</button></div>
-      <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
+      <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
       <div class="ptsbar" style="background:${bg};color:${fg}"><div class="pv">${(q.pts*(isC?2:1)).toFixed(1)}</div>
         <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
       <div class="cardsigs">${sigHTML(p,g)}</div>

@@ -76,12 +76,12 @@ function pitchHTML(){
   const xi=startingXI();
   if(!xi.length)return `<div class="pbody" style="text-align:center"><p class="note">No squad loaded.</p>
     <button class="pri" onclick="act('seed')">Load my GW1 squad</button></div>`;
-  const bench=squadPlayers().filter(p=>!xi.includes(p));
+  const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
   let h=`<div class="pitch">`;
   [1,2,3,4].forEach(pos=>{const r=xi.filter(p=>p.pos===pos);
-    if(r.length)h+=`<div class="row">${r.map(cardHTML).join("")}</div>`;});
+    if(r.length)h+=`<div class="row">${r.map(p=>cardHTML(p)).join("")}</div>`;});
   h+=`</div>`;
-  if(bench.length)h+=`<div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map(cardHTML).join("")}</div></div>`;
+  if(bench.length)h+=`<div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map((p,i)=>cardHTML(p,i+1)).join("")}</div></div>`;
   return h;
 }
 /* The two pages keep their own filters — changing one never moves the other */
@@ -113,19 +113,26 @@ const fix3=(p,g)=>{let h='';const LENS=p2=>p2.pos<=2?'def':'att';for(let e=g;e<g
   const f=q.fixtures[0],[b,c]=fdrCol(p.pos<=2?(f.diffDef??f.diff):(f.diffAtt??f.diff));
   h+=`<span class="fdrpill" style="background:${b};color:${c};font-size:8px;padding:1px 4px">${esc(f.opp.slice(0,3))}</span>`;}
   return `<span style="display:inline-flex;gap:2px">${h}</span>`;};
-const SORTVAL=(p,k,g)=>({name:p.web_name,team:p.teamName,pos:p.pos,price:p.price,
+const SORTVAL=(p,k,g)=>{
+  const W=ws(String(p.code||""),p.pos,S.lWin||38)||{};
+  const f0=p.gw[g]?.fixtures?.[0];
+  const team=(S.model.teams||[]).find(t=>t.id===p.team);
+  return ({name:p.web_name,team:p.teamName,pos:p.pos,price:p.price,
   next:(p.gw[g]?.fixtures||[]).reduce((s,f)=>s+f.diff,0)||99,form:p.form,lastform:p.lastForm,
   pred:hPts(p,g,S.tab==="table"?S.lHorizon:S.horizon),pred3:hPts(p,g,3),pred5:hPts(p,g,5),avg:avgFP(p,g,S.horizon),
   total:p.total,owned:p.owned,ppg:p.ppg,xg:p.xg90,xa:p.xa90,dc:p.dc90,
   mins:p.minutes,xmins:p.xMins,bonus:p.bonus,tin:p.tIn,
-  startpct:(ws(String(p.code||""),p.pos,S.lWin||38)||{}).startPct||0,
-  xgi:(()=>{const q=ws(String(p.code||""),p.pos,S.lWin||38);return q?q.xg90+q.xa90:0;})(),
-  npxg:(ws(String(p.code||""),p.pos,S.lWin||38)||{}).npxg90||0,
-  dchit:(ws(String(p.code||""),p.pos,S.lWin||38)||{}).dcHit||0,
-  cc:(ws(String(p.code||""),p.pos,S.lWin||38)||{}).cc90||0,
-  box:(ws(String(p.code||""),p.pos,S.lWin||38)||{}).box90||0,
-  bps:p.bps||0,csp:p.csRate||0,sv90:(ws(String(p.code||""),p.pos,S.lWin||38)||{}).sv90||0,
-  spthreat:p.spThreat||0,penord:p.penOrder||99}[k]);
+  startpct:W.startPct||0,xgi:(W.xg90||0)+(W.xa90||0),
+  npxg:W.npxg90||0,dchit:W.dcHit||0,cc:W.cc90||0,box:W.box90||0,
+  bps:p.bps||0,csp:p.csRate||0,sv90:W.sv90||0,
+  spthreat:p.spThreat||0,penord:p.penOrder||99,
+  /* position-specific columns — previously missing, so their headers did not sort */
+  oppatt:f0?(f0.diffDef??3):0,teamdef:team?team.def:0,
+  xgot:W.xgot90||0,gprev:W.gp||0,gc90:W.gc90||0,pensv:p.pensSaved||0,og:p.ownGoals||0,
+  cbit:W.cbit90||0,aer:W.aer90||0,shbox:(W.sh90||0)*0.62,sh90:W.sh90||0,sot:W.sot90||0,
+  f3:W.f390||0,drb:W.drb90||0,bcm:W.bcm||0,
+  conv:(W.xg90>0?(W.g||0)/Math.max(.1,W.xg90*(W.mins||0)/90):0)}[k]);
+};
 function sortList(arr,key,dir,g){
   return arr.sort((x,y)=>{const a=SORTVAL(x,key,g),b=SORTVAL(y,key,g);
     if(typeof a==="string")return dir==="asc"?a.localeCompare(b):b.localeCompare(a);
@@ -192,8 +199,8 @@ function listHTML(){
           <span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.web_name)}</span>
           ${INJ(p)}</span>
         <span style="display:block;font-size:9.5px;color:var(--mute);margin-top:1px">${esc(p.teamName)} · ${POS[p.pos]}${own?' · <span style="color:var(--mint)">in squad</span>':""}</span>
-        <span class="poolsigs">${sigHTML(p,g)}</span>
-        <span style="display:block;margin-top:2px">${fix3(p,g)}</span></span>
+        <span style="display:block;margin-top:2px">${fix3(p,g)}</span>
+        <span class="poolsigs">${sigHTML(p,g)}</span></span>
       <span class="lc mono" style="font-size:11px">£${p.price.toFixed(1)}${arw(p.priceChange)}</span>
       <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.xMins}′</span>
       <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.form.toFixed(1)}</span>
@@ -257,8 +264,8 @@ function tableHTML(){
   const a=sortList(filtered("list"),S.sortKey,S.sortDir,g);
   const W=S.lWin||38;
   const w=p=>ws(String(p.code||""),p.pos,W,p.price,teamMaxPrice(p.team));
-  const cols=[["name","Player"],["price","Price"],["form","Form"],["pred","xFPL"],
-    ["pred3","3GW"],["pred5","5GW"],["next","Next 3"],["owned","Own %"],["startpct","Start %"],
+  const cols=[["name","Player"],["price","Price"],["next","Next 3"],["form","Form"],["pred","xFPL"],
+    ["pred3","3GW"],["pred5","5GW"],["owned","Own %"],["startpct","Start %"],
     ["xmins","xMins"],["xgi","xGI/90"],["npxg","npxG/90"],["xa","xA/90"],["dchit","DefCon %"],
     ["csp","CS %"],["cc","CC/90"],["box","Box/90"],["bonus","Bonus"],["bps","BPS/90"],
     ["tin","TI"],["total","Pts"]];
@@ -277,16 +284,28 @@ function tableHTML(){
   };
   const POSKEY=new Set();
   if(S.lPos&&POSCOLS[S.lPos]){
-    POSCOLS[S.lPos].forEach(c=>{cols.push(c);POSKEY.add(c[0]);});
+    /* orange position stats sit together immediately after the xMins column,
+       most important first, rather than trailing at the far right */
+    const at=cols.findIndex(c=>c[0]==="xmins")+1;
+    cols.splice(at,0,...POSCOLS[S.lPos]);
+    POSCOLS[S.lPos].forEach(c=>POSKEY.add(c[0]));
     /* general columns that matter most for this position also get highlighted */
     ({1:["startpct","xmins","csp"],2:["dchit","csp","startpct"],
       3:["xgi","npxg","xa","cc"],4:["npxg","xgi","box"]}[S.lPos]||[]).forEach(k=>POSKEY.add(k));
   }
-  const head=cols.map(([k,n])=>{
+  const headCells=cols.map(([k,n])=>{
     const hl=POSKEY.has(k)?"color:var(--amber)"          // relevant to the filtered position
       :(KEY[k]&&S.sortKey!==k?"color:var(--cyan)":"");
     return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')"
-      style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("");
+      style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;});
+  /* Signals get their own column, ordered like the filter bar: signals then set pieces */
+  headCells.splice(1,0,`<th style="text-align:center;width:1%;white-space:nowrap">Signals</th>`);
+  const head=headCells.join("");
+  const iconCell=p=>{
+    const s=signals(p,g).map(([l,c,t])=>sigIcon(l,c,t)).join("");
+    const sp=setPieceHTML(p).replace(/^<span class="sigs">/,"").replace(/<\/span>$/,"");
+    const all=s+sp;
+    return all?`<span class="sigcell">${all}</span>`:`<span style="color:var(--ink3)">·</span>`;};
   const pct=v=>(v*100).toFixed(0)+"%";
   const CELL={
     pred3:p=>hPts(p,g,3).toFixed(1),
@@ -331,14 +350,16 @@ function tableHTML(){
     const nx=q.fixtures.length?q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f))).join(" ")
       :`<span style="color:var(--mute);font-size:9.5px">BLANK</span>`;
     const own=(S.squad||[]).includes(p.id);
-    let tds=`<td class="nm"><span style="display:flex;align-items:center;gap:6px">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
-      <span style="min-width:0"><span style="display:flex;align-items:center;gap:5px">
-        <span style="font-weight:600;font-size:12px">${esc(p.web_name)}</span>${INJ(p)}${sigHTML(p,g)}
-        <button onclick="act('addplan',${p.id})" title="Add to Team Planner"
-          style="border:none;background:none;padding:0 2px;cursor:pointer;font-size:14px;line-height:1;color:${(S.squad||[]).includes(p.id)?"var(--mint)":"var(--ink3)"}">+</button>
+    let tds=`<td class="nm"><span style="display:flex;align-items:center;gap:6px">
         <button onclick="act('star',${p.id})" title="Shortlist"
-          style="border:none;background:none;padding:0 3px;cursor:pointer;font-size:16px;line-height:1;color:${S.stars.includes(p.id)?"var(--amber)":"var(--ink3)"}">★</button></span>
-      <span style="display:flex;gap:4px;align-items:center;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>`;
+          style="border:none;background:none;padding:0;cursor:pointer;font-size:16px;line-height:1;flex:none;color:${S.stars.includes(p.id)?"var(--amber)":"var(--ink3)"}">★</button>
+        ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
+      <span style="min-width:0"><span style="display:flex;align-items:center;gap:5px">
+        <span style="font-weight:600;font-size:12px">${esc(p.web_name)}</span>${INJ(p)}
+        ${own?"":`<button onclick="act('addplan',${p.id})" title="Add to Team Planner"
+          style="border:none;background:none;padding:0 2px;cursor:pointer;font-size:14px;line-height:1;color:var(--ink3)">+</button>`}</span>
+      <span style="display:flex;gap:4px;align-items:center;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>
+      <td style="text-align:center">${iconCell(p)}</td>`;
     cols.slice(1).forEach(([k])=>{
       if(k==="next"){tds+=`<td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>`;return;}
       const hot=(k==="pred"||k==="pred5"||k==="pred3")?"color:var(--mint);font-weight:700;"
@@ -346,6 +367,84 @@ function tableHTML(){
       tds+=`<td style="text-align:right;${hot}">${CELL[k]?CELL[k](p):""}</td>`;});
     return `<tr style="${p.avail===0?"opacity:.4;":""}${own?"opacity:.45":""}" title="${own?"Already in your squad":""}">${tds}</tr>`;}).join("");
   return `<div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function xfplHTML(){
+  if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
+  const g=S.model.next.id;
+  const played=S.model.gwPlayed||0;
+  const stamp=S.stamp?new Date(S.stamp).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
+  const learn=(typeof LS!=="undefined"&&LS.get("learn"))||{};
+  /* richer per-gameweek snapshots (movers / xMins shifts / per-GW error) are
+     published by the model in app-core.js; the page renders them when present */
+  const rep=S.model.report||null;
+
+  const arrow=(d,good)=>{const up=d>0;
+    const c=good===undefined?"var(--mute)":((good?up:!up)?"var(--mint)":"var(--red)");
+    return `<span style="color:${c}">${up?"▲":"▼"}${Math.abs(d).toFixed(2)}</span>`;};
+
+  /* Predicted vs actual — projection for the upcoming GW against actual points
+     per appearance so far. A proxy until per-GW projection snapshots exist. */
+  const acc={1:[],2:[],3:[],4:[]};
+  if(played>=1)S.model.players.forEach(pl=>{
+    if(!pl.minutes||pl.xMins<45)return;
+    const proj=pl.gw[g]?.pts||0;if(proj<=0)return;
+    acc[pl.pos].push({p:proj,a:pl.total/Math.max(1,played)});});
+  const summ=arr=>{if(!arr.length)return null;const n=arr.length;
+    return {n,mae:arr.reduce((s,x)=>s+Math.abs(x.p-x.a),0)/n,
+      bias:arr.reduce((s,x)=>s+(x.p-x.a),0)/n};};
+  const overall=summ([].concat(acc[1],acc[2],acc[3],acc[4]));
+
+  const status=`<div class="panel"><div class="phead"><h2>xFPL model</h2>
+    <span class="note">data ${esc(stamp)}</span></div>
+    <div class="pbody">
+      <p class="note" style="margin:0 0 10px">Projections come from the FPL Core Insights dataset, then get calibrated per position. Once gameweeks finish, the model compares what each position actually returns per appearance with what it projected and nudges the calibration toward the truth — it needs 25+ regular starters and 4+ finished gameweeks in a position before anything moves, and every adjustment is capped.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${[[played,"GW finished"],["GW"+g,"projecting"],[overall?overall.mae.toFixed(2):"—","MAE (pts)"],[overall?(overall.bias>0?"+":"")+overall.bias.toFixed(2):"—","bias"]]
+          .map(([v,l])=>`<span style="flex:1;min-width:88px;background:var(--ink2);border:1px solid var(--ink3);border-radius:9px;padding:8px 10px;text-align:center">
+            <b style="display:block;font-family:'Barlow Condensed';font-size:22px;font-weight:800;color:var(--mint)">${v}</b>
+            <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)">${l}</span></span>`).join("")}
+      </div>
+      ${played<1?`<p class="note" style="margin:10px 0 0;color:var(--amber)">No finished gameweeks in the data yet — showing projections and the current calibration baseline. Predicted-vs-actual fills in once results land.</p>`:""}
+    </div></div>`;
+
+  const calib=`<div class="panel"><div class="phead"><h2>Calibration</h2>
+    <span class="note">points = A×minutes + B×raw</span></div>
+    <div class="scroll"><table><thead><tr>
+      <th style="text-align:left">Position</th><th>A (floor)</th><th>Δ base</th><th>B (spread)</th><th>Δ base</th><th style="text-align:left">Learned from</th></tr></thead><tbody>
+    ${[1,2,3,4].map(k=>{const c=CAL[k],b=CAL_BASE[k],L=learn[k];
+      return `<tr><td style="text-align:left">${POS[k]}</td>
+        <td class="mono">${c.A.toFixed(2)}</td><td class="mono">${Math.abs(c.A-b.A)<0.005?"—":arrow(c.A-b.A)}</td>
+        <td class="mono">${c.B.toFixed(2)}</td><td class="mono">${Math.abs(c.B-b.B)<0.005?"—":arrow(c.B-b.B)}</td>
+        <td class="note" style="text-align:left">${L?`${L.n} players · ${L.gw} GW`:"baseline (no learning yet)"}</td></tr>`;}).join("")}
+    </tbody></table></div></div>`;
+
+  const pva=played<1?"":`<div class="panel"><div class="phead"><h2>Predicted vs actual</h2>
+    <span class="note">projection vs actual pts / appearance</span></div>
+    <div class="scroll"><table><thead><tr>
+      <th style="text-align:left">Position</th><th>N</th><th>Predicted</th><th>Actual</th><th>MAE</th><th>Bias</th></tr></thead><tbody>
+    ${[1,2,3,4].map(k=>{const s=summ(acc[k]);
+      if(!s)return `<tr><td style="text-align:left">${POS[k]}</td><td colspan="5" class="note" style="text-align:left">not enough minutes yet</td></tr>`;
+      const mp=acc[k].reduce((a,x)=>a+x.p,0)/s.n,ma=acc[k].reduce((a,x)=>a+x.a,0)/s.n;
+      return `<tr><td style="text-align:left">${POS[k]}</td><td class="mono">${s.n}</td>
+        <td class="mono">${mp.toFixed(2)}</td><td class="mono">${ma.toFixed(2)}</td>
+        <td class="mono">${s.mae.toFixed(2)}</td><td class="mono">${(s.bias>0?"+":"")+s.bias.toFixed(2)}</td></tr>`;}).join("")}
+    </tbody></table></div>
+    <div class="pbody"><p class="note" style="margin:0">Actual is points per appearance across the ${played} finished gameweek${played>1?"s":""} — a proxy until per-gameweek projection snapshots are published. Positive bias = the model projects higher than players are returning.</p></div></div>`;
+
+  const movers=`<div class="panel"><div class="phead"><h2>Projection movers &amp; xMins shifts</h2></div>
+    <div class="pbody">
+    ${rep&&rep.movers&&rep.movers.length?`<span class="note" style="color:var(--cyan)">Biggest projection movers</span>
+      <div class="scroll"><table><thead><tr><th style="text-align:left">Player</th><th>Before</th><th>After</th><th>Δ</th></tr></thead><tbody>
+      ${rep.movers.slice(0,12).map(m=>`<tr><td style="text-align:left">${esc(m.name)}</td><td class="mono">${(+m.before).toFixed(1)}</td><td class="mono">${(+m.after).toFixed(1)}</td><td class="mono">${arrow(m.after-m.before,true)}</td></tr>`).join("")}</tbody></table></div>`:""}
+    ${rep&&rep.xminsShifts&&rep.xminsShifts.length?`<span class="note" style="color:var(--cyan);display:block;margin-top:10px">Expected-minutes shifts</span>
+      <div class="scroll"><table><thead><tr><th style="text-align:left">Player</th><th>Before</th><th>After</th><th>Δ</th></tr></thead><tbody>
+      ${rep.xminsShifts.slice(0,12).map(m=>`<tr><td style="text-align:left">${esc(m.name)}</td><td class="mono">${Math.round(m.before)}′</td><td class="mono">${Math.round(m.after)}′</td><td class="mono">${arrow(m.after-m.before,true)}</td></tr>`).join("")}</tbody></table></div>`:""}
+    ${(!rep||((!rep.movers||!rep.movers.length)&&(!rep.xminsShifts||!rep.xminsShifts.length)))?`<p class="note" style="margin:0">Waiting on per-gameweek snapshots — the biggest projection movers and expected-minutes shifts appear here once the model stores a projection snapshot each gameweek.</p>`:""}
+    </div></div>`;
+
+  const foot=`<div class="panel"><div class="pbody"><p class="note" style="margin:0">Richer per-gameweek actuals — live points, bonus, minutes — come from the official FPL API, which the browser can't read directly. A scheduled job publishes them to the data repo, and the model reads them like every other file.</p></div></div>`;
+
+  return status+calib+pva+movers+foot;
 }
 function swapCardHTML(m,g){
   return `<div class="tcard"><div class="tline">

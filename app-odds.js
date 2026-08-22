@@ -803,27 +803,27 @@ function render(){
           ${S.pendingOpt.map(m=>`<div><div style="font-size:9px;letter-spacing:.13em;text-transform:uppercase;
             color:var(--cyan);font-weight:700;margin-bottom:4px">${POS[m.out.pos]}</div>${swapCardHTML(m,g)}</div>`).join("")}</div>
         <button style="margin-top:10px" onclick="act('cancelopt')">Cancel</button></div></div>`:"";
-    main=`<div class="${S.compare?"grid3":"grid2"}"><div>
+    main=`<div class="grid2"><div>
       <div class="panel"><div class="phead"><h2>Planner</h2>
 
-        <span style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="act('opt')">Optimise</button>
-          
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button>
+          <button onclick="act('opt')">Optimise</button>
           <button onclick="act('reset')" style="background:var(--amber);color:#20130A;border-color:var(--amber);font-weight:800">Reset</button><button onclick="act('save')" style="background:var(--mint);color:var(--ink);border-color:var(--mint);font-weight:800">Save</button></span></div>
         <div class="gwbar">
-          <span class="pseg" style="margin-right:auto">
-            <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
-            <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
           <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
           <span style="text-align:center;min-width:112px">
             <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} predicted</span>
             <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span></span>
           <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button>
-          <span class="pseg" style="margin-left:auto">
-            <button class="${S.pendingOpt?"on":""}" onclick="act('optimise')">Optimise</button>
-            <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button></span>
         </div>
 
-        ${S.sqView==="list"?squadListHTML():pitchHTML()}
+        <div style="position:relative">
+          <span class="pitchctl"><span class="pseg">
+            <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
+            <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span></span>
+          ${S.sqView==="list"?`<div style="padding-top:34px">${squadListHTML()}</div>`:pitchHTML()}
+        </div>
         </div>
       <div class="panel chippanel">
         <div class="chiprow">
@@ -836,14 +836,13 @@ function render(){
       <div class="panel">${legendHTML()}</div>
       <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
         <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
-      ${S.compare?`<div>${compareHTML()}</div>`:""}
       <div class="poolcol">
         <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
         <button onclick="act('tab','table')">Full Player Data →</button></div>
         ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
-          <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>`;
+          <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>${S.compare?compareHTML():""}`;
   }
   else if(S.tab==="table")main=`<div class="panel"><div class="phead"><h2>Player Data</h2>
       <span class="note">${filtered("list").length} players · tap any column to sort</span></div>
@@ -881,6 +880,7 @@ function render(){
           <input type="range" min="1" max="8" step="1" value="${S.lHorizon}" oninput="act('lhorizon',this.value)" style="flex:1"></span>
       </span></div>
     ${tableHTML()}</div>`;
+  else if(S.tab==="xfpl")main=xfplHTML();
   else if(S.tab==="chips")main=chipsHTML();
   else if(S.tab==="transfers")main=transfersHTML();
   else if(S.tab==="fixtures")main=fixturesHTML();
