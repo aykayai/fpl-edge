@@ -51,7 +51,7 @@ function trkBandVal(arr,band,dir){
   return hi?trkMin(arr):trkMax(arr);   // worst
 }
 
-/* ---------- historical AVERAGE / BEST / WORST ---------- */
+/* ---------- historical performance — grouped by stat ---------- */
 function trkHistoryHTML(){
   const cur=(S.tracker&&S.tracker.gw)||null;   // this-season series once wired
   const curSeries=key=>{
@@ -59,67 +59,89 @@ function trkHistoryHTML(){
     if(key==="rankChange")return trkChange(cur.map(r=>r.orRank));
     return cur.map(r=>r[key]).filter(x=>x!=null);
   };
-  const bands=[
-    {id:"avg", label:"Average", accent:"var(--cyan)", tint:"rgba(93,214,255,.10)"},
-    {id:"best",label:"Best",    accent:"var(--mint)", tint:"rgba(125,251,158,.10)"},
-    {id:"worst",label:"Worst",  accent:"var(--red)",  tint:"rgba(255,107,107,.10)"}
-  ];
-  return bands.map(b=>`
-    <div class="panel trkband" style="--acc:${b.accent}">
-      <div class="trkband-h" style="background:${b.tint};color:${b.accent}">${b.label}</div>
-      <div class="tgrid">
-        ${TSTATS.map(st=>{
-          const last=trkBandVal(trkSeries("2026",st.key),b.id,st.dir);
-          const all =trkBandVal(trkAll(st.key),b.id,st.dir);
-          const now =st.pending?null:trkBandVal(curSeries(st.key),b.id,st.dir);
-          const row=(lbl,v,strong)=>`<div class="trow"><span class="tlbl">${lbl}</span>
-            <span class="tval" ${strong?`style="color:${b.accent}"`:""}>${st.fmt(v)}</span></div>`;
-          return `<div class="tcard">
-            <div class="tcard-h">${st.name}</div>
-            ${row("This season",now,false)}
-            ${row("Last season",last,true)}
-            ${row("All-time",all,false)}
-          </div>`;}).join("")}
-      </div>
-    </div>`).join("");
+  const accents={points:"var(--mint)",gwRank:"var(--cyan)",orRank:"var(--amber)",
+    rankChange:"#c9a0ff",transferDiff:"#ff9db0",captain:"#ffd76b"};
+  const bands=[["avg","Avg"],["best","Best"],["worst","Worst"]];
+  const card=st=>{
+    const acc=accents[st.key]||"var(--cyan)";
+    const now=curSeries(st.key),last=trkSeries("2026",st.key),all=trkAll(st.key);
+    const allBest=trkBandVal(all,"best",st.dir);              // the single best-ever value
+    return `<div class="tcard2" style="--acc:${acc}">
+      <div class="tcard2-h">${st.name}</div>
+      <table class="tmini"><thead><tr><th></th>
+        <th class="tnow">This yr</th><th>Last</th><th>All-time</th></tr></thead><tbody>
+      ${bands.map(([b,lbl])=>{
+        const av=trkBandVal(all,b,st.dir);
+        const isBest=b==="best"&&av!=null&&av===allBest;
+        return `<tr><td class="tmet">${lbl}</td>
+          <td class="tv2 tnow">${st.fmt(trkBandVal(now,b,st.dir))}</td>
+          <td class="tv2">${st.fmt(trkBandVal(last,b,st.dir))}</td>
+          <td class="tv2${isBest?" tbest":""}">${st.fmt(av)}${isBest?' <span class="tstar">★</span>':''}</td></tr>`;
+      }).join("")}
+      </tbody></table></div>`;
+  };
+  return `<div class="tgrid2">${TSTATS.map(card).join("")}</div>`;
 }
 
-/* ---------- comparison chart (GW-by-GW, one line per season) ---------- */
+/* ---------- comparison — grouped bars per gameweek, 10 at a time ---------- */
 function trkChartHTML(){
   let key=S.trkStat||"points";
   if((TSTATS.find(s=>s.key===key)||{}).noChart)key="points";
   const st=TSTATS.find(s=>s.key===key)||TSTATS[0];
   const seasons=Object.keys(TRACKER_HISTORY.seasons);
-  const lines=[];
-  const PAL=["var(--cream)","var(--cyan)","var(--amber)","#c9a0ff","#ff9db0","var(--mint)"];
-  seasons.forEach((ssn,i)=>{const ser=trkSeries(ssn,key);if(trkClean(ser).length)lines.push({label:ssn,data:ser,color:PAL[i%PAL.length]});});
+  const PAL=["var(--cream)","var(--cyan)","var(--amber)","#c9a0ff","#ff9db0"];
+  const series=seasons.map((ssn,i)=>({label:ssn,data:trkSeries(ssn,key),color:PAL[i%PAL.length]}))
+    .filter(s=>trkClean(s.data).length);
   const cur=(S.tracker&&S.tracker.gw)||null;
   if(cur){const cs=key==="rankChange"?trkChange(cur.map(r=>r.orRank)):cur.map(r=>r[key]);
-    lines.push({label:S.tracker.season||"This season",data:cs,color:"var(--mint)"});}
-  const W=680,H=230,pl=44,pr=12,pt=14,pb=22;
-  const all=lines.flatMap(l=>trkClean(l.data));
-  let lo=Math.min(...all),hi=Math.max(...all);if(lo===hi){lo-=1;hi+=1;}
-  const invert=st.dir==="lo";                       // ranks: better at the top
-  const x=g=>pl+(g/37)*(W-pl-pr);
-  const y=v=>{const t=(v-lo)/(hi-lo);return pt+(invert?t:1-t)*(H-pt-pb);};
-  const path=data=>data.map((v,i)=>v==null?null:`${x(i).toFixed(1)},${y(v).toFixed(1)}`)
-    .filter(Boolean).map((p,i)=>(i?"L":"M")+p).join(" ");
-  const yTicks=[lo,(lo+hi)/2,hi].map(v=>{const yy=y(v);
-    return `<line x1="${pl}" y1="${yy}" x2="${W-pr}" y2="${yy}" stroke="var(--ink3)" stroke-width="1" opacity=".5"/>
-      <text x="${pl-6}" y="${yy+3}" text-anchor="end" font-size="9" fill="var(--mute)">${st.dir==="lo"?trkRank(v):trkNum(v,0)}</text>`;}).join("");
-  const svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">
-    ${yTicks}
-    ${[1,10,20,30,38].map(g=>`<text x="${x(g-1)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--mute)">${g}</text>`).join("")}
-    ${lines.map(l=>`<path d="${path(l.data)}" fill="none" stroke="${l.color}" stroke-width="2" stroke-linejoin="round"/>`).join("")}
-  </svg>`;
-  const legend=lines.map(l=>`<span class="tlegend"><span class="tdot" style="background:${l.color}"></span>${esc(l.label)}</span>`).join("");
+    series.push({label:S.tracker.season||"2027",data:cs,color:"var(--mint)"});}
+
+  const all=!!S.trkGwAll;
+  const start=all?0:Math.min(Math.max(S.trkGwStart||0,0),30);
+  const to=all?38:Math.min(start+10,38);
+  const gws=[];for(let g=start;g<to;g++)gws.push(g);
+
+  const vals=series.flatMap(s=>gws.map(g=>s.data[g]).filter(v=>v!=null));
+  const hi=Math.max(...vals,0),lo=Math.min(...vals,0),base0=Math.min(0,lo);
+  const groupW=all?66:Math.max(60,600/gws.length);
+  const barW=Math.max(5,(groupW-8)/series.length);
+  const padL=8,H=250,pt=26,pb=24;
+  const W=Math.round(padL+gws.length*groupW+6);
+  const baseY=H-pb,topY=pt,span=baseY-topY;
+  const scaleH=v=>hi===base0?0:Math.abs(v-Math.max(base0,0))/(hi-base0)*span;
+  const zeroY=baseY-(0-base0)/(hi-base0||1)*span;
+  const compact=n=>n==null?"":(Math.abs(n)>=1e6?(n/1e6).toFixed(1)+"M":Math.abs(n)>=1000?Math.round(n/1000)+"k":(Number.isInteger(n)?""+n:n.toFixed(1)));
+  let bars="";
+  gws.forEach((g,gi)=>{
+    const gx=padL+gi*groupW+4;
+    series.forEach((s,si)=>{
+      const v=s.data[g];if(v==null)return;
+      const bx=gx+si*barW, h=scaleH(v);
+      const by=v>=0?zeroY-h:zeroY;
+      bars+=`<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(barW-1).toFixed(1)}" height="${Math.max(1,h).toFixed(1)}" fill="${s.color}" rx="1"><title>${esc(s.label)} · GW${g+1}: ${v}</title></rect>`;
+      const ly=(v>=0?by:by+h)-3, cx=bx+barW/2;
+      bars+=`<text x="${cx.toFixed(1)}" y="${ly.toFixed(1)}" font-size="7" fill="var(--mute)" text-anchor="start" transform="rotate(-90 ${cx.toFixed(1)} ${ly.toFixed(1)})">${compact(v)}</text>`;
+    });
+    bars+=`<text x="${(gx+ (groupW-8)/2).toFixed(1)}" y="${(baseY+14).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--mute)">${g+1}</text>`;
+  });
+  const svg=`<svg viewBox="0 0 ${W} ${H}" style="width:${all?W+"px":"100%"};height:auto;display:block">
+    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W-4}" y2="${zeroY.toFixed(1)}" stroke="var(--ink3)" stroke-width="1"/>${bars}</svg>`;
+
+  const legend=series.map(l=>`<span class="tlegend"><span class="tdot" style="background:${l.color}"></span>${esc(l.label)}</span>`).join("");
   const picker=TSTATS.filter(s=>!s.noChart).map(s=>`<button class="${key===s.key?"on":""}" onclick="act('trkstat','${s.key}')">${s.name}</button>`).join("");
+  const rangeLbl=all?"All 38 GWs":`GW ${start+1}–${to}`;
+  const controls=`<span class="pseg">
+      <button ${all||start<=0?"disabled":""} onclick="act('trkgw','prev')">←</button>
+      <button ${all||to>=38?"disabled":""} onclick="act('trkgw','next')">→</button></span>
+    <span class="note" style="min-width:74px;text-align:center">${rangeLbl}</span>
+    <button class="${all?"on":""}" onclick="act('trkgw','all')">${all?"Show 10":"Show all"}</button>`;
   return `<div class="panel"><div class="phead"><h2>Gameweek comparison</h2>
       <span class="pseg" style="flex-wrap:wrap">${picker}</span></div>
     <div class="pbody">
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px">${legend}</div>
-      ${svg}
-      ${st.dir==="lo"?`<p class="note" style="margin:6px 0 0">Lower is better — the line is flipped so up = a better rank.</p>`:""}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-right:auto">${legend}</div>${controls}</div>
+      <div style="overflow-x:auto">${svg}</div>
+      ${st.dir==="lo"?`<p class="note" style="margin:6px 0 0">Ranks — lower is better, so a taller bar is a worse (higher) rank.</p>`:""}
     </div></div>`;
 }
 
@@ -173,23 +195,48 @@ function trkTableHTML(){
     <div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
-/* ---------- chips (await season-labelled data) ---------- */
+/* ---------- chips ---------- */
 function trkChipHTML(){
   const c=TRACKER_HISTORY.chips,cur=(S.tracker&&S.tracker.chips)||null;
-  const cell=v=>v==null?`<td style="text-align:right;color:var(--ink3)">—</td>`
-    :`<td style="text-align:right;color:${v>0?"var(--mint)":v<0?"var(--red)":"var(--cream)"}">${v>0?"+":""}${v}</td>`;
-  const head=`<th style="text-align:left">Chip</th>${cur?`<th>2027</th>`:""}${c.labels.map(l=>`<th>${l}</th>`).join("")}`;
+  const cell=v=>v==null?`<td style="color:var(--ink3)">—</td>`
+    :`<td style="color:${v>0?"var(--mint)":v<0?"var(--red)":"var(--cream)"}">${v>0?"+":""}${v}</td>`;
+  const head=`<th>Chip</th>${cur?`<th>2027</th>`:""}${c.labels.map(l=>`<th>${l}</th>`).join("")}`;
   const rows=Object.keys(c.rows).map(name=>
-    `<tr><td style="text-align:left">${name}</td>${cur?cell(cur[name]==null?null:cur[name]):""}${c.rows[name].map(cell).join("")}</tr>`).join("");
+    `<tr><td>${name}</td>${cur?cell(cur[name]==null?null:cur[name]):""}${c.rows[name].map(cell).join("")}</tr>`).join("");
   return `<div class="panel"><div class="phead"><h2>Chip performance</h2>
       <span class="note">points gained vs an average week</span></div>
-    <div class="scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="scroll"><table class="trktable"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
     ${cur?"":`<div class="pbody"><p class="note" style="margin:0">This season's chip returns (2027) drop into the first column once you use a chip and the feed is connected.</p></div>`}</div>`;
+}
+
+/* ---------- career finishes (official FPL season data) ---------- */
+const TRACKER_FINISHES=[
+  ["2025/26",2193,975373,8],["2024/25",2371,792468,7],["2023/24",2362,564629,5],
+  ["2022/23",2496,184398,2],["2021/22",2392,331851,4],["2020/21",2363,160062,2],
+  ["2019/20",2150,553017,7],["2018/19",2114,736967,12],["2017/18",1971,1417858,24],
+  ["2016/17",1749,2173755,48],["2015/16",1816,1704946,46],["2014/15",1765,1293596,37],
+  ["2013/14",2380,16301,0.5],["2012/13",2089,76413,3],["2011/12",2100,41520,2],
+  ["2010/11",1975,121520,5],["2009/10",2217,61847,3],["2008/09",1928,69247,4],
+  ["2007/08",2034,126732,8],["2006/07",1746,187513,15]
+];
+function trkFinishesHTML(){
+  const bestPct=Math.min(...TRACKER_FINISHES.map(r=>r[3]));
+  const bestPts=Math.max(...TRACKER_FINISHES.map(r=>r[1]));
+  const rows=TRACKER_FINISHES.map(([s,pts,rank,pct])=>
+    `<tr><td>${s}</td>
+      <td${pts===bestPts?' class="tbest"':""}>${pts.toLocaleString("en-GB")}</td>
+      <td>${rank.toLocaleString("en-GB")}</td>
+      <td${pct===bestPct?' class="tbest"':""}>${pct}%${pct===bestPct?' <span class="tstar">★</span>':""}</td></tr>`).join("");
+  return `<div class="panel"><div class="phead"><h2>Career finishes</h2>
+      <span class="note">official FPL · net of hits</span></div>
+    <div class="scroll tallscroll"><table class="trktable"><thead><tr>
+      <th>Season</th><th>Points</th><th>Overall rank</th><th>Finish</th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
 }
 
 function trackerHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
   return trkSummaryHTML()+trkTableHTML()+
-    `<div class="trkband-title">Historical performance · this season vs last vs all-time</div>`+
-    trkHistoryHTML()+trkChartHTML()+trkChipHTML();
+    `<div class="trkband-title">Historical performance · ★ = best ever · shaded column = this season</div>`+
+    trkHistoryHTML()+trkChartHTML()+trkFinishesHTML()+trkChipHTML();
 }

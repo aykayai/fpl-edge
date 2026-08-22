@@ -37,6 +37,11 @@ function act(k,a,b){
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
     case"trkstat":S.trkStat=a;break;
+    case"trkgw":
+      if(a==="next")S.trkGwStart=Math.min((S.trkGwStart||0)+10,30),S.trkGwAll=false;
+      else if(a==="prev")S.trkGwStart=Math.max((S.trkGwStart||0)-10,0),S.trkGwAll=false;
+      else if(a==="all")S.trkGwAll=!S.trkGwAll;
+      break;
     case"benchcycle":{
       /* Tapping ⇄ on an outfield sub cycles its order (2nd→3rd→…→2nd). The keeper
          stays at bench position 1 and is never part of the cycle. */
