@@ -217,7 +217,7 @@ function act(k,a,b){
     case"setchip":S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;
     case"clearchip":{const c={...S.chips};delete c[a];S.chips=c;saveState();break;}
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
-    case"fixgw":S.fixGW=clamp(+a,S.model.next.id,38);break;
+    case"fixgw":S.fixGW=clamp(+a,1,38);break;
     case"fixsort":if((S.fixSort||"d5")===a)S.fixDir=(S.fixDir||"asc")==="asc"?"desc":"asc";
       else{S.fixSort=a;S.fixDir="asc";}break;
     case"fixmode":S.fixMode=a;break;
