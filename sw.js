@@ -3,7 +3,7 @@
    dropped connection. Deliberately network-first for the page itself, so a new
    version published to GitHub Pages is picked up on the next load rather than
    being pinned to a stale cache. */
-const CACHE = "fpl-edge-v9.3.1";
+const CACHE = "fpl-edge-v9.3.2";
 const SHELL = [
   "./",
   "./index.html",
@@ -57,6 +57,21 @@ self.addEventListener("fetch", e => {
   /* The script files change with every release, so they follow the page rather
      than the icons: network first, cache only as a fallback. */
   if(url.pathname.endsWith(".js") && !url.pathname.endsWith("sw.js")){
+    e.respondWith(
+      fetch(req).then(res=>{
+        const copy=res.clone();
+        caches.open(CACHE).then(c=>c.put(req,copy));
+        return res;
+      }).catch(()=>caches.match(req))
+    );
+    return;
+  }
+
+  /* The actuals feed is rewritten by a scheduled job, so it must never be
+     pinned: network first, cache only so the last known scores survive
+     offline. Without this it falls through to the icon rule below and freezes
+     until the next cache bump. */
+  if(url.pathname.includes("/data/")){
     e.respondWith(
       fetch(req).then(res=>{
         const copy=res.clone();
