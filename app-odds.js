@@ -809,7 +809,7 @@ function render(){
         <span style="display:flex;gap:6px;flex-wrap:wrap">
           <button onclick="act('reset')" style="background:var(--amber);color:#20130A;border-color:var(--amber);font-weight:800">Reset</button><button onclick="act('save')" style="background:var(--mint);color:var(--ink);border-color:var(--mint);font-weight:800">Save</button></span></div>
         <div class="gwbar">
-          <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" title="Earlier gameweek">←</button>
+          <button onclick="act('startgw',${Math.max(1,VG()-1)})" title="Earlier gameweek">←</button>
           <span style="text-align:center;min-width:130px">
             ${(S.actuals&&S.actuals[VG()]!=null)?`
             <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} actual</span>
@@ -936,7 +936,7 @@ function render(){
              <span class="msv" style="color:${c}">${v}</span></span>`).join("")}
        </span>
        <span class="gwpill">
-         <button onclick="act('startgw',${Math.max(S.model.next.id,VG()-1)})" aria-label="Earlier">←</button>
+         <button onclick="act('startgw',${Math.max(1,VG()-1)})" aria-label="Earlier">←</button>
          <span class="gwv">GW${VG()}</span>
          <button onclick="act('startgw',${Math.min(38,VG()+1)})" aria-label="Later">→</button>
        </span>

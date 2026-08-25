@@ -53,7 +53,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="9.4.0";
+const APP_VERSION="9.4.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -1357,7 +1357,7 @@ function parseReturn(news){
   return "";
 }
 
-const VG=()=>clamp(S.startGW||(S.model?S.model.next.id:1),S.model?S.model.next.id:1,38);
+const VG=()=>clamp(S.startGW||(S.model?S.model.next.id:1),1,38);
 /* FPL sells at purchase price plus half the rise, rounded down to 0.1 */
 function sellPrice(p){
   const bought=+(p.price-(p.seasonChange||0)).toFixed(1);

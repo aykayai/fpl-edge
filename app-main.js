@@ -92,7 +92,7 @@ function act(k,a,b){
       toast("Comparison applied — remember to Save");break;}
     case"horizon":S.horizon=clamp(+a||1,1,8);break;
     case"vgw":
-    case"startgw":S.startGW=clamp(Math.round(+a)||S.model.next.id,S.model.next.id,38);break;
+    case"startgw":S.startGW=clamp(Math.round(+a)||S.model.next.id,1,38);break;
     case"pos":S.fPos=+a;break;
     case"team":S.fTeam=+a;break;
     case"lpos":S.lPos=+a;break;
