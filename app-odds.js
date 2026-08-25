@@ -782,7 +782,7 @@ function render(){
   if(S.tab==="squad"){
     const first=S.model.next.id;
     const hSlider=`<div class="chipbar" style="align-items:center;justify-content:space-between">
-      <button onclick="act('vgw',${Math.max(1,g-1)})" ${g<=1?"disabled style=\"opacity:.35\"":""}>←</button>
+      <button onclick="act('vgw',${Math.max(first,g-1)})" ${g<=first?"disabled style=\"opacity:.35\"":""}>←</button>
       <span style="text-align:center">
         <span style="display:block;font-family:'Barlow Condensed';font-weight:700;font-size:18px;letter-spacing:.05em">
           GAMEWEEK ${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span>

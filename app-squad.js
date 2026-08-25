@@ -707,8 +707,7 @@ function compareHTML(){
   const card=p=>{
     const q=p.gw[g]||{fixtures:[],pts:0};
     const isC=C.captain===p.id;
-    const noHistData=g<S.model.next.id&&!p.gw[g];
-    const[bg,fg]=noHistData?["var(--ink3)","var(--mute)"]:ptsCol(q.pts*(isC?2:1));
+    const[bg,fg]=ptsCol(q.pts*(isC?2:1));
     const f0=q.fixtures[0];
     return `<div class="card">
       <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
@@ -719,8 +718,8 @@ function compareHTML(){
         <button class="badge" style="top:-2px;right:2px;background:${(C.flagged||[]).includes(p.id)?"var(--mint)":"var(--ink3)"};color:${(C.flagged||[]).includes(p.id)?"var(--ink)":"var(--cream)"}"
           onclick="act('cflag',${p.id})">✕</button></div>
       <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
-      <div class="ptsbar" style="background:${bg};color:${fg}"><div class="pv">${noHistData?"—":(q.pts*(isC?2:1)).toFixed(1)}</div>
-        <div class="fx">${noHistData?`no data for GW${g}`:(f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture")}</div></div>
+      <div class="ptsbar" style="background:${bg};color:${fg}"><div class="pv">${(q.pts*(isC?2:1)).toFixed(1)}</div>
+        <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
       <div class="cardsigs">${sigHTML(p,g)}</div>
     <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w2=p.gw[e];
         if(!w2||w2.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
@@ -779,7 +778,7 @@ function dashData(){
       if(taken>=mine.length)break;
       if(p.price>budget-(mine.length-taken-1)*3.9)continue;
       if((club[p.team]||0)>=3)continue;
-      club[p.team]=(club[p.team]||0)+1;best+=p.gw[g]?.pts||0;budget-=p.price;taken++;}
+      club[p.team]=(club[p.team]||0)+1;best+=p.gw[g].pts;budget-=p.price;taken++;}
     strength[pos]={got,best,pct:best>0?clamp(got/best,0,1):0,n:mine.length};
   });
   /* five-week fixture outlook for the XI */
