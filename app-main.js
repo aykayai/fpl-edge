@@ -36,7 +36,17 @@ function act(k,a,b){
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
-    case"radarpick":{S.radarIds=S.radarIds||[null,null,null];S.radarIds[a]=b?+b:null;break;}
+    case"radarpick":{S.radarIds=S.radarIds||[null,null,null];S.radarSearch=S.radarSearch||["","",""];
+      const id=b?+b:null;
+      if(id){
+        const pl=S.model.players.find(x=>x.id===id);
+        const locked=S.radarIds.map(x=>x?S.model.players.find(y=>y.id===x):null).find(x=>x);
+        if(pl&&locked&&pl.pos!==locked.pos)break;    // one position only — ignore a stray mismatch
+      }
+      S.radarIds[a]=id;S.radarSearch[a]="";break;}
+    case"radarsearch":{S.radarSearch=S.radarSearch||["","",""];S.radarSearch[a]=b;break;}
+    case"radarclear":{S.radarIds=S.radarIds||[null,null,null];S.radarIds[a]=null;break;}
+    case"radarhorizon":{const H=[1,3,5,10,"rest"];S.radarHorizon=H[clamp(Math.round(+a),0,4)]||5;break;}
     case"xfplgw":{const cur=clamp(S.xfplGW||(S.model.gwPlayed>=1?S.model.gwPlayed:S.model.next.id),1,38);
       S.xfplGW=clamp(cur+(a==="next"?1:-1),1,38);break;}
     case"trkstat":S.trkStat=a;break;

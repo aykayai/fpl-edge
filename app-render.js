@@ -527,59 +527,107 @@ function swapCardHTML(m,g){
 function radarHTML(){
   const g=VG();
   const ids=S.radarIds||[null,null,null];
-  const own=new Set(S.squad||[]);
-  const byPred=[...S.model.players].sort((a,b)=>hPts(b,g,S.horizon)-hPts(a,g,S.horizon));
-  const cand=[],seen=new Set();
-  S.model.players.filter(p=>own.has(p.id)).forEach(p=>{cand.push(p);seen.add(p.id);});
-  byPred.forEach(p=>{if(cand.length<180&&!seen.has(p.id)){cand.push(p);seen.add(p.id);}});
-  cand.sort((a,b)=>a.web_name.localeCompare(b.web_name));
-  const opts=sel=>[1,2,3,4].map(pos=>`<optgroup label="${POS[pos]}">${cand.filter(p=>p.pos===pos)
-    .map(p=>`<option value="${p.id}" ${sel===p.id?"selected":""}>${esc(p.web_name)} · ${esc(p.teamName)}</option>`).join("")}</optgroup>`).join("");
-  const selects=[0,1,2].map(i=>`<select class="rsel" onchange="act('radarpick',${i},this.value)">
-    <option value="">Player ${i+1}…</option>${opts(ids[i])}</select>`).join("");
+  const search=S.radarSearch||["","",""];
+  const active=ids.map(id=>id?S.model.players.find(p=>p.id===id):null);
+  const activePlayers=active.filter(Boolean);
+  const lockedPos=activePlayers.length?activePlayers[0].pos:null;
+  /* Green, orange, off-white — the most contrasting trio in the existing palette,
+     so the three players never get confused with each other or with the amber
+     used elsewhere on this page for highlights. */
+  const COL=["var(--mint)","var(--amber)","var(--cream)"];
+
+  const HSTEPS=[1,3,5,10,"rest"];
+  const curH=S.radarHorizon||5;
+  const hIdx=Math.max(0,HSTEPS.indexOf(curH));
+  const gwsFor=h=>h==="rest"?Math.max(1,39-g):h;
+  const hLabel=h=>h==="rest"?"Rest of season":`Next ${h} GW${h>1?"s":""}`;
 
   const W=p=>ws(String(p.code||""),p.pos,S.lWin||38)||{};
   const AXF={
-    "xFPL":p=>hPts(p,g,S.horizon),"Form":p=>p.form||0,
-    "xGI/90":p=>{const w=W(p);return (w.xg90||0)+(w.xa90||0);},"xMins":p=>p.xMins||0,
+    "xFPL":p=>hPts(p,g,gwsFor(curH)),"Form":p=>p.form||0,
+    "xGI/90":p=>{const w=W(p);return(w.xg90||0)+(w.xa90||0);},"xMins":p=>p.xMins||0,
     "npxG/90":p=>W(p).npxg90||0,"xA/90":p=>W(p).xa90||0,"CC/90":p=>W(p).cc90||0,
     "xG/90":p=>W(p).xg90||0,"Shots/90":p=>W(p).sh90||0,"DefCon/90":p=>W(p).dc90||W(p).cbit90||0,
     "CS %":p=>(p.csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,"G prevented":p=>W(p).gp||0};
-  const AXSET={gen:["xFPL","Form","xGI/90","npxG/90","xA/90","xMins"],
-    1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
-    2:["xFPL","Form","DefCon/90","CS %","xGI/90","Aerials/90"],
+  /* One position at a time now, so there's no "mixed positions" fallback —
+     Defenders swap xGI/90 for xMins per Andy's request (nailed-on matters more
+     for a defender's ceiling than combined attacking output). */
+  const AXSET={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
+    2:["xFPL","Form","DefCon/90","CS %","Aerials/90","xMins"],
     3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
     4:["xFPL","Form","npxG/90","xG/90","Shots/90","xGI/90"]};
 
-  const active=ids.map(id=>id?S.model.players.find(p=>p.id===id):null).filter(Boolean);
-  const COL=["var(--cyan)","var(--amber)","var(--mint)"];
-  let body;
-  if(!active.length){
-    body=`<p class="note" style="margin:0">Pick up to three players above to compare them across xFPL, form and the stats that matter for their position.</p>`;
+  const takenIds=new Set(ids.filter(Boolean));
+  const pool=i=>S.model.players.filter(p=>(p.id===ids[i]||!takenIds.has(p.id))&&(!lockedPos||p.pos===lockedPos));
+  const results=i=>{const q=(search[i]||"").trim().toLowerCase();if(!q)return[];
+    return pool(i).filter(p=>p.web_name.toLowerCase().includes(q)||p.teamName.toLowerCase().includes(q))
+      .sort((a,b)=>hPts(b,g,S.horizon)-hPts(a,g,S.horizon)).slice(0,8);};
+
+  const slot=i=>{
+    const p=active[i];
+    if(p)return `<div class="rslot" style="--acc:${COL[i]}"><div class="rchip">
+        <span class="rsw" style="background:${COL[i]}"></span>${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}
+        <span class="rchip-nm">${esc(p.web_name)}<span class="rchip-tm">${esc(p.teamName)} · £${p.price.toFixed(1)}</span></span>
+        <button class="rchip-x" onclick="act('radarclear',${i})" title="Remove">✕</button></div></div>`;
+    const rs=results(i);
+    return `<div class="rslot" style="--acc:${COL[i]}">
+      <span class="rsw" style="background:${COL[i]}"></span>
+      <input class="rsearch" placeholder="${lockedPos?"Search "+POS[lockedPos]+"…":"Search a player…"}"
+        value="${esc(search[i]||"")}" oninput="act('radarsearch',${i},this.value)">
+      ${(search[i]||"").trim()?`<div class="rsdrop">${rs.length?rs.map(pl=>`<div class="rsopt" onclick="act('radarpick',${i},${pl.id})">
+          ${shirtSVG(pl.teamName.toUpperCase(),pl.pos===1,18)}<span class="rsopt-nm">${esc(pl.web_name)}</span>
+          <span class="note">${esc(pl.teamName)}</span></div>`).join(""):`<div class="rsopt" style="cursor:default"><span class="note">No matches</span></div>`}</div>`:""}
+      </div>`;};
+
+  let content;
+  if(!activePlayers.length){
+    content=`<p class="note" style="margin:14px 0 0;text-align:center">Search for up to three players in the same position — own squad included — to compare them.</p>`;
   }else{
-    const positions=[...new Set(active.map(p=>p.pos))];
-    const axes=(positions.length===1&&AXSET[positions[0]])?AXSET[positions[0]]:AXSET.gen;
-    const maxes=axes.map(ax=>Math.max(1e-6,...active.map(p=>AXF[ax](p))));
+    const axes=AXSET[lockedPos];
+    const maxes=axes.map(ax=>Math.max(1e-6,...activePlayers.map(p=>AXF[ax](p))));
+    const fmt=(ax,v)=>ax==="CS %"?v.toFixed(0)+"%":(Number.isInteger(v)?v.toFixed(0):v.toFixed(1));
+    const rows=axes.map(ax=>{
+      const vals=active.map(p=>p?AXF[ax](p):null);
+      const best=Math.max(...vals.filter(v=>v!=null));
+      return `<tr><td class="rmet">${ax}</td>${active.map((p,j)=>{
+        if(!p)return `<td class="rtd">—</td>`;
+        const v=vals[j],isBest=activePlayers.length>1&&v===best;
+        return `<td class="rtd" style="${isBest?`color:${COL[j]};font-weight:800`:""}">${fmt(ax,v)}${isBest?" ★":""}</td>`;}).join("")}</tr>`;}).join("");
+    const thead=`<tr><td></td>${active.map((p,j)=>p?`<th style="color:${COL[j]}">
+        ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,26)}<span class="rth-nm">${esc(p.web_name)}</span></th>`:"<th></th>").join("")}</tr>`;
+    const table=`<table class="rtable"><thead>${thead}</thead><tbody>${rows}</tbody></table>`;
+
     const cx=150,cy=150,R=104,N=axes.length;
     const ang=i=>(-90+i*360/N)*Math.PI/180;
     const pt=(i,f)=>[(cx+Math.cos(ang(i))*R*f).toFixed(1),(cy+Math.sin(ang(i))*R*f).toFixed(1)];
     const rings=[0.25,0.5,0.75,1].map(f=>`<polygon points="${axes.map((_,i)=>pt(i,f).join(",")).join(" ")}" fill="none" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
     const spokes=axes.map((_,i)=>`<line x1="${cx}" y1="${cy}" x2="${pt(i,1)[0]}" y2="${pt(i,1)[1]}" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
-    const labels=axes.map((ax,i)=>{const[x,y]=pt(i,1.16);
+    const labels=axes.map((ax,i)=>{const[x,y]=pt(i,1.17);
       return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="var(--mute)">${ax}</text>`;}).join("");
-    const polys=active.map((p,j)=>{const pts=axes.map((ax,i)=>pt(i,Math.min(1,AXF[ax](p)/maxes[i])).join(",")).join(" ");
-      return `<polygon points="${pts}" fill="${COL[j]}" fill-opacity=".14" stroke="${COL[j]}" stroke-width="2"/>`;}).join("");
-    const svg=`<svg viewBox="0 0 300 300" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto">
-      ${rings}${spokes}${labels}${polys}</svg>`;
-    const legend=active.map((p,j)=>`<span class="tlegend"><span class="tdot" style="background:${COL[j]};height:8px;width:8px;border-radius:50%"></span>${esc(p.web_name)}</span>`).join("");
-    body=`<div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:6px">${legend}</div>
-      ${svg}
-      <p class="note" style="margin:8px 0 0;text-align:center">Each axis is scaled to the strongest of the compared players${positions.length>1?" · mixed positions, so general stats are shown":""}.</p>`;
+    const polys=active.map((p,j)=>{if(!p)return"";const pts=axes.map((ax,i)=>pt(i,Math.min(1,AXF[ax](p)/maxes[i])).join(",")).join(" ");
+      return `<polygon points="${pts}" fill="${COL[j]}" fill-opacity=".16" stroke="${COL[j]}" stroke-width="2.5"/>`;}).join("");
+    const svg=`<svg viewBox="0 0 300 300" style="width:100%;max-width:300px;height:auto;display:block;margin:0 auto">${rings}${spokes}${labels}${polys}</svg>`;
+    const legend=activePlayers.map(p=>{const j=active.indexOf(p);
+      return `<span class="tlegend"><span class="tdot" style="background:${COL[j]};height:8px;width:8px;border-radius:50%"></span>${esc(p.web_name)}</span>`;}).join("");
+
+    content=`<div class="rgrid">
+        <div class="rtablewrap">${table}</div>
+        <div class="rradarwrap">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:8px">${legend}</div>
+          ${svg}
+        </div>
+      </div>
+      <p class="note" style="margin:10px 0 0;text-align:center">★ best of the group · axes scaled to the strongest player shown · ${esc(POS[lockedPos])} only.</p>`;
   }
-  return `<div class="panel"><div class="phead"><h2>Compare players</h2><span class="note">up to 3</span></div>
+
+  return `<div class="panel rcompare"><div class="phead"><h2>Compare players</h2>
+      <span class="note">${lockedPos?POS[lockedPos]+" only":"up to 3 · same position"}</span></div>
     <div class="pbody">
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${selects}</div>
-      ${body}
+      <div class="rslots">${[0,1,2].map(slot).join("")}</div>
+      <div class="rhorizon"><span class="note">xFPL over</span>
+        <input type="range" min="0" max="4" step="1" value="${hIdx}" oninput="act('radarhorizon',this.value)">
+        <span class="rhval">${hLabel(curH)}</span></div>
+      ${content}
     </div></div>`;
 }
 function transfersHTML(){

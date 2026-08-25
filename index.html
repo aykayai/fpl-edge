@@ -360,7 +360,39 @@ details[open]>summary::after{content:" ▴"}
 .tsum span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
 .tlegend{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--mute)}
 .tdot{width:12px;height:3px;border-radius:2px;display:inline-block}
-.rsel{background:var(--ink);border:1px solid var(--ink3);color:var(--cream);font-family:'Sora',sans-serif;font-size:12px;padding:8px 8px;border-radius:9px;flex:1;min-width:130px}
+/* Compare players (radar) */
+.rslots{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.rslot{flex:1;min-width:170px;position:relative;display:flex;align-items:center;gap:7px;
+  background:var(--ink);border:1px solid var(--ink3);border-left:3px solid var(--acc);border-radius:11px;padding:7px 9px}
+.rsw{width:8px;height:8px;border-radius:50%;flex:none}
+.rsearch{background:none;border:none;color:var(--cream);font-family:'Sora',sans-serif;font-size:12.5px;flex:1;min-width:0;outline:none}
+.rsearch::placeholder{color:var(--mute)}
+.rsdrop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--ink2);
+  border:1px solid var(--ink3);border-radius:11px;overflow:hidden;max-height:220px;overflow-y:auto;
+  box-shadow:0 10px 24px rgba(0,0,0,.4)}
+.rsopt{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer}
+.rsopt:hover{background:var(--ink3)}
+.rsopt-nm{font-size:12px;font-weight:600;color:var(--cream);flex:1}
+.rchip{display:flex;align-items:center;gap:7px;width:100%}
+.rchip-nm{font-size:12px;font-weight:700;color:var(--cream);display:flex;flex-direction:column;line-height:1.25}
+.rchip-tm{font-size:9.5px;font-weight:500;color:var(--mute)}
+.rchip-x{margin-left:auto;background:none;border:none;color:var(--mute);cursor:pointer;font-size:13px;padding:2px 4px}
+.rchip-x:hover{color:var(--red)}
+.rhorizon{display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:9px 12px;background:var(--ink);border:1px solid var(--ink3);border-radius:11px}
+.rhorizon input[type=range]{flex:1}
+.rhval{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:var(--mint);min-width:96px;text-align:right}
+.rgrid{display:grid;grid-template-columns:1fr;gap:16px;align-items:center;margin-top:14px}
+@media(min-width:760px){.rgrid{grid-template-columns:1fr 1fr}}
+.rtablewrap{overflow-x:auto}
+.rtable{width:100%;border-collapse:collapse}
+.rtable th{padding:6px 8px 8px;text-align:center;vertical-align:bottom}
+.rtable th:first-child{width:0}
+.rth-nm{display:block;font-family:'Sora',sans-serif;font-size:10px;font-weight:700;margin-top:3px;white-space:nowrap}
+.rtable .rmet{font-family:'Sora',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);padding:6px 8px;white-space:nowrap}
+.rtable .rtd{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:var(--cream);text-align:center;padding:6px 8px}
+.rtable tbody tr+tr td,.rtable tbody tr+tr th{border-top:1px solid rgba(255,255,255,.05)}
+.rradarwrap{display:flex;flex-direction:column;align-items:center;justify-content:center}
+.rcompare .phead h2{font-size:18px}
 /* Historical — grouped by stat, 2 per row */
 .tgrid2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 @media(max-width:640px){.tgrid2{grid-template-columns:1fr}}
