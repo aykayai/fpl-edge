@@ -603,6 +603,14 @@ function cardHTML(p,bench){
   const shownPts=hPts(p,g,S.horizon)*(isC?(S.activeChip==="3xc"?3:2):1);
   const col=ptsCol(shownPts/Math.max(1,S.horizon));
   const bg=col[0], fg=col[1], elite=col[2]==="elite";
+  /* Actual points for this specific gameweek — only present once the live-actuals
+     feed has that GW. Captain-multiplied the same way as the prediction, so the two
+     compare like-for-like (both = "contribution to the squad total"). */
+  const feedGW=(S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]))||null;
+  const actualRaw=feedGW?feedGW[g]??feedGW[String(g)]:null;
+  const hasActual=actualRaw!=null;
+  const actualShown=hasActual?actualRaw*(isC?(S.activeChip==="3xc"?3:2):1):null;
+  const diff=hasActual?actualShown-shownPts:null;
   const fixTxtHtml=q.fixtures.length?q.fixtures.map(f=>
     `<span style="${f.home?"":"font-style:italic"}">${esc(f.opp)} (${f.home?"H":"A"})</span>`).join(", "):"No fixture";
   let n3="";for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
@@ -628,8 +636,10 @@ function cardHTML(p,bench){
     <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('vice',${p.id})" title="Vice-captain">V</button></div>
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
-   <div class="ptsbar" style="background:${bg};color:${fg}${elite?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}">
-    <div class="pv">${shownPts.toFixed(1)}</div><div class="fx">${fixTxtHtml}</div></div>
+   <div class="ptsbar" style="background:${bg};color:${fg}${elite?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
+    <div class="pv">${hasActual?actualShown.toFixed(1):shownPts.toFixed(1)}</div>
+    ${hasActual?`<div class="pv2">pred ${shownPts.toFixed(1)} <span style="font-weight:700;color:${diff>=0?"#0f5132":"#7a1f1f"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`:""}
+    <div class="fx">${fixTxtHtml}</div></div>
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }

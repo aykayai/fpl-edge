@@ -37,6 +37,8 @@ function act(k,a,b){
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
     case"radarpick":{S.radarIds=S.radarIds||[null,null,null];S.radarIds[a]=b?+b:null;break;}
+    case"xfplgw":{const cur=clamp(S.xfplGW||(S.model.gwPlayed>=1?S.model.gwPlayed:S.model.next.id),1,38);
+      S.xfplGW=clamp(cur+(a==="next"?1:-1),1,38);break;}
     case"trkstat":S.trkStat=a;break;
     case"trkgw":
       if(a==="next")S.trkGwStart=Math.min((S.trkGwStart||0)+10,30),S.trkGwAll=false;

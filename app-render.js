@@ -388,6 +388,21 @@ function tableHTML(){
     return `<tr style="${p.avail===0?"opacity:.4;":""}${own?"opacity:.45":""}" title="${own?"Already in your squad":""}">${tds}</tr>`;}).join("");
   return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+/* Predicted squad total for an arbitrary gameweek — weekPts() is hard-wired to
+   VG() (the planner's own GW selector), so the xFPL comparison widget needs its
+   own version to browse independently. */
+function weekPtsFor(g){
+  const xi=startingXI();if(!xi.length)return 0;
+  let s=xi.reduce((a,p)=>a+hPts(p,g,1),0);
+  const cap=S.model.players.find(p=>p.id===S.captain);
+  if(cap&&xi.includes(cap))s+=hPts(cap,g,1);
+  const bench=squadPlayers().filter(p=>!xi.includes(p));
+  const chip=chipForWeek(g);
+  if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,1),0);
+  if(chip==="3xc"&&cap)s+=hPts(cap,g,1);
+  return s;
+}
+
 function xfplHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
   const g=S.model.next.id;
@@ -413,6 +428,34 @@ function xfplHTML(){
     return {n,mae:arr.reduce((s,x)=>s+Math.abs(x.p-x.a),0)/n,
       bias:arr.reduce((s,x)=>s+(x.p-x.a),0)/n};};
   const overall=summ([].concat(acc[1],acc[2],acc[3],acc[4]));
+
+  /* Squad-level predicted vs actual, navigable GW by GW. "Predicted" is the
+     model's current view of that gameweek's squad total — for past GWs this is
+     a retrospective figure (today's calibration applied backwards), not a replay
+     of what was shown before that gameweek's deadline. "Actual" comes from the
+     live-actuals feed and only appears once that GW has been published. */
+  const xg=clamp(S.xfplGW||(played>=1?played:g),1,38);
+  const xPred=weekPtsFor(xg);
+  const xActual=(S.actuals&&S.actuals[xg]!=null)?S.actuals[xg]:null;
+  const xDiff=xActual!=null?xActual-xPred:null;
+  const compare=`<div class="panel"><div class="phead"><h2>Predicted vs actual</h2>
+      <span class="note">your squad, by gameweek</span></div>
+    <div class="pbody">
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
+        <button onclick="act('xfplgw','prev')" ${xg<=1?"disabled":""} aria-label="Earlier">←</button>
+        <div style="text-align:center;min-width:96px">
+          <span class="note" style="display:block">Predicted</span>
+          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:var(--cyan)">${xPred.toFixed(1)}</span></div>
+        <div style="text-align:center;min-width:64px">
+          <span class="note" style="display:block">GW${xg}</span>
+          ${xDiff!=null?`<span style="display:block;font-weight:800;font-family:'Barlow Condensed',sans-serif;font-size:15px;color:${xDiff>=0?"var(--mint)":"var(--red)"}">${xDiff>=0?"+":""}${xDiff.toFixed(1)}</span>`:`<span class="note" style="display:block">—</span>`}</div>
+        <div style="text-align:center;min-width:96px">
+          <span class="note" style="display:block">Actual</span>
+          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:${xActual!=null?"var(--mint)":"var(--ink3)"}">${xActual!=null?xActual.toFixed(1):"—"}</span></div>
+        <button onclick="act('xfplgw','next')" ${xg>=38?"disabled":""} aria-label="Later">→</button>
+      </div>
+      ${xActual==null?`<p class="note" style="margin:8px 0 0;text-align:center">Actual score for GW${xg} lands once the live-actuals feed publishes it.</p>`:""}
+    </div></div>`;
 
   const status=`<div class="panel"><div class="phead"><h2>xFPL model</h2>
     <span class="note">data ${esc(stamp)}</span></div>
@@ -464,7 +507,7 @@ function xfplHTML(){
 
   const foot=`<div class="panel"><div class="pbody"><p class="note" style="margin:0">Richer per-gameweek actuals — live points, bonus, minutes — come from the official FPL API, which the browser can't read directly. A scheduled job publishes them to the data repo, and the model reads them like every other file.</p></div></div>`;
 
-  return status+calib+pva+movers+foot;
+  return compare+status+calib+pva+movers+foot;
 }
 function swapCardHTML(m,g){
   return `<div class="tcard"><div class="tline">
