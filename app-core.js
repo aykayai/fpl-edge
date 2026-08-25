@@ -53,7 +53,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="9.3.2";
+const APP_VERSION="9.3.3";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -700,31 +700,71 @@ function windowStats(code,n,pos,price,teamMax){
   }
   const take=n>=38?rows:rows.slice(-n);
   if(!take.length)return null;
+  /* ---- recency and season weighting ----
+     A window that treats a match from August 2025 as equal evidence to one
+     played last Saturday is the wrong shape once results start arriving. Each
+     appearance therefore carries a weight:
+
+       this season  SEASON_W x 0.5^(appsAgo / HALF_LIFE)
+       last season  1, faded down as this season accrues
+
+     Two deliberate constraints. The decay runs over THIS SEASON'S appearances
+     only, and last season's rows stay flat: fading a last-season-only history
+     would move every pre-season projection, and the published GW1-8 reference
+     set is a pre-GW1 snapshot that must not shift. And the last-season fade is
+     a function of how many matches this season actually has, so at zero it is
+     exactly 1. Together these make the whole block inert until a ball is
+     kicked -- identical numbers, by construction, not by luck.
+
+     Counts (apps, mins, starts, goals) stay raw: they are used as evidence
+     gates -- wd.apps>=8, wq.mins>600 -- and weighting them would silently move
+     the thresholds. Only rates are weighted. */
+  const SEASON_W=2.0, HALF_LIFE=6, LAST_FLOOR=0.35, FADE_OVER=12;
+  const nowRows=take.filter(r=>r.tag==="now");
+  const nowApps=nowRows.filter(r=>r.mins>0).length;
+  const lastW=1-(1-LAST_FLOOR)*clamp(nowApps/FADE_OVER,0,1);
+  const nowIdx=new Map();
+  nowRows.forEach((r,i)=>nowIdx.set(r,nowRows.length-1-i));   // 0 = most recent
+  const wt=r=>r.tag==="now"
+    ? SEASON_W*Math.pow(0.5,(nowIdx.get(r)||0)/HALF_LIFE)
+    : lastW;
+
   const sum=k=>take.reduce((a,r)=>a+(r[k]||0),0);
+  const wsum=(k,rs)=>(rs||take).reduce((a,r)=>a+wt(r)*(r[k]||0),0);
   const mins=sum("mins");
-  const per90=k=>mins>0?sum(k)*90/mins:0;
+  const wMins=wsum("mins");
+  /* weighted per 90: weighted total over weighted minutes, so a heavily
+     weighted match raises the numerator and denominator together */
+  const per90=k=>wMins>0?wsum(k)*90/wMins:0;
   const apps=take.length;
   /* start_min is 0 both for a player who kicked off and for one who never came
      on, so a start only counts when he actually played. */
   const played=take.filter(r=>r.mins>0);
   const starts=played.filter(r=>r.start===0).length;
+  /* weighted share of a filtered subset, e.g. how often the DefCon threshold
+     was cleared, counting recent matches for more */
+  const wShare=(rs,ok)=>{const tot=rs.reduce((a,r)=>a+wt(r),0);
+    return tot>0?rs.filter(ok).reduce((a,r)=>a+wt(r),0)/tot:0;};
+  const played60=take.filter(r=>r.mins>=60);
+  const wPlayed=played.reduce((a,r)=>a+wt(r),0);
+  const wAll=take.reduce((a,r)=>a+wt(r),0);
   return{
     apps:played.length,mins,starts,
-    startPct:played.length?starts/played.length:0,
-    minsPerApp:apps?mins/apps:0,
+    startPct:wPlayed>0?wShare(played,r=>r.start===0):0,
+    minsPerApp:wAll>0?wMins/wAll:0,
     g:sum("g"),a:sum("a"),
     xg90:per90("xg"),xa90:per90("xa"),
-    npxg90:mins>0?(sum("xg")-sum("pens")*0.79)*90/mins:0,
+    npxg90:wMins>0?(wsum("xg")-wsum("pens")*0.79)*90/wMins:0,
     sh90:per90("sh"),sot90:per90("sot"),
     cc90:per90("cc"),box90:per90("box"),f390:per90("f3"),drb90:per90("drb"),
     aer90:per90("aer"),bcm:sum("bcm"),
     dc90:per90("dc"),cbit90:per90("cbit"),
     /* how often he actually clears the DefCon threshold, not his average */
-    dcHit:(()=>{const el=take.filter(r=>r.mins>=60);if(!el.length)return 0;
-      return el.filter(r=>r.dc>=(S._dcThresh||10)).length/el.length;})(),
-    sv90:per90("sv"),gc90:per90("gc"),xgot90:per90("xgot"),gp:sum("gp"),
+    dcHit:wShare(played60,r=>r.dc>=(S._dcThresh||10)),
+    sv90:per90("sv"),gc90:per90("gc"),xgot90:per90("xgot"),
+    gp:sum("gp"),gp90:per90("gp"),
     cs:take.filter(r=>r.mins>=60&&r.tgc===0).length,
-    csRate:(()=>{const el=take.filter(r=>r.mins>=60);return el.length?el.filter(r=>r.tgc===0).length/el.length:0;})()
+    csRate:wShare(played60,r=>r.tgc===0)
   };
 }
 /* cache, because the table recomputes on every render */
@@ -1041,10 +1081,22 @@ function buildModel(){
     /* Shrink a rate toward the prior in proportion to how much evidence backs
        it, rather than switching abruptly at 900 minutes. A player with 450
        minutes keeps roughly two-thirds of his own rate instead of half. */
-    const pick=(a,b,fb,lim)=>{const cur=num(a);let v;
+    /* This season's rate takes over smoothly rather than at a cliff. The old
+       rule ignored this season entirely below 270 minutes whenever a player
+       had last-season data, then switched to this-season-only in one step --
+       so a striker three games into a hot run was still being projected off
+       last May until his fourth start. NOW_FULL is where this season carries
+       the rate outright; below it the two blend.
+       At mins=0 the ramp is 0 and cur is 0, so this returns the prior exactly
+       as before: pre-season projections, and the published GW1-8 reference
+       set, are untouched. */
+    const NOW_FULL=250;
+    const pick=(a,b,fb,lim)=>{const cur=num(a);
       const rel=clamp(lastMins/(lastMins+420),0,0.95);
-      if(cur>0&&mins>270)v=cur;
-      else{const y=L?num(b):0;v=y>0?(y*rel+fb*(1-rel)):(cur>0?cur*.6+fb*.4:fb);}
+      const y=L?num(b):0;
+      const prior=y>0?(y*rel+fb*(1-rel)):fb;
+      const nowTrust=cur>0?clamp(mins/NOW_FULL,0,1):0;
+      const v=cur>0?cur*nowTrust+prior*(1-nowTrust):prior;
       return lim?clamp(v,0,lim):v;};
     const posPrior={1:0,2:.06,3:.16,4:.34}[p.pos]||.15;
     const xg90=pick(s.expected_goals_per_90,L&&L.expected_goals_per_90,posPrior*(price/8),{1:.05,2:.35,3:.9,4:1.3}[p.pos]);
@@ -1060,7 +1112,7 @@ function buildModel(){
       if(wd&&!wd.estimated&&wd.apps>=8)dcHitRate=clamp(wd.dcHit,0,0.85);}
     let gpRate=0;
     if(p.pos===1){const wq=ws(String(p.code||""),1,38,price,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100);
-      if(wq&&wq.mins>600)gpRate=clamp((wq.gp/(wq.mins/90))*0.35,-0.3,0.3);}
+      if(wq&&wq.mins>600)gpRate=clamp(wq.gp90*0.35,-0.3,0.3);}
     const bonus90=mins>180?num(s.bonus)*90/mins:(L&&num(L.minutes)>500?num(L.bonus)*90/num(L.minutes):.15);
     const penOrder=num(s.penalties_order)||99;
     const setOrder=Math.min(num(s.corners_and_indirect_freekicks_order)||99,num(s.direct_freekicks_order)||99);

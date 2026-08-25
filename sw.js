@@ -3,7 +3,7 @@
    dropped connection. Deliberately network-first for the page itself, so a new
    version published to GitHub Pages is picked up on the next load rather than
    being pinned to a stale cache. */
-const CACHE = "fpl-edge-v9.3.2";
+const CACHE = "fpl-edge-v9.3.3";
 const SHELL = [
   "./",
   "./index.html",
