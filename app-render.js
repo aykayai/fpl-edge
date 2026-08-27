@@ -940,6 +940,18 @@ function chipsHTML(){
     const mine=myScore(g,weeks);
     const delta=t?t.total-mine:0;
     const label=kind==="wildcard"?`GW${g}–${Math.min(38,g+4)} average`:`GW${g}`;
+    /* Free Hit is a single-week team, so once that week's actuals land we can show
+       what it really scored. Wildcard spans five weeks, so a one-week actual would
+       be misleading there — deliberately Free Hit only. */
+    const showActual=kind==="freehit";
+    const actualOf=p=>{const f=S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]);
+      const v=f?(f[g]??f[String(g)]):null;return v==null?null:+v;};
+    let actualTotal=null;
+    if(showActual&&t){
+      const vals=t.xi.map(actualOf);
+      if(vals.some(v=>v!=null))
+        actualTotal=vals.reduce((a,v)=>a+(v||0),0)+(t.cap?(actualOf(t.cap)||0):0);
+    }
     return `<div class="panel">
       <div class="phead"><h2>${title}</h2>
         <span style="text-align:right">
@@ -955,11 +967,14 @@ function chipsHTML(){
             return `<button class="chipbtn ${form===k?"on":""}" onclick="act('${formKey}','${k}')">${k}</button>`;}).join("")}
         </div>
         ${t?`<p class="note" style="margin:8px 0 0">${t.total.toFixed(1)} projected · £${t.value.toFixed(1)} of £${budget.toFixed(1)} · bench £${t.benchValue.toFixed(1)}</p>`:""}
+        ${actualTotal!=null?`<p style="margin:6px 0 0;font-size:12.5px;color:var(--cream)">
+          <b style="font-family:'Barlow Condensed',sans-serif;font-size:19px;color:var(--mint)">${actualTotal.toFixed(0)}</b> actual ·
+          <span style="color:${actualTotal-t.total>=0?"var(--mint)":"var(--red)"};font-weight:700">${actualTotal-t.total>=0?"+":""}${(actualTotal-t.total).toFixed(1)}</span> vs projected</p>`:""}
       </div>
       ${t?`<div class="pitch">${[1,2,3,4].map(pos=>{const r=t.xi.filter(p=>p.pos===pos);
-        return r.length?`<div class="row">${r.map(p=>chipCard(p,t)).join("")}</div>`:"";}).join("")}</div>
+        return r.length?`<div class="row">${r.map(p=>chipCard(p,t,showActual)).join("")}</div>`:"";}).join("")}</div>
         <div class="benchbar"><div class="lb">Bench</div>
-          <div class="row">${t.bench.map(p=>chipCard(p,t)).join("")}</div></div>`
+          <div class="row">${t.bench.map(p=>chipCard(p,t,showActual)).join("")}</div></div>`
         :`<div class="pbody"><p class="note">Not enough data for this gameweek.</p></div>`}
     </div>`;
   };
@@ -969,6 +984,22 @@ function chipsHTML(){
     freehit:"Biggest gap between your XI and the best available",
     bboost:"Week your four substitutes score most",
     "3xc":"Week your best player has his highest single score"};
+  /* Detail shown on the orange locked line, computed fresh for the week actually
+     chosen (chipPlan only pre-computes the top three recommended weeks). */
+  const fixOf=(p,e)=>{const f=p.gw[e]?.fixtures?.[0];return f?`${f.opp} (${f.home?"H":"A"})`:"no fixture";};
+  const lockedDetail=(k,e)=>{
+    const kind=chipKind(k), sp=squadPlayers();
+    if(!sp.length)return "";
+    if(kind==="3xc"){
+      const top=[...sp].sort((a,b)=>(b.gw[e]?.pts||0)-(a.gw[e]?.pts||0))[0];
+      return top?`${esc(top.web_name)} · ${esc(fixOf(top,e))}`:"";
+    }
+    if(kind==="bboost"){
+      const w=weekScore(sp,e);
+      return orderBench(w.bench).map(p=>`${esc(p.web_name)} (${esc(fixOf(p,e))})`).join(", ");
+    }
+    return "";                                   // wildcard and free hit: week + uplift only
+  };
   const chipRow=(k,n)=>{
     const plan=chipPlan(k)||[], locked=S.chips[k], hist=CHIP_HISTORY[chipKind(k)];
     const isHalf2=k.endsWith("2");
@@ -977,13 +1008,14 @@ function chipsHTML(){
     const all=chipAllWeeks(k);
     const max=Math.max(0.1,...Object.values(all));
     const best=plan[0];
+    const det=locked?lockedDetail(k,locked):"";
     return `<div class="chipblock">
       <div class="chiphead">
         <span><span class="chipname">${n}</span>
           <span class="note" style="margin-left:8px">${esc(basis[chipKind(k)])}</span></span>
         <span class="note">you average ${hist.toFixed(1)}</span></div>
       ${locked?`<div class="chiplocked">
-        <span><b>GW${locked}</b> selected${byWeek[locked]!=null||all[locked]!=null?` · projected +${(all[locked]||0).toFixed(1)} pts`:""}</span>
+        <span>GW${locked}${det?` · ${det}`:""} · +${(all[locked]||0).toFixed(1)} pts</span>
         <button onclick="act('clearchip','${k}')">Clear</button></div>`
         :best?`<div class="chipbest">Best week — <b>GW${best.e}</b>, +${best.up.toFixed(1)} pts${best.note?` · ${esc(best.note)}`:""}</div>`:""}
       <div class="tl">
@@ -992,22 +1024,24 @@ function chipsHTML(){
           const isBest=best&&best.e===e, isSel=locked===e;
           return `<button class="tlweek ${isSel?"sel":""} ${isBest&&!isSel?"best":""}"
             onclick="act('setchip','${k}',${e})" title="GW${e} · +${v.toFixed(1)} pts">
+            <span class="tlval">${v>=0.05?"+"+v.toFixed(1):""}</span>
             <span class="tlbar" style="height:${h}px"></span>
             <span class="tlnum">${e}</span></button>`;}).join("")}
       </div></div>`;
   };
-  const set=[["wildcard","Wildcard"],["freehit","Free Hit"],["3xc","Triple Captain"],["bboost","Bench Boost"]];
+  /* Two per row: Wildcard + Bench Boost, then Free Hit + Triple Captain */
+  const set=[["wildcard","Wildcard"],["bboost","Bench Boost"],["freehit","Free Hit"],["3xc","Triple Captain"]];
   const halfPanel=hf=>`<div class="panel">
       <div class="phead" style="cursor:pointer" onclick="act('chiphalf',${hf})">
         <h2 style="${openHalf===hf?"color:var(--mint)":""}">${hf===1?"First half · GW1–19":"Second half · GW20–38"}</h2>
         <span class="note">${hf===1?"expire 2 Jan, 13:30 GMT":"reset at GW20"} ${openHalf===hf?"▲":"▼"}</span></div>
-      ${openHalf===hf?set.map(([k,n])=>chipRow(k+hf,n)).join(""):""}</div>`;
+      ${openHalf===hf?`<div class="chipgrid2">${set.map(([k,n])=>chipRow(k+hf,n)).join("")}</div>`:""}</div>`;
 
   return `<div class="sqgrid">
       <div class="${S.chipView==="wc"?"hideSm":""}">${sqCard("freehit","Free Hit team",
         "One week only, so every penny goes into the XI and the bench is fodder.","fhForm")}</div>
       <div class="${S.chipView==="fh"||!S.chipView?"hideSm":""}">${sqCard("wildcard","Wildcard squad",
-        "A squad you keep — judged across the next five gameweeks, with a bench that can actually play.","wcForm")}</div>
+        "Judged across the next 5 gameweeks, with a playable bench.","wcForm")}</div>
     </div>
     <div class="sqtoggle">
       <button class="${(S.chipView||"fh")==="fh"?"on":""}" onclick="act('chipview','fh')">Free Hit</button>
@@ -1034,26 +1068,35 @@ function chipAllWeeks(kind){
   }
   return out;
 }
-function chipCard(p,t){
+function chipCard(p,t,showActual){
   const g=VG();
   const v=t.val(p), isC=t.cap&&t.cap.id===p.id;
   const q=p.gw[g]||{fixtures:[]};
   const[bg,fg,elite]=ptsCol(v*(isC?2:1));
   const f0=q.fixtures[0];
   const own=(S.squad||[]).includes(p.id);
+  const proj=v*(isC?2:1);
+  /* Free Hit only: actual points for this gameweek once the live feed has them,
+     captain-multiplied the same way as the projection so they compare like for like. */
+  const feed=showActual&&S.playerActuals?(S.playerActuals[p.id]||S.playerActuals[String(p.id)]):null;
+  const raw=feed?(feed[g]??feed[String(g)]):null;
+  const hasActual=raw!=null;
+  const act1=hasActual?(+raw)*(isC?2:1):null;
+  const diff=hasActual?act1-proj:null;
   return `<div class="card">
     <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
       ${isC?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)">C</span>`:""}
       ${own?`<span class="badge" style="top:-2px;right:2px;background:var(--mint);color:var(--ink)">✓</span>`:""}</div>
     <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
     <div class="ptsbar" style="background:${bg};color:${fg};${elite?"box-shadow:0 0 0 2px var(--cyan) inset":""}">
-      <div class="pv">${(v*(isC?2:1)).toFixed(1)}</div>
+      <div class="pv">${hasActual?act1.toFixed(1):proj.toFixed(1)}</div>
+      ${hasActual?`<div class="pv2">proj ${proj.toFixed(1)} <span style="font-weight:700;color:${diff>=0?"#0f5132":"#7a1f1f"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`:""}
       <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
-    <div class="cardsigs">${sigHTML(p,g)}</div>
     <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
       if(!w||w.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
       const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
-      h+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}">${esc(f.opp.slice(0,3))}</span>`;}return h;})()}</div></div>`;
+      h+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}">${esc(f.opp.slice(0,3))}</span>`;}return h;})()}</div>
+    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }
 
 function itemHTML(n,score){

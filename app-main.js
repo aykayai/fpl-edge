@@ -199,11 +199,15 @@ function act(k,a,b){
       toast("Line-up, captain and vice optimised — "+weekPts().toFixed(1)+" pts");break;}
     case"cancelopt":S.pendingOpt=null;break;
     case"achip":{
-      /* assign or clear the chip for the gameweek being viewed */
+      /* Assign or clear the chip for the gameweek being viewed. Only the schedule
+         (S.chips) is written — "which chip is live" is derived from the schedule
+         plus the viewed gameweek via chipForWeek(), so the Planner and the Chips
+         page can never disagree, and browsing to another week can't leave a stale
+         chip applied. */
       const w=VG(), half=w>=20?"2":"1", next={...S.chips};
       ["bboost","3xc","freehit","wildcard"].forEach(k=>{if(next[k+half]===w)delete next[k+half];});
       if(a!=="none")next[a+half]=w;
-      S.chips=next;S.activeChip=a==="none"?null:a;saveState();break;}
+      S.chips=next;saveState();break;}
     case"save":{if(S.bank<-0.001){toast("You're £"+Math.abs(S.bank).toFixed(1)+" over budget — sell someone first");break;}
       S.original=S.squad;saveState();toast("Squad saved");break;}
     case"reset":{resolveSeed(true);S.flagged=[];S.pendingOpt=null;
@@ -217,7 +221,7 @@ function act(k,a,b){
     case"setchip":S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;
     case"clearchip":{const c={...S.chips};delete c[a];S.chips=c;saveState();break;}
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
-    case"fixgw":S.fixGW=clamp(+a,S.model.next.id,38);break;
+    case"fixgw":S.fixGW=clamp(+a,1,38);break;
     case"fixsort":if((S.fixSort||"d5")===a)S.fixDir=(S.fixDir||"asc")==="asc"?"desc":"asc";
       else{S.fixSort=a;S.fixDir="asc";}break;
     case"fixmode":S.fixMode=a;break;
@@ -263,8 +267,8 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
 (function(){
   const st=LS.get("state");
   if(st&&st.v===STATE_VERSION){Object.assign(S,{squad:st.squad,original:st.original,captain:st.captain,
-    vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null,
-    activeChip:st.activeChip||null});S.seeded=!!(st.squad&&st.squad.length);}
+    vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null
+    });S.seeded=!!(st.squad&&st.squad.length);}
   applyLearning();
   /* Not defaulted to a key: this file is public on GitHub Pages, and a free-tier
      key committed to a public repo gets scraped and its quota drained. Entered

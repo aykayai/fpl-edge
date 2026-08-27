@@ -53,7 +53,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="9.4.1";
+const APP_VERSION="10.0.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -181,7 +181,7 @@ const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n;};
 /* ---------- state ---------- */
 const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
- flagged:[],benchOrder:null,bank:0,ft:1,chips:{},activeChip:null,horizon:1,tab:"squad",
+ flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
  news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",

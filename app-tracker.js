@@ -22,6 +22,13 @@ const trkChange=or=>(or||[]).map((r,i)=>i===0?null:or[i-1]-r);   // + = climbed 
 const trkRank=n=>n==null?"—":Math.round(n).toLocaleString("en-GB");
 const trkNum=(n,d=0)=>n==null?"—":(+n).toFixed(d);
 const trkSigned=n=>n==null?"—":(n>0?"+":"")+Math.round(n).toLocaleString("en-GB");
+/* Compact forms for the historical stat cards specifically — GW Rank/OR Rank/Rank
+   Change run up to 8-10 digits, far wider than every other stat in the set, which
+   is why row 2 of the card grid used to look stretched next to rows 1 and 3 (each
+   card's table sizes its own columns from its own content). Compacting these three
+   to "6.8M"/"975k" keeps every card's numbers a similar width. */
+const trkCompact=n=>n==null?"—":(Math.abs(n)>=1e6?(n/1e6).toFixed(2)+"M":Math.abs(n)>=1000?Math.round(n/1000)+"k":Math.round(n).toLocaleString("en-GB"));
+const trkCompactSigned=n=>n==null?"—":(n>0?"+":"")+trkCompact(n);
 
 /* series for a stat within one season (rankChange derived) */
 function trkSeries(season,key){
@@ -36,9 +43,9 @@ function trkAll(key){
 
 const TSTATS=[
   {key:"points",     name:"GW Pts",      dir:"hi", fmt:n=>trkNum(n,1)},
-  {key:"gwRank",     name:"GW Rank",     dir:"lo", fmt:trkRank},
-  {key:"orRank",     name:"OR Rank",     dir:"lo", fmt:trkRank},
-  {key:"rankChange", name:"Rank Change", dir:"hi", fmt:trkSigned},
+  {key:"gwRank",     name:"GW Rank",     dir:"lo", fmt:trkCompact},
+  {key:"orRank",     name:"OR Rank",     dir:"lo", fmt:trkCompact},
+  {key:"rankChange", name:"Rank Change", dir:"hi", fmt:trkCompactSigned},
   {key:"transferDiff",name:"Transfer Pts",dir:"hi",fmt:trkSigned,noChart:true},
   {key:"captain",    name:"Captain Pts", dir:"hi", fmt:n=>trkNum(n,1)}
 ];
@@ -68,7 +75,8 @@ function trkHistoryHTML(){
     const allBest=trkBandVal(all,"best",st.dir);              // the single best-ever value
     return `<div class="tcard2" style="--acc:${acc}">
       <div class="tcard2-h">${st.name}</div>
-      <table class="tmini"><thead><tr><th></th>
+      <table class="tmini"><colgroup><col style="width:22%"><col style="width:26%"><col style="width:26%"><col style="width:26%"></colgroup>
+        <thead><tr><th></th>
         <th class="tnow">This yr</th><th>Last</th><th>All-time</th></tr></thead><tbody>
       ${bands.map(([b,lbl])=>{
         const av=trkBandVal(all,b,st.dir);
@@ -197,16 +205,16 @@ function trkTableHTML(){
 
 /* ---------- chips ---------- */
 function trkChipHTML(){
-  const c=TRACKER_HISTORY.chips,cur=(S.tracker&&S.tracker.chips)||null;
+  const c=TRACKER_HISTORY.chips,cur=(S.tracker&&S.tracker.chips)||{};
   const cell=v=>v==null?`<td style="color:var(--ink3)">—</td>`
     :`<td style="color:${v>0?"var(--mint)":v<0?"var(--red)":"var(--cream)"}">${v>0?"+":""}${v}</td>`;
-  const head=`<th>Chip</th>${cur?`<th>2027</th>`:""}${c.labels.map(l=>`<th>${l}</th>`).join("")}`;
+  const head=`<th>Chip</th><th style="color:var(--mint)">2027</th>${c.labels.map(l=>`<th>${l}</th>`).join("")}`;
   const rows=Object.keys(c.rows).map(name=>
-    `<tr><td>${name}</td>${cur?cell(cur[name]==null?null:cur[name]):""}${c.rows[name].map(cell).join("")}</tr>`).join("");
+    `<tr><td>${name}</td>${cell(cur[name]??null)}${c.rows[name].map(cell).join("")}</tr>`).join("");
   return `<div class="panel"><div class="phead"><h2>Chip performance</h2>
       <span class="note">points gained vs an average week</span></div>
     <div class="scroll"><table class="trktable"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
-    ${cur?"":`<div class="pbody"><p class="note" style="margin:0">This season's chip returns (2027) drop into the first column once you use a chip and the feed is connected.</p></div>`}</div>`;
+    <div class="pbody"><p class="note" style="margin:0">2027 column fills in as each chip gets used this season.</p></div></div>`;
 }
 
 /* ---------- career finishes (official FPL season data) ---------- */
@@ -220,23 +228,42 @@ const TRACKER_FINISHES=[
   ["2007/08",2034,126732,8],["2006/07",1746,187513,15]
 ];
 function trkFinishesHTML(){
-  const bestPct=Math.min(...TRACKER_FINISHES.map(r=>r[3]));
-  const bestPts=Math.max(...TRACKER_FINISHES.map(r=>r[1]));
-  const rows=TRACKER_FINISHES.map(([s,pts,rank,pct])=>
-    `<tr><td>${s}</td>
-      <td${pts===bestPts?' class="tbest"':""}>${pts.toLocaleString("en-GB")}</td>
-      <td>${rank.toLocaleString("en-GB")}</td>
-      <td${pct===bestPct?' class="tbest"':""}>${pct}%${pct===bestPct?' <span class="tstar">★</span>':""}</td></tr>`).join("");
+  const rows0=TRACKER_FINISHES.map(([s,pts,rank,pct])=>({
+    s,pts,rank,pct,
+    avgWk:pts/38,
+    /* Total Players derived from rank and finish % — pct = rank/totalPlayers*100 */
+    totalPlayers:Math.round(rank/(pct/100))
+  }));
+  const bestPct=Math.min(...rows0.map(r=>r.pct));
+  const bestPts=Math.max(...rows0.map(r=>r.pts));
+  const avg=(k)=>rows0.reduce((s,r)=>s+r[k],0)/rows0.length;
+
+  const rows=rows0.map(r=>
+    `<tr><td>${r.s}</td>
+      <td${r.pts===bestPts?' class="tbest"':""}>${r.pts.toLocaleString("en-GB")}</td>
+      <td>${r.avgWk.toFixed(1)}</td>
+      <td>${r.rank.toLocaleString("en-GB")}</td>
+      <td>${r.totalPlayers.toLocaleString("en-GB")}</td>
+      <td${r.pct===bestPct?' class="tbest"':""}>${r.pct}%${r.pct===bestPct?' <span class="tstar">★</span>':""}</td></tr>`).join("");
+
+  const avgRow=`<tr class="trkavg"><td>Average</td>
+      <td>${avg("pts").toFixed(0)}</td>
+      <td>${avg("avgWk").toFixed(1)}</td>
+      <td>${Math.round(avg("rank")).toLocaleString("en-GB")}</td>
+      <td>${Math.round(avg("totalPlayers")).toLocaleString("en-GB")}</td>
+      <td>${avg("pct").toFixed(1)}%</td></tr>`;
+
   return `<div class="panel"><div class="phead"><h2>Career finishes</h2>
       <span class="note">official FPL · net of hits</span></div>
     <div class="scroll tallscroll"><table class="trktable"><thead><tr>
-      <th>Season</th><th>Points</th><th>Overall rank</th><th>Finish</th></tr></thead>
-      <tbody>${rows}</tbody></table></div></div>`;
+      <th>Season</th><th>Points</th><th>Avg/wk</th><th>Overall rank</th><th>Total players</th><th>Finish</th></tr></thead>
+      <tbody>${avgRow}${rows}</tbody></table></div></div>`;
 }
 
 function trackerHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
   return trkSummaryHTML()+trkTableHTML()+
     `<div class="trkband-title">Historical performance · ★ = best ever · shaded column = this season</div>`+
-    trkHistoryHTML()+trkChartHTML()+trkFinishesHTML()+trkChipHTML();
+    trkHistoryHTML()+trkChartHTML()+
+    `<div class="trkrow2">${trkFinishesHTML()}${trkChipHTML()}</div>`;
 }

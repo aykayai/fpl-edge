@@ -159,7 +159,7 @@ const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
 
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
-  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,forceXI:S.forceXI,activeChip:S.activeChip,benchOrder:S.benchOrder,replacedBy:S.replacedBy});}
+  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy});}
 function resolveSeed(quiet){
   if(!S.model)return;
   const used=new Set(),ids=[],miss=[];
@@ -600,7 +600,8 @@ function cardHTML(p,bench){
   const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
   const isC=S.captain===p.id,isV=S.vice===p.id,fl=S.flagged.includes(p.id);
 
-  const shownPts=hPts(p,g,S.horizon)*(isC?(S.activeChip==="3xc"?3:2):1);
+  const chipNow=chipForWeek(g);
+  const shownPts=hPts(p,g,S.horizon)*(isC?(chipNow==="3xc"?3:2):1);
   const col=ptsCol(shownPts/Math.max(1,S.horizon));
   const bg=col[0], fg=col[1], elite=col[2]==="elite";
   /* Actual points for this specific gameweek — only present once the live-actuals
@@ -609,7 +610,7 @@ function cardHTML(p,bench){
   const feedGW=(S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]))||null;
   const actualRaw=feedGW?feedGW[g]??feedGW[String(g)]:null;
   const hasActual=actualRaw!=null;
-  const actualShown=hasActual?actualRaw*(isC?(S.activeChip==="3xc"?3:2):1):null;
+  const actualShown=hasActual?actualRaw*(isC?(chipNow==="3xc"?3:2):1):null;
   const diff=hasActual?actualShown-shownPts:null;
   /* The model only projects forward from the current gameweek, so a past week
      with no live-actuals data yet has no real number to show — the naive shownPts
@@ -707,7 +708,8 @@ function compareHTML(){
   const card=p=>{
     const q=p.gw[g]||{fixtures:[],pts:0};
     const isC=C.captain===p.id;
-    const[bg,fg]=ptsCol(q.pts*(isC?2:1));
+    const noHistData=g<S.model.next.id&&!p.gw[g];
+    const[bg,fg]=noHistData?["var(--ink3)","var(--mute)"]:ptsCol(q.pts*(isC?2:1));
     const f0=q.fixtures[0];
     return `<div class="card">
       <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
@@ -718,8 +720,8 @@ function compareHTML(){
         <button class="badge" style="top:-2px;right:2px;background:${(C.flagged||[]).includes(p.id)?"var(--mint)":"var(--ink3)"};color:${(C.flagged||[]).includes(p.id)?"var(--ink)":"var(--cream)"}"
           onclick="act('cflag',${p.id})">✕</button></div>
       <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
-      <div class="ptsbar" style="background:${bg};color:${fg}"><div class="pv">${(q.pts*(isC?2:1)).toFixed(1)}</div>
-        <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
+      <div class="ptsbar" style="background:${bg};color:${fg}"><div class="pv">${noHistData?"—":(q.pts*(isC?2:1)).toFixed(1)}</div>
+        <div class="fx">${noHistData?`no data for GW${g}`:(f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture")}</div></div>
       <div class="cardsigs">${sigHTML(p,g)}</div>
     <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w2=p.gw[e];
         if(!w2||w2.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
@@ -778,7 +780,7 @@ function dashData(){
       if(taken>=mine.length)break;
       if(p.price>budget-(mine.length-taken-1)*3.9)continue;
       if((club[p.team]||0)>=3)continue;
-      club[p.team]=(club[p.team]||0)+1;best+=p.gw[g].pts;budget-=p.price;taken++;}
+      club[p.team]=(club[p.team]||0)+1;best+=p.gw[g]?.pts||0;budget-=p.price;taken++;}
     strength[pos]={got,best,pct:best>0?clamp(got/best,0,1):0,n:mine.length};
   });
   /* five-week fixture outlook for the XI */
