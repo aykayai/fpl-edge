@@ -104,12 +104,19 @@ function fromTotals(mk){
 /* every priced fixture, reduced to what matters for FPL */
 function oddsFixtures(){
   const findTeam=clubFromName;
+  /* Player-prop markets (goalscorer, assists, cards) live on the fixture
+     independently of whether Correct Score or the Match Winner market happened
+     to parse — they used to be dropped together, silently discarding real player
+     data whenever the goal-expectancy side failed. Only fixtures where NEITHER
+     team could be identified are truly useless and dropped; everything else is
+     kept with goals:null, and callers that specifically need expected-goals data
+     (Attack, Defence, the clean-sheet/keeper panels) check for that themselves. */
   return (S.odds||[]).map(ev=>{
     const mk=marketsFor(ev);
-    const goals=fromCorrectScore(mk)||fromTotals(mk);
-    if(!goals)return null;
-    return{ev,mk,goals,ht:findTeam(ev.home),at:findTeam(ev.away),
-      home:ev.home,away:ev.away,date:ev.commence||ev.date};
+    const ht=findTeam(ev.home), at=findTeam(ev.away);
+    if(!ht&&!at)return null;
+    const goals=fromCorrectScore(mk)||fromTotals(mk)||null;
+    return{ev,mk,goals,ht,at,home:ev.home,away:ev.away,date:ev.commence||ev.date};
   }).filter(Boolean);
 }
 /* player prices, keyed to our own player records */
@@ -172,8 +179,8 @@ function marketPoints(p,rec,fx){
     else if(rec.ret&&rec.goal)pts+=Math.max(0,rec.ret-rec.goal)*3;
     if(rec.card)pts-=rec.card*1;
   }
-  if(fx&&p.pos<=3){
-    const mine=fx.ht&&fx.ht.id===p.team, theirs=mine?fx.goals.csHome:fx.goals.csAway;
+  if(fx&&fx.goals&&p.pos<=3){
+    const mine=fx.ht&&fx.ht.id===p.team;
     const cs=mine?fx.goals.csHome:(fx.at&&fx.at.id===p.team?fx.goals.csAway:0);
     pts+=cs*CS;
     if(p.pos<=2){
@@ -181,7 +188,7 @@ function marketPoints(p,rec,fx){
       pts-=Math.floor(conceded/2)*0.5;
     }
   }
-  if(p.pos===1&&fx){
+  if(p.pos===1&&fx&&fx.goals){
     const shots=(fx.ht&&fx.ht.id===p.team?fx.goals.xgAway:fx.goals.xgHome)*3.4;
     pts+=shots/3*0.6;
   }
@@ -466,17 +473,17 @@ function oddsHTML(){
       <span><span class="note" style="display:block">Market</span>${big(mkt.toFixed(1),"var(--cyan)")}</span>
       <span><span class="note" style="display:block">Difference</span>
         ${big((delta>0?"+":"")+delta.toFixed(1),delta>0.5?"var(--mint)":delta<-0.5?"var(--red)":"var(--cream)")}</span>
-      <span class="note" style="flex:1;min-width:180px">Sorted by disagreement — where the two views differ most is where a second look pays.</span>
+      <span class="note" style="flex:1;min-width:180px">Ordered by position, then price — GK first. The Diff column still flags where model and market disagree most.</span>
     </div>
     <div class="scroll"><table class="sqtable"><thead><tr>
       <th style="text-align:left">Player</th><th style="text-align:right">Model</th>
       <th style="text-align:right">Market</th><th style="text-align:right">Diff</th>
       <th style="text-align:right">Score</th><th style="text-align:right">Assist</th>
       <th style="text-align:right">CS</th><th style="text-align:center">Fixture</th></tr></thead><tbody>
-      ${rows.slice().sort((a,b)=>Math.abs((b.mkt??b.model)-b.model)-Math.abs((a.mkt??a.model)-a.model))
+      ${rows.slice().sort((a,b)=>a.p.pos-b.p.pos||a.p.price-b.p.price)
         .map(r=>{
         const d=r.mkt==null?null:r.mkt-r.model;
-        const cs=r.fx&&r.p.pos<=3
+        const cs=r.fx&&r.fx.goals&&r.p.pos<=3
           ? (r.fx.ht&&r.fx.ht.id===r.p.team?r.fx.goals.csHome:r.fx.goals.csAway) : null;
         const f0=r.p.gw[g]?.fixtures?.[0];
         return `<tr class="${r.start?"":"sub"}">
@@ -496,6 +503,7 @@ function oddsHTML(){
   /* ---- attack ---- */
   const teamAtt=[];
   fixtures.forEach(f=>{
+    if(!f.goals)return;                          // this match's xG didn't parse — nothing to rank
     if(f.ht)teamAtt.push({t:f.ht,xg:f.goals.xgHome,opp:f.at,home:true,f});
     if(f.at)teamAtt.push({t:f.at,xg:f.goals.xgAway,opp:f.ht,home:false,f});});
   teamAtt.sort((a,b)=>b.xg-a.xg);
@@ -531,6 +539,7 @@ function oddsHTML(){
   /* ---- defence ---- */
   const cs=[];
   fixtures.forEach(f=>{
+    if(!f.goals)return;                           // this match's xG didn't parse — nothing to rank
     if(f.ht)cs.push({t:f.ht,p:f.goals.csHome,conc:f.goals.xgAway,opp:f.at,home:true});
     if(f.at)cs.push({t:f.at,p:f.goals.csAway,conc:f.goals.xgHome,opp:f.ht,home:false});});
   cs.sort((a,b)=>b.p-a.p);
