@@ -24,20 +24,21 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Build data/actuals.json
+      - name: Build data/actuals.json and data/rivals.json
         env:
           FPL_ENTRY_ID: "301830"
           FPL_SEASON: "2027"
+          FPL_LEAGUE_ID: "391690"
         run: node scripts/build-actuals.mjs
 
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/actuals.json
+          git add data/actuals.json data/rivals.json
           if git diff --staged --quiet; then
             echo "No change."
           else
-            git commit -m "actuals: refresh $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git commit -m "feeds: refresh $(date -u +'%Y-%m-%d %H:%M UTC')"
             git push
           fi
