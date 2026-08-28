@@ -325,6 +325,17 @@ async function loadOdds(){
             const n=String(m&&m.name||"").trim();if(!n)return;
             S._markets=S._markets||{};
             (S._markets[n]=S._markets[n]||new Set()).add(bk);
+            /* Sample the exact raw shape of one real player-market line once,
+               so if outcomes still don't come through, the cause is visible
+               without needing another guess at the format. Shown in the
+               always-visible "Markets returned" panel, not the failure log —
+               fixtures already parse successfully via team markets, so the
+               failure branch that shows S.oddsLog never actually runs. */
+            if(!S._plSample&&/scorer|to score|assist|player|shots|card|anytime|goalscorer/i.test(n)){
+              const arr=m.odds||m.outcomes||m.prices||m.selections||m.runners||m.lines;
+              if(Array.isArray(arr)&&arr.length)
+                S._plSample=`"${n}" line 1: ${JSON.stringify(arr[0]).slice(0,200)}`;
+            }
           });});});
       if(rows.length&&!S._sampled){S._sampled=true;
         log("keys on row: "+Object.keys(rows[0]||{}).join(", "));}
@@ -350,6 +361,7 @@ async function loadOdds(){
     if(out.length){
       S.oddsMarkets=Object.fromEntries(Object.entries(S._markets||{})
         .map(([k,v])=>[k,[...v]]));
+      S.oddsPlSample=S._plSample||null;
       S.odds=out;S.oddsState="ok";
       LS.set("oddsCache",{t:Date.now(),odds:out});
       buildOddsTeams();buildModel();render();return;
@@ -382,20 +394,37 @@ function normaliseBooks(row){
     markets.forEach(m=>{
       const raw=String(m&&m.name||"").trim();
       const key=MARKET[raw.toLowerCase()]||raw.toLowerCase();
-      const lines=Array.isArray(m&&m.odds)?m.odds:[];
+      /* Where a market's individual price lines live isn't consistent across
+         providers — try every plausible field name rather than assume .odds. */
+      const LINES_FIELDS=["odds","outcomes","prices","selections","runners","lines"];
+      const linesField=LINES_FIELDS.find(f=>Array.isArray(m&&m[f]));
+      const lines=linesField?m[linesField]:[];
       /* A market arrives as an array of lines. Two-sided markets put both
          prices on one line; Correct Score and the player markets put one
          selection per line, so those are merged into a single market rather
-         than discarded for having a lone outcome. */
+         than discarded for having a lone outcome. Each line's own shape also
+         isn't consistent: sometimes the selection name IS the object key
+         (e.g. {"Bukayo Saka":3.5}), sometimes it's an explicit field next to
+         a separate price field (e.g. {name:"Bukayo Saka",price:3.5}) — both
+         are handled so a naming-convention mismatch can't silently mislabel
+         every outcome as the literal word "price". */
+      const NAME_FIELDS=["name","player","selection","runner","outcome","label","participant"];
+      const PRICE_FIELDS=["price","odds","value","decimal","dec"];
       const merged=[];
       lines.forEach(line=>{
         if(!line||typeof line!=="object")return;
         const outcomes=[];
-        Object.entries(line).forEach(([k,v])=>{
-          if(k==="hdp")return;                 // the handicap or total, not a price
-          const price=num(v);
-          if(price)outcomes.push({name:k,price});
-        });
+        const nameField=NAME_FIELDS.find(f=>line[f]!=null);
+        const priceField=PRICE_FIELDS.find(f=>num(line[f]));
+        if(nameField&&priceField){
+          outcomes.push({name:String(line[nameField]),price:num(line[priceField])});
+        }else{
+          Object.entries(line).forEach(([k,v])=>{
+            if(k==="hdp"||k==="updatedAt"||NAME_FIELDS.includes(k)||PRICE_FIELDS.includes(k))return;
+            const price=num(v);
+            if(price)outcomes.push({name:k,price});
+          });
+        }
         if(!outcomes.length)return;
         if(line.hdp!==undefined&&outcomes.length>=2)
           out.push({key,hdp:line.hdp,outcomes,updated:m.updatedAt});
@@ -455,7 +484,10 @@ function oddsHTML(){
     const fx=teamFx[p.team]||null;
     const rec=players[p.id]||null;
     const mkt=(fx||rec)?marketPoints(p,rec,fx):null;
-    return{p,fx,rec,model:p.gw[g]?.pts||0,mkt,start:xi.includes(p)};
+    const model=p.gw[g]?.pts||0;
+    const cs=fx&&fx.goals&&p.pos<=3
+      ? (fx.ht&&fx.ht.id===p.team?fx.goals.csHome:fx.goals.csAway) : null;
+    return{p,fx,rec,model,mkt,cs,d:mkt==null?null:mkt-model,start:xi.includes(p)};
   });
   const capId=S.captain;
   const sum=k=>rows.filter(r=>r.start).reduce((a,r)=>a+(k==="model"?r.model:(r.mkt||0)),0)
@@ -473,31 +505,40 @@ function oddsHTML(){
       <span><span class="note" style="display:block">Market</span>${big(mkt.toFixed(1),"var(--cyan)")}</span>
       <span><span class="note" style="display:block">Difference</span>
         ${big((delta>0?"+":"")+delta.toFixed(1),delta>0.5?"var(--mint)":delta<-0.5?"var(--red)":"var(--cream)")}</span>
-      <span class="note" style="flex:1;min-width:180px">Ordered by position, then price — GK first. The Diff column still flags where model and market disagree most.</span>
+      <span class="note" style="flex:1;min-width:180px">GK first, highest price first by default — click any column to sort by it.</span>
     </div>
     <div class="scroll"><table class="sqtable"><thead><tr>
-      <th style="text-align:left">Player</th><th style="text-align:right">Model</th>
-      <th style="text-align:right">Market</th><th style="text-align:right">Diff</th>
-      <th style="text-align:right">Score</th><th style="text-align:right">Assist</th>
-      <th style="text-align:right">CS</th><th style="text-align:center">Fixture</th></tr></thead><tbody>
-      ${rows.slice().sort((a,b)=>a.p.pos-b.p.pos||a.p.price-b.p.price)
-        .map(r=>{
-        const d=r.mkt==null?null:r.mkt-r.model;
-        const cs=r.fx&&r.fx.goals&&r.p.pos<=3
-          ? (r.fx.ht&&r.fx.ht.id===r.p.team?r.fx.goals.csHome:r.fx.goals.csAway) : null;
+      ${[["name","Player","left"],["model","Model","right"],["mkt","Market","right"],
+         ["d","Diff","right"],["goal","Score","right"],["assist","Assist","right"],
+         ["cs","CS","right"]].map(([k,lbl,align])=>{
+        const on=S.oddsSort===k;
+        return `<th style="text-align:${align};cursor:pointer" onclick="act('oddssort','${k}')">${lbl}${on?(S.oddsSortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("")}
+      <th style="text-align:center">Fixture</th></tr></thead><tbody>
+      ${(()=>{
+        const dir=S.oddsSortDir==="asc"?1:-1;
+        const val={name:r=>r.p.web_name.toLowerCase(),model:r=>r.model,mkt:r=>r.mkt??-1,
+          d:r=>r.d??-999,goal:r=>(r.rec&&r.rec.goal)||-1,assist:r=>(r.rec&&r.rec.assist)||-1,cs:r=>r.cs??-1};
+        const sorted=rows.slice().sort((a,b)=>{
+          if(!S.oddsSort)return a.p.pos-b.p.pos||b.p.price-a.p.price;   // default: GK first, highest price first
+          const va=val[S.oddsSort](a),vb=val[S.oddsSort](b);
+          if(typeof va==="string")return dir*va.localeCompare(vb);
+          return dir*(va-vb);
+        });
+        return sorted.map(r=>{
         const f0=r.p.gw[g]?.fixtures?.[0];
         return `<tr class="${r.start?"":"sub"}">
           <td class="nm"><span style="display:flex;align-items:center;gap:7px">
             ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,20)}
             <span><b>${esc(r.p.web_name)}</b>${r.p.id===capId?'<span class="tag c">C</span>':""}
-            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]}</span></span></span></td>
+            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
           <td class="mono" style="text-align:right;color:var(--mint)">${r.model.toFixed(1)}</td>
           <td class="mono" style="text-align:right;color:${r.mkt==null?"var(--mute)":"var(--cyan)"}">${r.mkt==null?"—":r.mkt.toFixed(1)}</td>
-          <td class="mono" style="text-align:right;font-weight:700;color:${d==null?"var(--mute)":d>0.4?"var(--mint)":d<-0.4?"var(--red)":"var(--cream)"}">${d==null?"—":(d>0?"+":"")+d.toFixed(1)}</td>
+          <td class="mono" style="text-align:right;font-weight:700;color:${r.d==null?"var(--mute)":r.d>0.4?"var(--mint)":r.d<-0.4?"var(--red)":"var(--cream)"}">${r.d==null?"—":(r.d>0?"+":"")+r.d.toFixed(1)}</td>
           <td class="mono" style="text-align:right">${r.rec&&r.rec.goal?pct(r.rec.goal):"—"}</td>
           <td class="mono" style="text-align:right">${r.rec&&r.rec.assist?pct(r.rec.assist):"—"}</td>
-          <td class="mono" style="text-align:right">${cs!=null?pct(cs):"—"}</td>
-          <td style="text-align:center;white-space:nowrap">${f0?fdrPill(f0.opp,f0.home,posDiff(r.p,f0),{short:true}):"—"}</td></tr>`;}).join("")}
+          <td class="mono" style="text-align:right">${r.cs!=null?pct(r.cs):"—"}</td>
+          <td style="text-align:center;white-space:nowrap">${f0?fdrPill(f0.opp,f0.home,posDiff(r.p,f0),{short:true}):"—"}</td></tr>`;}).join("");
+      })()}
     </tbody></table></div></div>`;
 
   /* ---- attack ---- */
@@ -575,7 +616,9 @@ function oddsHTML(){
   const cat=S.oddsMarkets&&Object.keys(S.oddsMarkets).length
     ? `<div class="panel"><div class="phead" style="cursor:pointer" onclick="act('dash','omk')">
         <h2>Markets returned</h2><span class="note">${Object.keys(S.oddsMarkets).length} ${S.dash.omk?"▲":"▼"}</span></div>
-      ${S.dash.omk?`<div class="pbody"><div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${S.dash.omk?`<div class="pbody">
+        ${S.oddsPlSample?`<p class="note mono" style="margin:0 0 8px;font-size:10px;word-break:break-all">Raw sample — ${esc(S.oddsPlSample)}</p>`:""}
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${Object.entries(S.oddsMarkets).sort().map(([n,bks])=>{
           const pl=/scorer|to score|assist|player|shots|card|anytime/i.test(n);
           return `<span class="chipbtn" style="${pl?"border-color:var(--mint);color:var(--mint)":""}"
@@ -883,7 +926,9 @@ function render(){
       <span style="text-align:center">
         <span style="display:block;font-family:'Barlow Condensed';font-weight:700;font-size:18px;letter-spacing:.05em">
           GAMEWEEK ${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span>
-        <span style="display:block;font-size:9.5px;color:var(--mute)">${g===first?"next deadline":`${g-first} week${g-first>1?"s":""} ahead`}${S.horizon>1?` · ${S.horizon}-week total`:""}</span></span>
+        <span style="display:block;font-size:9.5px;color:var(--mute)">${g===first?"next deadline":`${g-first} week${g-first>1?"s":""} ahead`}${S.horizon>1?` · ${S.horizon}-week total`:""}</span>
+        ${(g<first&&S.tracker&&(S.tracker.gw||[]).find(r=>r.event===g&&r.picks&&r.picks.length))
+          ?`<span style="display:block;font-size:8.5px;color:var(--mint)" title="Squad and captain confirmed from the official FPL API. The starting XI/bench split shown is a best estimate — that specific detail isn't in the feed yet.">official squad · GW${g}</span>`:""}</span>
       <button onclick="act('vgw',${Math.min(38,g+1)})" ${g>=38?"disabled style=\"opacity:.35\"":""}>→</button></div>`;
     const chipBarUnused=`<div class="chipzone">
       <span style="font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#9E86C6;font-weight:700;width:100%;text-align:center">Play a chip</span>

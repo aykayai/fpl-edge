@@ -181,7 +181,36 @@ function resolveSeed(quiet){
   saveState();
   if(miss.length&&!quiet)toast("Couldn't match: "+miss.join(", "));
 }
-const squadPlayers=()=>(S.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+/* Captain/multiplier for the currently-viewed historical gameweek, keyed by
+   player id — set as a side effect of squadPlayers() so cardHTML can read who
+   was actually captained without squadPlayers() needing to return copies of
+   the player objects (several call sites compare these by reference, e.g.
+   xi.includes(p), so a spread copy would silently break those checks). */
+let _histCaptain=null,_histSquadActive=false;
+const squadPlayers=()=>{
+  _histCaptain=null;_histSquadActive=false;
+  const g=VG();
+  /* For a gameweek that's already finished, the officially-locked squad — from
+     the FPL API via the live-actuals feed — is the source of truth. S.squad is
+     today's ongoing squad and has no business being reapplied retroactively to
+     a week that's already been played; that mismatch was the root cause of a
+     past gameweek showing the wrong team even though its points were correct
+     (points come from a separately GW-indexed source, the squad list didn't).
+     Falls back to today's squad for the current/future week, or if the feed
+     doesn't have that week yet. */
+  if(S.model&&g<S.model.next.id&&S.tracker&&Array.isArray(S.tracker.gw)){
+    const row=S.tracker.gw.find(r=>r.event===g);
+    if(row&&Array.isArray(row.picks)&&row.picks.length){
+      const list=[];
+      row.picks.forEach(pk=>{
+        const p=S.model.players.find(x=>x.id===pk.id);
+        if(p){list.push(p);if(pk.multiplier>=2)_histCaptain=p.id;}
+      });
+      if(list.length){_histSquadActive=true;return list;}
+    }
+  }
+  return (S.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+};
 function startingXI(){
   const sp=squadPlayers();if(!sp.length)return[];
   const g=VG();
@@ -598,12 +627,10 @@ const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="
 
 function cardHTML(p,bench){
   const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
-  const isC=S.captain===p.id,isV=S.vice===p.id,fl=S.flagged.includes(p.id);
+  const isC=(_histCaptain!=null?_histCaptain===p.id:S.captain===p.id),isV=_histCaptain==null&&S.vice===p.id,fl=S.flagged.includes(p.id);
 
   const chipNow=chipForWeek(g);
   const shownPts=hPts(p,g,S.horizon)*(isC?(chipNow==="3xc"?3:2):1);
-  const col=ptsCol(shownPts/Math.max(1,S.horizon));
-  const bg=col[0], fg=col[1], elite=col[2]==="elite";
   /* Actual points for this specific gameweek — only present once the live-actuals
      feed has that GW. Captain-multiplied the same way as the prediction, so the two
      compare like-for-like (both = "contribution to the squad total"). */
@@ -612,13 +639,20 @@ function cardHTML(p,bench){
   const hasActual=actualRaw!=null;
   const actualShown=hasActual?actualRaw*(isC?(chipNow==="3xc"?3:2):1):null;
   const diff=hasActual?actualShown-shownPts:null;
+  /* The score box colour must follow whichever number is actually displayed —
+     previously it always used the predicted band, so a past week with a real
+     (and possibly good) actual score still coloured itself off a near-zero
+     retrospective prediction, which is why actuals looked permanently red. */
+  const shownVal=hasActual?actualShown:shownPts;
+  const col=ptsCol(shownVal/Math.max(1,S.horizon));
+  const bg=col[0], fg=col[1], elite=col[2]==="elite";
   /* The model only projects forward from the current gameweek, so a past week
      with no live-actuals data yet has no real number to show — the naive shownPts
      would render a misleading "0.0" (and colour it as a bad projection) rather
      than making clear no data exists for that week. */
   const noHistData=g<S.model.next.id&&!p.gw[g]&&!hasActual;
-  const fixTxtHtml=q.fixtures.length?q.fixtures.map(f=>
-    `<span style="${f.home?"":"font-style:italic"}">${esc(f.opp)} (${f.home?"H":"A"})</span>`).join(", "):"No fixture";
+  const fixTxt=q.fixtures.length?q.fixtures.map(f=>
+    `${esc(f.opp)} (${f.home?"H":"A"})`).join(", "):null;
   let n3="";for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
     if(!w||w.blank){n3+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
     const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
@@ -643,10 +677,15 @@ function cardHTML(p,bench){
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
    <div class="ptsbar" style="background:${noHistData?"var(--ink3)":bg};color:${noHistData?"var(--mute)":fg}${elite&&!noHistData?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
-    <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):shownPts.toFixed(1))}</div>
-    ${hasActual?`<div class="pv2">pred ${shownPts.toFixed(1)} <span style="font-weight:700;color:${diff>=0?"#0f5132":"#7a1f1f"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`:""}
-    ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}
-    <div class="fx">${fixTxtHtml}</div></div>
+    <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):shownPts.toFixed(1))}
+      ${hasActual?`<span class="final">FINAL</span>`:""}</div>
+    ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}</div>
+   ${hasActual
+     ?`<div class="fxpill" style="background:var(--ink2);color:var(--mute)">pred ${shownPts.toFixed(1)}
+        <span style="font-weight:700;color:${diff>=0?"var(--mint)":"var(--red)"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`
+     :(fixTxt?(()=>{const f0=q.fixtures[0],[fb,fc]=fdrCol(posDiff(p,f0));
+        return `<div class="fxpill" style="background:${fb};color:${fc};${f0.home?"":"font-style:italic"}">${esc(fixTxt)}</div>`;})()
+     :`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">—</div>`)}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }

@@ -68,23 +68,24 @@ function trkHistoryHTML(){
   };
   const accents={points:"var(--mint)",gwRank:"var(--cyan)",orRank:"var(--amber)",
     rankChange:"#c9a0ff",transferDiff:"#ff9db0",captain:"#ffd76b"};
-  const bands=[["avg","Avg"],["best","Best"],["worst","Worst"]];
+  const bands=[["avg","Average"],["best","Best"],["worst","Worst"]];
   const card=st=>{
     const acc=accents[st.key]||"var(--cyan)";
     const now=curSeries(st.key),last=trkSeries("2026",st.key),all=trkAll(st.key);
-    const allBest=trkBandVal(all,"best",st.dir);              // the single best-ever value
     return `<div class="tcard2" style="--acc:${acc}">
       <div class="tcard2-h">${st.name}</div>
       <table class="tmini"><colgroup><col style="width:22%"><col style="width:26%"><col style="width:26%"><col style="width:26%"></colgroup>
         <thead><tr><th></th>
         <th class="tnow">This yr</th><th>Last</th><th>All-time</th></tr></thead><tbody>
       ${bands.map(([b,lbl])=>{
-        const av=trkBandVal(all,b,st.dir);
-        const isBest=b==="best"&&av!=null&&av===allBest;
-        return `<tr><td class="tmet">${lbl}</td>
-          <td class="tv2 tnow">${st.fmt(trkBandVal(now,b,st.dir))}</td>
-          <td class="tv2">${st.fmt(trkBandVal(last,b,st.dir))}</td>
-          <td class="tv2${isBest?" tbest":""}">${st.fmt(av)}${isBest?' <span class="tstar">★</span>':''}</td></tr>`;
+        const vNow=trkBandVal(now,b,st.dir),vLast=trkBandVal(last,b,st.dir),vAll=trkBandVal(all,b,st.dir);
+        /* Highlight whichever of the three columns is the best outcome for THIS
+           row specifically — every band gets its own highlight, not just "Best". */
+        const cands=[["now",vNow],["last",vLast],["all",vAll]].filter(([,v])=>v!=null);
+        const hi=st.dir==="hi";
+        const bestCol=cands.length?cands.reduce((a,c)=>(hi?c[1]>a[1]:c[1]<a[1])?c:a)[0]:null;
+        const cell=(col,v)=>`<td class="tv2${col==="now"?" tnow":""}${bestCol===col?" thibest":""}">${st.fmt(v)}${bestCol===col?' <span class="tstar">★</span>':''}</td>`;
+        return `<tr><td class="tmet">${lbl}</td>${cell("now",vNow)}${cell("last",vLast)}${cell("all",vAll)}</tr>`;
       }).join("")}
       </tbody></table></div>`;
   };
@@ -96,13 +97,16 @@ function trkChartHTML(){
   let key=S.trkStat||"points";
   if((TSTATS.find(s=>s.key===key)||{}).noChart)key="points";
   const st=TSTATS.find(s=>s.key===key)||TSTATS[0];
-  const seasons=Object.keys(TRACKER_HISTORY.seasons);
-  const PAL=["var(--cream)","var(--cyan)","var(--amber)","#c9a0ff","#ff9db0"];
-  const series=seasons.map((ssn,i)=>({label:ssn,data:trkSeries(ssn,key),color:PAL[i%PAL.length]}))
+  const seasons=Object.keys(TRACKER_HISTORY.seasons);   // numeric keys auto-sort ascending: 2022→2026
+  /* One hue, six shades, light to dark — oldest season lightest, this season
+     (2027) darkest, so recency reads directly from shade depth rather than an
+     arbitrary colour assignment. */
+  const ORANGE_RAMP=["#FFD9B0","#FFB980","#FF9D57","#FF8A3D","#E6672A","#B84413"];
+  const series=seasons.map((ssn,i)=>({label:ssn,data:trkSeries(ssn,key),color:ORANGE_RAMP[i]}))
     .filter(s=>trkClean(s.data).length);
   const cur=(S.tracker&&S.tracker.gw)||null;
   if(cur){const cs=key==="rankChange"?trkChange(cur.map(r=>r.orRank)):cur.map(r=>r[key]);
-    series.push({label:S.tracker.season||"2027",data:cs,color:"var(--mint)"});}
+    series.push({label:S.tracker.season||"2027",data:cs,color:ORANGE_RAMP[5]});}
 
   const all=!!S.trkGwAll;
   const start=all?0:Math.min(Math.max(S.trkGwStart||0,0),30);
@@ -237,9 +241,14 @@ function trkFinishesHTML(){
   const bestPct=Math.min(...rows0.map(r=>r.pct));
   const bestPts=Math.max(...rows0.map(r=>r.pts));
   const avg=(k)=>rows0.reduce((s,r)=>s+r[k],0)/rows0.length;
+  /* Trophies rank the three best seasons by finish % — the season-independent
+     "how well did I actually do" measure, since raw points totals aren't
+     directly comparable across eras with different scoring rules. */
+  const byRank=[...rows0].sort((a,b)=>a.pct-b.pct);
+  const medal=s=>{const i=byRank.indexOf(s);return i===0?"🥇":i===1?"🥈":i===2?"🥉":"";}
 
   const rows=rows0.map(r=>
-    `<tr><td>${r.s}</td>
+    `<tr><td>${r.s} ${medal(r)}</td>
       <td${r.pts===bestPts?' class="tbest"':""}>${r.pts.toLocaleString("en-GB")}</td>
       <td>${r.avgWk.toFixed(1)}</td>
       <td>${r.rank.toLocaleString("en-GB")}</td>
@@ -253,16 +262,48 @@ function trkFinishesHTML(){
       <td>${Math.round(avg("totalPlayers")).toLocaleString("en-GB")}</td>
       <td>${avg("pct").toFixed(1)}%</td></tr>`;
 
+  /* 2027 — the season in progress, shaded to show it's not a completed result yet. */
+  const pending=(S.tracker&&S.tracker.gw&&S.tracker.gw.length)
+    ?{pts:S.tracker.gw.reduce((s,r)=>s+(r.points||0),0),
+      rank:S.tracker.gw[S.tracker.gw.length-1].orRank}:null;
+  const pendingRow=`<tr class="trkpending"><td>2026/27</td>
+      <td>${pending?pending.pts:"—"}</td>
+      <td>${pending?(pending.pts/38).toFixed(1):"—"}</td>
+      <td>${pending?pending.rank.toLocaleString("en-GB"):"—"}</td>
+      <td>—</td><td>—</td></tr>`;
+
   return `<div class="panel"><div class="phead"><h2>Career finishes</h2>
       <span class="note">official FPL · net of hits</span></div>
     <div class="scroll tallscroll"><table class="trktable"><thead><tr>
       <th>Season</th><th>Points</th><th>Avg/wk</th><th>Overall rank</th><th>Total players</th><th>Finish</th></tr></thead>
-      <tbody>${avgRow}${rows}</tbody></table></div></div>`;
+      <tbody>${pendingRow}${rows}${avgRow}</tbody></table></div></div>`;
+}
+
+/* ---------- sub tracker (awaiting feed — see contract in the notes) ---------- */
+function trkSubTrackerHTML(){
+  const rows=(S.tracker&&S.tracker.gw)||[];
+  const withSubs=rows.filter(r=>Array.isArray(r.subs)&&r.subs.length);
+  if(!withSubs.length){
+    return `<div class="panel"><div class="phead"><h2>Sub tracker</h2></div>
+      <div class="pbody"><p class="note" style="margin:0">Automatic substitutions appear here — who came off, who came on, and the points swing — once the feed publishes them.</p></div></div>`;
+  }
+  const rowsHtml=withSubs.flatMap(r=>r.subs.map(s=>{
+    const diff=(s.inPts??0)-(s.outPts??0);
+    return `<tr><td>GW${r.event}</td>
+      <td style="text-align:left">${esc(s.outName||("#"+s.outId))} <span class="note">(${s.outPts??0})</span>
+        <span style="color:var(--mute)">→</span> ${esc(s.inName||("#"+s.inId))} <span class="note">(${s.inPts??0})</span></td>
+      <td style="color:${diff>0?"var(--mint)":diff<0?"var(--red)":"var(--mute)"}">${diff>0?"+":""}${diff}</td></tr>`;
+  })).join("");
+  return `<div class="panel"><div class="phead"><h2>Sub tracker</h2>
+      <span class="note">${withSubs.reduce((a,r)=>a+r.subs.length,0)} automatic substitutions</span></div>
+    <div class="scroll"><table class="trktable"><thead><tr>
+      <th style="text-align:left">GW</th><th style="text-align:left">Substitution</th><th>Points swing</th></tr></thead>
+      <tbody>${rowsHtml}</tbody></table></div></div>`;
 }
 
 function trackerHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
-  return trkSummaryHTML()+trkTableHTML()+
+  return trkSummaryHTML()+trkTableHTML()+trkSubTrackerHTML()+
     `<div class="trkband-title">Historical performance · ★ = best ever · shaded column = this season</div>`+
     trkHistoryHTML()+trkChartHTML()+
     `<div class="trkrow2">${trkFinishesHTML()}${trkChipHTML()}</div>`;
