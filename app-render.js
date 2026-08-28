@@ -517,7 +517,8 @@ function swapCardHTML(m,g){
     <span class="arrow">→</span>
     ${shirtSVG(m.inn.teamName.toUpperCase(),m.inn.pos===1,26)}
     <span class="tp"><span class="n">${esc(m.inn.web_name)}</span>
-      <span class="s" style="display:flex;gap:5px;align-items:center">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${(m.inn.gw[g]?.pts||0).toFixed(1)} xPts ${sigHTML(m.inn,g)}</span></span>
+      <span class="s">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${(m.inn.gw[g]?.pts||0).toFixed(1)} xPts</span>
+      <span style="display:flex;gap:5px;align-items:center;margin-top:3px">${sigHTML(m.inn,g)}</span></span>
     <span class="gain">+${m.gain.toFixed(1)}</span></div>
     <span style="display:flex;gap:6px;margin-top:8px">
       <button style="flex:1" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button>
@@ -528,12 +529,12 @@ function radarHTML(){
   const g=VG();
   const ids=S.radarIds||[null,null,null];
   const search=S.radarSearch||["","",""];
+  /* A position chosen up front (before any player is picked) locks search the
+     same way picking a player used to — either sets it. */
+  const posPick=S.radarPos||null;
   const active=ids.map(id=>id?S.model.players.find(p=>p.id===id):null);
   const activePlayers=active.filter(Boolean);
-  const lockedPos=activePlayers.length?activePlayers[0].pos:null;
-  /* Green, orange, off-white — the most contrasting trio in the existing palette,
-     so the three players never get confused with each other or with the amber
-     used elsewhere on this page for highlights. */
+  const lockedPos=activePlayers.length?activePlayers[0].pos:posPick;
   const COL=["var(--mint)","var(--amber)","var(--cream)"];
 
   const HSTEPS=[1,3,5,10,"rest"];
@@ -543,19 +544,33 @@ function radarHTML(){
   const hLabel=h=>h==="rest"?"Rest of season":`Next ${h} GW${h>1?"s":""}`;
 
   const W=p=>ws(String(p.code||""),p.pos,S.lWin||38)||{};
+  /* Every stat here is selectable — not just the six shown by default — matching
+     the orange position-relevant stats on Player Data, using the same underlying
+     figures the radar already had access to. Team/opponent-context columns from
+     Player Data (Opp att, Team def, Pen ord…) are left out deliberately: a radar
+     axis describes the player being compared, not their next fixture. */
   const AXF={
     "xFPL":p=>hPts(p,g,gwsFor(curH)),"Form":p=>p.form||0,
     "xGI/90":p=>{const w=W(p);return(w.xg90||0)+(w.xa90||0);},"xMins":p=>p.xMins||0,
     "npxG/90":p=>W(p).npxg90||0,"xA/90":p=>W(p).xa90||0,"CC/90":p=>W(p).cc90||0,
-    "xG/90":p=>W(p).xg90||0,"Shots/90":p=>W(p).sh90||0,"DefCon/90":p=>W(p).dc90||W(p).cbit90||0,
-    "CS %":p=>(p.csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,"G prevented":p=>W(p).gp||0};
-  /* One position at a time now, so there's no "mixed positions" fallback —
-     Defenders swap xGI/90 for xMins per Andy's request (nailed-on matters more
-     for a defender's ceiling than combined attacking output). */
-  const AXSET={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
+    "xG/90":p=>W(p).xg90||0,"Shots/90":p=>W(p).sh90||0,"SoT/90":p=>W(p).sot90||0,
+    "DefCon/90":p=>W(p).dc90||W(p).cbit90||0,"CBIT/90":p=>W(p).cbit90||0,
+    "CS %":p=>(p.csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,
+    "G prevented":p=>W(p).gp||0,"xGoT/90":p=>W(p).xgot90||0,"Start %":p=>(p.startPct||0)*100,
+    "Dribbles/90":p=>W(p).drb90||0,"F3 pass/90":p=>W(p).f390||0,"Box/90":p=>W(p).box90||0,
+    "Bonus":p=>p.bonus||0,"BPS/90":p=>p.bps||0,"Owned %":p=>p.owned||0};
+  const DEFAULT_AXSET={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
     2:["xFPL","Form","DefCon/90","CS %","Aerials/90","xMins"],
     3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
     4:["xFPL","Form","npxG/90","xG/90","Shots/90","xGI/90"]};
+  /* Wider pool offered per position when picking stats — a superset of the
+     default six, position-appropriate. */
+  const OPTS={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins","xGoT/90","Start %"],
+    2:["xFPL","Form","DefCon/90","CBIT/90","CS %","Aerials/90","xMins","Start %","Bonus"],
+    3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90","Shots/90","F3 pass/90","Dribbles/90","Bonus"],
+    4:["xFPL","Form","npxG/90","xG/90","Shots/90","SoT/90","xGI/90","Box/90","Bonus"]};
+  const chosen=(S.radarAxes&&S.radarAxes[lockedPos])||null;
+  const axes=(chosen&&chosen.length?chosen:DEFAULT_AXSET[lockedPos||3])||DEFAULT_AXSET[3];
 
   const takenIds=new Set(ids.filter(Boolean));
   const pool=i=>S.model.players.filter(p=>(p.id===ids[i]||!takenIds.has(p.id))&&(!lockedPos||p.pos===lockedPos));
@@ -570,31 +585,60 @@ function radarHTML(){
         <span class="rchip-nm">${esc(p.web_name)}<span class="rchip-tm">${esc(p.teamName)} · £${p.price.toFixed(1)}</span></span>
         <button class="rchip-x" onclick="act('radarclear',${i})" title="Remove">✕</button></div></div>`;
     const rs=results(i);
+    /* Fixed: typing used to trigger a full page re-render on every keystroke,
+       which destroyed and recreated the input, stealing focus after one
+       character. searchInput() debounces and restores focus + caret. */
     return `<div class="rslot" style="--acc:${COL[i]}">
       <span class="rsw" style="background:${COL[i]}"></span>
-      <input class="rsearch" placeholder="${lockedPos?"Search "+POS[lockedPos]+"…":"Search a player…"}"
-        value="${esc(search[i]||"")}" oninput="act('radarsearch',${i},this.value)">
+      <input class="rsearch" id="rsrch${i}" placeholder="${lockedPos?"Search "+POS[lockedPos]+"…":"Search a player…"}"
+        value="${esc(search[i]||"")}" oninput="searchInput('radarsearch',this,${i})">
       ${(search[i]||"").trim()?`<div class="rsdrop">${rs.length?rs.map(pl=>`<div class="rsopt" onclick="act('radarpick',${i},${pl.id})">
           ${shirtSVG(pl.teamName.toUpperCase(),pl.pos===1,18)}<span class="rsopt-nm">${esc(pl.web_name)}</span>
           <span class="note">${esc(pl.teamName)}</span></div>`).join(""):`<div class="rsopt" style="cursor:default"><span class="note">No matches</span></div>`}</div>`:""}
       </div>`;};
 
+  const posFilter=`<span class="rposf">
+    ${[1,2,3,4].map(p=>`<button class="${lockedPos===p?"on":""}" ${activePlayers.length?"disabled":""}
+      onclick="act('radarpos',${p})" title="${activePlayers.length?"Clear players to change position":""}">${POS[p]}</button>`).join("")}
+    ${lockedPos&&!activePlayers.length?`<button onclick="act('radarpos',null)" title="Clear position">✕</button>`:""}</span>`;
+  const horizonCtl=`<span class="rhorizon2"><span class="note">xFPL over</span>
+    <input type="range" min="0" max="4" step="1" value="${hIdx}" oninput="act('radarhorizon',this.value)">
+    <span class="rhval2">${hLabel(curH)}</span></span>`;
+
+  const statPicker=lockedPos?`<div class="rstatpick">
+      <span class="note" style="display:block;margin-bottom:5px">Compare on (up to 6) — <button class="rlink" onclick="act('radaraxes',${lockedPos},null)">reset to default</button></span>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${OPTS[lockedPos].map(ax=>`<button class="chipbtn ${axes.includes(ax)?"on":""}" onclick="act('radaraxes',${lockedPos},'${ax}')">${ax}</button>`).join("")}
+      </div></div>`:"";
+
   let content;
   if(!activePlayers.length){
     content=`<p class="note" style="margin:14px 0 0;text-align:center">Search for up to three players in the same position — own squad included — to compare them.</p>`;
   }else{
-    const axes=AXSET[lockedPos];
     const maxes=axes.map(ax=>Math.max(1e-6,...activePlayers.map(p=>AXF[ax](p))));
-    const fmt=(ax,v)=>ax==="CS %"?v.toFixed(0)+"%":(Number.isInteger(v)?v.toFixed(0):v.toFixed(1));
+    const fmt=(ax,v)=>ax==="CS %"||ax==="Start %"||ax==="Owned %"?v.toFixed(0)+"%":(Number.isInteger(v)?v.toFixed(0):v.toFixed(1));
+    /* Win-count per player across every row, to star the strongest overall
+       performer in this specific comparison — separate from the per-row
+       yellow highlight, which marks the best value in that one stat. */
+    const wins=[0,0,0];
     const rows=axes.map(ax=>{
       const vals=active.map(p=>p?AXF[ax](p):null);
       const best=Math.max(...vals.filter(v=>v!=null));
+      const bestJ=activePlayers.length>1?vals.findIndex(v=>v===best):-1;
+      if(bestJ>=0)wins[bestJ]++;
       return `<tr><td class="rmet">${ax}</td>${active.map((p,j)=>{
         if(!p)return `<td class="rtd">—</td>`;
-        const v=vals[j],isBest=activePlayers.length>1&&v===best;
-        return `<td class="rtd" style="${isBest?`color:${COL[j]};font-weight:800`:""}">${fmt(ax,v)}${isBest?" ★":""}</td>`;}).join("")}</tr>`;}).join("");
-    const thead=`<tr><td></td>${active.map((p,j)=>p?`<th style="color:${COL[j]}">
-        ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,26)}<span class="rth-nm">${esc(p.web_name)}</span></th>`:"<th></th>").join("")}</tr>`;
+        const isBest=j===bestJ;
+        return `<td class="rtd${isBest?" rbest":""}">${fmt(ax,vals[j])}</td>`;}).join("")}</tr>`;}).join("");
+    const topWins=Math.max(...wins);
+    const thead=`<tr><td></td>${active.map((p,j)=>{
+      if(!p)return "<th></th>";
+      const photoUrl=`https://resources.premierleague.com/premierleague/photos/players/110x140/p${esc(String(p.code||""))}.png`;
+      return `<th style="color:${COL[j]}">
+        <span class="rphotowrap"><img class="rphoto" alt="" src="${photoUrl}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <span class="rphotofallback" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,32)}</span></span>
+        <span class="rth-nm">${esc(p.web_name)}${wins[j]===topWins&&topWins>0?' <span class="rwinstar" title="Wins the most categories in this comparison">★</span>':""}</span></th>`;}).join("")}</tr>`;
     const table=`<table class="rtable"><thead>${thead}</thead><tbody>${rows}</tbody></table>`;
 
     const cx=150,cy=150,R=104,N=axes.length;
@@ -617,16 +661,15 @@ function radarHTML(){
           ${svg}
         </div>
       </div>
-      <p class="note" style="margin:10px 0 0;text-align:center">★ best of the group · axes scaled to the strongest player shown · ${esc(POS[lockedPos])} only.</p>`;
+      <p class="note" style="margin:10px 0 0;text-align:center">Yellow = best in that row · ★ = wins the most categories · axes scaled to the strongest player shown · ${esc(POS[lockedPos])} only.</p>`;
   }
 
   return `<div class="panel rcompare"><div class="phead"><h2>Compare players</h2>
       <span class="note">${lockedPos?POS[lockedPos]+" only":"up to 3 · same position"}</span></div>
     <div class="pbody">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">${posFilter}${horizonCtl}</div>
       <div class="rslots">${[0,1,2].map(slot).join("")}</div>
-      <div class="rhorizon"><span class="note">xFPL over</span>
-        <input type="range" min="0" max="4" step="1" value="${hIdx}" oninput="act('radarhorizon',this.value)">
-        <span class="rhval">${hLabel(curH)}</span></div>
+      ${statPicker}
       ${content}
     </div></div>`;
 }
@@ -747,25 +790,27 @@ function fixturesHTML(){
         <span class="note">${list.length?list.length+" clubs":"none right now"}</span></div>
       <div class="pbody" style="border-bottom:1px solid var(--ink3)"><p class="note" style="margin:0">${note}</p></div>
       ${list.length?list.map(x=>`<div class="fixrow">
-        <span class="fixteam" style="flex:none;width:148px;gap:8px">${shirtSVG(x.t.short.toUpperCase(),false,20)}
+        <span class="fixteam" style="flex:none;width:148px;gap:8px">${badgeOrShirt(x.t,20)}
           <b>${esc(x.t.name||x.t.short)}</b></span>
-        <span class="note" style="flex:none;width:74px">${x.good} of ${x.runs.length}</span>
-        <span style="display:flex;gap:4px;flex-wrap:wrap">${x.runs.map(r=>
+        <span class="note" style="flex:none;width:60px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:${kind==="att"?"var(--mint)":"var(--cyan)"}">${x.avg.toFixed(2)}</span>
+        <span class="note" style="flex:none;width:64px">${x.good} of ${x.runs.length}</span>
+        <span class="pillrow">${x.runs.map(r=>
           fdrPill(r.opp,r.home,r.d,{short:true})).join("")}</span></div>`).join("")
         :`<div class="pbody"><p class="note">No club has four kind fixtures in the next five on this measure.</p></div>`}
     </div>`;
   };
 
-  const head=`<div class="panel"><div class="phead"><h2>Fixtures</h2>
-     <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-       <button class="${mode==="team"?"on":""}" onclick="act('fixmode','team')">By club</button>
-       <button class="${mode==="gw"?"on":""}" onclick="act('fixmode','gw')">By gameweek</button>
-       <span style="width:8px"></span>
-       ${[["all","Overall"],["att","For attackers"],["def","For defenders"]].map(([k,n])=>
-         `<button class="${(lens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}
-     </span></div>
+  const head=`<div class="panel"><div class="phead"><h2>Fixtures</h2></div>
+    <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center">
+      <span class="pseg">
+        <button class="${mode==="team"?"on":""}" onclick="act('fixmode','team')">Club</button>
+        <button class="${mode==="gw"?"on":""}" onclick="act('fixmode','gw')">Gameweek</button></span>
+      <span class="pseg">
+        ${[["all","Overall"],["att","Attackers"],["def","Defenders"]].map(([k,n])=>
+          `<button class="${(lens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}</span>
+    </div>
     <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-      <span class="note" style="flex:1;min-width:220px">Away fixtures are shown in <i>italics</i>. A defender's rating reads the opponent's attack; an attacker's reads their defence.</span>
+      <span class="note" style="flex:1;min-width:220px">A defender's rating reads the opponent's attack; an attacker's reads their defence.</span>
       <span style="display:flex;gap:4px;align-items:center">
         ${[1,2,3,4,5].map(d=>{const[b,c]=fdrCol(d);
           return `<span class="fdrpill" style="background:${b};color:${c};min-width:20px">${d}</span>`;}).join("")}</span>
@@ -790,22 +835,21 @@ function fixturesHTML(){
       for(let e=start;e<start+span&&e<=38;e++){
         const fx=(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t);
         if(!fx.length){cells+=`<td style="text-align:center"><span class="fdrpill" style="background:var(--ink3);color:var(--mute)">—</span></td>`;continue;}
-        cells+=`<td style="text-align:center;white-space:nowrap">${fx.map(f=>{
+        cells+=`<td style="text-align:center;white-space:nowrap"><span class="pillrow" style="justify-content:center">${fx.map(f=>{
           const home=f.ht===t, opp=home?f.at:f.ht;
-          return fdrPill(opp?.short||"?",home,fdrOf(opp,home,t,lens),{short:true});}).join(" ")}</td>`;}
+          return fdrPill(opp?.short||"?",home,fdrOf(opp,home,t,lens),{short:true});}).join("")}</span></td>`;}
       const hot=best3.includes(t);
       const col=v=>v<=2.2?"var(--mint)":v>=3.6?"var(--red)":"var(--cream)";
       return `<tr style="${hot?"background:rgba(45,220,135,.07)":""}">
         <td class="nm" style="white-space:nowrap"><span style="display:flex;align-items:center;gap:7px">
-          ${shirtSVG(t.short.toUpperCase(),false,20)}<b>${esc(t.short)}</b>
-          ${hot?'<span class="sig" style="border-color:var(--mint);color:var(--mint)">🏃</span>':""}</span></td>
+          ${badgeOrShirt(t,20)}<b>${esc(t.name||t.short)}</b>
+          ${hot?`<span class="sig" style="border-color:${lens==="def"?"var(--cyan)":"var(--mint)"};color:${lens==="def"?"var(--cyan)":"var(--mint)"}" title="${lens==="def"?"Kind defensive run":"Kind attacking run"}">${lens==="def"?ICON_DEF:ICON_ATT}</span>`:""}</span></td>
         <td class="mono" style="text-align:right;color:${col(d1)}">${d1.toFixed(1)}</td>
         <td class="mono" style="text-align:right;color:${col(d3)}">${d3.toFixed(2)}</td>
         <td class="mono" style="text-align:right;font-weight:700;color:${col(d5)}">${d5.toFixed(2)}</td>${cells}</tr>`;});
-    return targetPanel("att","Attack",
-        "Clubs with a strong attack meeting weak defences in at least four of the next five.")
-      +targetPanel("def","Defence",
-        "Solid defences meeting weak attacks in at least four of the next five.")
+    return `<div class="trkrow2">${targetPanel("att","Attack",
+        "Clubs with a strong attack meeting weak defences in at least four of the next five.")}${targetPanel("def","Defence",
+        "Solid defences meeting weak attacks in at least four of the next five.")}</div>`
       +head+`<div class="panel">${navFix(start,span,g)}
         <div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
         ${navFix(start,span,g)}</div>`;
@@ -827,19 +871,40 @@ function fixturesHTML(){
       const dt=f.kickoff?new Date(f.kickoff):null;
       const d=dt?dt.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}):"";
       const tm=dt?dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"";
-      out+=`<div class="fixrow">
-        <span class="fixteam" style="gap:8px">${shirtSVG(h.short.toUpperCase(),false,22)}
-          <span style="font-weight:600">${esc(h.name||h.short)}</span>
+      const strongSide=t=>t.att>=1.30?`<span class="sig" style="border:none">${ICON_ATT}</span>`
+        :(2.6-t.def)>=1.12?`<span class="sig" style="border:none">${ICON_DEF}</span>`:"";
+      out+=`<div class="fixrow" style="align-items:flex-start;flex-wrap:wrap">
+        <span class="fixteam" style="gap:8px">${badgeOrShirt(h,22)}
+          <span style="font-weight:600">${esc(h.name||h.short)}</span>${strongSide(h)}
           ${fdrPill(a.short,true,hd,{short:true})}</span>
         <span style="flex:none;width:112px;text-align:center;line-height:1.25">
           <span style="display:block;color:var(--cream);font-size:11px;font-weight:600">${esc(tm)}</span>
           <span style="display:block;color:var(--mute);font-size:9px">${esc(d)}</span></span>
         <span class="fixteam away" style="gap:8px">${fdrPill(h.short,false,ad,{short:true})}
-          <span style="font-weight:600;font-style:italic">${esc(a.name||a.short)}</span>
-          ${shirtSVG(a.short.toUpperCase(),false,22)}</span></div>`;
+          ${strongSide(a)}<span style="font-weight:600">${esc(a.name||a.short)}</span>
+          ${badgeOrShirt(a,22)}</span>
+        <span style="flex-basis:100%;display:flex;gap:14px;justify-content:center;margin-top:5px">
+          <span class="last3">${lastResults(h,g)}</span>
+          <span class="note" style="font-size:9px;align-self:center">vs</span>
+          <span class="last3">${lastResults(a,g)}</span></span></div>`;
     });
   }
   return head+`<div class="panel">${navFix(start,span,g)}${out||'<div class="pbody"><p class="note">No fixtures in this range.</p></div>'}${navFix(start,span,g)}</div>`;
+}
+/* Last 3 completed results before a given gameweek — derived from fixture
+   scores the app already loads (S.fixtures[].hs/as populate once a match has
+   actually been played), so no new data source is needed. */
+function lastResults(team,beforeGw){
+  const played=(S.fixtures||[]).filter(f=>(f.h===team.id||f.a===team.id)&&f.hs!=null&&f.as!=null&&f.event<beforeGw)
+    .sort((a,b)=>b.event-a.event).slice(0,3).reverse();
+  if(!played.length)return `<span class="note" style="font-size:9px">no results yet</span>`;
+  return played.map(f=>{
+    const home=f.h===team.id;
+    const gf=home?f.hs:f.as, ga=home?f.as:f.hs;
+    const res=gf>ga?"W":gf<ga?"L":"D";
+    const col=res==="W"?"var(--mint)":res==="L"?"var(--red)":"var(--mute)";
+    return `<span class="l3" style="background:${col}" title="GW${f.event} · ${gf}-${ga} (${home?"Home":"Away"})">${res}<sub>${home?"H":"A"}</sub></span>`;
+  }).join("");
 }
 function navFix(start,span,g){
   return `<div class="pbody" style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">

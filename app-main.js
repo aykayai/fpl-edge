@@ -8,11 +8,11 @@
 /* Typing must not trigger a full re-render — that destroys the input and steals
    focus after one character. Debounce, then restore the caret. */
 let _srchT=null;
-function searchInput(action,el){
+function searchInput(action,el,extra){
   const v=el.value, pos=el.selectionStart, id=el.id;
   clearTimeout(_srchT);
   _srchT=setTimeout(()=>{
-    act(action,v);
+    if(extra!=null)act(action,extra,v);else act(action,v);
     const again=document.getElementById(id);
     if(again){again.focus();try{again.setSelectionRange(pos,pos);}catch(e){}}
   },220);
@@ -41,9 +41,24 @@ function act(k,a,b){
       if(id){
         const pl=S.model.players.find(x=>x.id===id);
         const locked=S.radarIds.map(x=>x?S.model.players.find(y=>y.id===x):null).find(x=>x);
-        if(pl&&locked&&pl.pos!==locked.pos)break;    // one position only — ignore a stray mismatch
+        const lockPos=locked?locked.pos:S.radarPos;
+        if(pl&&lockPos&&pl.pos!==lockPos)break;    // one position only — ignore a stray mismatch
+        if(pl&&!S.radarPos)S.radarPos=pl.pos;
       }
       S.radarIds[a]=id;S.radarSearch[a]="";break;}
+    case"radarpos":{const anyPicked=(S.radarIds||[]).some(x=>x);
+      if(!anyPicked)S.radarPos=a;break;}
+    case"radaraxes":{const pos=a,ax=b;
+      S.radarAxes=S.radarAxes||{};
+      if(ax===null||ax===undefined){delete S.radarAxes[pos];break;}
+      const DEF={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
+        2:["xFPL","Form","DefCon/90","CS %","Aerials/90","xMins"],
+        3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
+        4:["xFPL","Form","npxG/90","xG/90","Shots/90","xGI/90"]};
+      const cur=(S.radarAxes[pos]||DEF[pos]).slice();
+      const at=cur.indexOf(ax);
+      if(at>=0)cur.splice(at,1);else if(cur.length<6)cur.push(ax);
+      S.radarAxes[pos]=cur;break;}
     case"radarsearch":{S.radarSearch=S.radarSearch||["","",""];S.radarSearch[a]=b;break;}
     case"radarclear":{S.radarIds=S.radarIds||[null,null,null];S.radarIds[a]=null;break;}
     case"radarhorizon":{const H=[1,3,5,10,"rest"];S.radarHorizon=H[clamp(Math.round(+a),0,4)]||5;break;}

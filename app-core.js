@@ -62,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="10.5.0";
+const APP_VERSION="10.7.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -125,6 +125,17 @@ const KITS={ARS:{b:"#EF0107",s:"#FFFFFF"},MCI:{b:"#6CABDD",s:"#6CABDD"},LIV:{b:"
  _d:{b:"#8A7FA8",s:"#6E6489"}};
 const GK_KIT={b:"#2ED47A",s:"#1B9E56"};
 const BODY="M13.5 6 L11 7.2 L11 34 L29 34 L29 7.2 L26.5 6 L24.5 8.4 Q20 11.6 15.5 8.4 Z";
+/* Team crest with a graceful fallback to the shirt graphic — same onerror
+   pattern already used for player photos, so a wrong/missing badge never
+   breaks the layout, it just silently shows the shirt instead. */
+function badgeOrShirt(t,size){
+  const sz=size||20;
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;flex:none">
+    <img src="https://resources.premierleague.com/premierleague/badges/50/t${esc(String(t.code||""))}.png"
+      alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;display:block"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+    <span style="display:none">${shirtSVG((t.short||"").toUpperCase(),false,sz)}</span></span>`;
+}
 function shirtSVG(short,isGK,size){
   const k=isGK?GK_KIT:(KITS[short]||KITS._d);
   const light=["#FFFFFF","#FFF200","#F5A12D","#FDB913","#78D0F3"].includes(k.b);
@@ -192,7 +203,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,actuals:null,playerActuals:{},xfplGW:0,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
  outList:[],selected:null,menuOpen:false,compare:null,replacedBy:{},dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
