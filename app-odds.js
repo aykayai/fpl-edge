@@ -584,70 +584,158 @@ function oddsHTML(){
 }
 
 function rivalsHTML(){
-  const g=S.model.next.id;
-  const list=(S.rivals||[]);
-  const mine=squadPlayers();
-  const myIds=new Set(S.squad||[]);
-  const panel=`<div class="panel"><div class="phead"><h2>Leagues &amp; rivals</h2></div>
-    <div class="pbody">
-      <p class="note" style="margin:0 0 9px">League <b style="color:var(--cream)">${esc(S.leagueId||"391690")}</b> — live standings need the official API, which the browser can't reach. Add rivals by team ID and paste their squad once — everything below then updates from the same projections your own squad uses.</p>
-      <span class="pricebox">
-        <input placeholder="Rival name" id="rvName" style="flex:1">
-        <input placeholder="Team ID" id="rvId" style="width:110px">
-        <button onclick="act('addrival')">Add</button></span>
-      ${list.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">
-        ${list.map((r,i)=>`<button class="chipbtn ${S.rivalSel===i?"on":""}" onclick="act('selrival',${i})">${esc(r.name)}</button>`).join("")}
-        </div>`:""}
-    </div></div>`;
-  const sel=list[S.rivalSel];
-  if(!sel){
-    const mine2=squadPlayers();
-    if(!mine2.length)return panel;
-    const demo=S.model.players.filter(p=>!(S.squad||[]).includes(p.id)&&p.avail>0)
-      .sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0)).slice(0,6);
-    return panel+`<div class="panel"><div class="phead"><h2>Sample rival</h2>
-        <span class="note">layout preview · add a real rival above</span></div>
-      <div class="stats" style="padding-top:12px">
-        <div class="stat"><div class="k">You</div><div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div></div>
-        <div class="stat"><div class="k">Sample rival</div><div class="v">${(weekPts()*0.94).toFixed(1)}</div></div>
-        <div class="stat"><div class="k">Swing</div><div class="v" style="color:var(--mint)">+${(weekPts()*0.06).toFixed(1)}</div></div>
-      </div></div>
-      <div class="panel"><div class="phead"><h2 style="color:var(--amber)">Players they'd own that you don't</h2></div>
-      ${demo.map(p=>`<div class="prow" style="cursor:default">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}
-        <span style="flex:1;min-width:0"><span style="display:flex;gap:5px;align-items:center">
-          <span style="font-size:12.5px;font-weight:600">${esc(p.web_name)}</span>${sigHTML(p,g)}</span>
-          <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}% owned</span></span>
-        <span class="mono" style="color:var(--mint);font-weight:700">${(p.gw[g]?.pts||0).toFixed(1)}</span></div>`).join("")}</div>`;
+  const feed=S.rivalsFeed;
+  const gNext=S.model.next.id, gLast=gNext-1;
+  const mine=squadPlayers(), myIds=new Set(S.squad||[]);
+  const pOf=id=>S.model.players.find(p=>p.id===id);
+  const actOf=(id,gw)=>{const f=S.playerActuals&&(S.playerActuals[id]||S.playerActuals[String(id)]);
+    const v=f?(f[gw]??f[String(gw)]):null;return v==null?null:+v;};
+
+  if(!feed||!feed.standings||!feed.standings.length){
+    return `<div class="panel"><div class="phead"><h2>Leagues &amp; rivals</h2>
+        <span class="note">league ${esc(S.leagueId||"391690")}</span></div>
+      <div class="pbody"><p class="note" style="margin:0;color:var(--amber)">
+        The league table and rival squads appear here once the rivals feed is published
+        (same scheduled job as the actuals feed — it reads the official FPL API, which
+        the browser can't reach directly).</p></div></div>`;
   }
-  const theirs=(sel.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  if(!theirs.length)
-    return panel+`<div class="panel"><div class="phead"><h2>${esc(sel.name)}</h2></div>
-      <div class="pbody"><p class="note">No squad stored. Paste their 15 player names, comma separated.</p>
-        <span class="pricebox" style="margin-top:8px">
-          <input placeholder="Raya, Calafiori, …" id="rvSquad" style="flex:1">
-          <button onclick="act('rivalsquad')">Save</button></span></div></div>`;
-  const theirIds=new Set(theirs.map(p=>p.id));
-  const myDiff=mine.filter(p=>!theirIds.has(p.id));
-  const theirDiff=theirs.filter(p=>!myIds.has(p.id));
-  const score=a=>{const xi=[...a].sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0)).slice(0,11);
-    return xi.reduce((s,p)=>s+(p.gw[g]?.pts||0),0)+(xi[0]?.gw[g]?.pts||0);};
-  const row=p=>`<div class="prow" style="cursor:default">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}
-    <span style="flex:1;min-width:0"><span style="display:flex;gap:5px;align-items:center">
-      <span style="font-size:12.5px;font-weight:600">${esc(p.web_name)}</span>${sigHTML(p,g)}</span>
-      <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}% owned</span></span>
-    <span class="mono" style="color:var(--mint);font-weight:700">${(p.gw[g]?.pts||0).toFixed(1)}</span></div>`;
-  return panel+`<div class="panel"><div class="phead"><h2>${esc(sel.name)}</h2>
-      <span class="note">GW${g} projection</span></div>
+
+  /* ---------- league table ---------- */
+  const rows=[...feed.standings].sort((a,b)=>(a.rank||99)-(b.rank||99));
+  const selId=S.rivalPick!=null?String(S.rivalPick)
+    :String((rows.find(r=>String(r.entryId)!==String(TEAM_ID))||{}).entryId||"");
+  const mv=r=>{if(r.lastRank==null||r.rank==null||r.lastRank===0)return "";
+    const d=r.lastRank-r.rank;
+    if(!d)return `<span style="color:var(--mute)">–</span>`;
+    return `<span style="color:${d>0?"var(--mint)":"var(--red)"}">${d>0?"▲":"▼"}${Math.abs(d)}</span>`;};
+  const table=`<div class="panel"><div class="phead"><h2>${esc(feed.leagueName||"League")}</h2>
+      <span class="note">${esc(feed.leagueId||S.leagueId||"391690")} · GW${feed.lastEvent||gLast}</span></div>
+    <div class="scroll"><table class="trktable"><thead><tr>
+      <th>#</th><th></th><th>Team</th><th>GW</th><th>Total</th></tr></thead><tbody>
+      ${rows.map(r=>{const isMe=String(r.entryId)===String(TEAM_ID);
+        const isSel=String(r.entryId)===selId;
+        return `<tr class="rvrow${isSel?" on":""}" ${isMe?"":`onclick="act('rivalpick','${r.entryId}')"`}
+          style="${isMe?"":"cursor:pointer"}">
+          <td style="text-align:left">${r.rank??"—"}</td>
+          <td style="text-align:left">${mv(r)}</td>
+          <td style="text-align:left">
+            <span style="font-weight:700;color:${isMe?"var(--mint)":isSel?"var(--amber)":"var(--cream)"}">${esc(r.entryName||"—")}</span>
+            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.manager||"")}${isMe?" · you":""}</span></td>
+          <td>${r.gwPoints??"—"}</td><td>${r.totalPoints??"—"}</td></tr>`;}).join("")}
+    </tbody></table></div>
+    <div class="pbody"><p class="note" style="margin:0">Tap a rival for their squad, chips, transfers and differentials.</p></div></div>`;
+
+  /* ---------- league-wide summary ---------- */
+  const entries=feed.entries||{};
+  const latestGw=e=>{const a=(e&&e.gw)||[];return a.length?a[a.length-1]:null;};
+  const picksOf=e=>{const r=latestGw(e);return (r&&r.picks)||[];};
+  const others=Object.keys(entries).filter(k=>String(k)!==String(TEAM_ID));
+  /* how many rivals own each player, to find threats and true differentials */
+  const own={};
+  others.forEach(k=>{picksOf(entries[k]).forEach(pk=>{const id=pk.id??pk;own[id]=(own[id]||0)+1;});});
+  const threats=Object.keys(own).map(id=>({p:pOf(+id),n:own[id]}))
+    .filter(x=>x.p&&!myIds.has(x.p.id))
+    .sort((a,b)=>b.n-a.n||hPts(b.p,gNext,S.horizon)-hPts(a.p,gNext,S.horizon)).slice(0,8);
+  const myUnique=mine.filter(p=>!own[p.id])
+    .sort((a,b)=>hPts(b,gNext,S.horizon)-hPts(a,gNext,S.horizon));
+  const moves=[];
+  others.forEach(k=>{const r=latestGw(entries[k]);
+    if(r&&r.transfers)moves.push({name:entries[k].name||k,n:r.transfers,cost:r.transferCost||0,diff:r.transferDiff});});
+  moves.sort((a,b)=>b.n-a.n);
+
+  const miniRow=(p,right,sub)=>`<div class="prow" style="cursor:pointer" onclick="act('card',${p.id})">
+    ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
+    <span style="flex:1;min-width:0">
+      <span style="font-size:12.5px;font-weight:600">${esc(p.web_name)}</span>
+      <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)}${sub?" · "+sub:""}</span></span>
+    <span class="mono" style="font-weight:700;color:var(--mint)">${right}</span></div>`;
+
+  const summary=`<div class="rvsum">
+    <div class="panel"><div class="phead"><h2 style="color:var(--amber)">Threats</h2>
+        <span class="note">owned by rivals, not you</span></div>
+      ${threats.length?threats.map(x=>miniRow(x.p,hPts(x.p,gNext,S.horizon).toFixed(1),
+        `${x.n} of ${others.length} rivals`)).join(""):
+        `<div class="pbody"><p class="note" style="margin:0">Nothing they own that you don't.</p></div>`}</div>
+    <div class="panel"><div class="phead"><h2 style="color:var(--mint)">Your differentials</h2>
+        <span class="note">no rival owns these</span></div>
+      ${myUnique.length?myUnique.slice(0,8).map(p=>miniRow(p,hPts(p,gNext,S.horizon).toFixed(1),"unique to you")).join(""):
+        `<div class="pbody"><p class="note" style="margin:0">Every player you own is owned by someone else too.</p></div>`}</div>
+    <div class="panel"><div class="phead"><h2>Transfer activity</h2>
+        <span class="note">GW${feed.lastEvent||gLast}</span></div>
+      ${moves.length?`<div class="scroll"><table class="trktable"><thead><tr>
+        <th>Team</th><th>Moves</th><th>Hit</th><th>Gain</th></tr></thead><tbody>
+        ${moves.map(m=>`<tr><td>${esc(m.name)}</td><td>${m.n}</td>
+          <td style="color:${m.cost?"var(--red)":"var(--mute)"}">${m.cost?"-"+m.cost:"0"}</td>
+          <td style="color:${m.diff>0?"var(--mint)":m.diff<0?"var(--red)":"var(--mute)"}">${m.diff==null?"—":(m.diff>0?"+":"")+m.diff}</td></tr>`).join("")}
+        </tbody></table></div>`:`<div class="pbody"><p class="note" style="margin:0">No transfers made in the league this week.</p></div>`}</div>
+  </div>`;
+
+  /* ---------- selected rival ---------- */
+  const ent=entries[selId];
+  if(!ent)return table+summary;
+  const rowsGw=(ent.gw||[]);
+  const lastRow=rowsGw.length?rowsGw[rowsGw.length-1]:null;
+  const theirIds=picksOf(ent).map(pk=>pk.id??pk);
+  const theirSet=new Set(theirIds);
+  const theirs=theirIds.map(pOf).filter(Boolean);
+
+  const upcoming=S.rivalGwView!=="last";
+  const gShow=upcoming?gNext:(lastRow?lastRow.event:gLast);
+  const val=p=>upcoming?hPts(p,gNext,S.horizon):(actOf(p.id,gShow)??0);
+  const myDiff=mine.filter(p=>!theirSet.has(p.id)).sort((a,b)=>val(b)-val(a));
+  const theirDiff=theirs.filter(p=>!myIds.has(p.id)).sort((a,b)=>val(b)-val(a));
+  const sum=a=>a.reduce((s,p)=>s+val(p),0);
+  const edge=sum(myDiff)-sum(theirDiff);
+
+  const chips=(ent.chips||[]).slice().sort((a,b)=>(a.event||0)-(b.event||0));
+  const stat=(k,v,c)=>`<div class="stat"><div class="k">${k}</div>
+    <div class="v"${c?` style="color:${c}"`:""}>${v}</div></div>`;
+  const capName=lastRow&&lastRow.captainId?(pOf(lastRow.captainId)||{}).web_name:null;
+
+  const detail=`<div class="panel"><div class="phead"><h2>${esc(ent.name||selId)}</h2>
+      <span class="note">${esc(ent.manager||"")} · GW${lastRow?lastRow.event:gLast}</span></div>
     <div class="stats" style="padding-top:12px">
-      <div class="stat"><div class="k">You</div><div class="v" style="color:var(--mint)">${score(mine).toFixed(1)}</div></div>
-      <div class="stat"><div class="k">${esc(sel.name)}</div><div class="v">${score(theirs).toFixed(1)}</div></div>
-      <div class="stat"><div class="k">Swing</div>
-        <div class="v" style="color:${score(mine)>=score(theirs)?"var(--mint)":"var(--red)"}">${(score(mine)-score(theirs)>=0?"+":"")}${(score(mine)-score(theirs)).toFixed(1)}</div></div>
+      ${stat("GW points",lastRow?lastRow.points:"—","var(--mint)")}
+      ${stat("Captain",capName?esc(capName):"—")}
+      ${stat("Captain pts",lastRow&&lastRow.captainPts!=null?lastRow.captainPts:"—")}
+      ${stat("Transfers",lastRow?`${lastRow.transfers??0}${lastRow.transferCost?` (-${lastRow.transferCost})`:""}`:"—")}
+      ${stat("Transfer pts",lastRow&&lastRow.transferDiff!=null?(lastRow.transferDiff>0?"+":"")+lastRow.transferDiff:"—",
+        lastRow&&lastRow.transferDiff>0?"var(--mint)":lastRow&&lastRow.transferDiff<0?"var(--red)":null)}
+      ${stat("Free transfers",lastRow&&lastRow.ftAvailable!=null?lastRow.ftAvailable:"—","var(--amber)")}
+    </div>
+    <div class="pbody" style="border-top:1px solid var(--ink3)">
+      <span class="note" style="display:block;margin-bottom:6px">Chips used</span>
+      ${chips.length?`<div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${chips.map(c=>`<span class="rvchip">${esc(c.label||c.name)} · GW${c.event}${
+          c.uplift!=null?` · <b style="color:${c.uplift>=0?"var(--mint)":"var(--red)"}">${c.uplift>=0?"+":""}${(+c.uplift).toFixed(1)}</b>`:""}</span>`).join("")}
+        </div>`:`<p class="note" style="margin:0">No chips played yet.</p>`}
     </div></div>
-    <div class="panel"><div class="phead"><h2 style="color:var(--mint)">Your differentials</h2><span class="note">${myDiff.length}</span></div>
-      ${myDiff.map(row).join("")||`<div class="pbody"><p class="note">Identical squads.</p></div>`}</div>
-    <div class="panel"><div class="phead"><h2 style="color:var(--amber)">Theirs you don't own</h2><span class="note">${theirDiff.length}</span></div>
-      ${theirDiff.map(row).join("")||`<div class="pbody"><p class="note">Nothing they own that you don't.</p></div>`}</div>`;
+
+    <div class="panel"><div class="phead"><h2>Head to head</h2>
+        <span class="pseg">
+          <button class="${upcoming?"on":""}" onclick="act('rivalgw','next')">GW${gNext} projected</button>
+          <button class="${!upcoming?"on":""}" onclick="act('rivalgw','last')">GW${gShow} actual</button></span></div>
+      <div class="stats" style="padding-top:12px">
+        ${stat("Your differentials",sum(myDiff).toFixed(1),"var(--mint)")}
+        ${stat("Their differentials",sum(theirDiff).toFixed(1),"var(--amber)")}
+        ${stat("Edge",(edge>=0?"+":"")+edge.toFixed(1),edge>=0?"var(--mint)":"var(--red)")}
+      </div>
+      ${!upcoming&&!theirDiff.concat(myDiff).some(p=>actOf(p.id,gShow)!=null)?
+        `<div class="pbody"><p class="note" style="margin:0">No actual points stored for GW${gShow} yet.</p></div>`:""}
+    </div>
+
+    <div class="rvsum">
+      <div class="panel"><div class="phead"><h2 style="color:var(--mint)">Yours they don't own</h2>
+          <span class="note">${myDiff.length}</span></div>
+        ${myDiff.length?myDiff.slice(0,10).map(p=>miniRow(p,val(p).toFixed(1))).join(""):
+          `<div class="pbody"><p class="note" style="margin:0">Identical squads.</p></div>`}</div>
+      <div class="panel"><div class="phead"><h2 style="color:var(--amber)">Theirs you don't own</h2>
+          <span class="note">${theirDiff.length}</span></div>
+        ${theirDiff.length?theirDiff.slice(0,10).map(p=>miniRow(p,val(p).toFixed(1))).join(""):
+          `<div class="pbody"><p class="note" style="margin:0">Nothing they own that you don't.</p></div>`}</div>
+    </div>`;
+
+  return table+summary+detail;
 }
 
 function newsHTML(){

@@ -295,6 +295,12 @@ td.nm{font-family:'Sora',sans-serif}
 .sqtoggle button{flex:1;padding:10px}
 @media(min-width:1000px){.sqtoggle{display:none}.hideSm{display:block}}
 @media(max-width:999px){.hideSm{display:none}}
+.rvsum{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
+@media(min-width:900px){.rvsum{grid-template-columns:1fr 1fr}}
+.rvrow.on td{background:rgba(255,138,61,.10)}
+.rvrow:hover td{background:rgba(255,255,255,.04)}
+.rvchip{display:inline-flex;align-items:center;gap:4px;background:var(--ink);border:1px solid var(--ink3);
+ border-radius:9px;padding:5px 9px;font-size:11px;color:var(--cream)}
 .chipblock{padding:12px 14px;border-bottom:1px solid var(--ink3)}
 .chipgrid2{display:grid;grid-template-columns:1fr}
 @media(min-width:900px){.chipgrid2{grid-template-columns:1fr 1fr}

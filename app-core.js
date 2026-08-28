@@ -23,6 +23,15 @@ const SEASON="2026-2027", LAST="2025-2026";
    Absent or unreachable until the Action exists — every consumer already renders a
    clean waiting state, so this fails silently rather than blocking the main load. */
 const ACTUALS_URL="https://raw.githubusercontent.com/aykayai/fpl-edge/main/data/actuals.json";
+const RIVALS_URL="https://raw.githubusercontent.com/aykayai/fpl-edge/main/data/rivals.json";
+async function loadRivals(){
+  try{
+    const r=await fetch(RIVALS_URL);
+    if(!r.ok)return;
+    const d=await r.json();
+    if(d&&Array.isArray(d.standings))S.rivalsFeed=d;
+  }catch(e){ /* feed not published yet — the page shows its waiting state */ }
+}
 async function loadActuals(){
   try{
     const r=await fetch(ACTUALS_URL);
@@ -53,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="10.0.0";
+const APP_VERSION="10.1.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -183,7 +192,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,actuals:null,playerActuals:{},xfplGW:0,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
  outList:[],selected:null,menuOpen:false,compare:null,replacedBy:{},dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
@@ -205,7 +214,7 @@ async function loadAll(force){
     if(cached&&!force&&Date.now()-cached.t<1000*60*60*6){
       Object.assign(S,{players:cached.players,teams:cached.teams,fixtures:cached.fixtures,
         events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
-      buildModel();loadActuals().then(render);S.loading=false;return;
+      buildModel();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
     }
     S.progress="players and prices…";render();
     const [players,pstats,teams]=await Promise.all([
@@ -467,7 +476,7 @@ async function loadAll(force){
     S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
     S.stamp=Date.now();
     LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,hist:S.hist,teamMatch:S.teamMatch});
-    buildModel();await loadActuals();toast("Live data loaded");
+    buildModel();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
   }

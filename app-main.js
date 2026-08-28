@@ -248,6 +248,8 @@ function act(k,a,b){
       if(!n){toast("Give the rival a name");break;}
       S.rivals=[...(S.rivals||[]),{name:n,id,squad:[]}];S.rivalSel=S.rivals.length-1;
       LS.set("rivals",S.rivals);break;}
+    case"rivalpick":S.rivalPick=a;break;
+    case"rivalgw":S.rivalGwView=a;break;
     case"selrival":S.rivalSel=a;break;
     case"rivalsquad":{const raw=document.getElementById("rvSquad")?.value||"";
       const names=raw.split(",").map(x=>x.trim()).filter(Boolean);
