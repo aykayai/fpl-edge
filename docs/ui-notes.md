@@ -514,3 +514,69 @@ using the live-points map already in memory during that build step.
 
 Files: index.html, app-core.js, app-squad.js, app-odds.js, app-main.js,
 app-tracker.js, sw.js. Version 10.5.0.
+
+## v10.7.0 — Fixtures page overhaul (8 of 9 items; TV channels investigated, not built)
+Consolidated release again — GitHub still hadn't picked up 10.6.0 when this batch
+started, so this carries that forward too (index.html, app-core.js, app-render.js,
+app-main.js, sw.js all included).
+
+1. **Attack + Defence target panels** now share a row (`.trkrow2`, reused from the
+   Tracker page) — was two full-width panels stacked with plain string
+   concatenation, never actually wrapped in a grid despite looking like it should
+   be. Caught this exact gap with a test before shipping.
+2. **5-week average opponent score** added to each target row (`x.avg`, was
+   already computed by the existing `targets()` function but never displayed).
+3. **Pill spacing fixed** — root cause: some fixture lists joined pills with a
+   literal space character (`.join(" ")`), others used a flex `gap` — two
+   different spacing mechanisms producing visibly different results. Unified
+   under one `.pillrow` wrapper (flex, 4px gap) everywhere pills appear.
+4. **Full team names** on the primary row label in both the by-club table and
+   target panels (target panels already had this; by-club table was abbreviated).
+   Deliberately kept the small FDR pills abbreviated — full names wouldn't fit in
+   a compact fixture pill and every FDR pill already carries the full name in its
+   hover tooltip.
+5. **Attack/Defence icons replace the "kind run" 🏃 icon** — reused the existing
+   `ICON_ATT`/`ICON_DEF` signal glyphs (already used elsewhere for player signals)
+   rather than inventing new icons, so the visual language stays consistent.
+6. **Club/Gameweek and Overall/Attackers/Defenders combined** into two `.pseg`
+   segmented-control groups (existing component, already styled orange for its
+   active state — no new CSS needed) and moved onto their own row below the
+   "Fixtures" title, out of the header.
+7. **By-gameweek view**: attack/defence icons beside each team (via a shared
+   `strongSide()` helper), italics removed from the away team's name (the small
+   FDR pill's own italic — used globally to mean "away" — was left alone,
+   already independent of the name text), and a new **last 3 results** strip per
+   team. Derived entirely from data already loaded — `S.fixtures[].hs`/`.as`
+   populate once a match is actually played, no new data source needed. Shows
+   W/D/L with a small H/A subscript, coloured, tooltip with the exact score.
+8. **Team badges replace shirt icons** everywhere on this page —
+   `resources.premierleague.com/premierleague/badges/50/t{code}.png`, same
+   `onerror`-to-shirt-graphic fallback pattern already proven for player photos.
+   New shared helper `badgeOrShirt(team, size)` in app-core.js. **Caveat**: the
+   exact badge path wasn't confirmable with certainty from documentation — best
+   estimate from the same CDN and code convention as the already-working player
+   photo, but if it 404s the page still looks correct (silent fallback to the
+   shirt graphic), so a wrong guess costs nothing visible.
+
+## Item 9 — TV channel per fixture: investigated, not built
+Checked both referenced sites directly. Findings:
+- **wheresthematch.com** is real, human-maintained, and does carry the current
+  2026/27 Premier League schedule with exact channels (confirmed live — e.g.
+  Crystal Palace v Man City, Fri 28 Aug, Sky Sports Main Event). It's
+  server-rendered HTML, not an API — no clean JSON feed.
+- **sportontvireland.ie** is a client-rendered SPA — its content loads via JS
+  after the page shell, so even a server-side fetch sees nothing without running
+  a full browser (much heavier than a plain HTML scrape).
+
+Same fundamental constraint as everything else needing outside data: the
+browser can't fetch either site directly (no CORS), so this needs the same
+"Action fetches, publishes JSON, app reads it" pattern used for actuals/rivals.
+**But this one carries a different risk profile than those**: the FPL API is
+public infrastructure the whole fantasy-football developer community already
+builds against; wheresthematch.com is a commercial third-party site with its
+own Terms of Service, whose content is manually curated by their team rather
+than published as a stable feed — meaning regular automated scraping is a
+different kind of dependency (their HTML structure can change without notice,
+breaking the scraper silently, and it's worth checking their ToS before
+committing to it rather than assuming it's fine because the data is public).
+Flagged for Andy's explicit decision rather than built.
