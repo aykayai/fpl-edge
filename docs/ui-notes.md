@@ -415,3 +415,102 @@ model/market disagreement, now sorted by position (GK first) then price ascendin
 flag if descending was intended, one-line change). Header copy updated to match.
 
 Files: app-core.js (version only), app-odds.js, sw.js. Version 10.2.0.
+
+## v10.5.0 — consolidated release (10.2.0 → 10.5.0 in one, GitHub upload issue recurred)
+Same pattern as the v9.5.1 recovery: GitHub was found stuck at 10.2.0 despite two
+further versions (10.3.0 player-props/sort fix, 10.4.0 score-box redesign) having
+been delivered. Diffed every live file against this chat's own cached copies
+before touching anything — differences were exactly and only this chat's own
+pending changes, nothing foreign, nothing to preserve beyond what's already held.
+Consolidated all pending work into this one release rather than deliver another
+set of increments that might again not stick.
+
+### Team Planner: historical squad now reads the official record
+Root cause of "wrong team for GW1" confirmed precisely: `squadPlayers()` read
+only the current, flat `S.squad` — completely gameweek-unaware, so any past week
+showed today's squad reapplied backward. Fixed by making `squadPlayers()`
+GW-aware: for a finished gameweek, it now returns the officially-locked squad
+from `S.tracker.gw[].picks` (already fetched by the actuals Action for computing
+captain points — this data existed unused). Falls back to `S.squad` for the
+current/future week or if the feed has no picks for that GW yet.
+
+**Implementation care taken**: returns the actual `S.model.players` object
+references (not spread copies) so reference-equality checks elsewhere in the
+codebase (`xi.includes(p)` etc.) keep working — verified with a dedicated test.
+Captain badge now derives from the historical feed's `multiplier` field when
+viewing a past week (`_histCaptain`, a module-level variable set as a side effect
+of `squadPlayers()`, read by `cardHTML`); vice-captain badge simply doesn't show
+for historical weeks, per Andy — that field isn't in the feed. A small
+`official squad · GW{n}` confirmation note appears near the gameweek header when
+this path is active, with a tooltip caveat about the one remaining gap below.
+
+**Known gap, flagged not hidden**: the feed's `picks` only kept `{id,
+multiplier}` — the `position` field (formation slot 1–15, which distinguishes
+starting XI from bench) was stripped during capture. So `startingXI()` still
+auto-computes a best-XI from predicted points for a historical week, which are
+near-zero (the model doesn't project backward) — meaning the specific XI/bench
+split shown for a past week is a best-effort reconstruction, not guaranteed to
+match who actually started. Squad membership and captain are fully accurate;
+only the XI/bench split has this residual limitation.
+**One-line fix available**: `build-actuals.mjs`'s `row.picks = squad.map(p =>
+({id: p.element, multiplier: p.multiplier}))` → add `position: p.position` (the
+raw FPL API already returns it, just discarded). Given to the xFPL/infra chat as
+a follow-up; not required for today's fix to be a real improvement.
+
+### Cross-device sync for the live/in-progress squad — investigated, not built
+Andy confirmed: keep the live squad free-form (not mirroring the real official
+team), sync across devices "only if a relatively small fix". Genuine assessment,
+not guessed: writing to GitHub directly from the browser isn't safe (would need
+an exposed write-capable token sitting in a public repo). The smallest honest
+option is one small external key-value store — e.g. a single Cloudflare Worker
+with KV storage (~30-40 lines), read/written by a sync code the user sets once.
+That's a new piece of infrastructure, even if a small one — presented to Andy for
+an explicit go-ahead before building, rather than assumed to qualify as "small".
+
+## v10.4.0 (folded into this release) — Team Planner score box redesign
+Colour bug fixed: was always computed from the *predicted* value even when the
+*actual* value was displayed, so a past week with no real prediction (near-zero,
+model only projects forward) coloured red regardless of the real result. Now
+follows whichever number is shown. Fixture text removed from inside the score
+box; a single pill below it shows the fixture, or swaps to "predicted X.X
+(+/-diff)" once the actual is known. FINAL tag marks a real result. No more "No
+fixture" text anywhere — neutral dash instead. Verified against four scenarios.
+Optimise button's captain/vice logic was checked and found already exactly as
+requested (top-two predicted scorers in the starting XI) — no change made.
+
+## v10.5.0 — Tracker page polish (6 items)
+1–2. **Historical Performance**: "Avg" → "Average", band labels bold, stat
+values unbold (shared `.tmini` CSS). Every band (Average/Best/Worst) now
+highlights its own best column in orange (`.thibest`, new — dedicated rather
+than reusing the shared `.tbest`, which Career Finishes' existing mint-star
+mechanic still needs untouched), not just a single all-time-best cell in the
+Best row.
+3. **Gameweek Comparison**: multi-colour palette replaced with a single-hue
+orange ramp, six shades light→dark (`#FFD9B0`→`#B84413`), oldest season
+lightest, 2027 darkest. Seasons already iterate oldest-first automatically
+(numeric-string object keys sort ascending in JS regardless of source order —
+confirmed, not assumed).
+4. **Career Finishes**: Average moved to the last row (was first); stats
+unbolded (shared `.trktable td` CSS, same change serves Chip Performance too);
+gold/silver/bronze emoji next to the top 3 seasons by **finish %** (chosen over
+raw points as the era-independent "how well did I do" measure — flagged in case
+points was intended instead); a shaded, italicised 2026/27 pending row added at
+the top, populated from the live feed when present (total points and current
+rank), otherwise em-dashes.
+5. **Chip Performance**: unbolded via the same shared CSS change as #4.
+6. **Sub Tracker** — new panel, positioned right after Weekly Breakdown. Built
+against a defined contract with a clean waiting state, since **no per-player
+substitution data exists in the feed yet** (confirmed: only the aggregate weekly
+bench-points total is published; the Action's own comments explicitly note
+"Auto-substitutions are not modelled"). Contract:
+```
+S.tracker.gw[i].subs = [{outId, outName, outPts, inId, inName, inPts}]
+```
+**Follow-up prompt for the xFPL/infra chat**: FPL's own `picks` endpoint already
+returns an `automatic_subs` array (`{element_in, element_out}` per gameweek) —
+no need to reimplement substitution logic, just capture it alongside the
+already-fetched `picks` and `gwPoints` data, and publish points for both players
+using the live-points map already in memory during that build step.
+
+Files: index.html, app-core.js, app-squad.js, app-odds.js, app-main.js,
+app-tracker.js, sw.js. Version 10.5.0.
