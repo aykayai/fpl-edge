@@ -753,3 +753,88 @@ will show definitively whether the click is reaching the handler at all
 this analysis hasn't found yet). **Remove this console.log once diagnosed.**
 
 Files: app-core.js, app-squad.js, app-odds.js, app-main.js, sw.js. Version 10.9.1.
+
+## v11.1.0 — true-optimal Free Hit, real transfer tracking, form redesign
+Consolidated release — GitHub was still on 10.9.1 (v11.0.0's captain-cascade fix
+never landed either, same recurring upload issue). This build was continued
+directly from that verified work, so it's included here along with everything
+new: nothing lost, one upload catches everything up.
+
+### Free Hit — a real optimizer, not a heuristic
+Replaced `buildSquad('freehit',...)`'s greedy fill-by-position-then-locally-
+adjust approach with a genuine 0/1 Mixed-Integer Program, solved via
+`javascript-lp-solver` (branch-and-cut) — **the app's first external JS
+dependency**, loaded from CDN, flagged clearly. Chosen after research into
+what a rigorous approach actually requires: true budget-constrained squad
+selection is a real combinatorial optimization problem, and no hand-rolled
+heuristic can guarantee a global optimum.
+
+New `buildOptimalFreeHit(gw,budget)` in app-render.js models: 15 binary "in
+squad" variables, 15 binary "in starting XI" variables, and 15 binary
+"captain" variables per player, with constraints for squad composition
+(2/5/5/3), XI legality (1 GK, 3-5 DEF, 1-3 FWD — every formation considered
+**simultaneously**, not tried one shape at a time), one captain who must be in
+the XI, budget, and max-3-per-club. Objective: maximise XI value + captain's
+extra value.
+
+**Found and fixed a real bug while building this**: the first version used
+`ints` without an explicit bound, which let the solver select the same
+high-value player multiple times ("buying 2 or 3 copies") to satisfy count
+constraints, since general integers have no implicit upper bound. Switched to
+`binaries` — confirmed via the library's own source that this is the correct
+key for strict 0/1 variables.
+
+**Proved it beats the old heuristic**, not just assumed: built a deliberately
+adversarial test (a high-raw-value forward that's individually the "best" pick
+but expensive, vs a cheaper near-equal alternative that frees enough budget for
+a genuinely excellent midfielder). Under real budget pressure, the new solver
+correctly takes the cheaper forward and the elite midfielder — the exact
+cross-position trade the old greedy approach structurally cannot make, since it
+never explores giving up value in one position specifically to gain more in
+another.
+
+**Performance**: full unfiltered search was unpredictable (4-35 seconds
+depending on the random data's difficulty for branch-and-cut — unacceptable for
+a UI action). Added safe pre-filtering — top ~32 scorers plus cheapest ~10 per
+position (upper bound is generous; a true optimum essentially never includes a
+bottom-tier player at full price when better options exist, and cheap players
+are kept explicitly so "budget enabler" picks aren't lost). Verified side by
+side against an unfiltered search on the same data: **identical optimal
+answer**, ~200ms instead of tens of seconds.
+
+**Defence in depth**: 4-second solver timeout, plus full post-solve validation
+(squad size, position counts, XI legality, budget, club limits all re-checked
+independently) before the result is trusted. If the solver library fails to
+load, times out, returns infeasible, or produces anything that doesn't pass
+validation, `buildOptimalFreeHit()` returns `null` and `sqCard` transparently
+falls back to the existing heuristic — the user is never left with a broken or
+missing Free Hit team. Formation-selector buttons are now hidden on the Free
+Hit card specifically (Wildcard keeps them, unaffected) — forcing a shape would
+reintroduce exactly the limitation just removed, since the optimizer already
+searches every legal formation at once.
+
+### Free transfers — real local tracking, not just feed-dependent
+`S.ft` was previously never assigned anywhere in the codebase — literal dead
+state. New `localFtTrack()` (app-squad.js) walks forward one gameweek at a time
+whenever the live gameweek has advanced since the last check, applying the
+confirmed FPL rules: +1 per week capped at 5; Wildcard/Free Hit consume that
+week's transfer but leave the bank otherwise untouched; everything else counted
+from the real difference between consecutive weeks' resolved squads via the
+existing plan cascade (`effectiveSquadIds`). First-ever run sets a baseline at
+"now" rather than guessing backward through weeks that predate this feature —
+accurate going forward, honest about what it can't reconstruct. Tested against
+seven scenarios: no transfers, one transfer using a banked FT, a hit taken,
+rolling over to the cap, a Wildcard week (bank correctly untouched despite a
+total squad overhaul), and multiple weeks skipped between sessions — all pass.
+Header now reports which source is in play — official (feed, once it exists),
+tracked locally, or untracked default — rather than silently showing a number
+of unknown trustworthiness.
+
+### Form pill redesigned
+Colour-coded using the exact same `ptsCol()` band scheme as the predicted-
+points box (was flat grey regardless of value). Small trend-line icon, compact
+uppercase "FORM" label, bold value — replacing the plain "Form X.X" text
+string. Tested at both a high-form (elite green) and low-form (red) value.
+
+Files: index.html, app-core.js, app-render.js, app-squad.js, app-odds.js,
+app-main.js, sw.js. Version 11.1.0.
