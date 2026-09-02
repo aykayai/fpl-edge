@@ -711,3 +711,45 @@ actually-legal swap. Asked Andy which behaviour he's seeing (silent failure vs.
 a rejection message) before guessing at a fourth fix blind.
 
 Files: app-core.js, app-squad.js, app-odds.js, sw.js. Version 10.9.0.
+
+## v10.9.1 — critical: v10.9.0's real fix never actually went live + Raya diagnostic
+While investigating the Raya substitute report, discovered the v10.9.0 upload
+landed **partially and inconsistently**: `app-core.js` stayed on 10.8.0 entirely
+(missing the `snapshotPredictions` hooks), and `app-squad.js` ended up as a
+**mixed state** — it had the `writePlan()` snapshot-refresh hook but still had
+the OLD, broken `effectiveSquadIds()` (the v10.8.0 loop-based version that only
+works for future weeks). This means **the actual historical-squad-changes fix
+was never running** — Andy may have been testing against this broken hybrid,
+not the real v10.9.0 fix. `app-odds.js` was the only one of the four that
+matched exactly. Re-verified against the cached, tested v10.9.0 files line by
+line before re-deploying — no other divergence found, safe to overwrite.
+
+### Raya substitute — investigated further, temporary diagnostic added
+Andy confirmed: clicking ⇄ on Raya's pitch card does **nothing at all** — no
+toast, no highlight, not even the first tap's "Now tap who to swap with".
+Console showed zero errors related to the click (all errors present were
+unrelated pre-existing news-feed CORS/rate-limit failures). Confirmed `act()`
+has no try/catch anywhere, so a genuine JS exception would have surfaced as a
+visible red console error — its absence is reliable evidence no exception is
+occurring.
+
+Ruled out via source inspection: badge overlap (four badges sit at four
+distinct, non-overlapping corners), the GK's SVG having different bounds
+(identical viewBox/size to outfield kits, only the fill colours differ via
+`isGK`), `_gwLocked` disabling anything (it's set but never actually read
+anywhere in the codebase), and the onclick text differing for a misdetected
+bench state (traced through — resolves to the same `act('sub',...)` call
+regardless). Outfield substitutions are confirmed working, so this is specific
+to the GK card. Leading theory, unconfirmed: a CSS/layout quirk specific to the
+GK's pitch row, which is the only row that ever contains exactly one card
+(every outfield row has 3-5), and may behave differently under flex/grid
+alignment in a way that shifts the actual clickable area away from the visible
+badge.
+
+Added a temporary diagnostic — `case"sub"` now logs to console before anything
+else runs, unconditionally: `[DIAG] sub fired, a=…`. Next click on Raya's ⇄
+will show definitively whether the click is reaching the handler at all
+(pointing to CSS) or not (pointing to something upstream in event delegation
+this analysis hasn't found yet). **Remove this console.log once diagnosed.**
+
+Files: app-core.js, app-squad.js, app-odds.js, app-main.js, sw.js. Version 10.9.1.
