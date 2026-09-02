@@ -120,6 +120,10 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
  padding:1.5px 3px;border-radius:3px;line-height:1.3}
 .fxpill{margin-top:2px;border-radius:4px;padding:1.5px 3px;text-align:center;
  font-size:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.formpill{display:flex;align-items:center;justify-content:center;gap:2.5px;padding:2px 3px}
+.formpill svg{flex:none;opacity:.85}
+.formlbl{font-size:6px;font-weight:800;letter-spacing:.05em;opacity:.8}
+.formpill b{font-size:9.5px;font-weight:800;line-height:1}
 .ptsbar .fx{font-size:8.5px;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .next3{display:flex;gap:2px;margin-top:3px}
 .next3 span{flex:1;text-align:center;font-size:8px;line-height:14px;border-radius:3px;
@@ -463,6 +467,11 @@ details[open]>summary::after{content:" ▴"}
 </head>
 <body>
 <div class="wrap" id="app"></div>
+<!-- Free Hit's true-optimum solver — a real 0/1 integer-program solver (branch-
+     and-cut), used only for that one feature. Everything else in the app has no
+     external dependency; if this fails to load, buildOptimalFreeHit() detects
+     that and falls back to the existing heuristic automatically. -->
+<script src="https://unpkg.com/javascript-lp-solver/dist/solver.global.js"></script>
 <script src="./app-core.js"></script>
 <script src="./app-squad.js"></script>
 <script src="./app-render.js"></script>

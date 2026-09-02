@@ -62,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="10.9.1";
+const APP_VERSION="11.1.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -150,6 +150,9 @@ function ftFromFeed(){
   return clamp(Math.min(5,(last.ftAvailable-used)+1),0,5);
 }
 function freeTransfers(){const f=ftFromFeed();return f==null?(S.ft??1):f;}
+/* Whether the shown count is the feed's, local tracking's, or just the raw
+   untracked default — shown in the UI so it's clear how trustworthy it is. */
+function ftSource(){return ftFromFeed()!=null?"feed":(S.ftLastGw?"local":"default");}
 function badgeOrShirt(t,size){
   const sz=size||20;
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;flex:none">
@@ -225,7 +228,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
  outList:[],selected:null,menuOpen:false,compare:null,replacedBy:{},dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
@@ -247,7 +250,7 @@ async function loadAll(force){
     if(cached&&!force&&Date.now()-cached.t<1000*60*60*6){
       Object.assign(S,{players:cached.players,teams:cached.teams,fixtures:cached.fixtures,
         events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
-      buildModel();snapshotPredictions();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
+      buildModel();snapshotPredictions();localFtTrack();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
     }
     S.progress="players and prices…";render();
     const [players,pstats,teams]=await Promise.all([
@@ -509,7 +512,7 @@ async function loadAll(force){
     S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
     S.stamp=Date.now();
     LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,hist:S.hist,teamMatch:S.teamMatch});
-    buildModel();snapshotPredictions();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
+    buildModel();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
   }

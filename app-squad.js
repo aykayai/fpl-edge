@@ -159,7 +159,7 @@ const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
 
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
-  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
+  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,ftLastGw:S.ftLastGw,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
   planByGw:S.planByGw});}
 function resolveSeed(quiet){
   if(!S.model)return;
@@ -208,6 +208,25 @@ function effectiveSquadIds(g){
   let ids=((S.original&&S.original.length)?S.original:(S.squad||[])).slice();
   keys.forEach(e=>{const ov=plan[e];if(ov&&Array.isArray(ov.squad))ids=ov.squad.slice();});
   return {ids,fhWeek:chipForWeek(g)==="freehit"};
+}
+/* Same cascade as the squad itself — captain/vice need the same per-gameweek
+   history, not the single current S.captain/S.vice. Missing this was why a
+   past week always showed whoever the CURRENT captain is, rather than who was
+   actually captain that week (e.g. GW1 happening to look right because it
+   matches today's captain by coincidence, GW2 showing wrong because a captain
+   change since then overwrote the only place it was stored). */
+function effectiveCaptainVice(g){
+  const plan=S.planByGw||{};
+  const keys=Object.keys(plan).map(Number).filter(e=>e<=g)
+    .filter(e=>e===g||chipForWeek(e)!=="freehit")
+    .sort((a,b)=>a-b);
+  let captain=null,vice=null;
+  keys.forEach(e=>{const ov=plan[e];
+    if(ov&&ov.captain!==undefined)captain=ov.captain;
+    if(ov&&ov.vice!==undefined)vice=ov.vice;});
+  if(captain==null)captain=S.captain;
+  if(vice==null)vice=S.vice;
+  return {captain,vice};
 }
 const squadPlayers=()=>{
   _histCaptain=null;_histSquadActive=false;_gwLocked=false;
@@ -361,6 +380,37 @@ function editableGw(){
    later is to capture it *while* the week is still live. The very last snapshot
    taken before that week's deadline is exactly "the final predicted score
    saved before the deadline", which is what should persist. */
+/* Local free-transfer tracking — the feed still doesn't publish ftAvailable
+   (confirmed: 0 of the currently-published gameweek rows have it), and S.ft
+   was previously never updated by anything at all, frozen at its starting
+   value forever. This walks forward one gameweek at a time whenever the live
+   gameweek has advanced since the last check, applying the same confirmed
+   rule ftFromFeed() already uses: +1 per week capped at 5, Wildcard/Free Hit
+   consume that week's transfer but leave the bank otherwise untouched (their
+   squad change isn't counted as ordinary transfers), everything else counts
+   the real difference between that week's resolved squad and the week
+   before via the existing plan cascade. First-ever run sets a baseline at
+   "now" rather than guessing backward through weeks that predate this
+   feature — accurate from this point forward, honest about not being able
+   to reconstruct what it can't know. */
+function localFtTrack(){
+  if(!S.model)return;
+  const next=S.model.next.id;
+  const lastGw=S.ftLastGw||0;
+  if(lastGw===0){S.ftLastGw=next-1;return;}
+  if(lastGw>=next-1)return;
+  let ft=S.ft??1;
+  for(let g=lastGw+1;g<next;g++){
+    const kind=chipForWeek(g);
+    if(kind==="wildcard"||kind==="freehit")continue;   // bank unchanged, that week's FT went on the chip
+    const before=new Set(effectiveSquadIds(g-1).ids);
+    const after=effectiveSquadIds(g).ids;
+    const transfersMade=after.filter(id=>!before.has(id)).length;
+    const used=Math.min(ft,transfersMade);
+    ft=clamp((ft-used)+1,0,5);
+  }
+  S.ft=ft;S.ftLastGw=next-1;
+}
 function snapshotPredictions(){
   if(!S.model)return;
   const g=S.model.next.id;
@@ -708,7 +758,8 @@ const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="
 
 function cardHTML(p,bench){
   const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
-  const isC=(_histCaptain!=null?_histCaptain===p.id:S.captain===p.id),isV=_histCaptain==null&&S.vice===p.id,fl=S.flagged.includes(p.id);
+  const {captain:capForGw,vice:viceForGw}=effectiveCaptainVice(g);
+  const isC=(_histCaptain!=null?_histCaptain===p.id:capForGw===p.id),isV=_histCaptain==null&&viceForGw===p.id,fl=S.flagged.includes(p.id);
 
   const chipNow=chipForWeek(g);
   /* For a historical week, hPts() can't compute a real number (the model only
@@ -776,7 +827,10 @@ function cardHTML(p,bench){
    ${hasActual
      ?`<div class="fxpill" style="background:var(--ink2);color:var(--mute)">pred ${shownPts.toFixed(1)}
         <span style="font-weight:700;color:${diff>=0?"var(--mint)":"var(--red)"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`
-     :`<div class="fxpill" style="background:var(--ink2);color:var(--cream)">Form ${(p.form||0).toFixed(1)}</div>`}
+     :(()=>{const[fb,ff]=ptsCol(p.form||0);
+        return `<div class="fxpill formpill" style="background:${fb};color:${ff}">
+          <svg viewBox="0 0 14 10" width="10" height="8" aria-hidden="true"><path d="M0.5 8.5 L4 4.5 L6.5 6.5 L13.5 1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b></div>`;})()}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }

@@ -1058,7 +1058,8 @@ function render(){
         <div class="s">${rating?`best legal XI ${rating.best.toFixed(1)}`:"out of 100"}</div></div>
       <div class="stat"><div class="k">Free transfers</div>
         <div class="v" style="${chipForWeek(VG())==="freehit"?"color:var(--amber)":""}">${chipForWeek(VG())==="freehit"?"Unlimited":freeTransfers()}</div>
-        <div class="s">${chipForWeek(VG())==="freehit"?"Free Hit — this week only":(ftFromFeed()?"official · max 5":"max 5 banked")}</div></div>
+        <div class="s">${chipForWeek(VG())==="freehit"?"Free Hit — this week only":
+          {feed:"official · max 5",local:"tracked locally · max 5",default:"untracked · max 5"}[ftSource()]}</div></div>
       <div class="stat"><div class="k">Overall rank</div>
         <div class="v">${S.entryRank?S.entryRank.toLocaleString():"—"}</div>
         <div class="s">${S.entryRank?"live":"from GW1"}</div></div>

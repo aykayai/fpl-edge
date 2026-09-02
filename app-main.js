@@ -291,7 +291,7 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
   const st=LS.get("state");
   if(st&&(st.v===STATE_VERSION||st.v===3)){Object.assign(S,{squad:st.squad,original:st.original,captain:st.captain,
     vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null,
-    planByGw:st.planByGw||{}
+    planByGw:st.planByGw||{},ftLastGw:st.ftLastGw||0
     });S.seeded=!!(st.squad&&st.squad.length);}
   applyLearning();
   /* Not defaulted to a key: this file is public on GitHub Pages, and a free-tier
