@@ -1056,7 +1056,7 @@ function render(){
       <div class="stat"><div class="k">Team rating</div>
         <div class="v" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</div>
         <div class="s">${rating?`best legal XI ${rating.best.toFixed(1)}`:"out of 100"}</div></div>
-      <div class="stat"><div class="k">Free transfers</div><div class="v">${S.ft}</div><div class="s">max 5 banked</div></div>
+      <div class="stat"><div class="k">Free transfers</div><div class="v">${freeTransfers()}</div><div class="s">${ftFromFeed()?"official · max 5":"max 5 banked"}</div></div>
       <div class="stat"><div class="k">Overall rank</div>
         <div class="v">${S.entryRank?S.entryRank.toLocaleString():"—"}</div>
         <div class="s">${S.entryRank?"live":"from GW1"}</div></div>

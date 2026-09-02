@@ -90,7 +90,13 @@ function filtered(scope){
   let pos=list?S.lPos:S.fPos, team=list?S.lTeam:S.fTeam;
   const cap=list?S.lMax:S.fMax, q=(list?S.lSearch:S.fSearch)||"";
   if(!list){
-    const lock=S.flagged.length===1?S.model.players.find(p=>p.id===S.flagged[0])?.pos:0;
+    /* When the comparison squad is open and has a player flagged for replacement,
+       lock the pool to THAT player's position — otherwise the pool stayed keyed
+       to the main squad and there was no way to pick a replacement into the
+       comparison team. Falls back to the main-squad flag lock. */
+    const cFlag=S.compare&&(S.compare.flagged||[]).length
+      ? S.model.players.find(p=>p.id===S.compare.flagged[0])?.pos : 0;
+    const lock=cFlag||(S.flagged.length===1?S.model.players.find(p=>p.id===S.flagged[0])?.pos:0);
     if(lock&&S.fPos!==lock){S.fPos=lock;pos=lock;}
   }
   let out=S.model.players.filter(p=>(!pos||p.pos===pos)&&(!team||p.team===team)
@@ -176,18 +182,22 @@ const INJ=p=>p.avail===0?`<span title="${esc(p.news||"Unavailable")}" style="col
 function listHTML(){
   const g=VG();
   const a=sortList(filtered("planner"),S.lSort,S.lDir,g);
-  /* budget available: bank plus whatever the flagged players would raise */
-  const raised=(S.flagged||[]).reduce((t,id)=>{
+  const cmp=S.compare&&(S.compare.flagged||[]).length?S.compare:null;
+  /* budget available: bank plus whatever the flagged players would raise — in the
+     comparison context when a comparison player is flagged, else the main squad */
+  const flags=cmp?cmp.flagged:(S.flagged||[]);
+  const ownIds=cmp?cmp.squad:(S.squad||[]);
+  const raised=flags.reduce((t,id)=>{
     const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
-  const budget=+(S.bank+raised).toFixed(1);
-  const outP=(S.flagged||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+  const budget=+((cmp?cmp.bank:S.bank)+raised).toFixed(1);
+  const outP=flags.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
     ${cols.map(([k,n])=>`<span class="lc ${S.lSort===k?"act":""}" data-k="${k}" onclick="act('lsort','${k}')">${n}</span>`).join("")}</div>`;
   return head+a.slice(0,150).map(p=>{
-    const own=(S.squad||[]).includes(p.id);
+    const own=ownIds.includes(p.id);
     /* everything stays selectable; unaffordable players are simply dimmed */
-    const afford=!(S.flagged||[]).length || p.price<=budget+0.001 || own;
+    const afford=!flags.length || p.price<=budget+0.001 || own;
     /* against whoever is being sold in this position, if any */
     const out=outP.find(o=>o.pos===p.pos);
     const delta=out?hPts(p,g,S.horizon)-hPts(out,g,S.horizon):null;

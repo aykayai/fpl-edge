@@ -144,8 +144,10 @@ function act(k,a,b){
       else S.sortDir="desc";S.sortKey=a;break;}
     case"lsort":{if(a==="name")S.lDir=(S.lSort==="name"&&S.lDir==="asc")?"desc":"asc";
       else S.lDir="desc";S.lSort=a;break;}
-    case"cap":S.captain=a;if(S.vice===a)S.vice=null;saveState();break;
-    case"vice":S.vice=a;if(S.captain===a)S.captain=null;saveState();break;
+    case"cap":{const gw=editableGw();if(gw==null)break;S.captain=a;if(S.vice===a)S.vice=null;
+      writePlan(gw,null,{captain:a,vice:S.vice});saveState();break;}
+    case"vice":{const gw=editableGw();if(gw==null)break;S.vice=a;if(S.captain===a)S.captain=null;
+      writePlan(gw,null,{vice:a,captain:S.captain});saveState();break;}
     case"flag":{
       /* Un-flagging a player brought in as a replacement puts the original
          back, rather than leaving the squad a man short with a stale flag. */
@@ -190,18 +192,19 @@ function act(k,a,b){
         :(S.flagged.find(id=>P(id)?.pos===p.pos) ?? null);
       if(target){const o=P(target);
         if(o.pos!==p.pos){toast("Swap must be like for like — "+POS[o.pos]+" for "+POS[o.pos]);break;}
-        if(p.price>S.bank+sellPrice(o)+.001)
-        toast("Over budget by £"+(p.price-S.bank-sellPrice(o)).toFixed(1)+" — you can plan it, but not save it");
-        const clubs=(S.squad||[]).filter(i=>i!==target).filter(i=>P(i)?.team===p.team).length;
+        if(p.price>planBank()+sellPrice(o)+.001)
+        toast("Over budget by £"+(p.price-planBank()-sellPrice(o)).toFixed(1)+" — you can plan it, but not save it");
+        const clubs=(squadPlayers().map(x=>x.id)).filter(i=>i!==target).filter(i=>P(i)?.team===p.team).length;
         if(clubs>=3){toast("Max 3 per club");break;}
         applySwap(target,p.id);S.selected=null;toast(o.web_name+" → "+p.web_name);break;}
       /* players marked for transfer are treated as already gone, so they don't
          block a replacement at the same club or in the same position */
-      const cur=(S.squad||[]).filter(i=>!S.flagged.includes(i));
+      const cur=(squadPlayers().map(p=>p.id)||[]).filter(i=>!S.flagged.includes(i));
       if(cur.includes(p.id)){toast("Already in your squad");break;}
       if(cur.filter(i=>P(i)?.pos===p.pos).length>=SHAPE[p.pos]){toast("Already have "+SHAPE[p.pos]+" "+POS[p.pos]);break;}
       if(cur.filter(i=>P(i)?.team===p.team).length>=3){toast("Max 3 per club");break;}
-      S.squad=[...cur,p.id];S.bank=+(S.bank-p.price).toFixed(1);saveState();break;}
+      {const gw=editableGw();if(gw==null)break;
+       writePlan(gw,[...cur,p.id],{bank:+(planBank()-p.price).toFixed(1)});saveState();}break;}
     case"doswap":applySwap(a,b);S.pendingOpt=null;toast("Transfer made");break;
     case"opt":{S.forceXI=null;
       const g2=S.model.next.id;const xi=startingXI();
@@ -285,8 +288,9 @@ window.addEventListener("hashchange",()=>{if(applyHash())render();});
 window.addEventListener("popstate",()=>{if(applyHash())render();});
 (function(){
   const st=LS.get("state");
-  if(st&&st.v===STATE_VERSION){Object.assign(S,{squad:st.squad,original:st.original,captain:st.captain,
-    vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null
+  if(st&&(st.v===STATE_VERSION||st.v===3)){Object.assign(S,{squad:st.squad,original:st.original,captain:st.captain,
+    vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null,
+    planByGw:st.planByGw||{}
     });S.seeded=!!(st.squad&&st.squad.length);}
   applyLearning();
   /* Not defaulted to a key: this file is public on GitHub Pages, and a free-tier

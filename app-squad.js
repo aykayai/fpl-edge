@@ -159,7 +159,8 @@ const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
 
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
-  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy});}
+  vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
+  planByGw:S.planByGw});}
 function resolveSeed(quiet){
   if(!S.model)return;
   const used=new Set(),ids=[],miss=[];
@@ -186,30 +187,55 @@ function resolveSeed(quiet){
    was actually captained without squadPlayers() needing to return copies of
    the player objects (several call sites compare these by reference, e.g.
    xi.includes(p), so a spread copy would silently break those checks). */
-let _histCaptain=null,_histSquadActive=false;
-const squadPlayers=()=>{
-  _histCaptain=null;_histSquadActive=false;
-  const g=VG();
-  /* For a gameweek that's already finished, the officially-locked squad — from
-     the FPL API via the live-actuals feed — is the source of truth. S.squad is
-     today's ongoing squad and has no business being reapplied retroactively to
-     a week that's already been played; that mismatch was the root cause of a
-     past gameweek showing the wrong team even though its points were correct
-     (points come from a separately GW-indexed source, the squad list didn't).
-     Falls back to today's squad for the current/future week, or if the feed
-     doesn't have that week yet. */
-  if(S.model&&g<S.model.next.id&&S.tracker&&Array.isArray(S.tracker.gw)){
-    const row=S.tracker.gw.find(r=>r.event===g);
-    if(row&&Array.isArray(row.picks)&&row.picks.length){
-      const list=[];
-      row.picks.forEach(pk=>{
-        const p=S.model.players.find(x=>x.id===pk.id);
-        if(p){list.push(p);if(pk.multiplier>=2)_histCaptain=p.id;}
-      });
-      if(list.length){_histSquadActive=true;return list;}
-    }
+let _histCaptain=null,_histSquadActive=false,_gwLocked=false;
+/* The squad shown depends on which gameweek is being viewed:
+   - a finished GW: the officially-locked squad from the feed (immutable);
+   - the current/future GW: the base squad (S.squad) with any local per-GW plan
+     overrides that cascade forward — an edit made for GW10 carries into GW11+
+     until GW11 is itself edited. Free Hit is isolated: its week's squad neither
+     reads from nor writes to the surrounding weeks. */
+function effectiveSquadIds(g){
+  const next=S.model?S.model.next.id:1;
+  /* Free Hit week: a self-contained one-week squad. Start from the plan as it
+     stood the week before, apply only that week's own overrides, and never let
+     it flow into later weeks (handled by skipping FH weeks in the cascade). */
+  const fhWeek=chipForWeek(g)==="freehit";
+  const plan=S.planByGw||{};
+  let ids=(S.squad||[]).slice();
+  /* Apply every planned override from the current week up to and including g,
+     in order, skipping any Free Hit week that isn't g itself. */
+  for(let e=next;e<=g;e++){
+    if(e!==g&&chipForWeek(e)==="freehit")continue;   // a past FH doesn't persist forward
+    const ov=plan[e];
+    if(ov&&Array.isArray(ov.squad))ids=ov.squad.slice();
   }
-  return (S.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+  /* For a Free Hit week with no explicit override yet, ids already reflect the
+     pre-FH plan (the loop above skipped no earlier FH and stopped before g's own
+     absence), which is exactly "the team the week before" — correct default. */
+  return {ids,fhWeek};
+}
+const squadPlayers=()=>{
+  _histCaptain=null;_histSquadActive=false;_gwLocked=false;
+  const g=VG();
+  const next=S.model?S.model.next.id:1;
+  /* Finished gameweek → the officially-locked squad, immutable. */
+  if(S.model&&g<next){
+    _gwLocked=true;
+    if(S.tracker&&Array.isArray(S.tracker.gw)){
+      const row=S.tracker.gw.find(r=>r.event===g);
+      if(row&&Array.isArray(row.picks)&&row.picks.length){
+        const list=[];
+        row.picks.forEach(pk=>{const p=S.model.players.find(x=>x.id===pk.id);
+          if(p){list.push(p);if(pk.multiplier>=2)_histCaptain=p.id;}});
+        if(list.length){_histSquadActive=true;return list;}
+      }
+    }
+    /* feed hasn't published that week's picks yet — best-effort from the base
+       squad, clearly still marked locked so no edits are offered */
+    return (S.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+  }
+  const {ids}=effectiveSquadIds(g);
+  return ids.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
 };
 function startingXI(){
   const sp=squadPlayers();if(!sp.length)return[];
@@ -314,12 +340,44 @@ function bestCombo(outIds){
   const freed=S.bank+outs.reduce((a,p)=>a+p.price,0);
   return{picks,gain:picks.reduce((a,m)=>a+m.gain,0),left:+(freed-spent).toFixed(1),freed:+freed.toFixed(1)};
 }
+/* Persist an edit to the viewed gameweek's plan. Snapshots the currently-effective
+   squad into planByGw[g] so the edit applies to g and every later week (cascade),
+   without disturbing earlier weeks. For the current gameweek it also updates the
+   base squad, so "now" and the plan stay in step. */
+function editableGw(){
+  const g=VG(), next=S.model?S.model.next.id:1;
+  if(g<next){toast("Gameweek "+g+" is locked — its deadline has passed");return null;}
+  return g;
+}
+function writePlan(g,ids,extra){
+  const next=S.model?S.model.next.id:1;
+  if(g===next){                       // editing the live week updates the base squad directly
+    if(ids)S.squad=ids.slice();
+    if(extra){if(extra.captain!==undefined)S.captain=extra.captain;
+      if(extra.vice!==undefined)S.vice=extra.vice;if(extra.bank!==undefined)S.bank=extra.bank;}
+  }
+  S.planByGw=S.planByGw||{};
+  const prev=S.planByGw[g]||{};
+  S.planByGw[g]={...prev,...(ids?{squad:ids.slice()}:{}),...(extra||{})};
+}
 function applySwap(oid,iid){
+  const g=editableGw();if(g==null)return;
   const o=S.model.players.find(p=>p.id===oid),i=S.model.players.find(p=>p.id===iid);
   if(!o||!i)return;
-  S.squad=S.squad.map(x=>x===oid?iid:x);
-  S.bank=+(S.bank+o.price-i.price).toFixed(1);
+  const cur=squadPlayers().map(p=>p.id);
+  const ids=cur.map(x=>x===oid?iid:x);
+  const bank=+((planBank())+o.price-i.price).toFixed(1);
+  const extra={bank};
+  if(S.captain===oid)extra.captain=iid;
+  if(S.vice===oid)extra.vice=iid;
+  writePlan(g,ids,extra);
   S.flagged=S.flagged.filter(x=>x!==oid);S.forceXI=null;saveState();
+}
+/* bank as it stands for the viewed week's plan */
+function planBank(){
+  const g=VG(), next=S.model?S.model.next.id:1;
+  if(g>next&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)return S.planByGw[g].bank;
+  return S.bank;
 }
 /* Historical returns for this manager, shown alongside each projection */
 const TRANSFER_MIN=1.0;   // a suggestion has to be worth the transfer
@@ -651,12 +709,19 @@ function cardHTML(p,bench){
      would render a misleading "0.0" (and colour it as a bad projection) rather
      than making clear no data exists for that week. */
   const noHistData=g<S.model.next.id&&!p.gw[g]&&!hasActual;
-  const fixTxt=q.fixtures.length?q.fixtures.map(f=>
-    `${esc(f.opp)} (${f.home?"H":"A"})`).join(", "):null;
-  let n3="";for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
-    if(!w||w.blank){n3+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
-    const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
-    n3+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${e} · ${f.home?"home":"away"} · difficulty ${posDiff(p,f)}">${esc(f.opp.slice(0,3))}</span>`;}
+  let n3="";
+  if(g<S.model.next.id){
+    /* Historical gameweek: show only the opponent for that week, not the next 3. */
+    const w=p.gw[g];
+    if(w&&!w.blank&&w.fixtures[0]){const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
+      n3=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${g} · ${f.home?"home":"away"}">${esc(f.opp.slice(0,3))}</span>`;
+    }else n3=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;
+  }else{
+    for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
+      if(!w||w.blank){n3+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
+      const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
+      n3+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${e} · ${f.home?"home":"away"} · difficulty ${posDiff(p,f)}">${esc(f.opp.slice(0,3))}</span>`;}
+  }
   const sub=S.subFrom===p.id;
   /* Bench players show their sub-order number; tapping ⇄ mid-substitution receives
      the swap. Outfield subs also cycle their order when idle (benchcycle); the
@@ -677,15 +742,12 @@ function cardHTML(p,bench){
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
    <div class="ptsbar" style="background:${noHistData?"var(--ink3)":bg};color:${noHistData?"var(--mute)":fg}${elite&&!noHistData?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
-    <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):shownPts.toFixed(1))}
-      ${hasActual?`<span class="final">FINAL</span>`:""}</div>
+    <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):shownPts.toFixed(1))}</div>
     ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}</div>
    ${hasActual
      ?`<div class="fxpill" style="background:var(--ink2);color:var(--mute)">pred ${shownPts.toFixed(1)}
         <span style="font-weight:700;color:${diff>=0?"var(--mint)":"var(--red)"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`
-     :(fixTxt?(()=>{const f0=q.fixtures[0],[fb,fc]=fdrCol(posDiff(p,f0));
-        return `<div class="fxpill" style="background:${fb};color:${fc};${f0.home?"":"font-style:italic"}">${esc(fixTxt)}</div>`;})()
-     :`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">—</div>`)}
+     :`<div class="fxpill" style="background:var(--ink2);color:var(--cream)">Form ${(p.form||0).toFixed(1)}</div>`}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }

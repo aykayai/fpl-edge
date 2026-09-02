@@ -45,7 +45,7 @@ async function loadActuals(){
     if(d.players)S.playerActuals=d.players;
   }catch(e){ /* feed not published yet — leave the waiting states in place */ }
 }
-const TEAM_ID="301830", STATE_VERSION=3;
+const TEAM_ID="301830", STATE_VERSION=4;
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
 const NAV=[
   {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["chips","Chips"],["rivals","Rivals"],["tracker","Tracker"]]},
@@ -62,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="10.7.0";
+const APP_VERSION="10.8.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -128,6 +128,28 @@ const BODY="M13.5 6 L11 7.2 L11 34 L29 34 L29 7.2 L26.5 6 L24.5 8.4 Q20 11.6 15.
 /* Team crest with a graceful fallback to the shirt graphic — same onerror
    pattern already used for player photos, so a wrong/missing badge never
    breaks the layout, it just silently shows the shirt instead. */
+/* Free transfers available this gameweek.
+   FPL rules (confirmed from the official site + multiple sources, 2025/26+):
+   • 1 FT granted at each deadline; unused ones roll over, capped at 5.
+   • Triple Captain and Bench Boost do NOT consume the weekly transfer.
+   • Wildcard and Free Hit DO use that week's transfer, but banked FTs are kept.
+   The only reliable source is the feed (it depends on real transfer + chip
+   history the client can't fully see), so ftFromFeed() is preferred; S.ft is a
+   local fallback until the feed publishes ftAvailable. */
+function ftFromFeed(){
+  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
+  const g=S.model.next.id;
+  /* The feed's ftAvailable is "before this week's transfers" for the latest
+     published (finished) week. The current, not-yet-deadlined week's allowance =
+     last finished week's leftover + 1, capped at 5. */
+  const rows=S.tracker.gw.filter(r=>r.ftAvailable!=null).sort((a,b)=>a.event-b.event);
+  if(!rows.length)return null;
+  const last=rows[rows.length-1];
+  if(last.event>=g)return clamp(last.ftAvailable,0,5);
+  const used=Math.min(last.ftAvailable,(last.transfers||0));
+  return clamp(Math.min(5,(last.ftAvailable-used)+1),0,5);
+}
+function freeTransfers(){const f=ftFromFeed();return f==null?(S.ft??1):f;}
 function badgeOrShirt(t,size){
   const sz=size||20;
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;flex:none">
@@ -203,7 +225,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
  outList:[],selected:null,menuOpen:false,compare:null,replacedBy:{},dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
