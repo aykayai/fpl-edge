@@ -195,24 +195,19 @@ let _histCaptain=null,_histSquadActive=false,_gwLocked=false;
      until GW11 is itself edited. Free Hit is isolated: its week's squad neither
      reads from nor writes to the surrounding weeks. */
 function effectiveSquadIds(g){
-  const next=S.model?S.model.next.id:1;
-  /* Free Hit week: a self-contained one-week squad. Start from the plan as it
-     stood the week before, apply only that week's own overrides, and never let
-     it flow into later weeks (handled by skipping FH weeks in the cascade). */
-  const fhWeek=chipForWeek(g)==="freehit";
+  /* Resolves the squad for ANY gameweek — past, current, or future — by
+     finding every recorded plan entry at or before g and applying them in
+     order, latest wins. A Free Hit week is excluded from this search unless
+     it IS g itself, so its one-off changes never carry into a later week
+     (including once that later week itself becomes historical — this same
+     function is now used for locked weeks too, not just future planning). */
   const plan=S.planByGw||{};
-  let ids=(S.squad||[]).slice();
-  /* Apply every planned override from the current week up to and including g,
-     in order, skipping any Free Hit week that isn't g itself. */
-  for(let e=next;e<=g;e++){
-    if(e!==g&&chipForWeek(e)==="freehit")continue;   // a past FH doesn't persist forward
-    const ov=plan[e];
-    if(ov&&Array.isArray(ov.squad))ids=ov.squad.slice();
-  }
-  /* For a Free Hit week with no explicit override yet, ids already reflect the
-     pre-FH plan (the loop above skipped no earlier FH and stopped before g's own
-     absence), which is exactly "the team the week before" — correct default. */
-  return {ids,fhWeek};
+  const keys=Object.keys(plan).map(Number).filter(e=>e<=g)
+    .filter(e=>e===g||chipForWeek(e)!=="freehit")
+    .sort((a,b)=>a-b);
+  let ids=((S.original&&S.original.length)?S.original:(S.squad||[])).slice();
+  keys.forEach(e=>{const ov=plan[e];if(ov&&Array.isArray(ov.squad))ids=ov.squad.slice();});
+  return {ids,fhWeek:chipForWeek(g)==="freehit"};
 }
 const squadPlayers=()=>{
   _histCaptain=null;_histSquadActive=false;_gwLocked=false;
@@ -230,9 +225,18 @@ const squadPlayers=()=>{
         if(list.length){_histSquadActive=true;return list;}
       }
     }
-    /* feed hasn't published that week's picks yet — best-effort from the base
-       squad, clearly still marked locked so no edits are offered */
-    return (S.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+    /* Feed hasn't published that week's official picks yet — fall back to the
+       LOCAL plan cascade (same logic used for a future week) rather than
+       today's live squad. This is the fix: the previous fallback returned
+       S.squad directly, which is today's squad and changes with every future
+       transfer — meaning every historical week silently tracked whatever the
+       user's squad happened to be *right now*, and Free Hit's isolation never
+       even ran for a week once it became historical, since this fallback
+       bypassed effectiveSquadIds() (where the FH-skip logic lives) entirely.
+       The cascade correctly freezes each week to whatever was last written to
+       planByGw at or before that week — which is exactly what real edits
+       already write when made while a week is live — and still respects the
+       FH-skip. */
   }
   const {ids}=effectiveSquadIds(g);
   return ids.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
@@ -349,6 +353,24 @@ function editableGw(){
   if(g<next){toast("Gameweek "+g+" is locked — its deadline has passed");return null;}
   return g;
 }
+/* Snapshots each squad member's predicted points for the CURRENT live gameweek
+   into planByGw[next].predByPlayer, refreshed on every load and every edit made
+   during that week. The model only ever computes predictions forward from the
+   live gameweek — once a week passes into history there is no way to ask it
+   "what would you have predicted then", so the only way to have a real number
+   later is to capture it *while* the week is still live. The very last snapshot
+   taken before that week's deadline is exactly "the final predicted score
+   saved before the deadline", which is what should persist. */
+function snapshotPredictions(){
+  if(!S.model)return;
+  const g=S.model.next.id;
+  const sp=(S.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+  if(!sp.length)return;
+  const predByPlayer={};
+  sp.forEach(p=>{predByPlayer[p.id]=hPts(p,g,1);});
+  S.planByGw=S.planByGw||{};
+  S.planByGw[g]={...(S.planByGw[g]||{}),predByPlayer};
+}
 function writePlan(g,ids,extra){
   const next=S.model?S.model.next.id:1;
   if(g===next){                       // editing the live week updates the base squad directly
@@ -359,6 +381,7 @@ function writePlan(g,ids,extra){
   S.planByGw=S.planByGw||{};
   const prev=S.planByGw[g]||{};
   S.planByGw[g]={...prev,...(ids?{squad:ids.slice()}:{}),...(extra||{})};
+  if(g===next)snapshotPredictions();
 }
 function applySwap(oid,iid){
   const g=editableGw();if(g==null)return;
@@ -688,7 +711,13 @@ function cardHTML(p,bench){
   const isC=(_histCaptain!=null?_histCaptain===p.id:S.captain===p.id),isV=_histCaptain==null&&S.vice===p.id,fl=S.flagged.includes(p.id);
 
   const chipNow=chipForWeek(g);
-  const shownPts=hPts(p,g,S.horizon)*(isC?(chipNow==="3xc"?3:2):1);
+  /* For a historical week, hPts() can't compute a real number (the model only
+     projects forward) — use the snapshot captured while that week was still
+     live, if one was taken. */
+  const snapPred=(g<S.model.next.id&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].predByPlayer
+    &&S.planByGw[g].predByPlayer[p.id]!=null)?S.planByGw[g].predByPlayer[p.id]:null;
+  const basePred=snapPred!=null?snapPred:hPts(p,g,S.horizon);
+  const shownPts=basePred*(isC?(chipNow==="3xc"?3:2):1);
   /* Actual points for this specific gameweek — only present once the live-actuals
      feed has that GW. Captain-multiplied the same way as the prediction, so the two
      compare like-for-like (both = "contribution to the squad total"). */
@@ -708,7 +737,7 @@ function cardHTML(p,bench){
      with no live-actuals data yet has no real number to show — the naive shownPts
      would render a misleading "0.0" (and colour it as a bad projection) rather
      than making clear no data exists for that week. */
-  const noHistData=g<S.model.next.id&&!p.gw[g]&&!hasActual;
+  const noHistData=g<S.model.next.id&&!p.gw[g]&&snapPred==null&&!hasActual;
   let n3="";
   if(g<S.model.next.id){
     /* Historical gameweek: show only the opponent for that week, not the next 3. */
