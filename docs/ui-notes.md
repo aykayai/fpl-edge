@@ -1,0 +1,647 @@
+# UI and bugs — notes
+
+## This chat's authority
+May add or remove tabs, restructure navigation, and change any copy or layout
+across the whole app. The xFPL and FDR chats change only their own logic.
+
+## File layout (since v8.3)
+The app was one 276KB `index.html`, which truncated on raw fetch and left chats
+editing markup they could not see. Now split into six files, loaded in order as
+classic scripts sharing one global scope:
+
+| File | Size | Holds |
+|---|---|---|
+| `index.html` | 25KB | Markup, styles, script tags |
+| `app-core.js` | 73KB | Data loading, team ratings, FDR, prediction model |
+| `app-squad.js` | 53KB | Signals, squad, transfers, chips, news, dashboard |
+| `app-render.js` | 55KB | Player card, pitch, list, tables, page markup |
+| `app-odds.js` | 58KB | Bookmaker odds |
+| `app-main.js` | 14KB | Actions and init — **must load last** |
+
+Which file to fetch:
+- **xFPL chat** → `app-core.js`
+- **FDR chat** → `app-core.js`
+- **UI chat** → `index.html`, plus `app-render.js` and/or `app-squad.js`
+- Odds work → `app-odds.js`
+
+`APP_VERSION` lives in `app-core.js`. Bump it and `CACHE` in `sw.js` together.
+
+## Structure
+Hash routing (`#/team-planner`, `#/transfers`, …) via the `NAV` array — add or
+remove a page there and in the `S.tab` render switch in `app-render.js`.
+
+## Icon system
+One shield silhouette, gradient plus gloss highlight, drawn as SVG. Differential
+diamond, hot-streak flame, attack football, defence shield-and-tick, DefCon stop
+sign, nailed stopwatch, caution triangle. Set pieces use the same shield.
+
+**Spacing gotcha**: signal and set-piece groups are separate spans. Nesting flex
+gaps made the join between groups wider than gaps within them — fixed with
+`display:contents` so every badge sits in one flex row.
+
+## The recurring trap: stale caches
+Several rounds have been lost to a build being live but showing old behaviour.
+The service worker caches separately from the browser, and an installed PWA
+keeps its own again. When something "isn't working":
+1. Check the footer version first.
+2. Bump `CACHE` in `sw.js` on every release — always.
+3. Clearing requires: uninstall the PWA, clear browser cache, hard reload.
+
+The `.js` files are served **network-first** by the service worker, so a new
+release reaches users on next load rather than being pinned to a stale cache.
+
+## Recent fixes worth remembering
+- Name-bar click called `pick` (prepares transfer) not `card`.
+- Two separate failure blocks existed in the Odds tab; editing one left the
+  other live. Check for duplicates before assuming an edit didn't apply.
+- Player Pool markup differed from what an edit assumed — verify the target
+  string exists before trusting a replacement.
+
+## v9.1 changes
+Menu: `xFPL Model` moved into a new **Models** group (its own `NAV` group after Tools).
+Header/sticky bar: the Refresh button moved out of the header into the sticky
+mini-stats row, restyled as an orange pill (`.gwrefresh`) width-matched (132px) and
+aligned with the GW selector (`.gwpill`, also min-width 132px).
+Player Data: column headers stay visible — the table now lives in a bounded
+`.tallscroll` container (`max-height:calc(100vh - 168px)`) with `position:sticky`
+`thead th`; Signals column moved after Price and widened to fit 5 icons on one row
+(`.sigcell` max-width 96px, `.sig` shrunk to 15px in that column); **all** orange
+columns for the filtered position — position-specific AND highlighted generals
+(CS %, DefCon %, Start %…) — now cluster together right after xMins (the generals
+are pulled from their base positions and re-inserted, position-specific first).
+Team Planner:
+- **Compare "doesn't work" was the over-long pool** pushing `compareHTML` (rendered
+  full-width below the grid) off-screen. Fixed by bounding the pool height.
+- Pool pegged to the squad/dashboard column via an absolute-fill trick: on desktop
+  `.poolcol{position:relative}` + `.poolpanel{position:absolute;inset:0}` so the
+  panel contributes 0 intrinsic height — the grid row is sized by the left column
+  and the pool fills it and scrolls internally (was stretching to its own 150-row
+  content, which is why it ran long). Breakpoint aligned to 900px to match `.grid2`.
+- Bench order: `orderBench` now always puts the keeper first; the ⇄ cycle
+  (`benchcycle`) reorders **outfield subs only** — GK is fixed at bench position 1.
+  `cardHTML(p, {slot, cycle})`: cyclable outfield show a tappable order number;
+  the keeper shows its number but doesn't cycle.
+- Compare + Optimise buttons moved off the header onto the pitch overlay, right-
+  aligned level with the Pitch/List toggle (`.pitchctl` spanning left:8px right:8px,
+  `justify-content:space-between`). Header now holds only Reset + Save.
+- Player Pool transfer suggestions (`replHTML`) only show options that improve the
+  pick by **+0.1 or more**.
+
+**Open question for Andy:** the Refresh button was moved into the sticky bar beside
+the GW selector (orange, width-matched). Confirm that placement is what "align with
+the GW selector" meant, or say where you'd prefer it.
+
+## v9.2 — Tracker page (Plan → Tracker)
+New file **`app-tracker.js`** (loaded after app-odds.js, before app-main.js; new
+`<script>` in index.html). Holds `TRACKER_HISTORY` (static past-season data) + all
+`trk*` render functions. Wired via `NAV` Plan group + `TABPATH.tracker` (app-core),
+a `render()` case in app-odds, and `act('trkstat',…)` (chart stat picker) in app-main.
+State: `S.tracker` (current-season feed, null until wired), `S.trkStat` (chart stat).
+(Also bundles the v9.1.1 "Refresh back in the header" revert, since GitHub was still
+at 9.1.0 with Refresh in the sticky bar.)
+
+Two data sources:
+- **history** — committed in `TRACKER_HISTORY.seasons`. Overall/Best/Worst are
+  computed across *all* seasons present, so adding a season widens them automatically.
+  Currently only 25/26, and only the 5 clean rows (points, gwRank, orRank, captain,
+  value); rankChange is derived from orRank.
+- **current** — the FPL-API GitHub Action (same one the xFPL page needs) publishes
+  into `S.tracker`:
+  ```
+  S.tracker = { season, totalPlayers, gw:[{event,points,gwRank,orRank,bank,value,
+    transfers,transferCost,bench,captain,off1m,off500k,off100k,transferDiff}] }
+  ```
+  `entry/{id}/history/` covers most of it in one call; captain needs per-GW
+  `event/{gw}/picks/`; **off1m/off500k/off100k are not in the FPL API** — LiveFPL's
+  /rank is a JS app (no static HTML to scrape), so these come from the weekly feed or
+  are supplied. Until `S.tracker` exists the summary/table show a waiting state.
+
+Design: three bands (Average / Best / Worst) of stat cards, each showing This
+season / Last season / All-time; an SVG GW-comparison line chart (one line per
+season, rank stats flipped so up = better); chip panel awaiting season-labelled data.
+
+**Open data asks (blocking full population):**
+1. Chip table season labels were garbled (`26/27 24/25 24/25 23/34 22/23 21/22`).
+2. Transfer Pts Diff + No. Transfers rows had blank cells that collapsed on paste.
+3. Earlier seasons (2021–2025) to make the All-time column meaningful.
+Wanted as clean per-GW arrays (38 values, blanks explicit) per stat per season.
+
+## v9.2.1 — Tracker data populated
+Five past seasons now baked into `TRACKER_HISTORY` (2026→2022, labelled by end year;
+current live season = 2027 from the Action). Clean rows per season: points, gwRank,
+orRank, captain (not 2022), value, transferDiff (rankChange derived from orRank).
+transferDiff stores non-blank values only — fine for Average/Best/Worst (order-
+independent), so it's shown in cards but kept off the comparison chart (blank GW
+positions unknown). All-time = across all five seasons; Last season = 2026. Chip
+panel now renders the real 8-chip × 5-season table, with a 2027 column reserved for
+the current season once the feed lands.
+Changed files: app-tracker.js, app-core.js (APP_VERSION 9.2.1), sw.js (cache).
+
+## v9.2.2 — Tracker redesign
+- **Historical section grouped by stat** (points/gwRank/orRank/rankChange/transferDiff/
+  captain), 2 cards per row (`.tgrid2`). Each card = a mini 3×3 table: Avg/Best/Worst ×
+  This yr / Last / All-time. The This-yr column is tinted with the stat's accent
+  (`.tnow`, color-mix), and the single all-time-best value is starred (`.tbest`/`.tstar`).
+- **Gameweek comparison is now a grouped bar chart** (was a line). One bar per season
+  per GW, value printed above each bar (rotated, compacted — ranks show as 6.1M/975k).
+  Paginated 10 GWs at a time via `act('trkgw','prev'|'next'|'all')` + `S.trkGwStart`/
+  `S.trkGwAll`; "Show all" renders 38 GWs in a horizontally-scrollable SVG.
+- **Career finishes** panel (`TRACKER_FINISHES`, 20 seasons of official FPL data:
+  points net of hits, final rank, % finish). Best points and best % finish are starred.
+  Note: per-GW "GW Points" are gross; the official season totals are net of transfer
+  hits, so summing GW points runs higher (e.g. 2023 by ~114) — expected, not a bug.
+- **Chip + finishes tables** use a new `.trktable` style (Sora labels, Barlow Condensed
+  numbers) so they match the rest of the site instead of the default mono cell font.
+Changed: app-tracker.js, index.html, app-core.js (9.2.2 + trkGw state), app-main.js
+(trkgw action), sw.js (cache).
+
+## v9.3.0
+Player Data: player-name column stays visible when scrolling right (sticky first
+column, th+td `:first-child` `position:sticky;left:0`, `--ink2` bg); Signals never
+wraps (`.sigcell` `flex-wrap:nowrap`, icons 14px) so 5 fit on one row; every column
+header has a concise `title` tooltip (`TDESC`).
+Team Planner: comparison squad now renders inside the left column, under the squad
+and above the chips (was full-width below); the pool lengthens to match via the
+existing absolute-fill peg. Projected-points row shows **actual** big + predicted
+small + highlighted difference when `S.actuals[gw]` is present (predicted-only until
+the FPL-API feed provides it).
+Transfers: new **Compare players** radar above the planner — up to 3 players
+(`S.radarIds`, `act('radarpick')`) via dropdowns (own squad + top ~180 by xFPL),
+position-aware axes (same-position → that position's stats, else general), each axis
+scaled to the strongest compared player, one colour per player. **Team of the Week
+removed** (covered by the Chips Free Hit team); `totwCard` left as dead code.
+State added: radarIds, actuals. Version 9.3.0.
+OPEN QUESTION — Free Hit "same rules": TOTW used a flat £100 budget (best-possible
+XI); the Chips Free Hit team uses your team value + bank. Left as-is pending Andy's
+call on which budget rule to apply.
+
+## v9.3.1 — actual points wired
+**New shared feed, one contract, three consumers.** `loadActuals()` (app-core.js)
+fetches `https://raw.githubusercontent.com/aykayai/fpl-edge/main/data/actuals.json`
+after every load (cached-data fast path too, since own-entry data moves faster than
+the 6h core-data cache). Fails silently (try/catch, checks `r.ok`) if the file
+doesn't exist yet — every consumer already has a waiting state. Contract:
+```
+{ season, team:{ totalPlayers, gw:[{event,points,gwRank,orRank,bank,value,
+    transfers,transferCost,bench,captain,off1m,off500k,off100k,transferDiff}],
+    chips:{name:points} },
+  players:{ "<player_id>": { "<gw>":points } } }
+```
+Populates: `S.tracker` (Tracker page — contract unchanged, matches exactly),
+`S.actuals` (planner header — unchanged, matches exactly), `S.playerActuals` (new).
+
+**Per-player actual points (pitch cards):** `cardHTML` now checks
+`S.playerActuals[p.id][g]`. When present, the points bar shows **actual** as the
+primary number, **predicted** small underneath with the difference colour-coded
+(new `.pv2` CSS). Captain-multiplied the same way as the prediction so the two are
+comparable. Falls back to predicted-only until that GW is in the feed. Season-to-
+date **actual total** (`p.total` — genuinely live today, no Action needed, it's the
+same `total_points` field FPL Core Insights already publishes) is now shown as a
+tooltip on every card ("142 pts this season (actual)").
+
+**xFPL page — Predicted vs Actual widget**, top of page: squad-level predicted
+(via new `weekPtsFor(g)`, a VG()-independent version of `weekPts()`) vs actual
+(from `S.actuals`), with ← → to browse gameweeks (`act('xfplgw',...)`,
+`S.xfplGW`). Defaults to the most recently played GW. **Caveat documented in the
+UI comment**: "predicted" for a past GW is the model's *current* calibration
+applied retrospectively, not a snapshot of what was shown before that GW's
+deadline — a true snapshot would need the Action to record predictions pre-
+deadline, which is a separate ask (see prompt given to Andy for the xFPL chat).
+
+State added: playerActuals, xfplGW. Version 9.3.1.
+
+## v9.4.0 — Compare players redesigned
+Full rebuild of the Transfers-page radar (`radarHTML`, app-render.js):
+- **Search-to-select** replaces the three `<select>` dropdowns — each slot is a text
+  input with a live `.rsdrop` results list (`act('radarsearch',i,text)`), matching
+  name or team, capped at 8 results sorted by xFPL. Picking fills a chip
+  (shirt + name + team + price + ✕ to clear, `act('radarclear',i)`).
+- **One position at a time.** The first pick locks `lockedPos`; search results for
+  the other slots are filtered to it, and `act('radarpick',...)` also rejects a
+  stray mismatched id defensively (belt-and-braces alongside the UI-level filter).
+  Removed the old "mixed positions" general-axes fallback — no longer reachable.
+- **Own squad players included** — the candidate pool is every player of the locked
+  position, not pre-filtered by ownership (search narrows it, nothing excludes it).
+- **Colours: green/orange/off-white** (`var(--mint)`, `var(--amber)`, `var(--cream)`)
+  — the most contrasting trio already in the palette, assigned to players 1/2/3 in
+  that order, used consistently across chips, table, legend and radar polygons.
+- **Defenders: xGI/90 → xMins** in `AXSET[2]`.
+- **Summary table**, left of the radar on desktop (`.rgrid`, stacks under 760px):
+  one row per axis, one column per player, shirt (`shirtSVG`) as the "picture" —
+  the app has no real player-photo source, so this matches how every other page
+  represents players. Per-row best is bolded in that player's colour with a ★
+  (only when ≥2 players are active).
+  **Note:** the ★ appears only on the table's rows once ≥2 players are picked.
+- **xFPL horizon slider** (`.rhorizon`, native range 0–4 styled like the site's
+  existing sliders): 1 / 3 / 5 / 10 GWs / Rest of season. Scoped to the **xFPL axis
+  only** (`gwsFor(curH)` feeds `hPts`) — the per-90 rate axes (xG/90, xGI/90, etc.)
+  keep using the page's existing recent-form window, since "Rest of season" has no
+  backward-looking equivalent. Flagged to Andy in case broader scope was intended.
+- Layout redesigned to match site conventions throughout: `.panel`/`.phead`/`.pbody`,
+  `.note` for meta text, same card/border/radius language as Tracker's stat cards.
+State added: radarSearch, radarHorizon (replaces nothing — radarIds kept). Old
+`.rsel` CSS removed, replaced with the full `.rslot`/`.rsdrop`/`.rtable`/`.rgrid`
+etc. component set. Version 9.4.0.
+
+## v9.4.1 — bugfix: couldn't scroll back past the current gameweek
+**Root cause:** `VG()` (app-core.js) and the `startgw` action (app-main.js) both
+clamped their lower bound to `S.model.next.id` (today's gameweek) instead of 1 —
+left over from before the app had any reason to look backward. Both "Earlier
+gameweek" arrow buttons (app-odds.js, planner + sticky bar) independently hardcoded
+the same floor via `Math.max(S.model.next.id,VG()-1)`. All four fixed to floor at 1.
+
+**Side effect handled:** the model only computes projections forward from the
+current gameweek (`p.gw[e]` is built starting at `S.model.next.id`), so a naive
+unlock would show a false "0.0" (and a bad-projection colour) on every pitch card
+for a historical week. `cardHTML` now detects `noHistData` (past week, no
+projection, no actual-points data) and shows a neutral "— · no data for GW{g}"
+state instead. Once the live-actuals feed has that week, the card correctly shows
+the actual points instead, same as any other tracked gameweek.
+
+**Known gap, scoped out for now:** the comparison-squad card (`compareHTML`'s card
+builder) still shows a raw predicted number with no historical guard — it's a
+secondary view (used when comparing transfer scenarios) rather than the main
+pitch, so I left it as-is. Flag it if you hit a stray 0.0 there while browsing
+history and I'll apply the same fix.
+
+Files: app-core.js, app-main.js, app-odds.js, app-squad.js, sw.js. Version 9.4.1.
+
+## v9.5.1 — recovering from a lost upload (v9.4.2/9.4.3/9.5.0 never stuck)
+GitHub was found stuck reporting v9.4.1 well after v9.4.2, v9.4.3, and v9.5.0 had
+all been built and delivered. Investigated via the repo's commit history (not
+guessable from raw file fetches alone): confirmed a real GitHub Action now exists
+(`actuals.yml` / `build-actuals.mjs`, committed by the xFPL chat per this UI chat's
+recommendation) and is running every few hours — **the live-actuals feed is
+genuinely populated now**, separate from this incident entirely.
+
+Diffed every live file against this chat's own cached copies line by line before
+touching anything, specifically to rule out a cross-chat clobber on the shared
+`app-core.js`. Result: every live file differed from the cached copies by *exactly
+and only* the specific v9.4.2/9.4.3/9.5.0 fixes — no foreign content, nothing from
+another chat lost or overwritten. So nothing needed preserving; the safe path was
+to simply re-deliver the known-correct file set.
+
+Root cause is presumed to be an older zip/folder re-uploaded by mistake, landing
+last among several rapid "Add files via upload" commits on Aug 25 (commit history
+shows ~7 upload events that day) — consistent with Andy's own observation that day
+that zip-naming needed to be clearer to avoid exactly this kind of mix-up.
+
+This release reconsolidates v9.4.2 (GW1 navigation floor fix — `VG()`, `startgw`,
+the sticky-bar arrows, the planner's own "GAMEWEEK X" slider, and the Fixtures page
+pagination), v9.4.3 (the `dashData` historical-gameweek crash fix + the matching
+compare-card no-data state), and v9.5.0 (Tracker alignment/layout/derived-columns
+work) into one version number, since the intermediate numbers never stuck. No new
+functional changes beyond what those three releases already contained.
+
+## v10.0.0 — Chips page
+Built on the v9.5.1 recovery set (GitHub was still on 9.4.1 at build time, so this
+release also carries everything from v9.4.2/9.4.3/9.5.0 — see the v9.5.1 note).
+
+**Chip sync — fixed properly, not patched.** `S.activeChip` (a second, independent
+copy of "which chip is live") is **removed entirely** — from state init, saveState,
+and the restore block. Everything now derives from the schedule via the existing
+`chipForWeek(g)` helper, which `weekPts()` already used. `cardHTML`'s captain
+multiplier now calls `chipForWeek(g)` instead of reading `S.activeChip`, and
+`act('achip')` writes only `S.chips`. Consequences: selecting a chip on the Chips
+page (`setchip`, which only ever wrote `S.chips`) now immediately applies on the
+Planner — the previously missing direction — and it is structurally impossible for
+the two to disagree or for a stale chip to stay applied after browsing to another
+gameweek. The Planner's own chip buttons already derived their lit state from
+`chipForWeek(VG())`, so they needed no change.
+
+**Layout:** chips now render two per row (`.chipgrid2`) in the order Wildcard +
+Bench Boost, then Free Hit + Triple Captain; stacks to one column under 900px.
+
+**Locked-chip (orange `.chiplocked`) formats**, computed fresh for the week actually
+chosen — `chipPlan()` only pre-computes the top three recommended weeks, so a new
+`lockedDetail(k,e)` derives the detail for any locked week:
+- Triple Captain: `GW7 · Salah · WOL (A) · +9.0 pts`
+- Bench Boost: `GW7 · Raya (BOU (H)), Mbeumo (EVE (H)), … · +5.0 pts`
+- Wildcard / Free Hit: `GW7 · +12.0 pts`
+Bench Boost bench order runs GK first (via `orderBench`). Note the nested
+parentheses in the BB format are literal to the spec ("Bench GK (Fixture)" where a
+fixture is itself "EVE (H)") — flagged to Andy, trivially flattened if unwanted.
+
+**Chip timeline bars** now show the uplift above each bar (`.tlval`); `.tlweek`
+widened 26px→30px to fit. Blank when the uplift rounds to zero.
+
+**Free Hit actual points.** Free Hit is a single-week team, so once that week's
+actuals land the card shows real points — per player (actual big, projection small,
+colour-coded difference, same treatment as the Planner pitch card) and an actual
+squad total vs projected in the card header. Captain-multiplied to match the
+projection. **Deliberately Free Hit only** — Wildcard spans five gameweeks, so a
+one-week actual would misrepresent it. `chipCard(p,t,showActual)` gained the flag.
+
+**Icons below fixtures** on Free Hit and Wildcard cards (`.cardsigs` moved after
+`.next3` in `chipCard`), matching the Team Planner pitch card.
+
+**Consensus line: skipped** at Andy's instruction (it had never existed in the
+codebase — no trace in any file or prior note — so there was nothing to reintroduce
+and no source to base community consensus on).
+
+## v10.1.0 — Rivals rebuilt around league 391690
+Replaces the manual "add a rival, paste 15 names" flow entirely with a league-driven
+page fed by a new `data/rivals.json` (new `loadRivals()` in app-core.js, fetched
+alongside `loadActuals()` on both load paths). The manual paste path is **removed** —
+the feed supersedes it. Waiting state renders until the feed exists.
+
+Page structure: **league table** (rank, movement arrows, team/manager, GW pts, total;
+own row highlighted mint and not clickable, tap a rival to select) → **league-wide
+summary** (Threats = players rivals own that Andy doesn't, ranked by how many rivals
+own them; Your differentials = players no rival owns; Transfer activity = moves/hits/
+gain per rival) → **selected rival detail** (GW points, captain + captain points,
+transfers + hit, transfer points, free transfers, chips used with uplift) →
+**head-to-head** with a toggle between *GW{next} projected* and *GW{last} actual*,
+showing each side's differentials and the net edge.
+
+Actual-mode values come from the existing `S.playerActuals` feed, so no new player-
+points plumbing was needed. Unknown player ids in a rival's picks are filtered out
+rather than crashing; every panel has an explicit empty state.
+
+New state: rivalsFeed, rivalPick, rivalGwView. New actions: rivalpick, rivalgw.
+New CSS: .rvsum, .rvrow, .rvchip.
+
+**Contract this page expects (needs building in the xFPL/infra chat — prompt given
+to Andy):**
+```
+data/rivals.json
+{ season, leagueId, leagueName, lastEvent, updated,
+  standings:[{entryId,entryName,manager,rank,lastRank,gwPoints,totalPoints}],
+  entries:{ "<entryId>":{ name, manager,
+    gw:[{event,points,totalPoints,overallRank,bank,value,transfers,transferCost,
+         bench,captainId,captainPts,transferDiff,ftAvailable,
+         picks:[{id,multiplier}]}],
+    chips:[{name,label,event,uplift}] } } }
+```
+Every endpoint needed is already proven in `scripts/build-actuals.mjs`
+(leagues-classic standings, entry history, entry event picks, entry transfers,
+event live), so this is that script's logic run across 7 entry ids.
+
+**Two derivations flagged as inference, not fact:**
+- `ftAvailable` — not exposed by the API for other managers. Derived per Andy:
+  start 1 at GW1, +1/week, minus transfers made. Wildcard/Free Hit weeks must not
+  consume a free transfer, and the current rules cap the bank at 5 — both handled in
+  the spec given to the xFPL chat, but the number remains reconstructed.
+- `chip uplift` — Bench Boost = bench points that week; Triple Captain = the
+  captain's raw score (the extra 1×). Wildcard/Free Hit need a counterfactual (the
+  prior week's squad scored in the chip week), which is approximate by nature.
+Version 10.1.0.
+
+## v10.2.0 — Odds tab: player-props bug fixed
+**Root cause**, confirmed with a reproduction test before fixing: `oddsFixtures()`
+dropped a fixture entirely — including its player-scorer/assist/card markets —
+whenever Correct Score or the Match Winner market failed to parse for that match.
+Player-props extraction never actually needed that data; it was an incidental
+casualty of a gate meant for a completely different feature (the Attack/Defence
+xG panels). Test proved the exact failure: the old `oddsFixtures()` returned 0
+fixtures (and thus 0 player data) on a mock event where Correct Score was
+malformed but Anytime Goalscorer/Player To Score or Assist were both present and
+valid — matching what Andy's own diagnostic showed live (21 markets returned,
+including several player-level ones, but the "Score or assist" table stayed blank).
+
+**Fix:** `oddsFixtures()` now keeps every fixture where at least one team could be
+identified, attaching `goals:null` when the expected-goals parse fails rather than
+discarding the fixture. Every downstream consumer of `.goals` — `marketPoints()`
+(clean sheet/conceded/keeper-save contribution), the Attack panel, the Defence
+panel, and the squad panel's CS% column — now checks `fx.goals` before reading it,
+so none of them crash or show stale data when it's null. Concretely: even when a
+match's own expected-goals can't be derived, a player's own goal/assist/card odds
+still contribute to their **market** points estimate — previously that entire
+attacking-return component was silently zero for nearly every player.
+
+**"Your squad · market vs model"** panel re-sorted per Andy: was sorted by
+model/market disagreement, now sorted by position (GK first) then price ascending
+(cheapest first within each position — the plain reading of "ordered by price";
+flag if descending was intended, one-line change). Header copy updated to match.
+
+Files: app-core.js (version only), app-odds.js, sw.js. Version 10.2.0.
+
+## v10.5.0 — consolidated release (10.2.0 → 10.5.0 in one, GitHub upload issue recurred)
+Same pattern as the v9.5.1 recovery: GitHub was found stuck at 10.2.0 despite two
+further versions (10.3.0 player-props/sort fix, 10.4.0 score-box redesign) having
+been delivered. Diffed every live file against this chat's own cached copies
+before touching anything — differences were exactly and only this chat's own
+pending changes, nothing foreign, nothing to preserve beyond what's already held.
+Consolidated all pending work into this one release rather than deliver another
+set of increments that might again not stick.
+
+### Team Planner: historical squad now reads the official record
+Root cause of "wrong team for GW1" confirmed precisely: `squadPlayers()` read
+only the current, flat `S.squad` — completely gameweek-unaware, so any past week
+showed today's squad reapplied backward. Fixed by making `squadPlayers()`
+GW-aware: for a finished gameweek, it now returns the officially-locked squad
+from `S.tracker.gw[].picks` (already fetched by the actuals Action for computing
+captain points — this data existed unused). Falls back to `S.squad` for the
+current/future week or if the feed has no picks for that GW yet.
+
+**Implementation care taken**: returns the actual `S.model.players` object
+references (not spread copies) so reference-equality checks elsewhere in the
+codebase (`xi.includes(p)` etc.) keep working — verified with a dedicated test.
+Captain badge now derives from the historical feed's `multiplier` field when
+viewing a past week (`_histCaptain`, a module-level variable set as a side effect
+of `squadPlayers()`, read by `cardHTML`); vice-captain badge simply doesn't show
+for historical weeks, per Andy — that field isn't in the feed. A small
+`official squad · GW{n}` confirmation note appears near the gameweek header when
+this path is active, with a tooltip caveat about the one remaining gap below.
+
+**Known gap, flagged not hidden**: the feed's `picks` only kept `{id,
+multiplier}` — the `position` field (formation slot 1–15, which distinguishes
+starting XI from bench) was stripped during capture. So `startingXI()` still
+auto-computes a best-XI from predicted points for a historical week, which are
+near-zero (the model doesn't project backward) — meaning the specific XI/bench
+split shown for a past week is a best-effort reconstruction, not guaranteed to
+match who actually started. Squad membership and captain are fully accurate;
+only the XI/bench split has this residual limitation.
+**One-line fix available**: `build-actuals.mjs`'s `row.picks = squad.map(p =>
+({id: p.element, multiplier: p.multiplier}))` → add `position: p.position` (the
+raw FPL API already returns it, just discarded). Given to the xFPL/infra chat as
+a follow-up; not required for today's fix to be a real improvement.
+
+### Cross-device sync for the live/in-progress squad — investigated, not built
+Andy confirmed: keep the live squad free-form (not mirroring the real official
+team), sync across devices "only if a relatively small fix". Genuine assessment,
+not guessed: writing to GitHub directly from the browser isn't safe (would need
+an exposed write-capable token sitting in a public repo). The smallest honest
+option is one small external key-value store — e.g. a single Cloudflare Worker
+with KV storage (~30-40 lines), read/written by a sync code the user sets once.
+That's a new piece of infrastructure, even if a small one — presented to Andy for
+an explicit go-ahead before building, rather than assumed to qualify as "small".
+
+## v10.4.0 (folded into this release) — Team Planner score box redesign
+Colour bug fixed: was always computed from the *predicted* value even when the
+*actual* value was displayed, so a past week with no real prediction (near-zero,
+model only projects forward) coloured red regardless of the real result. Now
+follows whichever number is shown. Fixture text removed from inside the score
+box; a single pill below it shows the fixture, or swaps to "predicted X.X
+(+/-diff)" once the actual is known. FINAL tag marks a real result. No more "No
+fixture" text anywhere — neutral dash instead. Verified against four scenarios.
+Optimise button's captain/vice logic was checked and found already exactly as
+requested (top-two predicted scorers in the starting XI) — no change made.
+
+## v10.5.0 — Tracker page polish (6 items)
+1–2. **Historical Performance**: "Avg" → "Average", band labels bold, stat
+values unbold (shared `.tmini` CSS). Every band (Average/Best/Worst) now
+highlights its own best column in orange (`.thibest`, new — dedicated rather
+than reusing the shared `.tbest`, which Career Finishes' existing mint-star
+mechanic still needs untouched), not just a single all-time-best cell in the
+Best row.
+3. **Gameweek Comparison**: multi-colour palette replaced with a single-hue
+orange ramp, six shades light→dark (`#FFD9B0`→`#B84413`), oldest season
+lightest, 2027 darkest. Seasons already iterate oldest-first automatically
+(numeric-string object keys sort ascending in JS regardless of source order —
+confirmed, not assumed).
+4. **Career Finishes**: Average moved to the last row (was first); stats
+unbolded (shared `.trktable td` CSS, same change serves Chip Performance too);
+gold/silver/bronze emoji next to the top 3 seasons by **finish %** (chosen over
+raw points as the era-independent "how well did I do" measure — flagged in case
+points was intended instead); a shaded, italicised 2026/27 pending row added at
+the top, populated from the live feed when present (total points and current
+rank), otherwise em-dashes.
+5. **Chip Performance**: unbolded via the same shared CSS change as #4.
+6. **Sub Tracker** — new panel, positioned right after Weekly Breakdown. Built
+against a defined contract with a clean waiting state, since **no per-player
+substitution data exists in the feed yet** (confirmed: only the aggregate weekly
+bench-points total is published; the Action's own comments explicitly note
+"Auto-substitutions are not modelled"). Contract:
+```
+S.tracker.gw[i].subs = [{outId, outName, outPts, inId, inName, inPts}]
+```
+**Follow-up prompt for the xFPL/infra chat**: FPL's own `picks` endpoint already
+returns an `automatic_subs` array (`{element_in, element_out}` per gameweek) —
+no need to reimplement substitution logic, just capture it alongside the
+already-fetched `picks` and `gwPoints` data, and publish points for both players
+using the live-points map already in memory during that build step.
+
+Files: index.html, app-core.js, app-squad.js, app-odds.js, app-main.js,
+app-tracker.js, sw.js. Version 10.5.0.
+
+## v10.7.0 — Fixtures page overhaul (8 of 9 items; TV channels investigated, not built)
+Consolidated release again — GitHub still hadn't picked up 10.6.0 when this batch
+started, so this carries that forward too (index.html, app-core.js, app-render.js,
+app-main.js, sw.js all included).
+
+1. **Attack + Defence target panels** now share a row (`.trkrow2`, reused from the
+   Tracker page) — was two full-width panels stacked with plain string
+   concatenation, never actually wrapped in a grid despite looking like it should
+   be. Caught this exact gap with a test before shipping.
+2. **5-week average opponent score** added to each target row (`x.avg`, was
+   already computed by the existing `targets()` function but never displayed).
+3. **Pill spacing fixed** — root cause: some fixture lists joined pills with a
+   literal space character (`.join(" ")`), others used a flex `gap` — two
+   different spacing mechanisms producing visibly different results. Unified
+   under one `.pillrow` wrapper (flex, 4px gap) everywhere pills appear.
+4. **Full team names** on the primary row label in both the by-club table and
+   target panels (target panels already had this; by-club table was abbreviated).
+   Deliberately kept the small FDR pills abbreviated — full names wouldn't fit in
+   a compact fixture pill and every FDR pill already carries the full name in its
+   hover tooltip.
+5. **Attack/Defence icons replace the "kind run" 🏃 icon** — reused the existing
+   `ICON_ATT`/`ICON_DEF` signal glyphs (already used elsewhere for player signals)
+   rather than inventing new icons, so the visual language stays consistent.
+6. **Club/Gameweek and Overall/Attackers/Defenders combined** into two `.pseg`
+   segmented-control groups (existing component, already styled orange for its
+   active state — no new CSS needed) and moved onto their own row below the
+   "Fixtures" title, out of the header.
+7. **By-gameweek view**: attack/defence icons beside each team (via a shared
+   `strongSide()` helper), italics removed from the away team's name (the small
+   FDR pill's own italic — used globally to mean "away" — was left alone,
+   already independent of the name text), and a new **last 3 results** strip per
+   team. Derived entirely from data already loaded — `S.fixtures[].hs`/`.as`
+   populate once a match is actually played, no new data source needed. Shows
+   W/D/L with a small H/A subscript, coloured, tooltip with the exact score.
+8. **Team badges replace shirt icons** everywhere on this page —
+   `resources.premierleague.com/premierleague/badges/50/t{code}.png`, same
+   `onerror`-to-shirt-graphic fallback pattern already proven for player photos.
+   New shared helper `badgeOrShirt(team, size)` in app-core.js. **Caveat**: the
+   exact badge path wasn't confirmable with certainty from documentation — best
+   estimate from the same CDN and code convention as the already-working player
+   photo, but if it 404s the page still looks correct (silent fallback to the
+   shirt graphic), so a wrong guess costs nothing visible.
+
+## Item 9 — TV channel per fixture: investigated, not built
+Checked both referenced sites directly. Findings:
+- **wheresthematch.com** is real, human-maintained, and does carry the current
+  2026/27 Premier League schedule with exact channels (confirmed live — e.g.
+  Crystal Palace v Man City, Fri 28 Aug, Sky Sports Main Event). It's
+  server-rendered HTML, not an API — no clean JSON feed.
+- **sportontvireland.ie** is a client-rendered SPA — its content loads via JS
+  after the page shell, so even a server-side fetch sees nothing without running
+  a full browser (much heavier than a plain HTML scrape).
+
+Same fundamental constraint as everything else needing outside data: the
+browser can't fetch either site directly (no CORS), so this needs the same
+"Action fetches, publishes JSON, app reads it" pattern used for actuals/rivals.
+**But this one carries a different risk profile than those**: the FPL API is
+public infrastructure the whole fantasy-football developer community already
+builds against; wheresthematch.com is a commercial third-party site with its
+own Terms of Service, whose content is manually curated by their team rather
+than published as a stable feed — meaning regular automated scraping is a
+different kind of dependency (their HTML structure can change without notice,
+breaking the scraper silently, and it's worth checking their ToS before
+committing to it rather than assuming it's fine because the data is public).
+Flagged for Andy's explicit decision rather than built.
+
+## v10.8.0 — Team Planner: per-gameweek squad spine + two bug fixes
+Big architectural batch. **FPL transfer rules confirmed** from the official
+Premier League site + multiple corroborating sources: 1 FT per deadline, rolls
+over capped at 5; Triple Captain and Bench Boost do NOT use the weekly transfer;
+Wildcard and Free Hit DO use that week's transfer but keep banked FTs; Free Hit
+is temporary (reverts next week), Wildcard permanent.
+
+### Per-gameweek squad plan (`planByGw`) — the spine several items needed
+`squadPlayers()` now resolves the effective squad for the *viewed* gameweek:
+- **finished GW** → the officially-locked squad from the feed, immutable
+  (`_gwLocked`), no edits offered;
+- **current/future GW** → base squad + local per-GW overrides that **cascade
+  forward** (an edit for GW10 carries into GW11+ until GW11 is itself edited),
+  never backward.
+Edits route through new `editableGw()` (refuses locked weeks with a toast) +
+`writePlan(g,ids,extra)` (snapshots into `planByGw[g]`; also updates the base
+squad when editing the live week). `applySwap`, both `listpick` paths, and
+`cap`/`vice` now go through this. State schema bumped to v4; **v3 saved state is
+migrated forward, not discarded**, so squads aren't lost on upgrade.
+- **Free Hit isolation**: a Free Hit week reads "the team the week before" and
+  its changes don't flow into later weeks (the cascade skips past FH weeks) —
+  exactly the requested revert behaviour, driven off the chip schedule
+  (`chipForWeek`), so it activates when Andy assigns the Free Hit chip.
+- Verified with tests: GK swap works, forward-cascade correct, past weeks locked.
+
+### Free transfers in the header — feed-confirmed
+New `freeTransfers()`/`ftFromFeed()` derive the count from the feed's
+`ftAvailable` using the confirmed rules (leftover after last week's transfers, +1,
+capped at 5). Falls back to local `S.ft` until the feed provides it. Tested
+against roll-over, cap, and hit scenarios.
+**BLOCKER, flagged**: the live `data/actuals.json` currently publishes **neither
+`picks` nor `ftAvailable`** — the Action computes both internally (build-actuals.mjs
+lines ~171–212) but strips them from output. So the historical-squad fix (v10.5.0)
+and this free-transfer count both sit inert until the Action includes them.
+**Prompt for the xFPL/infra chat**: in `build-actuals.mjs`, stop stripping `picks`
+(add `position: p.position` to each pick too, for the XI/bench split) and
+`ftAvailable` from each published gw row.
+
+### Bugs fixed
+- **GK couldn't be transferred via ✕**: the old `applySwap` mutated `S.squad`
+  directly; the rewrite (routing through the plan, operating on the *effective*
+  squad) fixes GK swaps — confirmed with a test.
+- **Couldn't transfer into the comparison squad**: the player pool (`filtered`,
+  `listHTML`) had no awareness of `S.compare` — it stayed locked to the main
+  squad's position/budget/ownership. Now when a comparison player is flagged, the
+  pool locks to that position and uses the comparison squad's bank and ownership
+  for affordability/dimming, so picks route into the compare team.
+
+### Clean items
+- Pitch card: the opponent pill (duplicated the next-3 pills below) replaced with
+  a **Form** pill.
+- **FINAL badge removed** from actual scores.
+- **Historical gameweeks** show only that week's opponent in the fixture pill, not
+  the next 3.
+- **Bigger jerseys on laptop** (`@media(min-width:1000px)` scales the kit SVG to
+  48px on the pitch + bench).
+- **Optimise vice-captain** = 2nd-highest predicted — confirmed already correct
+  (`rank[1]`), no change needed.
+- **GW1 predicted score persisting**: this needs the pre-deadline prediction
+  snapshot, which only the Action can capture — same dependency as the picks/ft
+  blocker above; noted, not independently fixable client-side.
+
+Files: index.html, app-core.js, app-render.js, app-squad.js, app-odds.js,
+app-main.js, sw.js. Version 10.8.0.
