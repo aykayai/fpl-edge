@@ -645,3 +645,69 @@ and this free-transfer count both sit inert until the Action includes them.
 
 Files: index.html, app-core.js, app-render.js, app-squad.js, app-odds.js,
 app-main.js, sw.js. Version 10.8.0.
+
+## v10.9.0 — the real fix for historical squads + Free Hit + predicted score
+v10.8.0's fix was genuinely incomplete — verified and corrected, not re-guessed.
+
+### Root cause (shared by 3 of the 4 reported issues)
+`squadPlayers()`'s locked-week branch fell back to `S.squad` directly whenever
+the feed had no `picks` for that week (which is currently *every* week, since
+the feed doesn't publish `picks`/`ftAvailable` yet — flagged last release).
+`S.squad` is today's live squad, so every historical week silently displayed
+whatever the squad happens to be *right now* — reproducing the exact bug, and
+also meaning Free Hit's isolation logic (which lived in `effectiveSquadIds()`)
+never even ran once that week became historical, since this fallback bypassed
+it entirely.
+
+**Compounding bug found while fixing it**: `effectiveSquadIds(g)`'s loop was
+`for(let e=next;e<=g;e++)` — it only ever executes when `g>=next` (a future
+week). Wiring the locked-week fallback to call it for `g<next` (a past week)
+would have silently done nothing, since the loop condition is never true.
+Rewrote the function to search the *entire* plan history at or before `g`
+(oldest to newest, latest wins, excluding a Free Hit week that isn't `g`
+itself) rather than only walking forward from "now" — this works correctly for
+any gameweek, past, current, or future, using one code path.
+
+Verified with a battery of tests: an edit at GW7 doesn't touch GW5/GW6 but
+correctly appears from GW7 onward; a Free Hit at GW8 correctly shows the FH
+squad for GW8 only and GW9+ reverts to the pre-FH team — confirmed both while
+GW8 is still "current" AND after the whole scenario has become historical
+(`next.id` advanced past all of it), which is the exact case that was silently
+broken before.
+
+### Predicted score for historical weeks
+The model only ever computes predictions forward from the live gameweek — once
+a week is in the past there is no way to ask it retroactively, so the only way
+to have a real number later is to capture it *while* that week is still live.
+New `snapshotPredictions()`: captures each squad member's predicted points into
+`planByGw[next].predByPlayer`, refreshed on every load (both load paths) *and*
+every edit made during that week (`writePlan` triggers a refresh when editing
+the live week) — so a passive user who never transfers still gets an updated
+snapshot just by opening the app, and the very last snapshot taken before a
+deadline is exactly "the final predicted score before the deadline." `cardHTML`
+now checks this snapshot first for a historical week, falling back to the (
+near-zero) live recompute only if no snapshot was ever taken — e.g. a week the
+user never opened the app during at all. Verified: snapshot correctly persists
+the real number after `next.id` advances and the live model would otherwise
+return 0.
+
+### Free transfers header — "Unlimited" for Free Hit weeks
+Both places the transfer count is shown (the stat card and the sticky
+mini-stats bar) now display **Unlimited** (amber) when the *viewed* gameweek
+has the Free Hit chip applied (`chipForWeek(VG())==="freehit"`), reverting to
+the normal feed-confirmed count the following week automatically, since it's
+computed live from the chip schedule rather than stored separately.
+
+### Raya substitute bug — investigated, not resolved
+Traced exhaustively: the `sub` action handler, `trySub`, `legalXI`, and the
+card-rendering onclick wiring are **byte-for-byte identical** between the pitch
+and list views — both dispatch the same action through the same code path.
+Found no code-level asymmetry that would explain a pitch-only failure. Two real
+possibilities: (a) a CSS/click-target issue specific to the GK's pitch card
+that isn't visible from source alone, or (b) the attempted swap is GK-for-
+outfield, which `legalXI` correctly rejects everywhere (exactly-1-goalkeeper is
+a real FPL rule) — and the "works in list view" case may be a different,
+actually-legal swap. Asked Andy which behaviour he's seeing (silent failure vs.
+a rejection message) before guessing at a fourth fix blind.
+
+Files: app-core.js, app-squad.js, app-odds.js, sw.js. Version 10.9.0.
