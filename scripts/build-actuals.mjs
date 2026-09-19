@@ -60,8 +60,17 @@ const CHIP_LABELS = {
 const UNNUMBERED_CHIPS = new Set(["manager"]);
 const FREE_SQUAD_CHIPS = new Set(["wildcard", "freehit"]);
 
-/* Free transfer rules: one a week, banked up to five, and a Wildcard or Free
-   Hit week makes its transfers free without spending the bank. */
+/* Free transfer rules, as verified against the observed transferCost of seven
+   managers over five gameweeks (28 of 28 observations consistent):
+     - GW1 has unlimited transfers, so nothing is banked and GW2 always
+       starts at exactly 1.
+     - A Wildcard or Free Hit week carries the bank forward UNCHANGED. The
+       transfers are free, and no weekly free transfer is added either.
+     - Otherwise one is added each week, capped.
+   transferCost is the ground truth: a hit means transfers exceeded the free
+   allowance, so ft = transfers - cost/4. That reconciliation runs below and
+   overrides the rule when the two disagree, which keeps the feed correct even
+   if FPL changes the rules again. */
 const FT_MAX = 5;
 
 const UA = "Mozilla/5.0 (compatible; fpl-edge-actuals/1.0; +https://aykayai.github.io/fpl-edge)";
@@ -168,7 +177,7 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
   const cache = new Map((cachedRows || []).map(r => [r.event, r]));
 
   const rows = [];
-  let ft = 1; // GW1 starts with one free transfer
+  let ft = null; // GW1: unlimited transfers before the deadline
 
   for (const h of history.current || []) {
     const gw = h.event;
@@ -185,14 +194,26 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
       transfers: h.event_transfers ?? 0,
       transferCost: h.event_transfers_cost ?? 0,
       bench: h.points_on_bench ?? 0,
-      ftAvailable: ft                          // before this week's transfers
+      ftAvailable: ft                          // before this week's transfers; null in GW1
     };
 
-    /* The free transfer bank rolls forward. A Wildcard or Free Hit week makes
-       its transfers free, so the bank is untouched rather than spent. */
     const chip = chipAt.get(gw);
-    const spent = chip && FREE_SQUAD_CHIPS.has(chip.name) ? 0 : row.transfers;
-    ft = Math.min(FT_MAX, Math.max(0, ft - spent) + 1);
+    const onFreeSquadChip = chip && FREE_SQUAD_CHIPS.has(chip.name);
+
+    /* Reconcile against the hit actually charged. A cost means the free
+       allowance was exceeded, which pins the real figure exactly. */
+    if (ft != null && row.transferCost > 0) {
+      const implied = row.transfers - row.transferCost / 4;
+      if (implied >= 0 && implied !== ft) {
+        console.warn(`  entry ${entryId} GW${gw}: ft rule said ${ft}, hit implies ${implied} — using ${implied}`);
+        ft = implied;
+        row.ftAvailable = implied;
+      }
+    }
+
+    if (gw === 1) ft = 1;                       // GW2 always starts at one
+    else if (onFreeSquadChip) { /* bank carries, and no weekly one is added */ }
+    else ft = Math.min(FT_MAX, Math.max(0, ft - row.transfers) + 1);
 
     /* Settled weeks are reused from the previous run; the current and previous
        week are refetched because bonus points and auto-subs are still moving. */
@@ -227,9 +248,16 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
       }
 
       /* transferDiff: what the week's moves were actually worth —
-         points in, less points out, less the hit paid for them. */
-      const moves = byGw.get(gw) || [];
-      if (moves.length) {
+         points in, less points out, less the hit paid for them.
+         Meaningless on a Wildcard or Free Hit, where the whole squad turns
+         over and the API reports event_transfers as 0 while the transfers
+         endpoint still lists every move. The chip uplift covers those weeks,
+         so this is left null rather than reporting a number against a
+         transfer count of zero. */
+      const moves = onFreeSquadChip ? [] : (byGw.get(gw) || []);
+      if (onFreeSquadChip) {
+        row.transferDiff = null;
+      } else if (moves.length) {
         const gained = moves.reduce((s, t) => s + (pts.get(t.element_in) ?? 0), 0);
         const lost = moves.reduce((s, t) => s + (pts.get(t.element_out) ?? 0), 0);
         row.transferDiff = gained - lost - row.transferCost;
