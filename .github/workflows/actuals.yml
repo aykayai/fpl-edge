@@ -6,6 +6,11 @@ on:
     # bonus points are confirmed on a Sunday or Monday night round.
     - cron: "15 1,7,13,19 * * *"
   workflow_dispatch:
+    inputs:
+      rebuild_all:
+        description: "Rebuild every gameweek from scratch, ignoring the pick cache"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,6 +34,7 @@ jobs:
           FPL_ENTRY_ID: "301830"
           FPL_SEASON: "2027"
           FPL_LEAGUE_ID: "391690"
+          FPL_REBUILD_ALL: ${{ inputs.rebuild_all && '1' || '0' }}
         run: node scripts/build-actuals.mjs
 
       - name: Commit if changed
