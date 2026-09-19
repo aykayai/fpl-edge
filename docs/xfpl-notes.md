@@ -1,14 +1,38 @@
 # xFPL algorithm — notes
 
-**Current accuracy** (v8.2 fit, unchanged at v9.3.3): 292-player 8GW set MAE
-**5.38**, bias −0.15. 440 per-gameweek observations MAE **0.496**, bias −0.18.
-Rank correlation by position: GK 0.80, DEF 0.69, MID 0.56, FWD 0.69.
+## Accuracy — read this before quoting any number
 
-The reference sets are a **pre-GW1 snapshot** — projections *for* 2026/27 made
-with no completed matches in the model's state. Anything gated on this-season
-data is therefore inert against them by construction, and those numbers stay
-valid. They stop being a live measure of accuracy the moment real gameweeks
-accrue; the actuals feed replaces them for that.
+The figures carried in these notes until v11.2.1 (292-player MAE **5.38**;
+440-observation MAE **0.496**; rank correlation GK 0.80 / DEF 0.69 / MID 0.56 /
+FWD 0.69) were **never accuracy against reality**. 440 is 55 players × 8
+gameweeks, which is the `ref_gws.csv` grid itself, and 292 is the position
+files. Those numbers measure how closely the app reproduces the reference
+snapshot: a regression test against itself. A per-gameweek MAE of 0.5 is not
+achievable in FPL by anyone. Keep them, but label them for what they are.
+
+They remain useful as a **regression guard**: the reference set is a pre-GW1
+snapshot, so anything gated on this-season data must leave them untouched.
+
+### Real accuracy — first measurement, GW1–4 of 2026/27
+Pre-season projections vs actual points, 54 of 55 players matched, 216
+observations (GW5 excluded, still in play):
+
+| | MAE | bias |
+|---|---|---|
+| Per gameweek, all | **3.156** | **−0.151** |
+| DEF | 2.890 | −0.277 |
+| MID | 3.306 | +0.094 |
+| FWD | 4.093 | −0.429 |
+| GK (n=4 only) | 3.425 | +2.725 |
+
+MAE around 3.2 is normal for an FPL model; the week-to-week noise is
+irreducible. **Bias of −0.15 over 216 observations is the important number**:
+the level is right. Do not "fix" the level on the strength of MAE alone.
+
+Rank correlation against actual four-week totals: GK 0.58, DEF 0.28, MID 0.42,
+FWD 0.61 (n=289). Not comparable with the reference-set figures above. Four
+gameweeks of FPL points are mostly variance, so DEF at 0.28 is weak but not yet
+damning — revisit at GW10 before acting.
 
 ## Shape of the model
 Per-position calibration `output = A × minutesFactor + B × rawComponents`.
@@ -24,36 +48,53 @@ clean sheet (Poisson from expected goals conceded), DefCon, bonus, set pieces.
   multiplies and therefore cannot reorder two players in the same match.
 
 ## This-season weighting (v9.3.3)
-Two places govern how much this season counts, and both were changed together.
-Neither moves a pre-season projection.
+`windowStats` weights each appearance: this season `SEASON_W (2.0) ×
+0.5^(appsAgo / HALF_LIFE (6))`, last season `1` faded toward `LAST_FLOOR (0.35)`
+over `FADE_OVER (12)` matches. Decay runs over **this season's rows only** and
+last season stays flat; the fade is a function of this-season match count, so at
+zero it is exactly 1. Counts (`apps`, `mins`, `starts`) stay raw because they are
+evidence gates. `pick()` ramps this season in over `NOW_FULL` (250 minutes)
+rather than the old 270-minute cliff.
 
-**`windowStats` — recency and season weighting.** Each appearance now carries
-a weight: this season `SEASON_W (2.0) × 0.5^(appsAgo / HALF_LIFE (6))`, last
-season `1`, faded toward `LAST_FLOOR (0.35)` over the first `FADE_OVER (12)`
-matches of this season.
+Both are inert at the pre-season state by construction, which is what keeps the
+reference sets valid as a regression guard.
 
-Two constraints hold the pre-season baseline exactly:
-- The decay runs over **this season's appearances only**; last-season rows stay
-  flat. Fading a last-season-only history would move every pre-season number.
-- The last-season fade is a function of this-season match count, so at zero it
-  is exactly 1.
+## Learning from results — rebuilt at v11.2.1
+The GW4 gate opened during the 2026/27 season with three faults live, all
+pushing calibration the wrong way. Fixed:
 
-Counts (`apps`, `mins`, `starts`, goals) stay **raw** — they are evidence gates
-(`wd.apps>=8`, `wq.mins>600`) and weighting them would silently shift the
-thresholds. Only rates are weighted. Keeper goals-prevented now reads the
-weighted `gp90` rather than dividing raw `gp` by raw `mins`, which would have
-mixed weighted and unweighted quantities.
+1. **Feedback loop.** It read `pl.gw[g].pts`, built with the already-learned
+   `CAL`, and applied the ratio back to `CAL_BASE` — re-deriving a correction
+   from the residue of the previous one. Measured oscillation on unchanging
+   inputs: 1.102, 1.008, 1.093, 1.016, 1.087… The projection is now rebuilt
+   from `CAL_BASE` and `pl.rawPts`, which owe nothing to learned `CAL`. Same
+   simulation now returns a flat 1.102 on every reload.
+2. **Absences counted as bad weeks.** `actual = pl.total / gwPlayed` divided by
+   league gameweeks, not the player's appearances. ~80% of qualifying starters
+   had missed at least one of GW1–4, understating `actual` by roughly 40% and
+   driving `scale` to its 0.7 floor — a ~30% cut to every projection, against a
+   measured bias of only −0.15. Players must now have featured in
+   `LEARN_MIN_APP` (75%) of completed gameweeks.
+3. **Mismatched quantities.** A flat season mean against one fixture-adjusted
+   gameweek. Both sides are now per gameweek; fixtures largely cancel across a
+   position because every club plays each week.
 
-**`pick()` — smooth this-season ramp.** Previously this season's rate was
-discarded entirely below 270 minutes whenever a player had last-season data,
-then took over outright in one step. A striker three games into a hot run was
-projected off last May until his fourth start. Now blends over `NOW_FULL`
-(250 minutes): 1 match ≈ 36% this season, 3 matches ≈ 100%. At `mins=0` the
-ramp is 0 and returns the prior unchanged.
+Other changes: the learn record is written **whole**, so a position dropping
+below its evidence threshold lapses back to base instead of keeping a stale
+multiplier forever. Learning is skipped entirely when the actuals feed is
+missing rather than falling back to the old season-average path.
 
-Verified: with a last-season-only history, old and new `windowStats` agree to
-1e-12 on every field; `pick()` is exactly equal at `mins=0` both with and
-without last-season data.
+`LEARN_MIN_N = {GK 15, DEF 25, MID 25, FWD 20}`. **25 is structurally
+unreachable for keepers** — 20 clubs means at most 20 regular starters — and
+forwards are thin for the same reason. A flat 25 meant GK could never learn.
+
+Still not a backtest: `pl.rawPts` is today's model applied backwards, not what
+the model said before those deadlines. This corrects the level only. A true
+backtest needs the pre-deadline snapshot below.
+
+`learningFrom()` is split out as a pure function specifically so it can be
+driven with synthetic samples — the browser model cannot be stood up headless,
+so this is the only way the part that moves every projection gets test coverage.
 
 ## Rejected approaches — don't retry without new evidence
 - **Heavy FIXTURE_AMP** (was 3.2): made McBurnie outscore João Pedro.
@@ -61,41 +102,32 @@ without last-season data.
 - **Spread-matching solver** on the full 292 set: collapses B toward zero.
 - **Blending the old strength model** (FDR_MIX): removed at v7.4.1, added nothing.
 - **Decaying last-season rows by recency**: shifts DefCon hit-rate and keeper
-  goals-prevented at the pre-season state, moving the GW1–8 baseline for no
-  gain. Last season is flat on purpose.
+  goals-prevented at the pre-season state, moving the GW1–8 baseline for no gain.
+- **Learning from `pl.total / gwPlayed`**: the v11.2.1 bug above. Any future
+  "season average" shortcut reintroduces it.
 
 ## Expected minutes — the dominant error source
 Minutes error correlates **0.92** with points error. Fitted per position from
 start rate, duration when starting, and price relative to club maximum for
 players with no history. Watch for: non-appearances counted as starts
 (`start_min` is 0 both for a starter and for an unused sub — require mins > 0).
-Minutes already prefer this season: the appearance path switches to live rows
-after 3 of them, so the v9.3.3 work deliberately left it alone.
 
-## Calibration learning — known defects, not yet fixed
-`learnFromResults()` is dormant until `gwPlayed >= 4` with 25+ players per
-position. Three problems to fix before that gate opens:
-1. **Feedback loop.** `proj` is read from `pl.gw[g].pts`, built with the
-   *already-learned* CAL, then the ratio is applied back to `CAL_BASE`. Each
-   load re-derives the correction from the error remaining after the previous
-   one, which oscillates rather than converges. Should measure against a
-   base-calibration projection.
-2. **Absences double-counted.** `actual = pl.total / gwPlayed` divides by
-   league gameweeks, not the player's appearances, biasing `scale` downward.
-   Same shape as the historic minutes bug.
-3. **Mismatched quantities.** Next gameweek's fixture-adjusted projection is
-   compared against a flat season mean.
+**Open question, deliberately not touched at v11.2.1:** `xMins = mins / gwPlayed`
+uses the same divide-by-league-gameweeks pattern that was a bug in the learning
+layer. Here it is arguably correct, since a player who misses weeks should carry
+a lower minutes expectation for rotation and injury risk. It is only wrong if
+the points model applies an availability discount elsewhere as well, in which
+case it is counted twice. Decide before touching anything near it.
 
-Also: `a.n<0` on an array is always false — dead guard, reads as protection
-that isn't there. And `learn` lives in localStorage, so devices drift apart.
-
-`S.playerActuals` from the actuals feed (per-player, per-gameweek points) is
-the right input for 2 and 3. Fixing 1 properly wants the pre-deadline
-predicted snapshot.
-
-## Known unfixable until real gameweeks accrue
+## Known unfixable until more gameweeks accrue
 Players whose role changed without their record changing — Grealish, Reijnders,
 Tavernier. Flagged with the amber caution badge via squad over-allocation, not
 corrected, because nothing in the data says by how much. The v9.3.3 weighting
-shortens how long this persists — a changed role now reprices within about six
-appearances rather than being averaged against a full prior season.
+shortens how long this persists.
+
+## Future: pre-deadline predicted snapshot
+The actuals Action would snapshot the squad's predicted score before each
+deadline into `team.gw[].predicted`. This is the only route to a true backtest,
+and the only way to settle whether DEF/MID rank correlation reflects a modelling
+flaw or four weeks of noise. Needs the calibration extracted so it can run
+headless in Node; it currently lives in browser-scope `app-core.js`.
