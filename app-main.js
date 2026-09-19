@@ -31,7 +31,8 @@ function act(k,a,b){
     case"compare":S.compare=S.compare?null:{squad:[...(S.squad||[])],captain:S.captain,
       vice:S.vice,bank:S.bank,flagged:[],forceXI:null,subFrom:null};break;
     case"cclose":S.compare=null;break;
-    case"ccap":{const C=S.compare;if(!C)break;C.captain=a;break;}
+    case"ccap":{const C=S.compare;if(!C)break;C.captain=a;if(C.vice===a)C.vice=null;break;}
+    case"cvice":{const C=S.compare;if(!C)break;C.vice=a;if(C.captain===a)C.captain=null;break;}
     case"sqview":S.sqView=a;break;
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
@@ -229,8 +230,18 @@ function act(k,a,b){
       S.chips=next;saveState();break;}
     case"save":{if(S.bank<-0.001){toast("You're £"+Math.abs(S.bank).toFixed(1)+" over budget — sell someone first");break;}
       S.original=S.squad;saveState();toast("Squad saved");break;}
-    case"reset":{resolveSeed(true);S.flagged=[];S.pendingOpt=null;
-      toast("Reset to your official squad");break;}
+    case"reset":{
+      /* Scope the reset: wipe planned changes for the live week and everything
+         ahead of it, but leave finished gameweeks alone. A past week is a
+         record of what actually happened and must not be rewritten by a reset. */
+      const next=S.model?S.model.next.id:1;
+      if(S.planByGw)Object.keys(S.planByGw).map(Number).forEach(e=>{
+        if(e>=next)delete S.planByGw[e];});
+      resolveSeed(true);S.flagged=[];S.pendingOpt=null;
+      const bf=(typeof bankFromFeed==="function")?bankFromFeed():null;
+      if(bf!=null)S.bank=bf;                     // prefer the official bank when published
+      saveState();
+      toast("Reset to your official squad (this week onward)");break;}
     case"resetOld":{if(!S.original)break;
       const cur=(S.squad||[]).reduce((s,i)=>s+(P(i)?.price||0),0);
       const org=S.original.reduce((s,i)=>s+(P(i)?.price||0),0);

@@ -62,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="11.1.0";
+const APP_VERSION="11.2.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -139,15 +139,35 @@ const BODY="M13.5 6 L11 7.2 L11 34 L29 34 L29 7.2 L26.5 6 L24.5 8.4 Q20 11.6 15.
 function ftFromFeed(){
   if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
   const g=S.model.next.id;
-  /* The feed's ftAvailable is "before this week's transfers" for the latest
-     published (finished) week. The current, not-yet-deadlined week's allowance =
-     last finished week's leftover + 1, capped at 5. */
-  const rows=S.tracker.gw.filter(r=>r.ftAvailable!=null).sort((a,b)=>a.event-b.event);
+  const rows=S.tracker.gw.slice().sort((a,b)=>a.event-b.event);
   if(!rows.length)return null;
-  const last=rows[rows.length-1];
-  if(last.event>=g)return clamp(last.ftAvailable,0,5);
-  const used=Math.min(last.ftAvailable,(last.transfers||0));
-  return clamp(Math.min(5,(last.ftAvailable-used)+1),0,5);
+  /* Prefer an explicit ftAvailable if the feed ever publishes one. Otherwise
+     rebuild it from the official per-gameweek transfer counts, which ARE
+     published, using the confirmed FPL rules: 1 granted per deadline, banked
+     up to 5, and a Wildcard or Free Hit week consumes that week's transfer
+     while leaving the bank otherwise untouched (its squad changes are not
+     ordinary transfers, so they must not be counted as such). */
+  const explicit=rows.filter(r=>r.ftAvailable!=null);
+  if(explicit.length){
+    const last=explicit[explicit.length-1];
+    if(last.event>=g)return clamp(last.ftAvailable,0,5);
+    const used=Math.min(last.ftAvailable,(last.transfers||0));
+    return clamp(Math.min(5,(last.ftAvailable-used)+1),0,5);
+  }
+  if(rows.every(r=>r.transfers==null))return null;
+  /* Which gameweeks a chip was played, from the feed's own chip record. */
+  const chipWeeks=new Set();
+  const cm=(S.tracker.chips&&typeof S.tracker.chips==="object")?S.tracker.chips:null;
+  if(cm)Object.entries(cm).forEach(([name,ev])=>{
+    if(/wild|free hit/i.test(name)&&Number.isFinite(+ev))chipWeeks.add(+ev);});
+  let ft=1;                                   // GW1 starts with one
+  rows.forEach(r=>{
+    if(r.event>=g)return;                     // only completed weeks are known
+    if(r.event>1)ft=clamp(ft+1,0,5);          // each new deadline grants one, capped
+    if(chipWeeks.has(r.event))return;         // chip week: bank left alone
+    ft=clamp(ft-Math.min(ft,r.transfers||0),0,5);
+  });
+  return clamp(ft+1,0,5);                     // plus the allowance for the upcoming week
 }
 function freeTransfers(){const f=ftFromFeed();return f==null?(S.ft??1):f;}
 /* Whether the shown count is the feed's, local tracking's, or just the raw
@@ -250,7 +270,7 @@ async function loadAll(force){
     if(cached&&!force&&Date.now()-cached.t<1000*60*60*6){
       Object.assign(S,{players:cached.players,teams:cached.teams,fixtures:cached.fixtures,
         events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
-      buildModel();snapshotPredictions();localFtTrack();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
+      buildModel();dedupeSquad();snapshotPredictions();localFtTrack();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
     }
     S.progress="players and prices…";render();
     const [players,pstats,teams]=await Promise.all([
@@ -512,7 +532,7 @@ async function loadAll(force){
     S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
     S.stamp=Date.now();
     LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,hist:S.hist,teamMatch:S.teamMatch});
-    buildModel();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
   }

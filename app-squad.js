@@ -263,6 +263,16 @@ const squadPlayers=()=>{
 function startingXI(){
   const sp=squadPlayers();if(!sp.length)return[];
   const g=VG();
+  /* A finished gameweek uses the line-up captured at the time. Without this
+     the XI was re-derived from that week's predicted points, which are all
+     zero once the week is past, so the formation reshuffled on every render. */
+  if(S.model&&g<S.model.next.id){
+    const snap=S.planByGw&&S.planByGw[g]&&S.planByGw[g].xi;
+    if(Array.isArray(snap)&&snap.length===11){
+      const xi=snap.map(i=>sp.find(p=>p.id===i)).filter(Boolean);
+      if(xi.length===11)return xi;
+    }
+  }
   if(S.forceXI?.length===11){const xi=S.forceXI.map(i=>sp.find(p=>p.id===i)).filter(Boolean);
     if(xi.length===11)return xi;}
   const by={};sp.forEach(p=>(by[p.pos]=by[p.pos]||[]).push(p));
@@ -416,10 +426,22 @@ function snapshotPredictions(){
   const g=S.model.next.id;
   const sp=(S.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   if(!sp.length)return;
+  /* One-gameweek basis, matching how the card reads it back for a past week.
+     The display path previously recomputed with S.horizon, which for a past
+     gameweek summed FORWARD into future weeks (past entries don't exist in the
+     model), producing nonsense like "pred 19.0" for a single week. */
   const predByPlayer={};
   sp.forEach(p=>{predByPlayer[p.id]=hPts(p,g,1);});
+  /* Freeze the line-up too. startingXI() re-sorts by that week's predicted
+     points on every render, so once a week is past (all zeroes) the XI and
+     formation drifted arbitrarily. Captured here so a finished week stays
+     exactly as it was set. */
+  let xi=[];
+  try{xi=startingXI().map(p=>p.id);}catch(e){xi=[];}
   S.planByGw=S.planByGw||{};
-  S.planByGw[g]={...(S.planByGw[g]||{}),predByPlayer};
+  S.planByGw[g]={...(S.planByGw[g]||{}),predByPlayer,
+    xi:xi.length===11?xi:undefined,
+    captain:S.captain,vice:S.vice};
 }
 function writePlan(g,ids,extra){
   const next=S.model?S.model.next.id:1;
@@ -438,6 +460,12 @@ function applySwap(oid,iid){
   const o=S.model.players.find(p=>p.id===oid),i=S.model.players.find(p=>p.id===iid);
   if(!o||!i)return;
   const cur=squadPlayers().map(p=>p.id);
+  /* Guarded at this level rather than in the callers: both listpick's swap
+     branch and doswap reach here, and neither checked that the incoming
+     player was already owned. map(x=>x===oid?iid:x) then replaced one slot
+     and left the original in place, producing a squad with the same player
+     twice (and a man short elsewhere). */
+  if(iid!==oid&&cur.includes(iid)){toast(i.web_name+" is already in your squad");return;}
   const ids=cur.map(x=>x===oid?iid:x);
   const bank=+((planBank())+o.price-i.price).toFixed(1);
   const extra={bank};
@@ -446,10 +474,34 @@ function applySwap(oid,iid){
   writePlan(g,ids,extra);
   S.flagged=S.flagged.filter(x=>x!==oid);S.forceXI=null;saveState();
 }
+/* A squad should never contain the same player twice. Repairs any state that
+   already went wrong before the guard above existed, rather than leaving a
+   broken saved squad stuck that way. */
+function dedupeSquad(){
+  const seen=new Set(),out=[];
+  (S.squad||[]).forEach(id=>{if(!seen.has(id)){seen.add(id);out.push(id);}});
+  if(out.length!==(S.squad||[]).length){S.squad=out;S.forceXI=null;return true;}
+  return false;
+}
 /* bank as it stands for the viewed week's plan */
+/* The official bank for the most recently completed gameweek. The feed
+   publishes this per week, so it is authoritative for the live week rather
+   than the locally-tracked S.bank, which drifted with every planned edit. */
+function bankFromFeed(){
+  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
+  const g=S.model.next.id;
+  const rows=S.tracker.gw.filter(r=>r.bank!=null&&r.event<=g).sort((a,b)=>a.event-b.event);
+  if(!rows.length)return null;
+  return +rows[rows.length-1].bank;
+}
 function planBank(){
   const g=VG(), next=S.model?S.model.next.id:1;
   if(g>next&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)return S.planByGw[g].bank;
+  /* For the live week, trust the official figure unless the user has made
+     planned edits this week that move it (those write their own bank). */
+  if(g===next&&!(S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)){
+    const f=bankFromFeed();if(f!=null)return f;
+  }
   return S.bank;
 }
 /* Historical returns for this manager, shown alongside each projection */
@@ -756,10 +808,23 @@ function toast(m){let el=document.getElementById("toast");
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 
-function cardHTML(p,bench){
+function cardHTML(p,bench,ctx){
   const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
-  const {captain:capForGw,vice:viceForGw}=effectiveCaptainVice(g);
-  const isC=(_histCaptain!=null?_histCaptain===p.id:capForGw===p.id),isV=_histCaptain==null&&viceForGw===p.id,fl=S.flagged.includes(p.id);
+  /* ctx lets the comparison squad render through this exact same function
+     instead of its own stripped-down copy, so it gains the form pill,
+     actual-points display, injury dot, bench numbering and fixture strip
+     automatically and can never drift out of step with the planner again.
+     Its buttons dispatch the c-prefixed actions so edits land on the
+     comparison team rather than the real one. */
+  const C=ctx||null;
+  const A=C?{sub:"csub",flag:"cflag",cap:"ccap",vice:"cvice"}
+           :{sub:"sub",flag:"flag",cap:"cap",vice:"vice"};
+  const capId=C?C.captain:null, viceId=C?C.vice:null;
+  const flaggedList=C?(C.flagged||[]):S.flagged;
+  const {captain:capForGw,vice:viceForGw}=C?{captain:capId,vice:viceId}:effectiveCaptainVice(g);
+  const isC=C?(capId===p.id):(_histCaptain!=null?_histCaptain===p.id:capForGw===p.id);
+  const isV=C?(viceId===p.id):(_histCaptain==null&&viceForGw===p.id);
+  const fl=flaggedList.includes(p.id);
 
   const chipNow=chipForWeek(g);
   /* For a historical week, hPts() can't compute a real number (the model only
@@ -767,8 +832,14 @@ function cardHTML(p,bench){
      live, if one was taken. */
   const snapPred=(g<S.model.next.id&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].predByPlayer
     &&S.planByGw[g].predByPlayer[p.id]!=null)?S.planByGw[g].predByPlayer[p.id]:null;
-  const basePred=snapPred!=null?snapPred:hPts(p,g,S.horizon);
-  const shownPts=basePred*(isC?(chipNow==="3xc"?3:2):1);
+  /* For a finished gameweek, only a snapshot is trustworthy. hPts() sums
+     forward from g, and the model holds no entries for past weeks, so calling
+     it here silently added up FUTURE gameweeks instead (a single past week
+     showing "pred 19.0"). No snapshot means no prediction, not a fabricated one. */
+  const isPast=S.model&&g<S.model.next.id;
+  const basePred=snapPred!=null?snapPred:(isPast?null:hPts(p,g,S.horizon));
+  const hasPred=basePred!=null;
+  const shownPts=hasPred?basePred*(isC?(chipNow==="3xc"?3:2):1):null;
   /* Actual points for this specific gameweek — only present once the live-actuals
      feed has that GW. Captain-multiplied the same way as the prediction, so the two
      compare like-for-like (both = "contribution to the squad total"). */
@@ -776,12 +847,12 @@ function cardHTML(p,bench){
   const actualRaw=feedGW?feedGW[g]??feedGW[String(g)]:null;
   const hasActual=actualRaw!=null;
   const actualShown=hasActual?actualRaw*(isC?(chipNow==="3xc"?3:2):1):null;
-  const diff=hasActual?actualShown-shownPts:null;
+  const diff=(hasActual&&hasPred)?actualShown-shownPts:null;
   /* The score box colour must follow whichever number is actually displayed —
      previously it always used the predicted band, so a past week with a real
      (and possibly good) actual score still coloured itself off a near-zero
      retrospective prediction, which is why actuals looked permanently red. */
-  const shownVal=hasActual?actualShown:shownPts;
+  const shownVal=hasActual?actualShown:(hasPred?shownPts:0);
   const col=ptsCol(shownVal/Math.max(1,S.horizon));
   const bg=col[0], fg=col[1], elite=col[2]==="elite";
   /* The model only projects forward from the current gameweek, so a past week
@@ -802,35 +873,37 @@ function cardHTML(p,bench){
       const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
       n3+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${e} · ${f.home?"home":"away"} · difficulty ${posDiff(p,f)}">${esc(f.opp.slice(0,3))}</span>`;}
   }
-  const sub=S.subFrom===p.id;
+  const sub=(C?C.subFrom:S.subFrom)===p.id;
   /* Bench players show their sub-order number; tapping ⇄ mid-substitution receives
      the swap. Outfield subs also cycle their order when idle (benchcycle); the
      keeper is fixed at position 1 and does not cycle. */
   const isBench=!!bench,slot=isBench?bench.slot:0,cyc=isBench&&bench.cycle;
   const subOnclick=isBench
-    ? (cyc?`act(S.subFrom!=null?'sub':'benchcycle',${p.id})`:`act('sub',${p.id})`)
-    : `act('sub',${p.id})`;
+    ? (cyc?`act(${C?"S.compare.subFrom":"S.subFrom"}!=null?'${A.sub}':'benchcycle',${p.id})`:`act('${A.sub}',${p.id})`)
+    : `act('${A.sub}',${p.id})`;
   const subGlyph=isBench?(S.subFrom==null?slot:"⇄"):"⇄";
   const subTitle=isBench?(cyc?`Bench ${slot} · tap to change order (or to receive a substitution)`:`Bench ${slot} · goalkeeper (fixed)`):"Substitute";
   return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
    <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
-    ${p.avail<1?`<span class="dot" style="top:-2px;left:8px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
-    <button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('flag',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
+    ${p.avail<1?`<span class="dot" style="top:-2px;left:20px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
+    <button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('${A.flag}',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
     <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="${subOnclick}" title="${subTitle}">${subGlyph}</button>
-    <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('cap',${p.id})" title="Captain">C</button>
-    <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('vice',${p.id})" title="Vice-captain">V</button></div>
+    <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
+    <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('${A.vice}',${p.id})" title="Vice-captain">V</button></div>
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
    <div class="ptsbar" style="background:${noHistData?"var(--ink3)":bg};color:${noHistData?"var(--mute)":fg}${elite&&!noHistData?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
-    <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):shownPts.toFixed(1))}</div>
+    <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):(hasPred?shownPts.toFixed(1):"—"))}</div>
     ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}</div>
-   ${hasActual
+   ${(hasActual&&hasPred)
      ?`<div class="fxpill" style="background:var(--ink2);color:var(--mute)">pred ${shownPts.toFixed(1)}
         <span style="font-weight:700;color:${diff>=0?"var(--mint)":"var(--red)"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`
-     :(()=>{const[fb,ff]=ptsCol(p.form||0);
+     :(hasActual
+       ?`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">no prediction stored</div>`
+       :(()=>{const[fb,ff]=ptsCol(p.form||0);
         return `<div class="fxpill formpill" style="background:${fb};color:${ff}">
           <svg viewBox="0 0 14 10" width="10" height="8" aria-hidden="true"><path d="M0.5 8.5 L4 4.5 L6.5 6.5 L13.5 1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b></div>`;})()}
+          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b></div>`;})())}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }
@@ -889,28 +962,13 @@ function compareHTML(){
   const xi=compXI();
   const sq=(C.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const bench=sq.filter(p=>!xi.includes(p));
-  const card=p=>{
-    const q=p.gw[g]||{fixtures:[],pts:0};
-    const isC=C.captain===p.id;
-    const noHistData=g<S.model.next.id&&!p.gw[g];
-    const[bg,fg]=noHistData?["var(--ink3)","var(--mute)"]:ptsCol(q.pts*(isC?2:1));
-    const f0=q.fixtures[0];
-    return `<div class="card">
-      <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
-        <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}"
-          onclick="act('ccap',${p.id})" title="Captain">C</button>
-        <button class="badge" style="top:-2px;left:2px;background:${C.subFrom===p.id?"var(--cyan)":"var(--ink3)"};color:${C.subFrom===p.id?"var(--ink)":"var(--cream)"}"
-          onclick="act('csub',${p.id})" title="Substitute">⇄</button>
-        <button class="badge" style="top:-2px;right:2px;background:${(C.flagged||[]).includes(p.id)?"var(--mint)":"var(--ink3)"};color:${(C.flagged||[]).includes(p.id)?"var(--ink)":"var(--cream)"}"
-          onclick="act('cflag',${p.id})">✕</button></div>
-      <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
-      <div class="ptsbar" style="background:${bg};color:${fg}"><div class="pv">${noHistData?"—":(q.pts*(isC?2:1)).toFixed(1)}</div>
-        <div class="fx">${noHistData?`no data for GW${g}`:(f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture")}</div></div>
-      <div class="cardsigs">${sigHTML(p,g)}</div>
-    <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w2=p.gw[e];
-        if(!w2||w2.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
-        const f=w2.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
-        h+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}">${esc(f.opp.slice(0,3))}</span>`;}return h;})()}</div></div>`;
+  /* Renders through the planner's own cardHTML with a comparison context, so
+     the two teams look and behave identically by construction rather than by
+     two copies of markup being kept in sync by hand. */
+  const bOrder=bench.slice();
+  const card=(p)=>{
+    const i=bOrder.findIndex(b=>b.id===p.id);
+    return cardHTML(p,i>=0?{slot:i+1,cycle:p.pos!==1}:undefined,C);
   };
   const win=deltas[0].theirs>deltas[0].mine;
   return `<div class="panel" style="border-color:${win?"var(--mint)":"var(--ink3)"}">
@@ -1152,7 +1210,7 @@ function squadListHTML(){
       <td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="mini" onclick="act('sub',${p.id})" title="Substitute">⇄</button>
-        <button class="mini" onclick="act('cap',${p.id})" title="Captain">C</button>
+        <button class="mini" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
         <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button></td></tr>`;}).join("");
   return `<div class="scroll"><table class="sqtable"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }

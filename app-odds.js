@@ -915,7 +915,7 @@ function render(){
   const flaggedP=squadPlayers().filter(p=>S.flagged.includes(p.id));
   const raised=+flaggedP.reduce((a,p)=>a+sellPrice(p),0).toFixed(1);
   const sv=squadPlayers().filter(p=>!S.flagged.includes(p.id)).reduce((a,p)=>a+p.price,0);
-  const bank=+(S.bank+raised).toFixed(1);
+  const bank=+(planBank()+raised).toFixed(1);
   const rating=teamRating();
   const tabs=NAV.flatMap(gp=>gp.items);
   let main="";
