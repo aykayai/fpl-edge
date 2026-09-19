@@ -62,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="11.2.0";
+const APP_VERSION="11.2.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -918,31 +918,97 @@ function applyLearning(){
     if(L[k].scale) CAL[k].A=clamp(CAL_BASE[k].A*L[k].scale, CAL_BASE[k].A*0.7,CAL_BASE[k].A*1.4);
   });
 }
-function learnFromResults(){
-  if(!S.model||S.model.gwPlayed<1)return;
-  const g=S.model.next.id;
-  /* Two things are learned separately once results exist:
-     - scale: does this position score more or less than we project overall
-     - spread: are we too flat or too spiky across players in the position
-     Both need real evidence, so nothing moves until 25+ regular starters and
-     4+ gameweeks are in, and both are capped. */
-  const acc={1:[],2:[],3:[],4:[]};
-  S.model.players.forEach(pl=>{
-    if(!pl.minutes||pl.xMins<45)return;
-    const proj=pl.gw[g]?.pts||0;if(proj<=0)return;
-    const actual=pl.total/Math.max(1,S.model.gwPlayed);
-    (acc[pl.pos]||[]).push({a:actual,p:proj});});
-  const out=LS.get("learn")||{};
+/* ---- learning from real results ------------------------------------------
+   Rebuilt at v11.2.1. The previous version had three faults, all of which
+   moved the calibration the wrong way once the GW4 gate opened:
+
+   1. Feedback loop. It read pl.gw[g].pts, which is built with the ALREADY
+      LEARNED CAL, then applied the resulting ratio back to CAL_BASE. Each load
+      measured the error left over after the previous correction and re-derived
+      a correction from it, so the value oscillated instead of settling. The
+      projection is now rebuilt from CAL_BASE and pl.rawPts, which owe nothing
+      to the learned CAL, so a given set of results produces one fixed answer.
+
+   2. Absences counted as bad weeks. actual was pl.total/gwPlayed, dividing a
+      player's points by league gameweeks rather than his own appearances, so
+      anyone who missed time looked worse than he played. Around 80% of
+      starters had missed at least one of the first four gameweeks, which drove
+      scale toward its 0.7 floor and would have cut every projection by nearly
+      a third. Players must now have featured in most of the completed
+      gameweeks to be counted at all.
+
+   3. Mismatched quantities. A flat season mean was compared against a single
+      fixture-adjusted gameweek. Both sides are now per gameweek. Fixture
+      differences are not eliminated, but every club plays each week, so they
+      largely cancel once averaged across a position.
+
+   What this still is not: pl.rawPts is today's model applied backwards, not
+   what the model actually said before those deadlines. That makes it a level
+   correction, not a backtest. A true backtest needs the pre-deadline snapshot
+   (see the notes) and this does not remove the case for it. */
+const LEARN_MIN_GW=4;      // completed gameweeks before anything moves
+const LEARN_MIN_APP=0.75;  // share of those a player must have featured in
+/* 25 is unreachable for keepers: there are 20 clubs, so at most 20 regular
+   starters exist. Forwards are thin for the same reason: most clubs field one.
+   A lower bar for both, or those positions could never learn. */
+const LEARN_MIN_N={1:15,2:25,3:25,4:20};
+
+/* Pure, so it can be driven with synthetic samples in a test harness rather
+   than requiring the whole browser model to be stood up. */
+function learningFrom(acc,minN,gw){
+  const out={};
   [1,2,3,4].forEach(k=>{
-    const a=acc[k];if(!a||a.n<0||a.length<25||S.model.gwPlayed<4)return;
-    const ma=a.reduce((s2,x)=>s2+x.a,0)/a.length;
-    const mp=a.reduce((s2,x)=>s2+x.p,0)/a.length;
-    const sa=Math.sqrt(a.reduce((s2,x)=>s2+(x.a-ma)**2,0)/a.length);
-    const sp=Math.sqrt(a.reduce((s2,x)=>s2+(x.p-mp)**2,0)/a.length);
+    const a=acc[k];
+    if(!a||a.length<(minN[k]||25))return;
+    const ma=a.reduce((s,x)=>s+x.a,0)/a.length;
+    const mp=a.reduce((s,x)=>s+x.p,0)/a.length;
+    const sa=Math.sqrt(a.reduce((s,x)=>s+(x.a-ma)**2,0)/a.length);
+    const sp=Math.sqrt(a.reduce((s,x)=>s+(x.p-mp)**2,0)/a.length);
     out[k]={scale:clamp(mp>0?ma/mp:1,0.7,1.4),
             spread:clamp(sp>0.05?sa/sp:1,0.7,1.5),
-            n:a.length,gw:S.model.gwPlayed};});
-  if(Object.keys(out).length){LS.set("learn",out);applyLearning();}
+            n:a.length,gw:gw};
+  });
+  return out;
+}
+
+function learnFromResults(){
+  if(!S.model||S.model.gwPlayed<LEARN_MIN_GW)return;
+  const PA=S.playerActuals;
+  /* No feed, no learning. Falling back to the old season-average path would
+     reintroduce exactly the bias this rebuild removes. */
+  if(!PA||!Object.keys(PA).length)return;
+
+  const gws=[];for(let g=1;g<=S.model.gwPlayed;g++)gws.push(g);
+  const need=Math.ceil(gws.length*LEARN_MIN_APP);
+  const acc={1:[],2:[],3:[],4:[]};
+
+  S.model.players.forEach(pl=>{
+    const ap=PA[pl.id];if(!ap)return;
+    if(pl.xMins<60)return;                       // settled starters only
+    let tot=0,seen=0,apps=0;
+    gws.forEach(g=>{
+      const v=ap[g];if(v==null)return;
+      seen++;tot+=v;
+      /* a player who takes the field banks an appearance point, so a zero is
+         a week he did not play. 0 from an appearance plus a card is possible
+         and rare; it costs one sample, not correctness. */
+      if(v!==0)apps++;
+    });
+    if(seen<gws.length||apps<need)return;
+
+    const m=clamp(pl.xMins/88,0,1.02);
+    const base=CAL_BASE[pl.pos]||{A:0,B:1};
+    const proj=base.A*m+base.B*(pl.rawPts||0);
+    if(proj<=0)return;
+    (acc[pl.pos]||[]).push({a:tot/seen,p:proj});
+  });
+
+  /* Written whole rather than merged, so a position that drops below its
+     evidence threshold lapses back to base instead of keeping a stale
+     multiplier forever. */
+  const out=learningFrom(acc,LEARN_MIN_N,S.model.gwPlayed);
+  LS.set("learn",out);
+  applyLearning();
 }
 function buildModel(){
   const teams={};S.teams.forEach(t=>teams[t.id]=t);
