@@ -838,3 +838,66 @@ string. Tested at both a high-form (elite green) and low-form (red) value.
 
 Files: index.html, app-core.js, app-render.js, app-squad.js, app-odds.js,
 app-main.js, sw.js. Version 11.1.0.
+
+## v11.2.0 — Team Planner debug pass (seven root causes)
+
+**1. Duplicate players (the visible breakage).** `applySwap()` did
+`cur.map(x=>x===oid?iid:x)` with no check that the incoming player was already
+owned, so it replaced one slot and left the original, giving a squad with the
+same player twice and a man short elsewhere. The add path and the compare path
+both guarded against this; the main swap path did not, and `doswap` reached the
+same unguarded function. Guard added inside `applySwap` itself so every caller
+is covered. Added `dedupeSquad()`, run on load, to repair saved state that had
+already gone wrong.
+
+**2. The injury dot was swallowing clicks — and this was the long-running Raya
+substitute bug.** The dot sat at `left:8px` (spanning 8-18px) with `z-index:3`;
+the substitute/bench-number badge sits at `left:2px` (spanning 2-17px) with no
+z-index. They overlapped by nine pixels and the dot won, so any player carrying
+a doubt flag had a partially dead ⇄ button. This is why it failed on the pitch
+but worked in list view, and why no JS error ever appeared: the click was
+landing on a span, not the button. Fixed with `pointer-events:none` on `.dot`
+plus moving it clear to `left:20px`.
+
+**3. Historical predicted points were fabricated, not missing.** `hPts(p,g,h)`
+sums forward from `g`, and the model holds no entries for past weeks, so for a
+finished gameweek it silently summed FUTURE weeks instead (a single past week
+showing "pred 19.0"). Also the snapshot wrote a one-week basis while the display
+read `S.horizon` weeks, so the two disagreed even when a snapshot existed. Now a
+past week uses only a stored snapshot; with none, it shows the actual score and
+"no prediction stored" rather than inventing a number.
+
+**4. Historical formation drifted** because `startingXI()` re-sorted by that
+week's predicted points on every render, which are all zero once the week is
+past. `snapshotPredictions()` now also captures the XI, captain and vice at the
+time, and `startingXI()` returns that frozen line-up for any finished week.
+
+**5/6. Bank and free transfers now come from official data.** The feed has moved
+on since last checked: it now publishes `bank` and `transfers` per gameweek
+(still no `picks`). `bankFromFeed()` seeds the live week's bank from the official
+figure unless the user has planned edits that move it. `ftFromFeed()` rebuilds
+the transfer count by walking the official per-week transfer counts under the
+confirmed rules (1 per deadline, banked to 5, Wildcard/Free Hit consume that
+week's transfer but leave the bank otherwise untouched, read from the feed's own
+chip record). Verified against Andy's real data: GW1-3 no transfers, GW4 two,
+GW5 two, correctly yields 2 free transfers for GW6.
+
+**7. Compare team is now a true replica.** It had its own stripped-down card
+builder, which is why it looked and behaved differently. `cardHTML` now takes an
+optional context, and `compareHTML` renders through that same function, so the
+comparison squad inherits the form pill, actual points, injury dot, bench
+numbering and fixture strip automatically and cannot drift out of step again.
+Its buttons dispatch the c-prefixed actions; added the missing `cvice`.
+
+**Reset** now clears planned changes for the live week and everything ahead of
+it only, leaving finished gameweeks untouched (a past week is a record of what
+happened, not something a reset should rewrite), and prefers the official bank.
+
+**Still blocked:** `picks` are not published, so historical squads and
+formations are frozen from local snapshots taken at the time rather than pulled
+from the official record. Weeks played before this release cannot be
+reconstructed. The one-line Action change (publish `picks`, including
+`position`) remains the fix.
+
+Files: index.html, app-core.js, app-squad.js, app-odds.js, app-main.js, sw.js.
+Version 11.2.0.
