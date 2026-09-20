@@ -959,3 +959,58 @@ hasn't backfilled that already-published week. Worth a rerun of the job, or
 confirming whether backfill is expected.
 
 Files: app-core.js (version only), app-render.js, sw.js. Version 11.4.0.
+
+## v11.4.1 — Player Data page: fixed xFPL, Pr xFPL range column, precise inputs
+
+**Discussion, no code**: confirmed "Past stats — window" and xFPL don't
+contradict — traced it directly. `S.lWin` only ever appears in the display
+table's `ws()` call; it's never referenced in `app-core.js`, where `hPts()` and
+the prediction model live. One is a read-only lens on recent form for your own
+eyeballing; the other is the model's own output, computed once, independent of
+anything set on this page. They can legitimately disagree.
+
+**xFPL fixed at the next gameweek only** (was silently driven by the
+gameweeks-ahead slider, despite its own tooltip already claiming "next
+gameweek" — the value and its description had drifted apart). Confirmed via
+`SORTVAL`/`CELL`: `pred` now always calls `hPts(p,g,1)` on the table tab. The
+Transfers page's own "xPts" column (a different `pred` context, keyed off
+`S.horizon`) is untouched.
+
+**3GW/5GW columns removed, replaced by one "Pr xFPL" column** whose header
+shows the actual selected range — `Pr xFPL (GW7-12)`, or `Pr xFPL (GW6)` for a
+single week.
+
+**The range is explicit (From GW / To GW), not just a count** — deliberately
+broader than "N gameweeks ahead", since a genuinely useful range can start
+somewhere other than today (`GW7 to GW12` while sat in GW3). New
+`lGwRange()` in app-core.js resolves it, defaulting From to the current
+gameweek and To to From+4, so leaving From alone and only moving To reproduces
+the simpler "N ahead" behaviour. New actions `lgwfrom`/`lgwto`; moving From
+past To pulls To up automatically so the range can never invert. Sits right
+after the position filters, Player Data page only — the Transfers pool's own
+filter row is untouched.
+
+**Fidgety budget/gameweek inputs fixed.** Root cause: a drag-slider packing
+125 possible values (budget, 0.1 steps across 12.5 units) into a short drag
+distance is genuinely hard to land precisely — that's a real usability
+problem, not user error. New `stepperInput()`: a number field flanked by
+four nudge buttons (small step, big step, both directions) — every value is
+reachable in one or two clicks, no dragging required. Applied to Budget and
+both ends of the new gameweek range. Verified the generated buttons target
+the exact correct clamped values.
+
+**Icon row made genuinely compact.** The "Show only" row (11 buttons: 7
+signal icons, 3 set-piece icons, shortlist) each carried a full text label
+(`padding:6px 12px 6px 8px`, `gap:7px`) — guaranteed to wrap on any normal
+screen. Switched to icon-only buttons (30×30px) with the existing tooltip
+carrying the full description, so nothing is lost, just deferred to hover.
+Shortlist count moved to a small corner badge instead of inline text. A short
+note now confirms icons are hoverable for detail.
+
+Files: index.html, app-core.js, app-render.js, app-odds.js, app-main.js,
+sw.js. Version 11.4.1.
+
+**Still open, flagged not built**: the earlier request to move Position →
+Club → Search below the budget row on this same page — the follow-up message
+listed different priorities and didn't repeat it, so it's queued rather than
+assumed still wanted. Confirm if it should go in the next release.
