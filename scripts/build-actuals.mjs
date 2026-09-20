@@ -43,6 +43,13 @@ const LEAGUE_FALLBACK = [
    after a logic change. */
 const REBUILD_ALL = process.env.FPL_REBUILD_ALL === "1";
 const REFETCH_LAST = 2;
+/* Bump whenever the logic behind a CACHED field changes (captainId, captainPts,
+   transferDiff, picks). Settled weeks are otherwise reused verbatim, so a
+   correctness fix would never reach them and would silently depend on someone
+   remembering to tick rebuild_all. A mismatch here discards the cache and
+   rebuilds everything once, automatically.
+   2 — transferDiff nulled on Wildcard and Free Hit weeks. */
+const LOGIC_VERSION = 2;
 
 /* The overall league. Standings are 50 per page, so rank N sits on
    page ceil(N/50). This is the fragile part of the job — deep pages are slow
@@ -270,6 +277,12 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
       await sleep(250);
     }
 
+    /* Applied after the cache branch on purpose. Whether a week was a Wildcard
+       or Free Hit is known from the chip record, which is fetched every run, so
+       this correctness rule needs no picks and no live data and must not be
+       gated behind the pick cache. */
+    if (onFreeSquadChip) row.transferDiff = null;
+
     rows.push(row);
   }
 
@@ -377,7 +390,11 @@ async function main() {
   }
 
   /* ---- build every manager ----------------------------------------------- */
-  const prevRivals = await readJson(RIVALS_OUT);
+  let prevRivals = await readJson(RIVALS_OUT);
+  if (prevRivals && prevRivals.logicVersion !== LOGIC_VERSION) {
+    console.log(`  cache logic v${prevRivals.logicVersion ?? "none"} != v${LOGIC_VERSION} — rebuilding every gameweek once`);
+    prevRivals = null;
+  }
   const built = new Map();
   for (const m of members) {
     const res = await buildEntry(
@@ -496,6 +513,7 @@ async function main() {
   const rivals = {
     season: SEASON,
     leagueId: LEAGUE_ID,
+    logicVersion: LOGIC_VERSION,
     leagueName: league?.league?.name ?? null,
     lastEvent,
     updated: new Date().toISOString(),
@@ -506,7 +524,7 @@ async function main() {
   /* `updated` moves every run, which would commit the file four times a day
      even when nothing changed. Keep the previous timestamp when the substance
      is identical so the diff stays empty. */
-  const stripped = o => JSON.stringify({ ...o, updated: null });
+  const stripped = o => JSON.stringify({ ...o, updated: null, logicVersion: null });
   if (prevRivals && stripped(prevRivals) === stripped(rivals)) {
     rivals.updated = prevRivals.updated;
     console.log("Rivals unchanged — keeping previous timestamp.");
