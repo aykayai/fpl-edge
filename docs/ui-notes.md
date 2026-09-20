@@ -901,3 +901,25 @@ reconstructed. The one-line Action change (publish `picks`, including
 
 Files: index.html, app-core.js, app-squad.js, app-odds.js, app-main.js, sw.js.
 Version 11.2.0.
+
+## v11.3.1 — Opp att column reads the true opponent-attack band
+Change requested by the FDR chat after v11.3.0 exposed `f.oppAtt`. The "Opp att"
+column was reading `f.diffDef`, which is clean-sheet difficulty
+(`oppAtt * ourDef / PL_GF`) — half of it the player's own club's defence — so a
+column labelled "opponent attack strength" was really ranking clubs by how leaky
+they are. Hull banded 5 in 47% of their fixtures while having the league's
+weakest attack.
+
+**Two accessors changed, not one.** The FDR chat flagged line 356 (the CELL
+renderer). Line 136 in `SORTVAL` also read `diffDef` for the same column — left
+alone it would have sorted the column by different values than it displayed.
+Both now use `f.oppAtt`.
+
+`posDiff()` and the fixture pills still use `diffDef` and are untouched, as
+instructed — they genuinely want clean-sheet difficulty.
+
+Verified: `oppAttOf(opp,home)` takes no team argument, so the value now depends
+only on the opponent and the venue. Simulated against representative ratings,
+MCI bands 5, HUL bands 1.
+
+Files: app-core.js (version only), app-render.js, sw.js. Version 11.3.1.
