@@ -923,3 +923,39 @@ only on the opponent and the venue. Simulated against representative ratings,
 MCI bands 5, HUL bands 1.
 
 Files: app-core.js (version only), app-render.js, sw.js. Version 11.3.1.
+
+## v11.4.0 — xFPL "Predicted" uses the true snapshot; two items needed no code change
+
+**1. xFPL page "Predicted vs actual" now uses `team.gw[].predicted` where present.**
+Was always `weekPtsFor(xg)` — today's calibration re-applied to whichever
+gameweek was being viewed, which for a past week is retrospective, not a replay
+of what was actually predicted before that deadline. Now:
+- a past week with a snapshot → shows it;
+- a past week without one (GW1-5, before collection started) → renders **"—"**,
+  not a fabricated retrospective number and not 0;
+- the current or a future week → still shows the live forecast, since there is
+  nothing retrospective about a prediction for a week that hasn't happened yet.
+
+Tested all four cases plus the actual-without-prediction edge case (diff stays
+null, no crash). `data/predictions.json` (per-player predicted-vs-actual) is
+not built against — checked directly, it 404s on `main` right now, so nothing
+consumes it until it actually exists.
+
+**2. `ftAvailable` null in GW1 — no change needed.** Every read (`ftFromFeed()`
+in app-core.js, the one direct read in app-odds.js) already guards with
+`!=null`. Checked every call site directly rather than assuming.
+
+**3. `transferDiff` null on chip weeks — no change needed either.** Every
+render site (`app-odds.js` rival detail and moves list, `app-tracker.js`'s
+weekly breakdown) already falls back to "—" on null. The moves-list guard
+(`if(r.transfers)`) already excludes Wildcard/Free Hit weeks from ordinary
+transfer activity today, since the API reports `event_transfers:0` on them —
+so chip weeks were already routed to chip uplift instead, as intended.
+
+**Residual data issue found, not a UI bug**: live `data/rivals.json` right now
+still shows entry 1132821's GW2 (Wildcard) with `transferDiff: -31`, not null —
+the exact symptom described. The fix evidently applies going forward but
+hasn't backfilled that already-published week. Worth a rerun of the job, or
+confirming whether backfill is expected.
+
+Files: app-core.js (version only), app-render.js, sw.js. Version 11.4.0.
