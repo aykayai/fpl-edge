@@ -123,9 +123,10 @@ const SORTVAL=(p,k,g)=>{
   const W=ws(String(p.code||""),p.pos,S.lWin||38)||{};
   const f0=p.gw[g]?.fixtures?.[0];
   const team=(S.model.teams||[]).find(t=>t.id===p.team);
+  const gwr=lGwRange();
   return ({name:p.web_name,team:p.teamName,pos:p.pos,price:p.price,
   next:(p.gw[g]?.fixtures||[]).reduce((s,f)=>s+f.diff,0)||99,form:p.form,lastform:p.lastForm,
-  pred:hPts(p,g,S.tab==="table"?S.lHorizon:S.horizon),pred3:hPts(p,g,3),pred5:hPts(p,g,5),avg:avgFP(p,g,S.horizon),
+  pred:hPts(p,g,S.tab==="table"?1:S.horizon),prxfpl:hPts(p,gwr.from,gwr.count),pred3:hPts(p,g,3),pred5:hPts(p,g,5),avg:avgFP(p,g,S.horizon),
   total:p.total,owned:p.owned,ppg:p.ppg,xg:p.xg90,xa:p.xa90,dc:p.dc90,
   mins:p.minutes,xmins:p.xMins,bonus:p.bonus,tin:p.tIn,
   startpct:W.startPct||0,xgi:(W.xg90||0)+(W.xa90||0),
@@ -244,6 +245,25 @@ function plannerControls(){
         <input type="range" min="1" max="8" step="1" value="${S.horizon}" oninput="act('horizon',this.value)" style="flex:1"></span>
     </span></div>`;
 }
+/* A plain range slider packs many possible values into a short drag distance —
+   for budget (0.1 steps across 12.5 units, 125 stops) or a gameweek number,
+   that makes landing on an exact value genuinely hard. Nudge buttons at two
+   step sizes flanking the number input make every value reachable in one or
+   two clicks, no dragging required. */
+function stepperInput(action,value,opts){
+  const o=opts||{};
+  const min=o.min??0,max=o.max??100,step=o.step??1,big=o.big??(step*5),dp=o.dp??0;
+  const clampv=v=>Math.min(max,Math.max(min,v));
+  const fmt=v=>(+v).toFixed(dp);
+  return `<span class="stepper">
+    <button onclick="act('${action}',${fmt(clampv(value-big))})" title="-${fmt(big)}">«</button>
+    <button onclick="act('${action}',${fmt(clampv(value-step))})" title="-${fmt(step)}">‹</button>
+    <input type="number" min="${min}" max="${max}" step="${step}" value="${fmt(value)}"
+      onchange="act('${action}',this.value)" style="width:${o.w||54}px">
+    <button onclick="act('${action}',${fmt(clampv(+value+step))})" title="+${fmt(step)}">›</button>
+    <button onclick="act('${action}',${fmt(clampv(+value+big))})" title="+${fmt(big)}">»</button>
+  </span>`;
+}
 function filtersHTML(compact,scope){
   const L=scope==="list";
   const pos=L?S.lPos:S.fPos, team=L?S.lTeam:S.fTeam, q=L?S.lSearch:S.fSearch;
@@ -253,6 +273,12 @@ function filtersHTML(compact,scope){
       value="${esc(q)}" oninput="searchInput('${A('search')}',this)">
     <span style="display:flex;gap:4px;flex-wrap:wrap">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]]
       .map(([v,n])=>`<button class="${pos===v?"on":""}" onclick="act('${A('pos')}',${v})">${n}</button>`).join("")}</span>
+    ${L?(()=>{const r=lGwRange();return `<span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span class="note" style="white-space:nowrap">Pr xFPL: GW</span>
+      ${stepperInput("lgwfrom",r.from,{min:1,max:38,step:1,big:5,w:40})}
+      <span class="note">to</span>
+      ${stepperInput("lgwto",r.to,{min:r.from,max:38,step:1,big:5,w:40})}
+      </span>`;})():""}
     ${L?"":`<span class="pricebox" style="width:auto">
       <span class="note" style="white-space:nowrap">Max £</span>
       <input type="number" min="3.5" max="16" step="0.1" value="${S.fMax.toFixed(1)}"
@@ -275,12 +301,13 @@ function tableHTML(){
   const a=sortList(filtered("list"),S.sortKey,S.sortDir,g);
   const W=S.lWin||38;
   const w=p=>ws(String(p.code||""),p.pos,W,p.price,teamMaxPrice(p.team));
+  const gwr=lGwRange();
   const cols=[["name","Player"],["price","Price"],["signals","Signals"],["next","Next 3"],["form","Form"],["pred","xFPL"],
-    ["pred3","3GW"],["pred5","5GW"],["owned","Own %"],["startpct","Start %"],
+    ["prxfpl",gwr.from===gwr.to?`Pr xFPL (GW${gwr.from})`:`Pr xFPL (GW${gwr.from}-${gwr.to})`],["owned","Own %"],["startpct","Start %"],
     ["xmins","xMins"],["xgi","xGI/90"],["npxg","npxG/90"],["xa","xA/90"],["dchit","DefCon %"],
     ["csp","CS %"],["cc","CC/90"],["box","Box/90"],["bonus","Bonus"],["bps","BPS/90"],
     ["tin","TI"],["total","Pts"]];
-  const KEY={pred:1,pred5:1,form:1,xg:1,xa:1,dc:1,next:1,xmins:1};
+  const KEY={pred:1,prxfpl:1,form:1,xg:1,xa:1,dc:1,next:1,xmins:1};
   /* Filtering by position swaps in the stats that matter for that position */
   /* position-specific stats appended to the right, ordered by importance */
   const POSCOLS={
@@ -311,7 +338,8 @@ function tableHTML(){
     signals:"Signals: differential, hot streak, attack/defence threat, nailed starter, caution",
     next:"Next 3 fixtures — colour shows difficulty",form:"Average points over recent gameweeks",
     pred:"Projected points, next gameweek (xFPL)",pred3:"Projected points, next 3 GWs",
-    pred5:"Projected points, next 5 GWs",owned:"% of managers who own him",
+    pred5:"Projected points, next 5 GWs",prxfpl:"Projected points over the selected gameweek window",
+    owned:"% of managers who own him",
     startpct:"Estimated chance of starting",xmins:"Expected minutes next GW",
     xgi:"Expected goal involvements per 90",npxg:"Non-penalty xG per 90",xa:"Expected assists per 90",
     dchit:"% of games hitting the defensive-contribution points threshold",
@@ -368,7 +396,7 @@ function tableHTML(){
     conv:p=>{const q=w(p);return q&&q.xg90>0?((q.g/Math.max(.1,q.xg90*q.mins/90))).toFixed(2):"—";},
     price:p=>`£${p.price.toFixed(1)}${arw(p.priceChange)}`,
     form:p=>p.form.toFixed(1), lastform:p=>p.lastForm?p.lastForm.toFixed(1):"—",
-    pred:p=>hPts(p,g,S.lHorizon).toFixed(1),
+    pred:p=>hPts(p,g,1).toFixed(1),prxfpl:p=>{const r=lGwRange();return hPts(p,r.from,r.count).toFixed(1);},
     pred5:p=>hPts(p,g,5).toFixed(1), avg:p=>avgFP(p,g,S.horizon).toFixed(1),
     ppg:p=>p.ppg.toFixed(1), total:p=>p.total, owned:p=>p.owned.toFixed(1),
     xg:p=>p.xg90.toFixed(2), xa:p=>p.xa90.toFixed(2), dc:p=>p.dc90.toFixed(1),
@@ -392,7 +420,7 @@ function tableHTML(){
     cols.slice(1).forEach(([k])=>{
       if(k==="signals"){tds+=`<td style="text-align:center">${iconCell(p)}</td>`;return;}
       if(k==="next"){tds+=`<td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>`;return;}
-      const hot=(k==="pred"||k==="pred5"||k==="pred3")?"color:var(--mint);font-weight:700;"
+      const hot=(k==="pred"||k==="pred5"||k==="pred3"||k==="prxfpl")?"color:var(--mint);font-weight:700;"
         :(POSKEY.has(k)?"color:var(--amber);":(KEY[k]?"color:var(--cyan);":""));
       tds+=`<td style="text-align:right;${hot}">${CELL[k]?CELL[k](p):""}</td>`;});
     return `<tr style="${p.avail===0?"opacity:.4;":""}${own?"opacity:.45":""}" title="${own?"Already in your squad":""}">${tds}</tr>`;}).join("");

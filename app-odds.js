@@ -998,38 +998,29 @@ function render(){
   else if(S.tab==="table")main=`<div class="panel"><div class="phead"><h2>Player Data</h2>
       <span class="note">${filtered("list").length} players · tap any column to sort</span></div>
     ${filtersHTML(false,'list')}
-    <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--ink3)">
-      <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700">Show only</span>
-      ${SIGDEF.map(([l,c,t],ix)=>`<button class="fbtn ${S.iconF.includes(ix)?"on":""}"
+    <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
+      <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;flex:none">Show only</span>
+      ${SIGDEF.map(([l,c,t],ix)=>`<button class="fbtn fbtn-icon ${S.iconF.includes(ix)?"on":""}"
         onclick="act('iconf',${ix})" title="${t==="Stats caution"?"Hide players whose stats may be unreliable":esc(t)}" style="--fc:${c}">
-        <span class="sig">${l}</span><span>${t==="Stats caution"?"Hide caution":esc(t)}</span></button>`).join("")}
+        <span class="sig">${l}</span></button>`).join("")}
       ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
-        return `<button class="fbtn ${S.spF===k?"on":""}" onclick="act('spf','${k}')" style="--fc:${b}">
-          <span class="sig">${badge(G(k,11),b,c)}</span><span>${t}</span></button>`;}).join("")}
-      <button class="fbtn ${S.starOnly?"on":""}" onclick="act('staronly')" style="--fc:#FFB020">
-        <span class="sig" style="color:#FFB020;font-size:14px">★</span>
-        <span>Shortlist${S.stars.length?" ("+S.stars.length+")":""}</span></button>
+        return `<button class="fbtn fbtn-icon ${S.spF===k?"on":""}" onclick="act('spf','${k}')" title="${esc(t)}" style="--fc:${b}">
+          <span class="sig">${badge(G(k,11),b,c)}</span></button>`;}).join("")}
+      <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
+        <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button>
     </div>
+    <p class="note" style="margin:0;padding:2px 14px 0;font-size:9px">Hover an icon for what it filters.</p>
     <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
       <span style="flex:1;min-width:200px">
         <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)">
           <span>Budget</span></span>
-        <span class="pricebox" style="margin:4px 0">
-          <input type="number" min="3.5" max="16" step="0.1" value="${S.lMax.toFixed(1)}" onchange="act('lmax',this.value)">
-          <input type="range" min="3.5" max="16" step="0.1" value="${S.lMax}" oninput="act('lmax',this.value)" style="flex:1"></span>
+        <span style="margin:4px 0;display:block">${stepperInput("lmax",S.lMax,{min:3.5,max:16,step:0.1,big:1,dp:1,w:56})}</span>
       </span>
       <span style="flex:1;min-width:230px">
         <span style="font-size:10.5px;color:var(--mute)">Past stats — window</span>
         <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
           ${[1,3,5,10,38].map(n=>`<button class="chipbtn ${(S.lWin||38)===n?"on":""}" onclick="act('lwin',${n})">${n===38?"Season":"Last "+n}</button>`).join("")}
-        </span></span>
-      <span style="flex:1;min-width:200px">
-        <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)">
-          <span>Projected — gameweeks ahead</span></span>
-        <span class="pricebox" style="margin:4px 0">
-          <input type="number" min="1" max="8" step="1" value="${S.lHorizon}" onchange="act('lhorizon',this.value)">
-          <input type="range" min="1" max="8" step="1" value="${S.lHorizon}" oninput="act('lhorizon',this.value)" style="flex:1"></span>
-      </span></div>
+        </span></span></div>
     ${tableHTML()}</div>`;
   else if(S.tab==="tracker")main=trackerHTML();
   else if(S.tab==="xfpl")main=xfplHTML();

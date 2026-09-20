@@ -62,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="11.4.0";
+const APP_VERSION="11.4.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -136,6 +136,17 @@ const BODY="M13.5 6 L11 7.2 L11 34 L29 34 L29 7.2 L26.5 6 L24.5 8.4 Q20 11.6 15.
    The only reliable source is the feed (it depends on real transfer + chip
    history the client can't fully see), so ftFromFeed() is preferred; S.ft is a
    local fallback until the feed publishes ftAvailable. */
+/* Player Data's Pr xFPL window — an explicit range rather than a plain "N
+   gameweeks ahead" count, since a range can usefully start somewhere other
+   than the current gameweek (e.g. GW7 to GW12 while sat in GW3). 0 means
+   unset; From defaults to the current gameweek, so leaving it alone and only
+   moving To gives the simpler "N gameweeks ahead" behaviour for free. */
+function lGwRange(){
+  const g=S.model?S.model.next.id:1;
+  const from=clamp(S.lGwFrom||g,1,38);
+  const to=clamp(S.lGwTo||Math.min(38,from+4),from,38);
+  return {from,to,count:to-from+1};
+}
 function ftFromFeed(){
   if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
   const g=S.model.next.id;
@@ -249,7 +260,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
  news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
- fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:1,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
+ fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:5,lGwFrom:0,lGwTo:0,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
  outList:[],selected:null,menuOpen:false,compare:null,replacedBy:{},dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
 const LS={get(k){try{return JSON.parse(localStorage.getItem("fpl3:"+k));}catch(e){return null;}},

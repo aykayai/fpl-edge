@@ -116,6 +116,10 @@ function act(k,a,b){
     case"lsearch":S.lSearch=a;break;
     case"lmax":S.lMax=clamp(+a||16,3.5,16);break;
     case"lhorizon":S.lHorizon=clamp(Math.round(+a)||1,1,8);break;
+    case"lgwfrom":{const v=clamp(Math.round(+a)||1,1,38);S.lGwFrom=v;
+      if(S.lGwTo&&S.lGwTo<v)S.lGwTo=v;break;}
+    case"lgwto":{const from=S.lGwFrom||(S.model?S.model.next.id:1);
+      S.lGwTo=clamp(Math.round(+a)||from,from,38);break;}
     case"lwin":S.lWin=+a;break;
     case"iconf":S.iconF=S.iconF.includes(a)?S.iconF.filter(x=>x!==a):[...S.iconF,a];break;
     case"spf":S.spF=S.spF===a?null:a;break;
