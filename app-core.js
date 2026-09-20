@@ -62,7 +62,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="11.2.1";
+const APP_VERSION="11.3.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
  <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
    <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
@@ -269,7 +269,7 @@ async function loadAll(force){
     const cached=LS.get("data");
     if(cached&&!force&&Date.now()-cached.t<1000*60*60*6){
       Object.assign(S,{players:cached.players,teams:cached.teams,fixtures:cached.fixtures,
-        events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
+        events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},curTeamStats:cached.curTeamStats||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
       buildModel();dedupeSquad();snapshotPredictions();localFtTrack();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
     }
     S.progress="players and prices…";render();
@@ -284,6 +284,10 @@ async function loadAll(force){
 
     S.progress="fixtures…";render();
     const fixtures=[];
+    /* Current-season team output, accumulated from the very rows already being
+       parsed for the fixture list. No extra requests: the xG columns are in the
+       same CSV. Keyed by team code here because S.teams is not built yet. */
+    const cstat={};
     for(let batch=1;batch<=38;batch+=8){
       const jobs=[];
       for(let gw=batch;gw<batch+8&&gw<=38;gw++){
@@ -299,6 +303,19 @@ async function loadAll(force){
           hElo:num(f.home_team_elo),aElo:num(f.away_team_elo),
           kickoff:f.kickoff_time||"",finished:String(f.finished).toLowerCase()==="true",
           hs:f.home_score===""?null:num(f.home_score),as:f.away_score===""?null:num(f.away_score)});
+        const fin=String(f.finished).toLowerCase()==="true";
+        const hsv=f.home_score,asv=f.away_score;
+        if(fin&&hsv!==""&&hsv!=null&&asv!==""&&asv!=null){
+          [[Math.round(num(f.home_team)),true],[Math.round(num(f.away_team)),false]].forEach(([code,hm])=>{
+            if(!code)return;
+            const c=cstat[code]=cstat[code]||{n:0,gf:0,ga:0,xg:0,xga:0,npxg:0};
+            c.n++;
+            c.gf+=num(hm?hsv:asv); c.ga+=num(hm?asv:hsv);
+            c.xg  +=num(hm?f.home_expected_goals_xg:f.away_expected_goals_xg);
+            c.xga +=num(hm?f.away_expected_goals_xg:f.home_expected_goals_xg);
+            c.npxg+=num(hm?f.home_non_penalty_xg:f.away_non_penalty_xg);
+          });
+        }
       }));
       S.progress=`fixtures… ${Math.min(38,batch+7)}/38`;render();
     }
@@ -524,6 +541,9 @@ async function loadAll(force){
       sdh:num(t.strength_defence_home),sda:num(t.strength_defence_away),
       soh:num(t.strength_overall_home),soa:num(t.strength_overall_away),
       fdrHome:num(t.strength_overall_home),fdrAway:num(t.strength_overall_away)}));
+    /* re-key this season's output onto short names, as the ratings expect */
+    const cts={};S.teams.forEach(t=>{const c=cstat[Math.round(num(t.code))];if(c)cts[t.short]=c;});
+    S.curTeamStats=cts;
     /* one fixture per club pair per gameweek, whatever the source sends */
     const fseen=new Set();
     S.fixtures=fixtures.filter(f=>{
@@ -531,7 +551,7 @@ async function loadAll(force){
       if(fseen.has(k))return false;fseen.add(k);return true;});
     S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
     S.stamp=Date.now();
-    LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,hist:S.hist,teamMatch:S.teamMatch});
+    LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,curTeamStats:S.curTeamStats,hist:S.hist,teamMatch:S.teamMatch});
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
@@ -572,11 +592,47 @@ const PROMOTED={
   IPS:{gf:80/46, ga:47/46, note:"best xGA in the division, 1.01 per 90"},
   HUL:{gf:62/46, ga:58/46, note:"6th, promoted via play-offs, overperformed xG"}
 };
-const CHAMP_ATT=0.62, CHAMP_DEF=0.70, PL_GF=1.42;
+const CHAMP_ATT=0.62, PL_GF=1.42;   /* CHAMP_DEF removed at v11.3: declared, never read */
+
+/* ---- current-season blend -------------------------------------------------
+   Until v11.3 the ratings were built entirely from LAST and never moved: five
+   gameweeks into a season they were still the pre-season numbers. The "rolling
+   form" weight was the closing eight matches of the PREVIOUS season, not a
+   moving window, so nothing that happened in August could change a fixture
+   colour.
+
+   Weights are calibrated, not guessed. For each gameweek k of 2025-26 we took
+   the weight on games 1..k that best predicted the remainder of that season.
+   Attack and defence came out very differently:
+
+     k:        4     8    12    16    20    24
+     attack  0.55  0.60  0.65  0.60  0.60  0.65
+     defence 0.00  0.10  0.50  0.70  0.55  0.75
+
+   Attacking output is worth trusting almost immediately and then plateaus.
+   Defensive output is worth close to nothing before GW8 — early clean sheets
+   are mostly fixture luck — and only catches up around GW16. A single shared
+   ramp would be too slow on attack and far too fast on defence at the same
+   time, so they ramp separately.
+
+   Neither goes to 1.0: 38 games of prior still say something about true
+   quality that 20 games of current form does not.
+
+   Caveat for whoever reads this next: fitted on one season, so treat as ±0.1,
+   and the fit used the league mean as the stand-in prior because 2024-25 is
+   not in the feed. Our real prior is better than the league mean, which makes
+   these weights, if anything, slightly generous to the current season. */
+const CUR_ATT_FULL=12, CUR_ATT_CAP=0.65;
+const CUR_DEF_FULL=24, CUR_DEF_CAP=0.70;
 
 function buildRatings(){
   const T=S.teams;
   const last=S.lastTeams||{};
+  const cur=S.curTeamStats||{};
+  /* buildRatings runs before S.model exists, so count finished events directly */
+  const gwPlayed=(S.events||[]).filter(e=>e.finished).length;
+  const wAttG=Math.min(CUR_ATT_CAP,gwPlayed/CUR_ATT_FULL);
+  const wDefG=Math.min(CUR_DEF_CAP,gwPlayed/CUR_DEF_FULL);
   T.forEach(t=>{
     const L=last[t.short];
     const TS=(S.lastTeamStats||{})[t.short];
@@ -631,6 +687,25 @@ function buildRatings(){
       gf=PL_GF*(0.72+(o-1)*0.16); ga=PL_GF*(1.30-(o-1)*0.16);
       t.ratingSrc="FPL strength";
     }
+    /* Blend in what has actually happened this season. This sits after the
+       whole prior chain deliberately, so it also corrects promoted clubs —
+       a Championship estimate is the weakest prior we hold and the first that
+       should give way to real results. */
+    const C=cur[t.short];
+    if(C&&C.n>=2){
+      const cGf0=C.npxg/C.n*0.75+C.xg/C.n*0.25, cGa0=C.xga/C.n;
+      /* same xG-to-goals mix as the last-season path, for consistency */
+      const curGf=cGf0*0.62+(C.gf/C.n)*0.38;
+      const curGa=cGa0*0.62+(C.ga/C.n)*0.38;
+      /* a club with games in hand should not be weighted as if it had played
+         them: scale by matches actually completed against the league's */
+      const sc=clamp(C.n/Math.max(1,gwPlayed),0,1);
+      const wA=wAttG*sc, wD=wDefG*sc;
+      gf=gf*(1-wA)+curGf*wA;
+      ga=ga*(1-wD)+curGa*wD;
+      t.curN=C.n; t.wAtt=wA; t.wDef=wD;
+      t.ratingSrc=(t.ratingSrc||"")+" + "+Math.round(wA*100)+"/"+Math.round(wD*100)+"% this season";
+    }
     /* pre-season friendlies nudge it, lightly — they are weak evidence */
     t.attRaw=clamp(gf,0.55,2.55);
     t.defRaw=clamp(ga,0.55,2.55);
@@ -669,16 +744,43 @@ function buildRatings(){
 /* Both arrays run from the lowest expected-goals fixtures upward. For defence
    that means easiest first; for attack the mapping inverts, so the same
    ordering runs hardest first. Written out per lens to avoid the confusion. */
+/* The mixes pin the band distribution to the published ticker's shape (implied
+   means 2.71 attack, 3.38 defence, against 2.72 and 3.36). This is a CHOICE,
+   not a measurement: it forces the same proportion of fixtures into band 5
+   every season regardless of how polarised the league actually is. It is kept
+   because it makes our colours legible to anyone used to the official ticker,
+   which is worth more than a distribution nobody can calibrate against by eye.
+   Anyone tempted to make these adaptive should know they are trading that
+   legibility away, and should validate against fixture outcomes, not against
+   ref_fdr.csv, which encodes the same fixed shape. */
 const BAND_MIX_ATT=[0.06,0.18,0.32,0.29,0.15];   // low xGF = hard for attackers
 const BAND_MIX_DEF=[0.05,0.16,0.32,0.30,0.17];   // low xGC = easy for defenders
 function buildBands(){
-  const g=S.model?S.model.next.id:1;
+  /* Band cuts are a property of the RATINGS, not of how much season is left.
+
+     Until 11.3.0 this iterated the REMAINING schedule (for(let e=g;e<=38;e++)),
+     so the sample shrank as the season contracted and the cuts moved with it.
+     A fixture could therefore change colour when nothing about either club had
+     changed, purely because other fixtures had dropped out of the sample.
+     Measured on the real 2026-27 schedule with ratings held fixed, the cuts
+     moved 0.02-0.04 and 2-4% of fixture-sides sat on the wrong side of a
+     boundary as a result. Small, but it is noise with no signal in it, and it
+     confounded rating movement with schedule attrition at exactly the point in
+     the season when people trust the ticker most.
+
+     Every club meets every other home and away, so the full 380-fixture set is
+     well defined in every gameweek and depends only on the ratings. Cuts are
+     now built from that, which means they move if and only if the ratings do. */
+  const T=S.teams||[];
+  if(T.length<2){S.bandCuts=null;return;}
   const att=[],def=[];
-  for(let e=g;e<=38;e++)(S.model.byEv[e]||[]).forEach(f=>{
-    if(!f.ht||!f.at)return;
-    [[f.ht,f.at,true],[f.at,f.ht,false]].forEach(([t,o,home])=>{
-      att.push(fdrCalc(t,o,home,"xgf"));
-      def.push(fdrCalc(t,o,home,"xgc"));});});
+  T.forEach(t=>T.forEach(o=>{
+    if(t===o)return;
+    /* t at home to o, then o away at t: both sides of that leg. Iterating
+       ordered pairs covers the reverse leg on its own pass. */
+    att.push(fdrCalc(t,o,true,"xgf"));  def.push(fdrCalc(t,o,true,"xgc"));
+    att.push(fdrCalc(o,t,false,"xgf")); def.push(fdrCalc(o,t,false,"xgc"));
+  }));
   const cuts=(arr,mix)=>{const v=arr.slice().sort((a,b)=>a-b);
     const out=[];let acc=0;
     for(let i=0;i<4;i++){acc+=mix[i];out.push(v[Math.min(v.length-1,Math.floor(acc*v.length))]);}
@@ -717,6 +819,23 @@ function fdrCalc(team,opp,home,kind){
   return kind==="def" ? bandOf(xGC,"def") : bandOf(xGF,"att");
 }
 /* Backwards-compatible single number, used for the tickers and colours */
+/* How strong is the opposition attack, on its own terms?
+
+   This is NOT fdrOf(...,"def"). That returns clean-sheet difficulty, which is
+   oppAtt * ourDef / PL_GF — half of it is the player's own defence. Ranking
+   clubs by it ranks them by how leaky they are, so Hull came out as the most
+   dangerous attack in the league while rating 0.97 for attack.
+
+   Holding our defence at the league average collapses the expression to the
+   opponent's attack at this venue, which is exactly what a league-average side
+   would expect to concede against them — so it bands correctly against the
+   same goals-conceded cuts. */
+function oppAttOf(opp,home){
+  if(!opp)return 3;
+  if(!S.ratingsReady)return 3;
+  return clamp(Math.round(bandOf(home?opp.attA:opp.attH,"def")),1,5);
+}
+
 function fdrOf(opp,home,team,kind){
   if(!opp)return 3;
   if(S.ratingsReady){
@@ -1057,6 +1176,7 @@ function buildModel(){
     return{opp:opp?.short||"?",oppName:opp?.name||"",home,oppId:opp?.id,oppT:opp,
       diff:fdrOf(opp,home,team),
       diffAtt:fdrOf(opp,home,team,"att"),diffDef:fdrOf(opp,home,team,"def"),
+      oppAtt:oppAttOf(opp,home),
       xAtt:fdrExact(opp,home,team,"att"),xDef:fdrExact(opp,home,team,"def"),
       xgf:fdrCalc(team,opp,home,"xgf"),xgc:fdrCalc(team,opp,home,"xgc")};});
 
