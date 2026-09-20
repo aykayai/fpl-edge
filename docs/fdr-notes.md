@@ -131,6 +131,49 @@ Cuts are now built from all 380 fixtures implied by the ratings, which exist in
 every gameweek, so they move if and only if the ratings move. `buildBands` no
 longer depends on `S.model`.
 
+## Interaction with xFPL (added after 11.3.0)
+
+Reported by the xFPL chat; thresholds re-derived here and binding frequency
+measured, which they could not do without standing up the model.
+
+**1. Clamp exposure is asymmetric, and 11.3 widens it.** xFPL applies
+
+    nA=clamp(pow(xgf/PL_GF,1.9),.30,2.40)
+    nD=clamp(pow(PL_GF/max(.35,xgc),1.9),.35,2.30)
+
+Inverting the exponent: nA binds at xgf below 0.754 or above 2.251; nD binds at
+xgc above 2.467 or **below 0.916**. Both nA bounds are genuinely extreme. The nD
+high bound is not: xgc under 0.92 is an ordinary good-defence-against-weak-attack
+fixture, which is precisely where defensive returns concentrate.
+
+Measured across all 760 fixture-sides of the real 2026-27 schedule:
+
+| ratings | nA low | nA high | nD low | nD high |
+|---|---|---|---|---|
+| 11.2.1 frozen | 2.4% | 2.4% | 0.7% | 6.8% |
+| 11.3.0 at GW5 | 3.0% | 4.3% | 1.7% | 10.4% |
+| 11.3.0 at GW12 attack cap | 7.2% | 6.6% | 3.4% | 15.4% |
+| 11.3.0 at GW17 both caps | 9.1% | 8.2% | 4.7% | 18.4% |
+
+So the blend takes nD high-clamping from roughly one fixture-side in fifteen to
+nearly one in five, against 8.2% for nA at the same point. This is a real cost of
+the ramp, not a rounding effect.
+
+**It does not argue against 11.3**, and the mitigation is xFPL's. But it is a
+live constraint on any future FDR tuning: anything that widens rating spread
+further buys accuracy in the ratings and spends it against a clamp that is
+already binding on one defensive fixture in five. If the ramps are ever raised
+past their current caps, check this table again first.
+
+**2. FDR_MIX=1.00 biases the xFPL learned `spread` downward.** Because ratings
+now carry in-season results, rawPts partly reflects the same realised form the
+calibration scores its actuals against. Their measurement: `scale` (ratio of
+means) is largely safe; `spread` (ratio of standard deviations) runs about -15%
+at the current 0.42 attack weight and up to -28% at the 0.65 cap. A suppressed
+spread narrows B, and CAL_BASE deliberately carries a wider slope for MID and
+FWD or the premiums stop separating. Recorded here because it is a consequence
+of our ramp; xFPL is handling it.
+
 ## Open
 
 - **Arsenal reading band 4 on the Player Data defender view is unexplained.**
@@ -175,3 +218,10 @@ longer depends on `S.model`.
   cross-season case where the closing-eight window does help. Do not retry
   without a materially larger sample.
 - `CHAMP_DEF=0.70` was declared and never read. Removed at 11.3.0.
+
+## Naming trap
+
+`FDR_MIX` appears in `xfpl-notes.md` as removed at v7.4.1. That was the **old
+strength-model blend**, a different quantity that happened to share the name.
+The xG-based `FDR_MIX=1.00` that 11.3 feeds is not the thing that was removed.
+Anyone reading the xFPL notes and concluding FDR_MIX is dead will be wrong.
