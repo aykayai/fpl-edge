@@ -1,0 +1,77 @@
+name: FPL prediction snapshot
+
+# Hourly because deadlines move around (Friday, Saturday, Tuesday) and the
+# usable window between deadline and first kickoff is only about 90 minutes.
+# The script exits in well under a second when there is nothing to do, and
+# only installs a browser once it has decided to snapshot, so the cost of
+# running often is close to nothing. A missed or failed hour self-heals on
+# the next one, as long as it is still before the first match.
+on:
+  schedule:
+    - cron: "25 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Snapshot even outside the window, or re-take one already recorded (produces a contaminated sample — debugging only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fpl-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Cheap pre-check first: decide whether this hour is in the window at all
+      # before spending a couple of minutes installing a browser.
+      - name: Is there anything to do?
+        id: gate
+        env:
+          FPL_ENTRY_ID: "301830"
+          FPL_SNAPSHOT_FORCE: ${{ inputs.force && '1' || '0' }}
+        run: |
+          node scripts/snapshot-predictions.mjs --check-only > gate.log 2>&1 || true
+          cat gate.log
+          if grep -q "in window" gate.log; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install browser
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+
+      - name: Snapshot
+        if: steps.gate.outputs.go == 'true'
+        env:
+          FPL_ENTRY_ID: "301830"
+          FPL_SEASON: "2027"
+          FPL_SNAPSHOT_FORCE: ${{ inputs.force && '1' || '0' }}
+        run: node scripts/snapshot-predictions.mjs
+
+      - name: Commit if changed
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/predictions.json
+          if git diff --staged --quiet; then
+            echo "No change."
+          else
+            git commit -m "predictions: snapshot $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
