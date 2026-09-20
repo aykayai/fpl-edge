@@ -133,7 +133,7 @@ const SORTVAL=(p,k,g)=>{
   bps:p.bps||0,csp:p.csRate||0,sv90:W.sv90||0,
   spthreat:p.spThreat||0,penord:p.penOrder||99,
   /* position-specific columns — previously missing, so their headers did not sort */
-  oppatt:f0?(f0.diffDef??3):0,teamdef:team?team.def:0,
+  oppatt:f0?(f0.oppAtt??3):0,teamdef:team?team.def:0,
   xgot:W.xgot90||0,gprev:W.gp||0,gc90:W.gc90||0,pensv:p.pensSaved||0,og:p.ownGoals||0,
   cbit:W.cbit90||0,aer:W.aer90||0,shbox:(W.sh90||0)*0.62,sh90:W.sh90||0,sot:W.sot90||0,
   f3:W.f390||0,drb:W.drb90||0,bcm:W.bcm||0,
@@ -353,7 +353,7 @@ function tableHTML(){
     gprev:p=>{const q=w(p);return q?q.gp.toFixed(1):"—";},
     gc90:p=>{const q=w(p);return q?q.gc90.toFixed(2):"—";},
     pensv:p=>p.pensSaved||0, og:p=>p.ownGoals||0,
-    oppatt:p=>{const f=p.gw[g]?.fixtures?.[0];return f?(f.diffDef??3).toFixed(0):"—";},
+    oppatt:p=>{const f=p.gw[g]?.fixtures?.[0];return f?(f.oppAtt??3).toFixed(0):"—";},
     teamdef:p=>{const t=S.model.teams.find(t2=>t2.id===p.team);return t?t.def.toFixed(2):"—";},
     cbit:p=>{const q=w(p);return q?q.cbit90.toFixed(1):"—";},
     spthreat:p=>(p.spThreat||0).toFixed(1),
