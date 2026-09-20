@@ -25,6 +25,9 @@ const ENTRY_ID = String(process.env.FPL_ENTRY_ID || "301830");
 const SEASON = process.env.FPL_SEASON || "2027";
 const OUT = process.env.FPL_OUT || "data/actuals.json";
 const RIVALS_OUT = process.env.FPL_RIVALS_OUT || "data/rivals.json";
+/* Written by scripts/snapshot-predictions.mjs before each round kicks off.
+   Read-only here: this job never writes it. */
+const PRED_IN = process.env.FPL_PRED_OUT || "data/predictions.json";
 const LEAGUE_ID = String(process.env.FPL_LEAGUE_ID || "391690");
 
 /* Fallback roster, used only if the standings fetch fails. The league itself
@@ -444,6 +447,18 @@ async function main() {
     if (kept) for (const [f, v] of Object.entries(kept)) if (g[f] == null) g[f] = v;
   }
 
+  /* Fold in what was predicted before each deadline, where a snapshot exists.
+     Absent for any gameweek snapshotted before the job was introduced, and the
+     UI renders "—" for a missing value. */
+  const preds = await readJson(PRED_IN);
+  let predCount = 0;
+  if (preds?.gw) {
+    for (const g of teamGw) {
+      const p = preds.gw[g.event];
+      if (p && p.squad != null) { g.predicted = p.squad; predCount++; }
+    }
+  }
+
   const actuals = {
     season: SEASON,
     team: { totalPlayers, gw: teamGw, chips: chipsMap },
@@ -499,7 +514,7 @@ async function main() {
 
   /* ---- write ------------------------------------------------------------- */
   for (const [path, payload, note] of [
-    [OUT, actuals, `${teamGw.length} gameweeks, ${Object.keys(players).length} players`],
+    [OUT, actuals, `${teamGw.length} gameweeks (${predCount} with predictions), ${Object.keys(players).length} players`],
     [RIVALS_OUT, rivals, `${Object.keys(entries).length} managers, last GW ${lastEvent}`]
   ]) {
     const json = JSON.stringify(payload);
