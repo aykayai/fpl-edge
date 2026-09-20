@@ -439,23 +439,31 @@ function xfplHTML(){
       bias:arr.reduce((s,x)=>s+(x.p-x.a),0)/n};};
   const overall=summ([].concat(acc[1],acc[2],acc[3],acc[4]));
 
-  /* Squad-level predicted vs actual, navigable GW by GW. "Predicted" is the
-     model's current view of that gameweek's squad total — for past GWs this is
-     a retrospective figure (today's calibration applied backwards), not a replay
-     of what was shown before that gameweek's deadline. "Actual" comes from the
+  /* Squad-level predicted vs actual, navigable GW by GW.
+     "Predicted" prefers the true snapshot the model job now takes right after
+     each deadline (data.team.gw[].predicted) — what was actually predicted,
+     not today's calibration applied backwards. Collection only started
+     recently, so early gameweeks won't have one; for a PAST week with none,
+     showing a retrospective estimate would misrepresent it as a real
+     prediction, so it renders "—" instead. For the current or a future week
+     there is nothing to be retrospective about yet, so the live forecast
+     (weekPtsFor) is still shown as before. "Actual" comes from the
      live-actuals feed and only appears once that GW has been published. */
   const xg=clamp(S.xfplGW||(played>=1?played:g),1,38);
-  const xPred=weekPtsFor(xg);
+  const isPastGw=xg<g;
+  const snapRow=S.tracker&&Array.isArray(S.tracker.gw)?S.tracker.gw.find(r=>r.event===xg):null;
+  const snapPred=snapRow&&snapRow.predicted!=null?snapRow.predicted:null;
+  const xPred=snapPred!=null?snapPred:(isPastGw?null:weekPtsFor(xg));
   const xActual=(S.actuals&&S.actuals[xg]!=null)?S.actuals[xg]:null;
-  const xDiff=xActual!=null?xActual-xPred:null;
+  const xDiff=(xActual!=null&&xPred!=null)?xActual-xPred:null;
   const compare=`<div class="panel"><div class="phead"><h2>Predicted vs actual</h2>
       <span class="note">your squad, by gameweek</span></div>
     <div class="pbody">
       <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
         <button onclick="act('xfplgw','prev')" ${xg<=1?"disabled":""} aria-label="Earlier">←</button>
         <div style="text-align:center;min-width:96px">
-          <span class="note" style="display:block">Predicted</span>
-          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:var(--cyan)">${xPred.toFixed(1)}</span></div>
+          <span class="note" style="display:block">Predicted${snapPred!=null?"":(isPastGw?"":" (live)")}</span>
+          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:${xPred!=null?"var(--cyan)":"var(--ink3)"}">${xPred!=null?xPred.toFixed(1):"—"}</span></div>
         <div style="text-align:center;min-width:64px">
           <span class="note" style="display:block">GW${xg}</span>
           ${xDiff!=null?`<span style="display:block;font-weight:800;font-family:'Barlow Condensed',sans-serif;font-size:15px;color:${xDiff>=0?"var(--mint)":"var(--red)"}">${xDiff>=0?"+":""}${xDiff.toFixed(1)}</span>`:`<span class="note" style="display:block">—</span>`}</div>
@@ -464,7 +472,8 @@ function xfplHTML(){
           <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:${xActual!=null?"var(--mint)":"var(--ink3)"}">${xActual!=null?xActual.toFixed(1):"—"}</span></div>
         <button onclick="act('xfplgw','next')" ${xg>=38?"disabled":""} aria-label="Later">→</button>
       </div>
-      ${xActual==null?`<p class="note" style="margin:8px 0 0;text-align:center">Actual score for GW${xg} lands once the live-actuals feed publishes it.</p>`:""}
+      ${xActual==null?`<p class="note" style="margin:8px 0 0;text-align:center">Actual score for GW${xg} lands once the live-actuals feed publishes it.</p>`
+        :(xPred==null?`<p class="note" style="margin:8px 0 0;text-align:center">No predicted snapshot was taken for GW${xg} — snapshotting started from a later gameweek.</p>`:"")}
     </div></div>`;
 
   const status=`<div class="panel"><div class="phead"><h2>xFPL model</h2>
