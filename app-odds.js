@@ -810,7 +810,8 @@ function go(ev,tab){
 function statusChipHTML(){
   const st=S.status;
   let cls="",txt;
-  if(!st||S.statusErr){cls="wait";txt=`Server unreachable · <b>showing last copy</b>`;}
+  if(S.statusPending&&!S.statusErr)txt=`Checking for updates · <b>last copy ${ukHHMM(S.statusAt||Date.now())}</b>`;
+  else if(!st||S.statusErr){cls="wait";txt=`Server unreachable · <b>showing last copy</b>`;}
   else{
     const ds=st.dataset||{},fpl=st.fpl||{},feeds=st.feeds||{};
     const liveAge=agoMin(fpl.liveFetchedAt);

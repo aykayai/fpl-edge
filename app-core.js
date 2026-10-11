@@ -349,8 +349,14 @@ async function loadAll(force,opts){
      network wait and no status call; the normal load that follows checks the
      server and refreshes anything newer. */
   const fromSnap=!!(opts&&opts.fromSnap&&_snap);
-  S.loading=true;S.err=null;render();
+  S.loading=true;S.err=null;
+  /* the instant start reuses the status saved with the snapshot, so the
+     gameweek and the chip are right from the first frame; the chip says it is
+     checking until the live status call answers */
+  if(fromSnap&&_snap.status&&!S.status){S.status=_snap.status;S.statusAt=_snap.statusAt||_snap.at;S.statusPending=true;}
+  render();
   const st=fromSnap?null:await loadStatus();
+  if(!fromSnap)S.statusPending=false;
   const commit=fromSnap?_snap.commit:(st&&st.dataset?st.dataset.commit:null);
   const sameData=!!S.model&&commit!=null&&S.datasetCommit===commit;
   if(!fromSnap&&((sameData&&!force)||(!st&&S.model))){
@@ -358,7 +364,8 @@ async function loadAll(force,opts){
        built model, refresh the light feeds, and re-render once */
     S.capture={};
     await Promise.all([loadActuals(),loadRivals()]);
-    if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();IDB.set("snap",_snap);}
+    if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();
+      if(st){_snap.status=st;_snap.statusAt=S.statusAt;}IDB.set("snap",_snap);}
     S.capture=null;
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();
     syncOfficialSquad();
@@ -658,7 +665,7 @@ async function loadAll(force,opts){
     syncOfficialSquad();
     if(!fromSnap){
       /* save this load as the next instant start: dataset files and feeds */
-      _snap={commit,files:S.capture,at:Date.now()};IDB.set("snap",_snap);
+      _snap={commit,files:S.capture,at:Date.now(),status:st,statusAt:S.statusAt};IDB.set("snap",_snap);
       toast("Live data loaded");
     }
   }catch(e){
