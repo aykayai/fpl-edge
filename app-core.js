@@ -31,19 +31,54 @@ const SEASON="2026-2027", LAST="2025-2026";
    state, so this fails silently rather than blocking the main load. */
 const ACTUALS_URL="/data/feeds/actuals.json";
 const RIVALS_URL="/data/feeds/rivals.json";
+/* ---------- instant start ----------
+   The last good copy of every data file (dataset CSVs and both feeds) is kept
+   in IndexedDB, which has room for it where localStorage did not. On open the
+   planner is built from that copy straight away, with no network wait, and the
+   normal load then checks the server and refreshes only what changed.
+   IndexedDB missing or failing (private mode, tests) just means no instant
+   start: every call below degrades to a plain network load. */
+const IDB={
+  db:null,
+  open(){
+    if(this.db)return Promise.resolve(this.db);
+    return new Promise((res,rej)=>{
+      if(typeof indexedDB==="undefined")return rej(new Error("no indexedDB"));
+      const q=indexedDB.open("fpl-signals",1);
+      q.onupgradeneeded=()=>q.result.createObjectStore("kv");
+      q.onsuccess=()=>{this.db=q.result;res(this.db);};
+      q.onerror=()=>rej(q.error);});
+  },
+  async get(k){try{const db=await this.open();return await new Promise((res,rej)=>{
+    const q=db.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>res(q.result??null);q.onerror=()=>rej(q.error);});}
+    catch(e){return null;}},
+  async set(k,v){try{const db=await this.open();await new Promise((res,rej)=>{
+    const t=db.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);});}
+    catch(e){}}
+};
+/* The snapshot the instant start reads: {commit, files:{url:text}, at}. */
+let _snap=null;
+/* Every data read goes through here. In cache mode (the instant start) a file
+   the snapshot holds is served from it; anything it lacks still comes from the
+   network. Network reads are captured so a successful load can be saved as
+   the next snapshot. */
+async function dataText(url){
+  if(S.fromCache&&_snap&&_snap.files&&_snap.files[url]!=null)return _snap.files[url];
+  const r=await fetch(url);
+  if(!r.ok)throw new Error(url+" → HTTP "+r.status);
+  const t=await r.text();
+  if(S.capture)S.capture[url]=t;
+  return t;
+}
 async function loadRivals(){
   try{
-    const r=await fetch(RIVALS_URL);
-    if(!r.ok)return;
-    const d=await r.json();
+    const d=JSON.parse(await dataText(RIVALS_URL));
     if(d&&Array.isArray(d.standings))S.rivalsFeed=d;
   }catch(e){ /* feed not published yet — the page shows its waiting state */ }
 }
 async function loadActuals(){
   try{
-    const r=await fetch(ACTUALS_URL);
-    if(!r.ok)return;
-    const d=await r.json();
+    const d=JSON.parse(await dataText(ACTUALS_URL));
     if(d.team&&Array.isArray(d.team.gw)){
       S.tracker={season:d.season,totalPlayers:d.team.totalPlayers,gw:d.team.gw,chips:d.team.chips||null};
       const am={};d.team.gw.forEach(row=>{if(row.event!=null&&row.points!=null)am[row.event]=row.points;});
@@ -69,7 +104,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.0.0";
+const APP_VERSION="12.1.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -292,9 +327,7 @@ const LS={get(k){try{return JSON.parse(localStorage.getItem("fpl3:"+k));}catch(e
    LOADING
    ============================================================ */
 async function getCSV(path){
-  const r=await fetch(`${REPO}/${path}`);
-  if(!r.ok)throw new Error(path+" → HTTP "+r.status);
-  return parseCSV(await r.text());
+  return parseCSV(await dataText(`${REPO}/${path}`));
 }
 /* One cheap call that drives the status chip, the provenance footer and the
    should-we-redownload decision. Failures keep the last known copy so the
@@ -311,19 +344,28 @@ async function loadStatus(){
    ~12 MB, so it is only re-downloaded when the server's mirrored commit
    differs from the copy the model was built from (S.datasetCommit); the
    status, feeds and everything light refresh every time. */
-async function loadAll(force){
+async function loadAll(force,opts){
+  /* opts.fromSnap: the instant start. Build from the saved snapshot with no
+     network wait and no status call; the normal load that follows checks the
+     server and refreshes anything newer. */
+  const fromSnap=!!(opts&&opts.fromSnap&&_snap);
   S.loading=true;S.err=null;render();
-  const st=await loadStatus();
-  const commit=st&&st.dataset?st.dataset.commit:null;
+  const st=fromSnap?null:await loadStatus();
+  const commit=fromSnap?_snap.commit:(st&&st.dataset?st.dataset.commit:null);
   const sameData=!!S.model&&commit!=null&&S.datasetCommit===commit;
-  if((sameData&&!force)||(!st&&S.model)){
+  if(!fromSnap&&((sameData&&!force)||(!st&&S.model))){
     /* nothing new on the server (or the server is unreachable): keep the
        built model, refresh the light feeds, and re-render once */
+    S.capture={};
     await Promise.all([loadActuals(),loadRivals()]);
+    if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();IDB.set("snap",_snap);}
+    S.capture=null;
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();
+    syncOfficialSquad();
     S.loading=false;S.progress="";render();
     return;
   }
+  S.fromCache=fromSnap;S.capture=fromSnap?null:{};
   try{
     S.progress="players and prices…";render();
     const [players,pstats,teams]=await Promise.all([
@@ -607,23 +649,31 @@ async function loadAll(force){
       if(fseen.has(k))return false;fseen.add(k);return true;});
     S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
     S.stamp=Date.now();
-    /* No localStorage copy: the 7.8 MB write blew the quota on some browsers,
-       and the server is close enough that a fresh fetch per session is fine.
-       The commit is kept so "Check now" can skip an unchanged dataset. */
+    /* The commit is kept so "Check now" can skip an unchanged dataset. The
+       copy itself goes to IndexedDB below (localStorage had no room for it). */
     S.datasetCommit=commit;
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);
-    /* A planner seeded BEFORE the feeds landed could only use the hard-coded
-       GW1 seed. Now that the actuals feed is here, upgrade that provisional
-       seed to the latest official picks. Saved drafts are untouched: the flag
-       is only ever set when this very load had to seed an empty planner. */
-    if(S.seedProvisional&&typeof resolveOfficial==="function"&&resolveOfficial(true)){
-      S.seedProvisional=false;dedupeSquad();
+    /* Bring the planner onto the latest official squad when a newer one has
+       been published (this also upgrades a seed made before the feeds landed). */
+    syncOfficialSquad();
+    if(!fromSnap){
+      /* save this load as the next instant start: dataset files and feeds */
+      _snap={commit,files:S.capture,at:Date.now()};IDB.set("snap",_snap);
+      toast("Live data loaded");
     }
-    toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
   }
+  S.fromCache=false;S.capture=null;
   S.loading=false;S.progress="";render();
+  if(S.model)savePaint();
+}
+/* The last drawn page, kept so the next open can show it the instant the page
+   loads, before the model is rebuilt. It is a picture of the page only: clicks
+   are held off (see .booting) until the real render replaces it. */
+function savePaint(){
+  const app=document.getElementById("app");
+  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint",{tab:S.tab,html:app.innerHTML,at:Date.now()});
 }
 
 /* ============================================================

@@ -306,7 +306,7 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
   const st=LS.get("state");
   if(st&&(st.v===STATE_VERSION||st.v===3)){Object.assign(S,{squad:st.squad,original:st.original,captain:st.captain,
     vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null,
-    planByGw:st.planByGw||{},ftLastGw:st.ftLastGw||0
+    planByGw:st.planByGw||{},ftLastGw:st.ftLastGw||0,baseGw:st.baseGw??null
     });S.seeded=!!(st.squad&&st.squad.length);}
   applyLearning();
   S.ignored=LS.get("ignored")||[];
@@ -321,12 +321,28 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
     try{localStorage.removeItem("fpl3:"+k);}catch(e){}});
   applyHash();
   if(!location.hash)history.replaceState({},"",routeFor(S.tab));
-  render();
-  /* Boot fix: always load. Render whatever exists immediately (above), then
-     fetch the dataset, feeds and status in the background and re-render when
-     they land. Previously a visit only ever showed the cached copy and
-     nothing refreshed until the Refresh button was pressed. */
-  loadAll().then(()=>loadNews());
+  /* Instant start: paint the last page straight away, build the model from
+     the saved data with no network wait, then run the normal load, which
+     checks the server and refreshes only what changed. With nothing saved
+     (first visit on a device, or no IndexedDB) this is the plain load. */
+  (async()=>{
+    const [snap,paint]=await Promise.all([IDB.get("snap"),IDB.get("paint")]);
+    const app=document.getElementById("app");
+    if(snap&&snap.files){
+      _snap=snap;
+      if(paint&&paint.html&&paint.tab===S.tab){
+        app.innerHTML=paint.html;app.classList.add("booting");S.booting=true;}
+      else render();
+      await loadAll(false,{fromSnap:true});
+    }else render();
+    /* Always load. Render whatever exists, then fetch the dataset, feeds and
+       status in the background and re-render when they land. */
+    await loadAll();
+    loadNews();
+  })();
+  /* Save the current page as the next instant start when the tab is hidden
+     or closed. */
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")savePaint();});
   /* Keep an open page honest: refetch /api/status every minute and repaint
      only the chip and the footer. During a live gameweek this is also what
      moves the chip to Live. A full load still only happens on open, on

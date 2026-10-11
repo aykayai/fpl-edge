@@ -473,6 +473,9 @@ details[open]>summary::after{content:" ▴"}
 .trkavg td{color:var(--amber) !important;font-weight:800 !important;background:rgba(255,138,61,.08)}
 .trkpending td{color:var(--mute) !important;font-style:italic;background:rgba(255,255,255,.03)}
 .trkavg td:first-child{color:var(--amber) !important}
+/* Instant start: the saved picture of the last page shows while the model is
+   rebuilt; clicks wait until the real page replaces it a moment later */
+#app.booting{pointer-events:none}
 /* Header status chip and provenance footer (the approved FPL Signals design) */
 .sigchip{display:flex;align-items:center;gap:8px;background:#06070A;border:1px solid var(--ink3);border-radius:12px;padding:7px 10px;font-size:11px;color:var(--mute);white-space:nowrap}
 .sigchip b{color:var(--cream);font-weight:600}

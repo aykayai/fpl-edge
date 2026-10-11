@@ -843,6 +843,11 @@ function provHTML(){
 }
 function render(){
   const app=document.getElementById("app");
+  /* Instant start: while the saved picture of the last page is showing and the
+     model is still being built from the saved data, leave the picture alone
+     instead of flashing the loading screen. The first real render clears it. */
+  if(!S.model&&S.booting)return;
+  if(S.booting){S.booting=false;app.classList.remove("booting");}
   if(!S.model){
     app.innerHTML=`<div style="max-width:460px;margin:0 auto;padding:28px 4px">
       <h1 style="font-size:44px;line-height:.95;font-weight:800">FPL<br><span style="color:var(--mint)">Signals</span></h1>

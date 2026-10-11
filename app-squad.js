@@ -160,7 +160,7 @@ const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
   vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,ftLastGw:S.ftLastGw,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
-  planByGw:S.planByGw});}
+  planByGw:S.planByGw,baseGw:S.baseGw??null});}
 /* The owner's official squad for the latest gameweek the feed has picks for.
    Returns null when the feed (or a complete, resolvable 15) isn't there, so
    callers fall back honestly rather than dressing the hard-coded seed up as
@@ -190,8 +190,29 @@ function resolveOfficial(quiet){
   if(bf!=null)S.bank=bf;
   else{const P=id=>S.model.players.find(p=>p.id===id);
     S.bank=+Math.max(0,100-ids.reduce((a,i)=>a+(P(i)?.price||0),0)).toFixed(1);}
+  S.baseGw=off.event;
   saveState();
   if(!quiet)toast("Squad set to your official GW"+off.event+" line-up");
+  return true;
+}
+/* Keep the planner on the real squad. The draft remembers which official
+   gameweek it was built from (baseGw). When FPL publishes a newer official
+   squad (after each deadline), or the draft predates this (the old GW1 seed),
+   the planner moves onto the latest official squad. The draft it replaces is
+   kept under its own key so nothing is lost, and the toast says so. */
+function syncOfficialSquad(){
+  if(typeof latestOfficialPicks!=="function")return false;
+  const off=latestOfficialPicks();
+  if(!off)return false;
+  if(S.baseGw!=null&&off.event<=S.baseGw)return false;
+  const had=!!(S.squad&&S.squad.length);
+  if(had){try{LS.set("state_before_gw"+off.event,LS.get("state"));}catch(e){}}
+  /* plans were drafted against the old squad, so they go with the old draft */
+  S.planByGw={};S.replacedBy={};
+  resolveOfficial(true);
+  dedupeSquad();
+  S.seedProvisional=false;
+  if(had)toast("Planner now starts from your official GW"+off.event+" squad. Your earlier draft is saved.");
   return true;
 }
 /* Returns "official" when the squad came from the feed's official picks, or
