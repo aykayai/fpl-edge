@@ -10,6 +10,10 @@
 
    Contracts:
      actuals.json  { season, team:{ totalPlayers, gw[], chips{} }, players{} }
+       team.gw rows for the owner also carry the official per-week history:
+       picks [{id,pos,multiplier,isC,isVC}], autoSubs [{out,in}], chip,
+       chipLabel, totalPoints, ftAvailable (into this week) and ftNext (the
+       reconciled free transfers into the next week). All additive.
      rivals.json   { season, leagueId, leagueName, lastEvent, updated,
                      standings[], entries{} }
 
@@ -48,8 +52,9 @@ const REFETCH_LAST = 2;
    correctness fix would never reach them and would silently depend on someone
    remembering to tick rebuild_all. A mismatch here discards the cache and
    rebuilds everything once, automatically.
-   2 — transferDiff nulled on Wildcard and Free Hit weeks. */
-const LOGIC_VERSION = 2;
+   2 — transferDiff nulled on Wildcard and Free Hit weeks.
+   3 - picks carry position, captain and vice flags; automatic subs cached. */
+const LOGIC_VERSION = 3;
 
 /* The overall league. Standings are 50 per page, so rank N sits on
    page ceil(N/50). This is the fragile part of the job — deep pages are slow
@@ -225,6 +230,11 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
     else if (onFreeSquadChip) { /* bank carries, and no weekly one is added */ }
     else ft = Math.min(FT_MAX, Math.max(0, ft - row.transfers) + 1);
 
+    /* The reconciled count carried INTO the next gameweek. This is the number
+       the app's header shows as official, so it is published rather than
+       recomputed client-side from rules the client cannot verify. */
+    row.ftNext = ft;
+
     /* Settled weeks are reused from the previous run; the current and previous
        week are refetched because bonus points and auto-subs are still moving. */
     const cached = cache.get(gw);
@@ -235,6 +245,7 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
       row.captainPts = cached.captainPts;
       row.transferDiff = cached.transferDiff;
       row.picks = cached.picks;
+      if (cached.autoSubs?.length) row.autoSubs = cached.autoSubs;
     } else if (pts) {
       const picks = await getJson(`/entry/${entryId}/event/${gw}/picks/`, {
         attempts: 3,
@@ -242,7 +253,18 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
       });
       const squad = picks?.picks || [];
       if (squad.length) {
-        row.picks = squad.map(p => ({ id: p.element, multiplier: p.multiplier }));
+        /* Position 1-11 is the picked XI in formation order, 12-15 the bench
+           in substitution order. isC/isVC are the picked armbands; an auto
+           vice-captain takeover still shows up through the multiplier. */
+        row.picks = squad.map(p => ({
+          id: p.element, multiplier: p.multiplier, pos: p.position,
+          isC: !!p.is_captain, isVC: !!p.is_vice_captain
+        }));
+
+        /* The automatic substitutions the API applied once the week settled,
+           so the published line-up matches what actually scored. */
+        const asubs = picks?.automatic_subs || [];
+        if (asubs.length) row.autoSubs = asubs.map(s => ({ out: s.element_out, in: s.element_in }));
 
         /* Captain: the pick carrying the highest multiplier, which is how the
            endpoint reports an auto vice-captain takeover. Points are already
@@ -318,6 +340,46 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
   });
 
   return { history, rows, chips: withUplift };
+}
+
+/* ---- free-transfer self-check ---------------------------------------------
+   Recomputes the whole trajectory straight from the entry's history (transfer
+   counts, hit costs and chip events; nothing read back from the rows being
+   checked except the published numbers themselves) and logs a line whenever
+   the published ftAvailable/ftNext disagree, or the official hit charged does
+   not match what the reconstructed allowance says it should have been. */
+function ftSelfCheck(own) {
+  const chipAt = new Map((own.history.chips || []).map(c => [c.event, c.name]));
+  let ft = null, bad = 0, checked = 0;
+  for (const h of own.history.current || []) {
+    const gw = h.event;
+    const tr = h.event_transfers ?? 0, cost = h.event_transfers_cost ?? 0;
+    const free = FREE_SQUAD_CHIPS.has(chipAt.get(gw));
+    if (ft != null && cost > 0) {
+      const implied = tr - cost / 4;
+      if (implied >= 0 && implied !== ft) ft = implied;
+    }
+    const row = own.rows.find(r => r.event === gw);
+    checked++;
+    if (row && (row.ftAvailable ?? null) !== (ft ?? null)) {
+      bad++; console.warn(`  ft self-check: GW${gw} ftAvailable ${row.ftAvailable} != recomputed ${ft}`);
+    }
+    if (ft != null && gw > 1 && !free) {
+      const expCost = Math.max(0, tr - ft) * 4;
+      if (expCost !== cost) {
+        bad++; console.warn(`  ft self-check: GW${gw} allowance ${ft} with ${tr} transfers implies a ${expCost} hit, API charged ${cost}`);
+      }
+    }
+    if (gw === 1) ft = 1;
+    else if (free) { /* bank carried unchanged */ }
+    else ft = Math.min(FT_MAX, Math.max(0, ft - tr) + 1);
+    if (row && row.ftNext != null && row.ftNext !== ft) {
+      bad++; console.warn(`  ft self-check: GW${gw} ftNext ${row.ftNext} != recomputed ${ft}`);
+    }
+  }
+  console.log(bad
+    ? `  ft self-check: ${bad} inconsistencies across ${checked} gameweeks`
+    : `  ft self-check: consistent across ${checked} gameweeks`);
 }
 
 async function main() {
@@ -418,7 +480,15 @@ async function main() {
   /* ---- actuals.json ------------------------------------------------------ */
   const own = built.get(ENTRY_ID);
   if (!own) throw new Error(`entry ${ENTRY_ID} could not be built`);
+  ftSelfCheck(own);
 
+  /* Per-week history for the owner's own entry. Everything here is ADDITIVE
+     to the old shape (the GitHub Pages app ignores unknown fields): the
+     official picks with armbands, the auto subs, the chip played, the week's
+     running total, and the reconciled free-transfer counts (ftAvailable into
+     this week, ftNext into the following week). This is what lets the planner
+     show the real line-up, formation and transfers for a finished week. */
+  const ownChipAt = new Map(own.chips.map(c => [c.event, c]));
   const teamGw = own.rows.map(r => {
     const row = {
       event: r.event,
@@ -433,6 +503,13 @@ async function main() {
     };
     if (r.captainPts != null) row.captain = r.captainPts;
     if (r.transferDiff != null) row.transferDiff = r.transferDiff;
+    if (r.totalPoints != null) row.totalPoints = r.totalPoints;
+    if (r.picks?.length) row.picks = r.picks;
+    if (r.autoSubs?.length) row.autoSubs = r.autoSubs;
+    if (r.ftAvailable != null) row.ftAvailable = r.ftAvailable;
+    if (r.ftNext != null) row.ftNext = r.ftNext;
+    const chip = ownChipAt.get(r.event);
+    if (chip) { row.chip = chip.name; row.chipLabel = chip.label; }
     return row;
   });
 
@@ -504,7 +581,9 @@ async function main() {
         captainPts: r.captainPts ?? null,
         transferDiff: r.transferDiff ?? null,
         ftAvailable: r.ftAvailable,
-        picks: r.picks || []
+        picks: r.picks || [],
+        /* additive: lets the pick cache round-trip the applied auto subs */
+        ...(r.autoSubs?.length ? { autoSubs: r.autoSubs } : {})
       })),
       chips: res.chips
     };
