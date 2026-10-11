@@ -1,4 +1,4 @@
-/* FPL Edge — app-core.js
+/* FPL Signals - app-core.js
    data loading, team ratings, FDR, the prediction model
 
    Part of a single script split across files so each stays small enough to
@@ -6,24 +6,25 @@
    so the order in index.html matters: app-main.js must come last. */
 
 /* ============================================================
-   FPL ASSISTANT v3
-   Data: FPL Core Insights (github.com/olbauday/FPL-Core-Insights)
-   served from raw.githubusercontent.com with open CORS, so the
-   browser can fetch it directly — no proxy, no file juggling.
+   FPL SIGNALS v12
+   Data: the FPL Core Insights dataset, mirrored and validated by the
+   app's own server (server/server.mjs) and served same-origin under
+   /data/insights with the same relative paths the public repo uses.
    ============================================================ */
-const REPO="https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/main/data";
+const REPO="/data/insights";
 const SEASON="2026-2027", LAST="2025-2026";
-/* Live "actuals" feed — team GW history, per-player actual points, chips — published
-   by a scheduled GitHub Action into the app's own repo (not the insights dataset,
-   since this is Andy's own entry data). One file feeds the planner header, every
-   pitch card, the xFPL predicted-vs-actual panel, and the whole Tracker page.
+/* Live "actuals" feed: team GW history, per-player actual points, chips. Built
+   locally by the server (scripts/build-actuals.mjs run every 15 minutes) and
+   served same-origin, so Andy's own entry data never touches a public repo.
+   One file feeds the planner header, every pitch card, the xFPL
+   predicted-vs-actual panel, and the whole Tracker page.
    Contract: { season, team:{totalPlayers, gw:[{event,points,gwRank,orRank,bank,
    value,transfers,transferCost,bench,captain,off1m,off500k,off100k,transferDiff}],
    chips:{name:points}}, players:{ "<id>": {"<gw>":points} } }
-   Absent or unreachable until the Action exists — every consumer already renders a
-   clean waiting state, so this fails silently rather than blocking the main load. */
-const ACTUALS_URL="https://raw.githubusercontent.com/aykayai/fpl-edge/main/data/actuals.json";
-const RIVALS_URL="https://raw.githubusercontent.com/aykayai/fpl-edge/main/data/rivals.json";
+   Unreachable or not yet built: every consumer already renders a clean waiting
+   state, so this fails silently rather than blocking the main load. */
+const ACTUALS_URL="/data/feeds/actuals.json";
+const RIVALS_URL="/data/feeds/rivals.json";
 async function loadRivals(){
   try{
     const r=await fetch(RIVALS_URL);
@@ -73,6 +74,28 @@ const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" 
    fill="#3DE38C" text-anchor="middle">FPL</text>
  <path d="M44 168 L84 130 L108 152 L152 104" fill="none" stroke="#5BE8C0" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
  <path d="M124 96 L160 96 L160 132" fill="none" stroke="#FF8A3D" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+/* ---------- UK time ----------
+   Every displayed date or time is Europe/London, whatever zone the viewer's
+   device is set to. Deadlines carry the GMT/BST label, derived from Intl so
+   summer time is never hard-coded. */
+const UK_TZ="Europe/London";
+function ukFmt(d,opts){try{return new Date(d).toLocaleString("en-GB",{timeZone:UK_TZ,...(opts||{})});}catch(e){return "";}}
+function ukZone(d){
+  try{return (new Intl.DateTimeFormat("en-GB",{timeZone:UK_TZ,timeZoneName:"short"})
+    .formatToParts(new Date(d==null?Date.now():d)).find(p=>p.type==="timeZoneName")||{}).value||"";}
+  catch(e){return "";}
+}
+function ukDeadline(d){return ukFmt(d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+" "+ukZone(d);}
+function ukHHMM(d){return ukFmt(d,{hour:"2-digit",minute:"2-digit"});}
+function agoMin(v){if(v==null)return null;const t=typeof v==="number"?v:Date.parse(v);
+  if(!isFinite(t))return null;return Math.max(0,Math.round((Date.now()-t)/60000));}
+function agoText(v){const m=agoMin(v);if(m==null)return "—";
+  if(m<1)return "just now";if(m<60)return m+" min ago";
+  const h=Math.round(m/60);if(h<24)return h+"h ago";return Math.round(h/24)+"d ago";}
+/* "today 15:30" for a London-today timestamp, "6 Oct 14:00" otherwise */
+function ukWhen(v){if(v==null||agoMin(v)==null)return "—";
+  const sameDay=ukFmt(v,{day:"numeric",month:"short"})===ukFmt(Date.now(),{day:"numeric",month:"short"});
+  return (sameDay?"today":ukFmt(v,{day:"numeric",month:"short"}))+" "+ukHHMM(v);}
 const POS={1:"GKP",2:"DEF",3:"MID",4:"FWD"};
 const POSNAME={Goalkeeper:1,Defender:2,Midfielder:3,Forward:4,
  GKP:1,DEF:2,MID:3,FWD:4,GK:1,Goalkeepers:1,Defenders:2,Midfielders:3,Forwards:4};
@@ -259,6 +282,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
+ status:null,statusAt:0,statusErr:null,datasetCommit:null,newsFetchedAt:null,
  news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:5,lGwFrom:0,lGwTo:0,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
@@ -1597,16 +1621,13 @@ function buildModel(){
   S.model.players=players;
   S.model.teamById=teams;
   learnFromResults();
-  /* Prices change through the week, so refresh on load rather than waiting for
-     the tab to be opened — the projections use them, not just the display. */
-  if(S.oddsKey&&(S.oddsState==="idle"||S.oddsState==="nokey")&&!S._oddsTried){
+  /* Prices change through the week, so refresh on load rather than waiting
+     for the tab to be opened: the projections use them, not just the display.
+     The server holds the key and the 4-hour cache, so one fetch per load is
+     cheap, and it answers { state:"nokey" } when no key is configured. */
+  if(!S._oddsTried){
     S._oddsTried=true;
-    /* free tiers are capped at a few hundred calls a month, so reuse a recent
-       response rather than refetching on every visit */
-    const c=LS.get("oddsCache");
-    if(c&&c.t&&Date.now()-c.t<4*3600*1000&&(c.odds||[]).length){
-      S.odds=c.odds;S.oddsState="ok";buildOddsTeams();
-    }else setTimeout(()=>loadOdds(),400);
+    setTimeout(()=>loadOdds(),400);
   }
   if(!S.seeded&&(!S.squad||!S.squad.length)){S.seeded=true;resolveSeed(true);}
   render();

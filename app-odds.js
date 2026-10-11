@@ -1,12 +1,13 @@
-/* FPL Edge — app-odds.js
+/* FPL Signals - app-odds.js
    bookmaker odds: fetching, de-vigging, the Odds page
 
    Part of a single script split across files so each stays small enough to
    fetch whole. Loaded in order as classic scripts, sharing one global scope,
    so the order in index.html matters: app-main.js must come last. */
 /* ---------- Odds ----------
-   Bookmaker prices are a live consensus model — they price form, team news,
-   penalties and venue in one number. Needs a free key from odds-api.io. */
+   Bookmaker prices are a live consensus model: they price form, team news,
+   penalties and venue in one number. The odds-api.io key lives on the FPL
+   Signals server (ODDS_API_KEY); the page only talks to /api/odds. */
 /* ---------- reading the market ----------
    Both available bookmakers are soft books, so their prices carry a wider
    margin than a sharp book's. Everything below is de-vigged before use. */
@@ -228,147 +229,63 @@ function buildOddsTeams(){
   S.oddsTeams=Object.keys(M).length?M:null;
   return S.oddsTeams;
 }
+/* The odds now come from this app's own server (/api/odds), which holds the
+   odds-api.io key, looks the league slug up, reads the account's bookmaker
+   selection and caches for four hours. Its rows carry the raw per-book
+   object, so normaliseBooks runs on each row exactly as it did against the
+   upstream API. Server states map one-to-one onto S.oddsState. */
 async function loadOdds(){
-  if(!S.oddsKey){S.oddsState="nokey";render();return;}
-  S.oddsState="loading";S.oddsErr="";S._sampled=false;S._markets={};S.oddsLog=["v"+APP_VERSION+" · started "+new Date().toLocaleTimeString("en-GB")];render();
-  const key=encodeURIComponent(S.oddsKey);
-  const base="https://api.odds-api.io/v3";
-  const log=m=>{S.oddsLog.push(m);};
-  const readErr=async r=>{try{const e=await r.json();return e.message||e.error||"";}catch(_){return "";}};
-  const get=async(path,label)=>{
-    const r=await fetch(base+path);
-    if(!r.ok){
-      const why=await readErr(r);
-      log(`${label}: HTTP ${r.status}${why?" — "+why:""}`);
-      if(r.status===401||/invalid[_ ]?key/i.test(why))S.oddsErr="Key rejected by odds-api.io";
-      else if(r.status===429)S.oddsErr="Rate limit reached";
-      return null;
-    }
-    const j=await r.json();
-    return j;
-  };
+  S.oddsState="loading";S.oddsErr="";S.oddsLog=[];render();
   try{
-    /* The league slug is looked up rather than guessed — the previous build
-       assumed "england-premier-league" and silently got back nothing. */
-    let slug=LS.get("oddsLeague");
-    if(!slug){
-      const lj=await get(`/leagues?sport=football&apiKey=${key}`,"leagues");
-      if(lj===null){S.oddsState="fail";render();return;}
-      const leagues=Array.isArray(lj)?lj:(lj.data||lj.leagues||[]);
-      log(`leagues: ${leagues.length} returned`);
-      /* 892 leagues come back and dozens contain "Premier League" — the loose
-         match landed on an amateur northern division. Score candidates instead,
-         rejecting anything amateur, regional or age-group, and require the name
-         to be the Premier League rather than merely contain it. */
-      const BAD=/amateur|women|u1[6-9]|u2[0-3]|youth|reserve|northern|southern|isthmian|county|regional|division\s*[a-z0-9]|cup|friendly|qualif/i;
-      const score=l=>{
-        const name=String(l.name||l.title||"");
-        const slug=String(l.slug||l.id||l.key||"");
-        const hay=`${name} ${slug} ${l.country||""}`;
-        if(BAD.test(hay))return -1;
-        let sc=0;
-        if(/^(england[- ])?premier league$/i.test(name.trim()))sc+=10;
-        if(/^england-premier-league$|^epl$/i.test(slug))sc+=10;
-        if(/premier league/i.test(name))sc+=3;
-        if(/england|english/i.test(hay))sc+=3;
-        if(/^premier league$/i.test(name.trim()))sc+=4;
-        return sc;
-      };
-      const ranked=leagues.map(l=>({l,sc:score(l)})).filter(x=>x.sc>=6)
-        .sort((a,b)=>b.sc-a.sc);
-      const hit=ranked.length?ranked[0].l:null;
-      if(!hit){
-        S.oddsErr="Couldn't find a Premier League entry among "+leagues.length+" football leagues";
-        S.oddsState="fail";render();return;
-      }
-      slug=hit.slug||hit.id||hit.key;
-      LS.set("oddsLeague",slug);
-      log(`league matched: ${hit.name||hit.title||slug} → ${slug}`+(ranked.length>1?` (from ${ranked.length} candidates)`:""));
+    const r=await fetch("/api/odds");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    const state=d&&d.state;
+    if(state==="nokey"){S.oddsState="nokey";render();return;}
+    if(state==="loading"){
+      S.oddsState="loading";
+      S.oddsLog=["The server has not finished its first odds fetch yet. Try again in a minute."];
+      render();return;
     }
-
-    /* /odds rejects a call with no bookmakers, so establish the account's own
-       selection first and fall back to a couple of mainstream UK books. */
-    let books=LS.get("oddsBooks");
-    if(!books){
-      const bj=await get(`/bookmakers/selected?apiKey=${key}`,"bookmakers");
-      const list=bj?(Array.isArray(bj)?bj:(bj.data||bj.bookmakers||[])):[];
-      books=list.map(b=>(typeof b==="string"?b:(b.name||b.key||b.id))).filter(Boolean);
-      if(!books.length)books=["Bet365","PaddyPower"];
-      LS.set("oddsBooks",books);
-      log(`bookmakers: ${books.join(", ")}`);
-    }
-    const bParam="&bookmakers="+encodeURIComponent(books.join(","));
-
-    const ej=await get(`/events?sport=football&league=${encodeURIComponent(slug)}&apiKey=${key}`,"events");
-    if(ej===null){S.oddsState="fail";render();return;}
-    const events=(Array.isArray(ej)?ej:(ej.data||ej.events||[])).slice(0,10);
-    log(`events: ${events.length} for ${slug}`);
-    if(!events.length){S.oddsState="empty";render();return;}
-
-    /* /odds/multi takes up to ten event ids at a time */
+    if(d.error)S.oddsErr=String(d.error);
+    S.oddsFetchedAt=d.fetchedAt||null;
+    const rows=Array.isArray(d.rows)?d.rows:[];
+    /* Catalogue every market the feed returns, as before. Player-level
+       markets are often gated behind paid tiers, and the design of the Odds
+       tab depends on whether they come through; one raw player-market line
+       is kept so an unfamiliar shape can be inspected rather than guessed. */
+    S._markets={};S._plSample=null;
+    rows.forEach(rw=>{
+      Object.entries(rw&&rw.bookmakers||{}).forEach(([bk,ms])=>{
+        (Array.isArray(ms)?ms:[]).forEach(m=>{
+          const n=String(m&&m.name||"").trim();if(!n)return;
+          (S._markets[n]=S._markets[n]||new Set()).add(bk);
+          if(!S._plSample&&/scorer|to score|assist|player|shots|card|anytime|goalscorer/i.test(n)){
+            const arr=m.odds||m.outcomes||m.prices||m.selections||m.runners||m.lines;
+            if(Array.isArray(arr)&&arr.length)
+              S._plSample=`"${n}" line 1: ${JSON.stringify(arr[0]).slice(0,200)}`;
+          }
+        });});});
     const out=[];
-    for(let i2=0;i2<events.length;i2+=10){
-      const chunk=events.slice(i2,i2+10);
-      const ids=chunk.map(e=>e.id||e.eventId).filter(Boolean);
-      if(!ids.length)continue;
-      const oj=await get(`/odds/multi?eventIds=${encodeURIComponent(ids.join(","))}${bParam}&apiKey=${key}`,"odds");
-      if(oj===null)break;
-      const rows=Array.isArray(oj)?oj:(oj.data||Object.values(oj||{}));
-      log(`odds: ${rows.length} rows for ${ids.length} events`);
-      /* Catalogue every market the feed actually returns. Player-level markets
-         are often gated behind paid tiers, and the design of the Odds tab
-         depends on whether they come through, so this is worth knowing exactly
-         rather than assuming from the bookmaker's own website. */
-      rows.forEach(rw=>{
-        Object.entries(rw&&rw.bookmakers||{}).forEach(([bk,ms])=>{
-          (Array.isArray(ms)?ms:[]).forEach(m=>{
-            const n=String(m&&m.name||"").trim();if(!n)return;
-            S._markets=S._markets||{};
-            (S._markets[n]=S._markets[n]||new Set()).add(bk);
-            /* Sample the exact raw shape of one real player-market line once,
-               so if outcomes still don't come through, the cause is visible
-               without needing another guess at the format. Shown in the
-               always-visible "Markets returned" panel, not the failure log —
-               fixtures already parse successfully via team markets, so the
-               failure branch that shows S.oddsLog never actually runs. */
-            if(!S._plSample&&/scorer|to score|assist|player|shots|card|anytime|goalscorer/i.test(n)){
-              const arr=m.odds||m.outcomes||m.prices||m.selections||m.runners||m.lines;
-              if(Array.isArray(arr)&&arr.length)
-                S._plSample=`"${n}" line 1: ${JSON.stringify(arr[0]).slice(0,200)}`;
-            }
-          });});});
-      if(rows.length&&!S._sampled){S._sampled=true;
-        log("keys on row: "+Object.keys(rows[0]||{}).join(", "));}
-      rows.forEach(rw=>{
-        const id=rw.eventId||rw.id;
-        const ev=chunk.find(e=>String(e.id||e.eventId)===String(id))||{};
-        const books=normaliseBooks(rw);
-        if(!books.length)return;
-        out.push({home:rw.home||ev.home,away:rw.away||ev.away,
-          commence:rw.date||ev.date,bookmakers:books});
-      });
-    }
-    /* report the catalogue, flagging anything player-level */
-    const mk=S._markets||{};
-    const names=Object.keys(mk).sort();
-    log(`markets available (${names.length}):`);
-    const PLAYER=/scorer|to score|assist|player|shots|card|anytime|first goal|goalscorer/i;
-    const players=names.filter(n=>PLAYER.test(n));
-    names.forEach(n=>log(`   ${PLAYER.test(n)?"★ ":"  "}${n}  [${[...mk[n]].join(", ")}]`));
-    log(players.length?`player-level markets: ${players.length} — ${players.join(" | ")}`
-      :"player-level markets: NONE returned by this tier");
-    log(`usable fixtures with prices: ${out.length}`);
-    if(out.length){
-      S.oddsMarkets=Object.fromEntries(Object.entries(S._markets||{})
+    rows.forEach(rw=>{
+      const books=normaliseBooks(rw);
+      if(!books.length)return;
+      out.push({home:rw.home,away:rw.away,commence:rw.commence,bookmakers:books});
+    });
+    if(state==="ok"&&out.length){
+      S.oddsMarkets=Object.fromEntries(Object.entries(S._markets)
         .map(([k,v])=>[k,[...v]]));
       S.oddsPlSample=S._plSample||null;
       S.odds=out;S.oddsState="ok";
-      LS.set("oddsCache",{t:Date.now(),odds:out});
       buildOddsTeams();buildModel();render();return;
     }
-    S.oddsState=S.oddsErr?"fail":"empty";render();
+    if(state==="fail"){
+      if(!S.oddsErr)S.oddsErr="The server's last odds fetch failed.";
+      S.oddsState="fail";
+    }else S.oddsState="empty";
+    render();
   }catch(e){
-    S.oddsErr=String(e.message||e)+" — this looks like a network or CORS failure";
+    S.oddsErr="Couldn't reach the server: "+String(e.message||e);
     S.oddsState="fail";render();
   }
 }
@@ -438,38 +355,24 @@ function normaliseBooks(row){
   });
   return books;
 }
-/* keep a trimmed sample of the raw response so an unfamiliar shape can be
-   inspected rather than guessed at */
-function sampleJSON(o){
-  try{
-    const t=JSON.stringify(o);
-    return t.length>1400?t.slice(0,1400)+" …":t;
-  }catch(e){return "(not serialisable)";}
-}
-
 function oddsHTML(){
   const g=VG();
   const head=`<div class="panel"><div class="phead"><h2>Odds</h2>
-     <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button>
-       <button onclick="act('oddsreset')" title="Clear the cached league and refetch">Reset</button></span></div>
+     <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button></span></div>
     <div class="pbody">
-      <p class="note" style="margin:0 0 8px">Uses <a href="https://odds-api.io" target="_blank" style="color:var(--cyan)">odds-api.io</a>. Your key stays in this browser. Prices are cached for four hours and shown with the bookmaker's margin removed — both available books are recreational, so treat these as a second opinion rather than truth.</p>
-      <span class="pricebox"><input type="password" placeholder="Paste your odds API key" value="${esc(S.oddsKey||"")}"
-        onchange="act('oddskey',this.value)" style="flex:1"></span></div></div>`;
-  if(S.oddsState==="idle")
-    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching current prices…</p></div></div>`;
-  if(S.oddsState==="nokey"||!S.oddsKey)
-    return head+`<div class="panel"><div class="pbody"><p class="note">No key set — everything else in the app works without one.</p></div></div>`;
+      <p class="note" style="margin:0">Uses <a href="https://odds-api.io" target="_blank" style="color:var(--cyan)">odds-api.io</a> through the FPL Signals server. The key is held on the server, so there is nothing to paste here. Prices are cached for four hours and shown with the bookmaker's margin removed. Both available books are recreational, so treat these as a second opinion rather than truth.${S.oddsFetchedAt?` <span style="color:var(--cream)">Last fetched ${esc(ukWhen(S.oddsFetchedAt))}.</span>`:""}</p></div></div>`;
+  if(S.oddsState==="nokey")
+    return head+`<div class="panel"><div class="pbody"><p class="note">No key is set on the server (ODDS_API_KEY). Everything else in the app works without one.</p></div></div>`;
   if(S.oddsState==="loading")
-    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching prices…</p></div></div>`;
+    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching prices…</p>
+      ${(S.oddsLog||[]).length?`<p class="note" style="margin:8px 0 0">${S.oddsLog.map(x=>esc(x)).join("<br>")}</p>`:""}</div></div>`;
   if(S.oddsState!=="ok")
     return head+`<div class="panel"><div class="pbody"><div class="warn">${S.oddsErr
-      ? `<b>${esc(S.oddsErr)}</b>` : "The feed responded but returned nothing usable."}
+      ? `<b>${esc(S.oddsErr)}</b>` : "The server responded but returned nothing usable."}
       ${(S.oddsLog||[]).length?`<div class="mono" style="font-size:10.5px;margin-top:10px;opacity:.9;line-height:1.6">
         ${S.oddsLog.map(x=>esc(x)).join("<br>")}</div>`:""}</div>
       <span style="display:flex;gap:6px;margin-top:10px">
-        <button class="pri" onclick="act('odds')">↻ Fetch now</button>
-        <button onclick="act('oddsreset')">Reset league cache</button></span></div></div>`;
+        <button class="pri" onclick="act('odds')">↻ Fetch now</button></span></div></div>`;
 
   const fixtures=oddsFixtures();
   const players=oddsPlayers();
@@ -816,14 +719,16 @@ function newsHTML(){
   const red=S.reddit.filter(match).slice(0,10);
   const creators=CREATORS.slice(0,S.expand.creators?CREATORS.length:5);
 
+  const srcN=Object.keys(S.srcLog||{}).filter(k=>!k.startsWith("·")).length;
   const ctrl=`<div class="panel"><div class="phead"><h2>News feed</h2>
+     ${S.newsState==="ok"&&S.newsFetchedAt?`<span class="note" style="margin-right:auto;margin-left:8px">Updated ${esc(agoText(S.newsFetchedAt))}${srcN?` · ${srcN} sources`:""} · checked every 15 min</span>`:""}
      <span style="display:flex;gap:6px;align-items:center">
       ${[24,72,168].map(w=>`<button class="${S.newsWindow===w?"on":""}" onclick="act('nwin',${w})">${w===24?"24h":w===72?"3d":"7d"}</button>`).join("")}
       <button onclick="act('news')">${S.newsState==="loading"?"…":"↻"}</button></span></div>
      ${S.newsState==="idle"?`<div class="pbody"><button class="pri" onclick="act('news')">Load the feed</button></div>`:""}
      ${S.newsState==="loading"?`<div class="pbody"><p class="note">Reading the feeds…</p></div>`:""}
      ${S.newsState==="fail"?`<div class="pbody"><div class="warn">
-       ${Object.keys(S.srcLog||{}).length?`<div class="mono" style="font-size:10px;margin-bottom:8px">${Object.entries(S.srcLog).map(([k,v])=>esc(k)+": "+v).join("<br>")}</div>`:""}No feed came back — the public CORS proxies are refusing right now. Squad data is unaffected.</div></div>`:""}
+       ${Object.keys(S.srcLog||{}).length?`<div class="mono" style="font-size:10px;margin-bottom:8px">${Object.entries(S.srcLog).map(([k,v])=>esc(k)+": "+v).join("<br>")}</div>`:""}The server returned no news items. It refetches every 15 minutes; squad data is unaffected.</div></div>`:""}
      ${S.newsState==="ok"?`<div class="pbody" style="border-top:1px solid var(--ink3);display:flex;flex-direction:column;gap:8px">
        <span style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
          <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;width:46px">Source</span>

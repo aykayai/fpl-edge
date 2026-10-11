@@ -1,4 +1,4 @@
-/* FPL Edge — app-squad.js
+/* FPL Signals - app-squad.js
    signals, squad handling, transfers, chips, news, dashboard
 
    Part of a single script split across files so each stays small enough to
@@ -656,136 +656,53 @@ function teamRating(){
 }
 
 /* ---------- news ---------- */
-/* News is fetched alongside everything else on refresh. Each source gets a
-   handful of routes; a source only counts as failed once all of them have been
-   tried, and nothing here blocks the squad data. */
-/* r.jina.ai sends CORS headers of its own and renders the target server-side,
-   which is why it survives where the generic proxies fail. It goes first. */
-const ROUTES=[
-  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u=>`https://r.jina.ai/${u}`,
-  u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-  u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-  u=>`https://api.cors.lol/?url=${encodeURIComponent(u)}`
-];
-async function grab(url,ms){
-  for(const fn of ROUTES){
-    try{
-      const ctl=new AbortController();
-      const timer=setTimeout(()=>ctl.abort(),ms||9000);
-      const r=await fetch(fn(url),{signal:ctl.signal});
-      clearTimeout(timer);
-      if(!r.ok)continue;
-      let t=await r.text();
-      if(t&&t.trim().startsWith("{")&&t.includes('"contents"')){
-        try{t=JSON.parse(t).contents;}catch(e){}
-      }
-      if(t&&t.length>120)return t;
-    }catch(e){}
-  }
-  return null;
-}
-/* jina hands back markdown for HTML pages, so pull [title](url) pairs out of it */
-function parseLinks(txt,src,sink,filter){
-  if(!txt)return 0;
-  let n=0,m;const seen=new Set();
-  const re=/\[([^\]\n]{14,160})\]\((https?:\/\/[^\s)]+)\)/g;
-  while((m=re.exec(txt))&&n<60){
-    const title=m[1].replace(/\s+/g," ").trim(), url=m[2];
-    if(filter&&!filter.test(url))continue;
-    const k=title.toLowerCase();if(seen.has(k))continue;seen.add(k);
-    sink.push({src,title,url,time:Date.now()});n++;
-  }
-  return n;
-}
-function parseFeed(txt,src,sink){
-  if(!txt)return 0;let n=0;
-  try{
-    const d=new DOMParser().parseFromString(txt,"text/xml");
-    d.querySelectorAll("item, entry").forEach(it=>{
-      const t=(it.querySelector("title")?.textContent||"").trim();
-      const l=it.querySelector("link")?.getAttribute("href")||it.querySelector("link")?.textContent||"";
-      const pd=it.querySelector("pubDate, updated, published")?.textContent||"";
-      if(t){sink.push({src,title:t,url:l,time:pd?new Date(pd).getTime():Date.now()});n++;}});
-  }catch(e){}
-  return n;
-}
-const FEEDS=[
-  ["Fantasy Football Scout","https://www.fantasyfootballscout.co.uk/feed/"],
-  ["Fantasy Football Pundit","https://www.fantasyfootballpundit.com/feed/"],
-  ["All About FPL","https://allaboutfpl.com/feed/"],
-  ["FPL Family","https://www.fplfamily.com/feed/"],
-  ["Premier League","https://www.premierleague.com/rss/news"],
-  ["BBC Football","https://feeds.bbci.co.uk/sport/football/rss.xml"]
-];
-const FPL_WORDS=["fpl","fantasy","gameweek","captain","wildcard","differential","defcon",
-  "price change","bench boost","free hit","triple captain","clean sheet","predicted lineup"];
-const looksFPL=t=>{const l=(t||"").toLowerCase();return FPL_WORDS.some(w=>l.includes(w));};
-
+/* All feeds are fetched, parsed and sanitised by the FPL Signals server every
+   15 minutes, so the page makes two cheap same-origin calls: /api/news for
+   the general feeds and r/FantasyPL, and /api/player-news for the per-player
+   Google News searches (the page knows the squad; the server does not). A
+   source that fails upstream keeps serving its last good copy and reports its
+   error in perSource, which fills srcLog. Nothing here blocks the squad data. */
 async function loadNews(){
   if(!S.model)return;
   S.newsState="loading";S.news=[];S.reddit=[];S.squadNews=[];S.srcLog={};render();
-  const news=[],reddit=[],squad=[],log={};
-
-  const jobs=FEEDS.map(async([name,url])=>{
-    const t=await grab(url);
-    const before=news.length;
-    if(!parseFeed(t,name,news))parseLinks(t,name,news);
-    /* general feeds only contribute FPL-flavoured items */
-    if(/BBC|Premier League/.test(name)){
-      const kept=news.slice(before).filter(n=>looksFPL(n.title));
-      news.length=before;kept.forEach(n=>news.push(n));
-    }
-    log[name]=news.length-before;
-  });
-
-  jobs.push((async()=>{
-    /* the original working route: allorigins wrapping reddit's own JSON */
-    for(const u of ["https://www.reddit.com/r/FantasyPL/hot.json?limit=50&raw_json=1",
-                    "https://www.reddit.com/r/FantasyPL/hot/.json?limit=50",
-                    "https://old.reddit.com/r/FantasyPL/hot.json?limit=50",
-                    "https://api.reddit.com/r/FantasyPL/hot?limit=50",
-                    "https://www.reddit.com/r/FantasyPL/top.json?t=day&limit=50"]){
-      const t=await grab(u,12000);if(!t)continue;
-      try{
-        const kids=JSON.parse(t)?.data?.children||[];
-        if(kids.length){
-          kids.forEach(c=>{const d=c.data;if(!d?.title)return;
-            reddit.push({src:"r/FantasyPL",title:d.title,url:"https://www.reddit.com"+d.permalink,
-              time:(d.created_utc||0)*1000,score:d.score||0,comments:d.num_comments||0,
-              extra:d.link_flair_text||""});});
-          log["r/FantasyPL"]=reddit.length;return;
-        }
-      }catch(e){}
-    }
-    for(const u of ["https://www.reddit.com/r/FantasyPL/hot/.rss?limit=50",
-                    "https://old.reddit.com/r/FantasyPL/.rss?sort=hot&limit=50"]){
-      const t=await grab(u);
-      if(t&&parseFeed(t,"r/FantasyPL",reddit)){log["r/FantasyPL"]=reddit.length;return;}
-    }
-    /* last resort: read the rendered hot page and lift the post links */
-    const t=await grab("https://www.reddit.com/r/FantasyPL/hot/");
-    log["r/FantasyPL"]=parseLinks(t,"r/FantasyPL",reddit,/\/r\/FantasyPL\/comments\//);
-  })());
-
-  /* one search per squad player — the only reliable route to pre-season coverage */
-  squadPlayers().forEach(p=>{
-    jobs.push((async()=>{
-      const q=encodeURIComponent(`"${p.first} ${p.last}" ${p.teamFull||p.teamName} when:7d`);
-      const t=await grab(`https://news.google.com/rss/search?q=${q}&hl=en-GB&gl=GB&ceid=GB:en`,7000);
-      const n=parseFeed(t,p.web_name,squad);log["· "+p.web_name]=n;
-    })());
-  });
-
-  await Promise.all(jobs);
-  const seen=new Set();
-  const dedupe=a=>a.filter(n=>{const k=(n.title||"").slice(0,64).toLowerCase();
-    if(!k||seen.has(k))return false;seen.add(k);return true;});
-  S.news=dedupe(news.sort((a,b)=>b.time-a.time));
-  S.squadNews=dedupe(squad.sort((a,b)=>b.time-a.time));
-  S.reddit=dedupe(reddit);
-  S.srcLog=log;
-  S.newsState=(S.news.length||S.reddit.length||S.squadNews.length)?"ok":"fail";
+  const log={};
+  try{
+    const r=await fetch("/api/news");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    const news=Array.isArray(d.news)?d.news:[];
+    const reddit=Array.isArray(d.reddit)?d.reddit:[];
+    Object.entries(d.perSource||{}).forEach(([name,s])=>{
+      log[name]=s&&s.ok?(s.count??0):"failed"+(s&&s.error?" ("+s.error+")":"");
+    });
+    S.newsFetchedAt=d.fetchedAt||null;
+    /* one server call for all fifteen squad searches, searched by full name
+       as before; items come back keyed by the name that was sent */
+    const squad=[];
+    try{
+      const sp=squadPlayers();
+      const names=sp.map(p=>(((p.first||"")+" "+(p.last||"")).trim())||p.web_name);
+      const r2=await fetch("/api/player-news?names="+encodeURIComponent(names.join(",")));
+      if(r2.ok){
+        const d2=await r2.json();
+        sp.forEach((p,i)=>{
+          const items=(d2.items&&d2.items[names[i]])||[];
+          items.forEach(it=>squad.push({...it,src:p.web_name}));
+          log["· "+p.web_name]=items.length;
+        });
+      }
+    }catch(e){/* squad search is additive; the general feed already landed */}
+    const seen=new Set();
+    const dedupe=a=>a.filter(n=>{const k=(n.title||"").slice(0,64).toLowerCase();
+      if(!k||seen.has(k))return false;seen.add(k);return true;});
+    S.news=dedupe(news.sort((a,b)=>b.time-a.time));
+    S.squadNews=dedupe(squad.sort((a,b)=>b.time-a.time));
+    S.reddit=dedupe(reddit);
+    S.srcLog=log;
+    S.newsState=(S.news.length||S.reddit.length||S.squadNews.length)?"ok":"fail";
+  }catch(e){
+    S.srcLog=log;S.newsState="fail";
+  }
   render();
 }
 function hits(title){
