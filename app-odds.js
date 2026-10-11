@@ -823,6 +823,13 @@ function statusChipHTML(){
   return `<span class="sigchip"><span class="sigdot ${cls}"></span><span>${txt}</span>
     <button onclick="act('load')">${S.loading?esc(S.progress||"…"):"Check now"}</button></span>`;
 }
+/* Repaint only the chip and the footer in place. The minute timer uses this
+   so an open page's ages stay honest without a full re-render, which would
+   wipe scroll position and open menus. */
+function refreshStatusUI(){
+  const c=document.querySelector(".sigchip");if(c)c.outerHTML=statusChipHTML();
+  const p=document.querySelector(".prov");if(p)p.outerHTML=provHTML();
+}
 /* Real per-source ages from /api/status. If the last status check failed the
    last known values keep showing (S.status is only replaced on success). */
 function provHTML(){

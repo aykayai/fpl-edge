@@ -325,4 +325,10 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
      they land. Previously a visit only ever showed the cached copy and
      nothing refreshed until the Refresh button was pressed. */
   loadAll().then(()=>loadNews());
+  /* Keep an open page honest: refetch /api/status every minute and repaint
+     only the chip and the footer. During a live gameweek this is also what
+     moves the chip to Live. A full load still only happens on open, on
+     Check now, or when the server reports a new dataset commit. */
+  setInterval(()=>{if(S.loading)return;
+    loadStatus().then(s=>{if(s)refreshStatusUI();});},60000);
 })();

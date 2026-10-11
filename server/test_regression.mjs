@@ -274,6 +274,9 @@ try {
   console.log(`\n${pass} passed, ${fail} failed (players compared: ${ids.length})`);
   if (fail === 0) console.log("All regression checks passed.");
   process.exitCode = fail ? 1 : 0;
+  /* the app now runs a minute status timer, which keeps jsdom's loop alive;
+     the run is over, so leave explicitly with the verdict */
+  process.exit(process.exitCode);
 } catch (e) {
   console.error("regression harness error: " + (e && e.stack || e));
   process.exitCode = 1;
