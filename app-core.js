@@ -370,6 +370,7 @@ async function loadAll(force,opts){
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();
     syncOfficialSquad();
     S.loading=false;S.progress="";render();
+    savePaint();
     return;
   }
   S.fromCache=fromSnap;S.capture=fromSnap?null:{};
@@ -673,13 +674,16 @@ async function loadAll(force,opts){
   }
   S.fromCache=false;S.capture=null;
   S.loading=false;S.progress="";render();
-  if(S.model)savePaint();
+  /* the picture for the next open is taken only after a load that spoke to
+     the server, never from the in-between instant-start frame */
+  if(S.model&&!fromSnap)savePaint();
 }
 /* The last drawn page, kept so the next open can show it the instant the page
    loads, before the model is rebuilt. It is a picture of the page only: clicks
    are held off (see .booting) until the real render replaces it. */
 function savePaint(){
   const app=document.getElementById("app");
+  if(S.loading||S.statusPending||S.booting)return;
   if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint",{tab:S.tab,html:app.innerHTML,at:Date.now()});
 }
 
