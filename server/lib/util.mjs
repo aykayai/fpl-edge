@@ -1,10 +1,21 @@
 /* FPL Signals server - small shared helpers. No dependencies. */
 
 /* One log line per action: time, action, result, ms. Never log keys,
-   tokens or player names. */
+   tokens or player names. Timestamps are UK time (Europe/London) with the
+   GMT/BST label so the log reads in the owner's clock; everything in the
+   API's JSON stays ISO UTC, since those are machine fields. */
+const UK_LOG_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London", hour12: false, timeZoneName: "short",
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit"
+});
+export function ukStamp(d = new Date()) {
+  const p = {};
+  for (const part of UK_LOG_FMT.formatToParts(d)) p[part.type] = part.value;
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} ${p.timeZoneName || ""}`.trim();
+}
 export function log(action, result, ms) {
-  const t = new Date().toISOString();
-  console.log(`${t} ${action} ${result}${ms != null ? " " + ms + "ms" : ""}`);
+  console.log(`${ukStamp()} ${action} ${result}${ms != null ? " " + ms + "ms" : ""}`);
 }
 
 /* fetch with a hard timeout, returning the Response or throwing. */

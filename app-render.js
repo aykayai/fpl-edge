@@ -1,4 +1,4 @@
-/* FPL Edge — app-render.js
+/* FPL Signals - app-render.js
    player card, pitch, list, tables, all page markup
 
    Part of a single script split across files so each stays small enough to
@@ -445,7 +445,7 @@ function xfplHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
   const g=S.model.next.id;
   const played=S.model.gwPlayed||0;
-  const stamp=S.stamp?new Date(S.stamp).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
+  const stamp=S.stamp?ukFmt(S.stamp,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
   const learn=(typeof LS!=="undefined"&&LS.get("learn"))||{};
   /* richer per-gameweek snapshots (movers / xMins shifts / per-GW error) are
      published by the model in app-core.js; the page renders them when present */
@@ -908,16 +908,19 @@ function fixturesHTML(){
     const fx=(S.model.byEv[e]||[]).slice().sort((a,b)=>String(a.kickoff).localeCompare(String(b.kickoff)));
     if(!fx.length)continue;
     const ev=(S.events||[]).find(x=>x.id===e);
-    const dl=ev&&ev.deadline?new Date(ev.deadline).toLocaleString("en-GB",
-      {weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"";
+    /* UK time, always, with the GMT/BST label. The official FPL API's own
+       nextDeadline (via /api/status) wins for the upcoming gameweek. */
+    const dlIso=(e===g&&S.status&&S.status.fpl&&S.status.fpl.nextDeadline)
+      ?S.status.fpl.nextDeadline:(ev&&ev.deadline?ev.deadline:null);
+    const dl=dlIso?ukDeadline(dlIso):"";
     out+=`<div class="gwband"><span>Gameweek ${e}${e===g?" · next":""}</span>
       ${dl?`<span class="gwdl">Deadline ${esc(dl)}</span>`:""}</div>`;
     fx.forEach(f=>{
       const h=f.ht,a=f.at;if(!h||!a)return;
       const hd=fdrOf(a,true,h,lens), ad=fdrOf(h,false,a,lens);
       const dt=f.kickoff?new Date(f.kickoff):null;
-      const d=dt?dt.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}):"";
-      const tm=dt?dt.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"";
+      const d=dt?ukFmt(dt,{weekday:"short",day:"numeric",month:"short"}):"";
+      const tm=dt?ukHHMM(dt):"";
       const strongSide=t=>t.att>=1.30?`<span class="sig" style="border:none">${ICON_ATT}</span>`
         :(2.6-t.def)>=1.12?`<span class="sig" style="border:none">${ICON_DEF}</span>`:"";
       out+=`<div class="fixrow" style="align-items:flex-start;flex-wrap:wrap">
@@ -1224,10 +1227,20 @@ function chipsHTML(){
   };
   /* Two per row: Wildcard + Bench Boost, then Free Hit + Triple Captain */
   const set=[["wildcard","Wildcard"],["bboost","Bench Boost"],["freehit","Free Hit"],["3xc","Triple Captain"]];
+  /* First-half chips expire at the GW19 deadline. The date comes from the
+     data (gameweek_summaries, or the official nextDeadline when GW19 is the
+     upcoming week), shown in UK time; it was hard-coded before and wrong. */
+  const chipsExpiry=(()=>{
+    const ev=(S.events||[]).find(e=>e.id===19);
+    const iso=(ev&&ev.deadline)
+      ||(S.model.next.id===19&&S.status&&S.status.fpl&&S.status.fpl.nextDeadline)||null;
+    return iso?ukFmt(iso,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+" "+ukZone(iso)
+      :"at the GW19 deadline";
+  })();
   const halfPanel=hf=>`<div class="panel">
       <div class="phead" style="cursor:pointer" onclick="act('chiphalf',${hf})">
         <h2 style="${openHalf===hf?"color:var(--mint)":""}">${hf===1?"First half · GW1–19":"Second half · GW20–38"}</h2>
-        <span class="note">${hf===1?"expire 2 Jan, 13:30 GMT":"reset at GW20"} ${openHalf===hf?"▲":"▼"}</span></div>
+        <span class="note">${hf===1?"expire "+esc(chipsExpiry):"reset at GW20"} ${openHalf===hf?"▲":"▼"}</span></div>
       ${openHalf===hf?`<div class="chipgrid2">${set.map(([k,n])=>chipRow(k+hf,n)).join("")}</div>`:""}</div>`;
 
   return `<div class="sqgrid">

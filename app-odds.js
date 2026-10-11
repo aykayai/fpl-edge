@@ -801,18 +801,51 @@ function go(ev,tab){
   act('tab',tab);
   return false;
 }
+/* ---------- status chip and provenance footer ---------- */
+/* The header chip replaces the old Refresh button: it reports the server's
+   own /api/status and carries the Check now button, which runs the same
+   loadAll the old button did. Green: everything fresh. Green pulsing: a
+   fixture is in play and live points are flowing. Amber: a source is late or
+   the server itself cannot be reached, with the last good copy's time. */
+function statusChipHTML(){
+  const st=S.status;
+  let cls="",txt;
+  if(!st||S.statusErr){cls="wait";txt=`Server unreachable · <b>showing last copy</b>`;}
+  else{
+    const ds=st.dataset||{},fpl=st.fpl||{},feeds=st.feeds||{};
+    const liveAge=agoMin(fpl.liveFetchedAt);
+    if(ds.stale)txt=`Waiting on FPL Core Insights · <b>last good copy ${ukHHMM(ds.committedAt||ds.fetchedAt||Date.now())}</b>`,cls="wait";
+    else if(fpl.error)txt=`Waiting on FPL · <b>last good copy ${ukHHMM(fpl.fetchedAt||Date.now())}</b>`,cls="wait";
+    else if(feeds.error)txt=`Waiting on the feed builder · <b>last good copy ${ukHHMM(feeds.lastOk||Date.now())}</b>`,cls="wait";
+    else if(liveAge!=null&&liveAge<=10){cls="live";txt=`Live · <b>updated ${agoText(fpl.liveFetchedAt)}</b>`;}
+    else txt=`Up to date · <b>checked ${S.statusAt?agoText(S.statusAt):"just now"}</b>`;
+  }
+  return `<span class="sigchip"><span class="sigdot ${cls}"></span><span>${txt}</span>
+    <button onclick="act('load')">${S.loading?esc(S.progress||"…"):"Check now"}</button></span>`;
+}
+/* Real per-source ages from /api/status. If the last status check failed the
+   last known values keep showing (S.status is only replaced on success). */
+function provHTML(){
+  const st=S.status||{};
+  const ds=st.dataset||{},fpl=st.fpl||{},news=st.news||{},odds=st.odds||{};
+  return `<div class="prov"><span>FPL Signals v${APP_VERSION}</span>
+    <span>Stats: <b>FPL Core Insights, ${esc(ukWhen(ds.committedAt))}</b>${ds.committedAt?` (${esc(agoText(ds.committedAt))})`:""}</span>
+    <span>Prices, flags and deadlines: <b>FPL, ${esc(agoText(fpl.fetchedAt))}</b></span>
+    <span>News: <b>${esc(agoText(news.fetchedAt))}</b></span>
+    <span>Odds: <b>${esc(ukWhen(odds.fetchedAt))}</b></span></div>`;
+}
 function render(){
   const app=document.getElementById("app");
   if(!S.model){
     app.innerHTML=`<div style="max-width:460px;margin:0 auto;padding:28px 4px">
-      <h1 style="font-size:44px;line-height:.95;font-weight:800">FPL<br><span style="color:var(--mint)">Assistant</span></h1>
+      <h1 style="font-size:44px;line-height:.95;font-weight:800">FPL<br><span style="color:var(--mint)">Signals</span></h1>
       <p class="note" style="margin-top:12px">Armitage Shanks · team 301830</p>
       <div class="panel" style="border-color:var(--mint);margin-top:18px"><div class="pbody">
-        <p class="note" style="margin:0 0 10px">Loads players, prices, fixtures and last season's underlying stats straight from the FPL Core Insights dataset. No proxy, no downloads.</p>
+        <p class="note" style="margin:0 0 10px">Loads players, prices, fixtures and last season's underlying stats from this box's own FPL Signals server, which mirrors the FPL Core Insights dataset.</p>
         <button class="pri" style="width:100%" onclick="act('load')">${S.loading?esc(S.progress||"Loading…"):"Load data"}</button>
       </div></div>
       ${S.err?`<div class="warn" style="margin-top:12px">${esc(S.err)}</div>`:""}
-      <p class="note" style="margin-top:14px">Data: <a href="https://github.com/olbauday/FPL-Core-Insights" target="_blank" style="color:var(--cyan)">FPL Core Insights</a>, refreshed twice daily.</p></div>`;
+      <p class="note" style="margin-top:14px">Data: <a href="https://github.com/olbauday/FPL-Core-Insights" target="_blank" style="color:var(--cyan)">FPL Core Insights</a>, mirrored locally about three times a day.</p></div>`;
     return;
   }
   const g=VG();
@@ -941,10 +974,10 @@ function render(){
     <div class="phead bare">
       <div style="display:flex;gap:11px;align-items:center">
         ${LOGO}
-        <div><div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700">FPL Edge · Gameweek ${g}</div>
+        <div><div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700">FPL Signals · Gameweek ${g}</div>
         <h1 style="font-size:29px">Armitage Shanks</h1>
         <div style="font-size:11px;color:var(--mute)">Andrew Kenny · team ${TEAM_ID}</div></div></div>
-      <button class="pri" style="background:var(--amber);border-color:var(--amber);color:#20130A" onclick="act('load')">${S.loading?esc(S.progress||"…"):"↻ Refresh"}</button></div>
+      ${statusChipHTML()}</div>
     <div class="stats">
       <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
         <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
@@ -984,6 +1017,6 @@ function render(){
      </div>
      ${navHTML()}</div>
    ${main}
-   <p class="note" style="text-align:center;padding:14px 0">FPL Edge v${APP_VERSION} · data refreshed ${S.stamp?new Date(S.stamp).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—"}</p>`;
+   ${provHTML()}`;
 }
 
