@@ -298,15 +298,35 @@ async function getCSV(path){
   if(!r.ok)throw new Error(path+" → HTTP "+r.status);
   return parseCSV(await r.text());
 }
+/* One cheap call that drives the status chip, the provenance footer and the
+   should-we-redownload decision. Failures keep the last known copy so the
+   footer never blanks; the chip reports the server as unreachable instead. */
+async function loadStatus(){
+  try{
+    const r=await fetch("/api/status");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    S.status=await r.json();S.statusAt=Date.now();S.statusErr=null;
+  }catch(e){S.statusErr=String(e.message||e);}
+  return S.statusErr?null:S.status;
+}
+/* Runs on every page open and on every "Check now". The dataset itself is
+   ~12 MB, so it is only re-downloaded when the server's mirrored commit
+   differs from the copy the model was built from (S.datasetCommit); the
+   status, feeds and everything light refresh every time. */
 async function loadAll(force){
   S.loading=true;S.err=null;render();
+  const st=await loadStatus();
+  const commit=st&&st.dataset?st.dataset.commit:null;
+  const sameData=!!S.model&&commit!=null&&S.datasetCommit===commit;
+  if((sameData&&!force)||(!st&&S.model)){
+    /* nothing new on the server (or the server is unreachable): keep the
+       built model, refresh the light feeds, and re-render once */
+    await Promise.all([loadActuals(),loadRivals()]);
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();
+    S.loading=false;S.progress="";render();
+    return;
+  }
   try{
-    const cached=LS.get("data");
-    if(cached&&!force&&Date.now()-cached.t<1000*60*60*6){
-      Object.assign(S,{players:cached.players,teams:cached.teams,fixtures:cached.fixtures,
-        events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},curTeamStats:cached.curTeamStats||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
-      buildModel();dedupeSquad();snapshotPredictions();localFtTrack();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
-    }
     S.progress="players and prices…";render();
     const [players,pstats,teams]=await Promise.all([
       getCSV(`${SEASON}/players.csv`),
@@ -376,9 +396,12 @@ async function loadAll(force){
     }catch(e){}
     S.pre=pre;
     let events=[];
+    /* Sorted by numeric id before anything scans for the first unfinished
+       row: the CSV's own order is not guaranteed, and an out-of-order file
+       silently pointed the whole app at the wrong gameweek. */
     try{events=(await getCSV(`${SEASON}/gameweek_summaries.csv`)).map(e=>({
       id:Math.round(num(e.id)),name:e.name,deadline:e.deadline_time,
-      finished:String(e.finished).toLowerCase()==="true"}));}catch(e){}
+      finished:String(e.finished).toLowerCase()==="true"})).sort((a,b)=>a.id-b.id);}catch(e){}
 
     /* merge players + stats */
     const byId={};players.forEach(p=>byId[p.player_id]={
@@ -586,7 +609,10 @@ async function loadAll(force){
       if(fseen.has(k))return false;fseen.add(k);return true;});
     S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
     S.stamp=Date.now();
-    LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,curTeamStats:S.curTeamStats,hist:S.hist,teamMatch:S.teamMatch});
+    /* No localStorage copy: the 7.8 MB write blew the quota on some browsers,
+       and the server is close enough that a fresh fetch per session is fine.
+       The commit is kept so "Check now" can skip an unchanged dataset. */
+    S.datasetCommit=commit;
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
@@ -1201,7 +1227,11 @@ function buildModel(){
 
   const evs=(S.events||[]).slice().sort((a,b)=>a.id-b.id);
   const gwPlayed=evs.filter(e=>e.finished).length;
-  const nextEv=evs.find(e=>!e.finished)||{id:1,name:"Gameweek 1"};
+  /* The official FPL API (via /api/status) knows the upcoming gameweek before
+     the dataset's finished flags catch up, so it wins when both exist. */
+  const statusGw=Number(S.status&&S.status.fpl&&S.status.fpl.gw)||0;
+  const nextEv=(statusGw?evs.find(e=>e.id===statusGw&&!e.finished):null)
+    ||evs.find(e=>!e.finished)||{id:1,name:"Gameweek 1"};
 
   const byEv={};S.fixtures.forEach(f=>{f.ht=anyTeam(f.h);f.at=anyTeam(f.a);
     (byEv[f.event]=byEv[f.event]||[]).push(f);});

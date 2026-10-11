@@ -1,4 +1,4 @@
-/* FPL Edge — app-main.js
+/* FPL Signals - app-main.js
    actions and init — must load last
 
    Part of a single script split across files so each stays small enough to
@@ -20,7 +20,7 @@ function searchInput(action,el,extra){
 function act(k,a,b){
   const P=id=>S.model?.players.find(p=>p.id===id);
   switch(k){
-    case"load":loadAll(true).then(()=>loadNews());return;
+    case"load":loadAll().then(()=>loadNews());return;
     case"tab":S.tab=a;S.menuOpen=false;break;
     case"menu":S.menuOpen=!S.menuOpen;break;
     case"dash":S.dash={...S.dash,[a]:!S.dash[a]};break;
@@ -275,8 +275,6 @@ function act(k,a,b){
     case"odds":loadOdds();return;
     case"oddsdemo":S.oddsDemo=!S.oddsDemo;break;
     case"oddsview":S.oddsView=a;break;
-    case"oddsreset":LS.set("oddsLeague","");LS.set("oddsBooks",null);LS.set("oddsCache",null);loadOdds();return;
-    case"oddskey":S.oddsKey=a.trim();LS.set("oddsKey",S.oddsKey);if(S.oddsKey)loadOdds();return;
     case"addrival":{const n=document.getElementById("rvName")?.value?.trim();
       const id=document.getElementById("rvId")?.value?.trim();
       if(!n){toast("Give the rival a name");break;}
@@ -309,19 +307,22 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
     planByGw:st.planByGw||{},ftLastGw:st.ftLastGw||0
     });S.seeded=!!(st.squad&&st.squad.length);}
   applyLearning();
-  /* Not defaulted to a key: this file is public on GitHub Pages, and a free-tier
-     key committed to a public repo gets scraped and its quota drained. Entered
-     once in the Odds tab and kept in this browser only. */
-  S.oddsKey=LS.get("oddsKey")||"";
   S.ignored=LS.get("ignored")||[];
-  if(S.oddsKey)S.oddsState="idle";
   S.stars=LS.get("stars")||[];
   S.rivals=LS.get("rivals")||[];
   S.leagueId=LS.get("leagueId")||"391690";
-  const c=LS.get("data");
-  if(c&&c.players){Object.assign(S,{players:c.players,teams:c.teams,fixtures:c.fixtures,
-    events:c.events,last:c.last,pre:c.pre||{},preMax:c.preMax||1,lastTeams:c.lastTeams||{},lastTeamStats:c.lastTeamStats||{},lastTeamRecent:c.lastTeamRecent||{},hist:c.hist||{},teamMatch:c.teamMatch||{},stamp:c.t});buildModel();}
+  /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
+     quota on some browsers; the server is close now) and everything odds,
+     which lives on the server. Every key that is Andy's own work (state,
+     learn, stars, rivals, leagueId, ignored) keeps its name and survives. */
+  ["data","oddsKey","oddsLeague","oddsBooks","oddsCache"].forEach(k=>{
+    try{localStorage.removeItem("fpl3:"+k);}catch(e){}});
   applyHash();
   if(!location.hash)history.replaceState({},"",routeFor(S.tab));
-  else render();
+  render();
+  /* Boot fix: always load. Render whatever exists immediately (above), then
+     fetch the dataset, feeds and status in the background and re-render when
+     they land. Previously a visit only ever showed the cached copy and
+     nothing refreshed until the Refresh button was pressed. */
+  loadAll().then(()=>loadNews());
 })();
