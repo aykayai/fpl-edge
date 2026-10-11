@@ -65,8 +65,16 @@ function materialiseOld() {
 
 /* ---------- the server, against the shared state ---------- */
 function startServer() {
+  /* SIGNALS_TICK_MS is pushed out to a day so the scheduler never runs: the
+     server serves the state dir exactly as handed to it, and writes nothing
+     into it. Without this, the dataset poller can swap in a new upstream
+     commit BETWEEN the old and new captures, so the two sides silently
+     compare different data and every projection moves. That exact failure
+     happened in the field: a state dir showed dataset/prev fetched 19:24 and
+     dataset/current fetched 20:04, mid-test. The commit-identity check below
+     guards the same hole from the other side. */
   const child = spawn(process.execPath, [join(ROOT, "server", "server.mjs")], {
-    env: { ...process.env, PORT: String(PORT), STATE_DIR, ODDS_API_KEY: "" },
+    env: { ...process.env, PORT: String(PORT), STATE_DIR, ODDS_API_KEY: "", SIGNALS_TICK_MS: "86400000" },
     stdio: ["ignore", "pipe", "pipe"]
   });
   child.stdout.on("data", () => {});
@@ -122,6 +130,12 @@ async function runApp(dir, statusOverride) {
   w.AbortController = AbortController; w.setTimeout = setTimeout; w.clearTimeout = clearTimeout; w.scrollTo = () => {};
   w.console = { log() {}, warn() {}, error() {} };
   for (const f of FILES) vm.runInContext(readFileSync(join(dir, f), "utf8"), ctx, { filename: f });
+  /* Count every buildModel call and read CAL at capture time, so a learning
+     or rebuild difference between the two flows is reported, not guessed at.
+     Injected before any load runs (the new app's boot is async and has not
+     reached buildModel yet). */
+  vm.runInContext(`window.__bmCalls=0;
+    (function(){const orig=buildModel;buildModel=function(){window.__bmCalls++;return orig.apply(this,arguments);};})();`, ctx);
   vm.runInContext(`window.__g={get S(){return S},loadAll,render,ftSource,freeTransfers,bankFromFeed,planBank,REPO}`, ctx);
   const g = w.__g, S = g.S;
 
@@ -138,6 +152,8 @@ async function runApp(dir, statusOverride) {
   }
 
   const out = { next: S.model.next.id, players: {}, pages: {},
+    bmCalls: w.__bmCalls,
+    calAtBase: vm.runInContext(`JSON.stringify(CAL)===JSON.stringify(CAL_BASE)`, ctx),
     header: { ftSource: g.ftSource(), freeTransfers: g.freeTransfers(), bankFromFeed: g.bankFromFeed(), planBank: g.planBank() } };
   for (const p of S.model.players) out.players[p.id] = +((p.gw[S.model.next.id] || {}).pts || 0).toFixed(3);
   for (const tab of TABS) {
@@ -204,10 +220,20 @@ try {
     console.log(`INFO  official FPL says the next gameweek is ${liveStatus.fpl.gw}, the dataset's finished flags say ${dsNext}.`
       + ` In production the new app follows the official API (the gameweek-correctness fix); pinned to GW${dsNext} here for a like-for-like maths diff.`);
 
+  const commitBefore = (liveStatus.dataset || {}).commit || null;
   console.log("running OLD app against " + BASE + " ...");
   const OLD = await runApp(oldDir);
   console.log("running NEW app (working tree) ...");
   const NEW = await runApp(ROOT, pinned);
+  const statusAfter = await (await fetch(BASE + "/api/status")).json();
+  const commitAfter = (statusAfter.dataset || {}).commit || null;
+  check(commitBefore != null && commitBefore === commitAfter,
+    "dataset commit identical across both captures",
+    `before ${commitBefore} vs after ${commitAfter}; the server must not refresh mid-test`);
+
+  console.log(`INFO  buildModel calls: old ${OLD.bmCalls}, new ${NEW.bmCalls}`);
+  check(OLD.calAtBase, "old app projected from base CAL (no learning applied)");
+  check(NEW.calAtBase, "new app projected from base CAL (learning recorded, not applied; owner decision D4)");
 
   check(OLD.next === NEW.next, "same next gameweek", `old GW${OLD.next} vs new GW${NEW.next}`);
 

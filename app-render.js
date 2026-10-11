@@ -526,7 +526,10 @@ function xfplHTML(){
         <td class="mono">${c.A.toFixed(2)}</td><td class="mono">${Math.abs(c.A-b.A)<0.005?"—":arrow(c.A-b.A)}</td>
         <td class="mono">${c.B.toFixed(2)}</td><td class="mono">${Math.abs(c.B-b.B)<0.005?"—":arrow(c.B-b.B)}</td>
         <td class="note" style="text-align:left">${L?`${L.n} players · ${L.gw} GW`:"baseline (no learning yet)"}</td></tr>`;}).join("")}
-    </tbody></table></div></div>`;
+    </tbody></table></div>
+    ${Object.keys(learn).length&&!LEARN_APPLY
+      ?`<div class="pbody" style="border-top:1px solid var(--ink3)"><p class="note" style="margin:0">Adjustments are recorded from results but not applied: every projection stays on the baseline until learning is switched on (owner decision D4).</p></div>`:""}
+    </div>`;
 
   const pva=played<1?"":`<div class="panel"><div class="phead"><h2>Predicted vs actual</h2>
     <span class="note">projection vs actual pts / appearance</span></div>

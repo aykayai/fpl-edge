@@ -1087,11 +1087,20 @@ const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kell
 const CAL_BASE={1:{A:0.51,B:0.77},2:{A:1.92,B:0.33},3:{A:2.45,B:0.39},4:{A:1.18,B:0.55}};
 let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
 
-/* Once real gameweeks exist, compare what each position actually returns per
-   appearance with what we project and nudge B toward the truth. Needs 25+
-   players and is capped at +/-30% so one freak week can't distort the model. */
+/* Learning is RECORDED, NOT APPLIED. learnFromResults still writes the learn
+   record so the xFPL page can show what the results say, but projections stay
+   on CAL_BASE until Andy decides to switch learning on (decision D4 from the
+   audit; the backtest showed it made GW5 worse). This used to be moot: the
+   old flow built the model once per session, before the actuals feed landed,
+   so the record was never written and the apply path below never fired. The
+   server-era boot can build several times per session with actuals in hand,
+   which would have armed that path silently, so the switch is now explicit:
+   every build projects from CAL_BASE, however many builds a session runs,
+   until LEARN_APPLY is flipped by the owner. */
+const LEARN_APPLY=false;   /* D4: owner decision pending */
 function applyLearning(){
   CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
+  if(!LEARN_APPLY)return;
   const L=LS.get("learn");if(!L)return;
   [1,2,3,4].forEach(k=>{
     if(!L[k]||L[k].n<25)return;
