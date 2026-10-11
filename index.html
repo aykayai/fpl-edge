@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>FPL Edge — Planner &amp; Assistant</title>
+<title>FPL Signals - Planner &amp; Assistant</title>
 <link rel="icon" href="favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0C0E12">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="FPL Edge">
-<meta name="description" content="FPL Edge — Fantasy Premier League planner, projections and transfer assistant.">
+<meta name="apple-mobile-web-app-title" content="FPL Signals">
+<meta name="description" content="FPL Signals - Fantasy Premier League planner, projections and transfer assistant.">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
- /* FPL Edge — purple base, green primary, teal secondary, orange accent.
+ /* FPL Signals - purple base, green primary, teal secondary, orange accent.
     Fixture difficulty, price arrows, kits and the pitch keep their own
     meaning-carrying colours and are deliberately not themed. */
  --ink:#0C0E12;--ink2:#141820;--ink3:#222834;--line:#303845;
@@ -473,6 +473,16 @@ details[open]>summary::after{content:" ▴"}
 .trkavg td{color:var(--amber) !important;font-weight:800 !important;background:rgba(255,138,61,.08)}
 .trkpending td{color:var(--mute) !important;font-style:italic;background:rgba(255,255,255,.03)}
 .trkavg td:first-child{color:var(--amber) !important}
+/* Header status chip and provenance footer (the approved FPL Signals design) */
+.sigchip{display:flex;align-items:center;gap:8px;background:#06070A;border:1px solid var(--ink3);border-radius:12px;padding:7px 10px;font-size:11px;color:var(--mute);white-space:nowrap}
+.sigchip b{color:var(--cream);font-weight:600}
+.sigdot{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 3px rgba(45,220,135,.18);flex:none}
+.sigdot.wait{background:var(--amber);box-shadow:0 0 0 3px rgba(255,138,61,.18)}
+.sigdot.live{animation:sigpulse 1.6s ease-in-out infinite}
+@keyframes sigpulse{0%,100%{box-shadow:0 0 0 3px rgba(45,220,135,.18)}50%{box-shadow:0 0 0 7px rgba(45,220,135,.34)}}
+.sigchip button{padding:4px 9px;font-size:11px}
+.prov{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;padding:14px 0;font-size:11px;color:var(--mute)}
+.prov b{color:var(--cream);font-weight:600}
 </style>
 </head>
 <body>

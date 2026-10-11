@@ -63,17 +63,19 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="11.4.1";
-const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
- <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
-   <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
-  <linearGradient id="lgG" x1="0" y1="1" x2="1" y2="0">
-   <stop offset="0" stop-color="#21C97A"/><stop offset="1" stop-color="#5BE8C0"/></linearGradient></defs>
- <path d="M100 8 L184 38 v78c0 46-38 76-84 96-46-20-84-50-84-96V38Z" fill="url(#lgS)" stroke="url(#lgG)" stroke-width="7"/>
- <text x="100" y="104" font-family="Arial Black,Arial,sans-serif" font-size="52" font-weight="900"
-   fill="#3DE38C" text-anchor="middle">FPL</text>
- <path d="M44 168 L84 130 L108 152 L152 104" fill="none" stroke="#5BE8C0" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
- <path d="M124 96 L160 96 L160 132" fill="none" stroke="#FF8A3D" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const APP_VERSION="12.0.0";
+const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
+ <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
+ <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
+ <circle cx="50" cy="64" r="34" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="5 4" opacity=".55"/>
+ <circle cx="50" cy="64" r="22" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".45"/>
+ <circle cx="50" cy="64" r="11" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="3 3" opacity=".4"/>
+ <path d="M50 30 A34 34 0 0 1 82 52" fill="none" stroke="#E8743B" stroke-width="3.5"/>
+ <line x1="50" y1="22" x2="50" y2="106" stroke="#E8743B" stroke-width="1.5" opacity=".6"/>
+ <line x1="54" y1="62" x2="86" y2="24" stroke="#8BE33A" stroke-width="3"/>
+ <path d="M92 16 L78 22 L88 32 Z" fill="#8BE33A"/>
+ <circle cx="73" cy="38" r="3.5" fill="#E8743B"/>
+ <circle cx="50" cy="34" r="8" fill="#8BE33A"/></svg>`;
 /* ---------- UK time ----------
    Every displayed date or time is Europe/London, whatever zone the viewer's
    device is set to. Deadlines carry the GMT/BST label, derived from Intl so

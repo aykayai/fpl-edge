@@ -1,7 +1,7 @@
 {
-  "name": "FPL Edge — Planner & Assistant",
-  "short_name": "FPL Edge",
-  "description": "Fantasy Premier League planner, projections and transfer assistant.",
+  "name": "FPL Signals - Planner & Assistant",
+  "short_name": "FPL Signals",
+  "description": "FPL Signals - Fantasy Premier League planner, projections and transfer assistant, served from its own box.",
   "start_url": "./index.html#/team-planner",
   "scope": "./",
   "display": "standalone",
