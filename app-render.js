@@ -75,7 +75,7 @@ function playerCardHTML(){
 function pitchHTML(){
   const xi=startingXI();
   if(!xi.length)return `<div class="pbody" style="text-align:center"><p class="note">No squad loaded.</p>
-    <button class="pri" onclick="act('seed')">Load my GW1 squad</button></div>`;
+    <button class="pri" onclick="act('seed')">Load my squad</button></div>`;
   const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
   let h=`<div class="pitch">`;
   [1,2,3,4].forEach(pos=>{const r=xi.filter(p=>p.pos===pos);

@@ -182,6 +182,10 @@ function normalise(text, isNew) {
     t = t.replace(/ FPL (?=Predicted )/, " ");
   }
   t = t.replace(/expire [^▲▼]+/g, "expire ");                          /* chips expiry was hard-coded */
+  /* PLANNED: the header free-transfer figure and its source label changed on
+     purpose (see the header INFO above), so both are blanked on both sides. */
+  t = t.replace(/Free transfers\s+(Unlimited|\d+)\s+(official|tracked locally|untracked) · max 5/g, "Free transfers X");
+  t = t.replace(/Transfers\s*[∞\d]+\s*(?=Rank)/g, "Transfers X ");
   t = t.replace(/data \d{1,2} \w{3}, \d{2}:\d{2}/g, "data X");         /* xFPL load stamp */
   return t.replace(/\s+/g, " ").trim();
 }
@@ -249,9 +253,18 @@ try {
   }
   check(ptsDiffs === 0, `per-player GW${OLD.next} pts identical to 3dp (${ids.length} players)`, `${ptsDiffs} differ; ${examples.join("; ")}`);
 
-  for (const k of ["ftSource", "freeTransfers", "bankFromFeed", "planBank"]) {
+  for (const k of ["bankFromFeed", "planBank"]) {
     check(JSON.stringify(OLD.header[k]) === JSON.stringify(NEW.header[k]), `header ${k} identical`,
       `${JSON.stringify(OLD.header[k])} vs ${JSON.stringify(NEW.header[k])}`);
+  }
+  /* PLANNED difference: the header free-transfer count changed on purpose.
+     The old code rebuilt the count client-side (wrongly: it added the weekly
+     +1 in GW1 and read the feed's chips map - which stores points - as
+     gameweeks) and still labelled it "official". The new code only reports
+     the builder's reconciled ftAvailable/ftNext as official; without those
+     fields it falls back to the local tracker, labelled as such. */
+  for (const k of ["ftSource", "freeTransfers"]) {
+    console.log(`INFO  header ${k} (changed by design): old ${JSON.stringify(OLD.header[k])}, new ${JSON.stringify(NEW.header[k])}`);
   }
 
   for (const tab of TABS) {

@@ -241,11 +241,13 @@ function act(k,a,b){
       const next=S.model?S.model.next.id:1;
       if(S.planByGw)Object.keys(S.planByGw).map(Number).forEach(e=>{
         if(e>=next)delete S.planByGw[e];});
-      resolveSeed(true);S.flagged=[];S.pendingOpt=null;
+      const src=resolveSeed(true);S.flagged=[];S.pendingOpt=null;
       const bf=(typeof bankFromFeed==="function")?bankFromFeed():null;
       if(bf!=null)S.bank=bf;                     // prefer the official bank when published
       saveState();
-      toast("Reset to your official squad (this week onward)");break;}
+      /* Say what actually happened: the seed is a fallback, never "official". */
+      toast(src==="official"?"Reset to your official squad (this week onward)"
+        :"Reset to the GW1 seed squad (no official history available yet)");break;}
     case"resetOld":{if(!S.original)break;
       const cur=(S.squad||[]).reduce((s,i)=>s+(P(i)?.price||0),0);
       const org=S.original.reduce((s,i)=>s+(P(i)?.price||0),0);

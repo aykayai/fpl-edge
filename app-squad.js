@@ -161,8 +161,45 @@ const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
   vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,ftLastGw:S.ftLastGw,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
   planByGw:S.planByGw});}
+/* The owner's official squad for the latest gameweek the feed has picks for.
+   Returns null when the feed (or a complete, resolvable 15) isn't there, so
+   callers fall back honestly rather than dressing the hard-coded seed up as
+   official. */
+function latestOfficialPicks(){
+  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
+  const rows=S.tracker.gw.filter(r=>Array.isArray(r.picks)&&r.picks.length===15);
+  if(!rows.length)return null;
+  const last=rows.reduce((a,b)=>(b.event>a.event?b:a));
+  const picks=last.picks.slice().sort((a,b)=>(a.pos||0)-(b.pos||0));
+  if(picks.some(pk=>!S.model.players.find(p=>p.id===pk.id)))return null; // a pick the dataset can't name: don't half-seed
+  return {event:last.event,picks};
+}
+/* Seed an empty planner from the LATEST official picks. Returns false when no
+   history is published yet (old feed cached, or feed unreachable). */
+function resolveOfficial(quiet){
+  const off=latestOfficialPicks();
+  if(!off)return false;
+  const ids=off.picks.map(pk=>pk.id);
+  S.squad=ids.slice();S.original=ids.slice();S.forceXI=null;
+  const cap=off.picks.find(pk=>pk.isC)||off.picks.find(pk=>pk.multiplier>=2);
+  const vice=off.picks.find(pk=>pk.isVC);
+  S.captain=cap?cap.id:ids[0];
+  S.vice=(vice&&vice.id!==S.captain)?vice.id:ids.find(i=>i!==S.captain);
+  S.benchOrder=off.picks.slice(11).map(pk=>pk.id);
+  const bf=(typeof bankFromFeed==="function")?bankFromFeed():null;
+  if(bf!=null)S.bank=bf;
+  else{const P=id=>S.model.players.find(p=>p.id===id);
+    S.bank=+Math.max(0,100-ids.reduce((a,i)=>a+(P(i)?.price||0),0)).toFixed(1);}
+  saveState();
+  if(!quiet)toast("Squad set to your official GW"+off.event+" line-up");
+  return true;
+}
+/* Returns "official" when the squad came from the feed's official picks, or
+   "seed" when only the hard-coded GW1 seed was available (the last resort,
+   kept for a fresh install whose feed has no history yet). */
 function resolveSeed(quiet){
   if(!S.model)return;
+  if(resolveOfficial(quiet))return "official";
   const used=new Set(),ids=[],miss=[];
   SEED.forEach(([n,t,pos])=>{
     const target=norm(n);
@@ -181,6 +218,7 @@ function resolveSeed(quiet){
   S.bank=+Math.max(0,100-ids.reduce((a,i)=>a+(P(i)?.price||0),0)).toFixed(1);
   saveState();
   if(miss.length&&!quiet)toast("Couldn't match: "+miss.join(", "));
+  return "seed";
 }
 /* Captain/multiplier for the currently-viewed historical gameweek, keyed by
    player id — set as a side effect of squadPlayers() so cardHTML can read who
@@ -188,6 +226,12 @@ function resolveSeed(quiet){
    the player objects (several call sites compare these by reference, e.g.
    xi.includes(p), so a spread copy would silently break those checks). */
 let _histCaptain=null,_histSquadActive=false,_gwLocked=false;
+/* The rest of the official record for that week, set alongside _histCaptain:
+   the vice, the XI/bench split and order straight from the picks' positions
+   (auto subs already applied by the API), and each pick's multiplier so a
+   Triple Captain week multiplies by what was actually played, not by the
+   local chip plan. Null whenever the viewed week has no official picks. */
+let _histVice=null,_histXI=null,_histBench=null,_histMult=null;
 /* The squad shown depends on which gameweek is being viewed:
    - a finished GW: the officially-locked squad from the feed (immutable);
    - the current/future GW: the base squad (S.squad) with any local per-GW plan
@@ -230,6 +274,7 @@ function effectiveCaptainVice(g){
 }
 const squadPlayers=()=>{
   _histCaptain=null;_histSquadActive=false;_gwLocked=false;
+  _histVice=null;_histXI=null;_histBench=null;_histMult=null;
   const g=VG();
   const next=S.model?S.model.next.id:1;
   /* Finished gameweek → the officially-locked squad, immutable. */
@@ -238,10 +283,29 @@ const squadPlayers=()=>{
     if(S.tracker&&Array.isArray(S.tracker.gw)){
       const row=S.tracker.gw.find(r=>r.event===g);
       if(row&&Array.isArray(row.picks)&&row.picks.length){
-        const list=[];
-        row.picks.forEach(pk=>{const p=S.model.players.find(x=>x.id===pk.id);
-          if(p){list.push(p);if(pk.multiplier>=2)_histCaptain=p.id;}});
-        if(list.length){_histSquadActive=true;return list;}
+        /* Position order from the API: 1-11 the XI as it finally counted
+           (auto subs applied), 12-15 the bench. Old feeds have no pos field,
+           in which case the array order (already positional) is kept. */
+        const picks=row.picks.slice().sort((a,b)=>((a.pos||0)-(b.pos||0)));
+        const list=[];const mult={};const xi=[];const bench=[];
+        picks.forEach((pk,i)=>{const p=S.model.players.find(x=>x.id===pk.id);
+          if(!p)return;
+          list.push(p);mult[p.id]=pk.multiplier;
+          const slot=pk.pos||i+1;
+          (slot<=11?xi:bench).push(p.id);});
+        /* The C badge goes on whoever actually carried the armband that week:
+           the pick with a 2x/3x multiplier (how the API reports an auto
+           vice-captain takeover), falling back to the picked captain. */
+        const capPk=picks.find(pk=>pk.multiplier>=2)||picks.find(pk=>pk.isC);
+        if(capPk&&list.some(p=>p.id===capPk.id))_histCaptain=capPk.id;
+        const vicePk=picks.find(pk=>pk.isVC);
+        if(vicePk&&list.some(p=>p.id===vicePk.id))_histVice=vicePk.id;
+        if(list.length){
+          _histSquadActive=true;_histMult=mult;
+          if(xi.length===11)_histXI=xi;
+          if(bench.length)_histBench=bench;
+          return list;
+        }
       }
     }
     /* Feed hasn't published that week's official picks yet — fall back to the
@@ -263,6 +327,13 @@ const squadPlayers=()=>{
 function startingXI(){
   const sp=squadPlayers();if(!sp.length)return[];
   const g=VG();
+  /* The official XI for a finished gameweek, straight from the picks'
+     positions. This outranks any local snapshot, because it is the line-up
+     that actually scored. */
+  if(_histSquadActive&&Array.isArray(_histXI)&&_histXI.length===11){
+    const xi=_histXI.map(id=>sp.find(p=>p.id===id)).filter(Boolean);
+    if(xi.length===11)return xi;
+  }
   /* A finished gameweek uses the line-up captured at the time. Without this
      the XI was re-derived from that week's predicted points, which are all
      zero once the week is past, so the formation reshuffled on every render. */
@@ -740,10 +811,17 @@ function cardHTML(p,bench,ctx){
   const flaggedList=C?(C.flagged||[]):S.flagged;
   const {captain:capForGw,vice:viceForGw}=C?{captain:capId,vice:viceId}:effectiveCaptainVice(g);
   const isC=C?(capId===p.id):(_histCaptain!=null?_histCaptain===p.id:capForGw===p.id);
-  const isV=C?(viceId===p.id):(_histCaptain==null&&viceForGw===p.id);
+  const isV=C?(viceId===p.id):(_histSquadActive?_histVice===p.id:(_histCaptain==null&&viceForGw===p.id));
   const fl=flaggedList.includes(p.id);
+  /* A finished week with official picks is a record, not a draft: the edit
+     controls don't render, and the multiplier comes from the official pick
+     (so a real Triple Captain week triples), never from the local chip plan. */
+  const official=_histSquadActive&&!C;
 
   const chipNow=chipForWeek(g);
+  const capMult=official
+    ?((_histMult&&_histMult[p.id]>=2)?_histMult[p.id]:1)
+    :(isC?(chipNow==="3xc"?3:2):1);
   /* For a historical week, hPts() can't compute a real number (the model only
      projects forward) — use the snapshot captured while that week was still
      live, if one was taken. */
@@ -756,14 +834,14 @@ function cardHTML(p,bench,ctx){
   const isPast=S.model&&g<S.model.next.id;
   const basePred=snapPred!=null?snapPred:(isPast?null:hPts(p,g,S.horizon));
   const hasPred=basePred!=null;
-  const shownPts=hasPred?basePred*(isC?(chipNow==="3xc"?3:2):1):null;
+  const shownPts=hasPred?basePred*capMult:null;
   /* Actual points for this specific gameweek — only present once the live-actuals
      feed has that GW. Captain-multiplied the same way as the prediction, so the two
      compare like-for-like (both = "contribution to the squad total"). */
   const feedGW=(S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]))||null;
   const actualRaw=feedGW?feedGW[g]??feedGW[String(g)]:null;
   const hasActual=actualRaw!=null;
-  const actualShown=hasActual?actualRaw*(isC?(chipNow==="3xc"?3:2):1):null;
+  const actualShown=hasActual?actualRaw*capMult:null;
   const diff=(hasActual&&hasPred)?actualShown-shownPts:null;
   /* The score box colour must follow whichever number is actually displayed —
      previously it always used the predicted band, so a past week with a real
@@ -800,13 +878,20 @@ function cardHTML(p,bench,ctx){
     : `act('${A.sub}',${p.id})`;
   const subGlyph=isBench?(S.subFrom==null?slot:"⇄"):"⇄";
   const subTitle=isBench?(cyc?`Bench ${slot} · tap to change order (or to receive a substitution)`:`Bench ${slot} · goalkeeper (fixed)`):"Substitute";
+  /* Official past week: no edit controls at all, just the armbands that were
+     actually worn, as plain badges, and the bench number as a plain label. */
+  const controls=official
+    ?`${isC?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)" title="Captain (official)">C</span>`:""}
+      ${isV?`<span class="badge" style="bottom:-2px;right:4px;background:var(--cyan);color:var(--ink)" title="Vice-captain (official)">V</span>`:""}
+      ${isBench?`<span class="badge" style="top:-2px;left:2px;background:var(--ink3);color:var(--cream)" title="Bench ${slot} (official)">${slot}</span>`:""}`
+    :`<button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('${A.flag}',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
+    <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="${subOnclick}" title="${subTitle}">${subGlyph}</button>
+    <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
+    <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('${A.vice}',${p.id})" title="Vice-captain">V</button>`;
   return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
    <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
     ${p.avail<1?`<span class="dot" style="top:-2px;left:20px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
-    <button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('${A.flag}',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
-    <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="${subOnclick}" title="${subTitle}">${subGlyph}</button>
-    <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
-    <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('${A.vice}',${p.id})" title="Vice-captain">V</button></div>
+    ${controls}</div>
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
    <div class="ptsbar" style="background:${noHistData?"var(--ink3)":bg};color:${noHistData?"var(--mute)":fg}${elite&&!noHistData?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
@@ -827,6 +912,12 @@ function cardHTML(p,bench,ctx){
 /* keep any explicit bench order the optimiser set, else best first */
 function orderBench(list){
   const g=VG();
+  /* A finished week with official picks keeps the official bench order
+     (positions 12-15, auto subs applied), not the local S.benchOrder. */
+  if(_histSquadActive&&Array.isArray(_histBench)&&_histBench.length){
+    const off=_histBench.map(id=>list.find(p=>p.id===id)).filter(Boolean);
+    if(off.length===list.length)return off;
+  }
   const gk=list.filter(p=>p.pos===1);
   const out=list.filter(p=>p.pos!==1);
   const ordered=(S.benchOrder&&S.benchOrder.length)
@@ -1081,6 +1172,10 @@ function squadListHTML(){
   const g=VG(), xi=startingXI();
   const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
   const all=squadPlayers();
+  /* Official past week: the armbands actually worn, and no edit controls,
+     the same rule the pitch cards follow. */
+  const official=_histSquadActive;
+  const capId=official?_histCaptain:S.captain, viceId=official?_histVice:S.vice;
   const key=S.sqSort||"pos", dir=S.sqDir||"asc";
   const val={
     pos:p=>p.pos*100-(xi.includes(p)?50:0),
@@ -1111,7 +1206,7 @@ function squadListHTML(){
         ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
         <span style="min-width:0">
           <button class="lname" onclick="act('card',${p.id})">${esc(p.web_name)}</button>
-          ${S.captain===p.id?'<span class="tag c">C</span>':""}${S.vice===p.id?'<span class="tag v">V</span>':""}
+          ${capId===p.id?'<span class="tag c">C</span>':""}${viceId===p.id?'<span class="tag v">V</span>':""}
           ${starting?"":'<span class="tag s">SUB</span>'}
           <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]}</span>
         </span></span></td>
@@ -1125,9 +1220,9 @@ function squadListHTML(){
       <td style="white-space:nowrap"><span class="psrow">${posStats(p).map(([k,v])=>
         `<span class="ps"><span class="k">${k}</span><span class="v">${v}</span></span>`).join("")}</span></td>
       <td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>
-      <td style="text-align:right;white-space:nowrap">
+      <td style="text-align:right;white-space:nowrap">${official?"":`
         <button class="mini" onclick="act('sub',${p.id})" title="Substitute">⇄</button>
-        <button class="mini" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
-        <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button></td></tr>`;}).join("");
+        <button class="mini" onclick="act('cap',${p.id})" title="Captain">C</button>
+        <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button>`}</td></tr>`;}).join("");
   return `<div class="scroll"><table class="sqtable"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }

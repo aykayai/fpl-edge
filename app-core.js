@@ -21,6 +21,12 @@ const SEASON="2026-2027", LAST="2025-2026";
    Contract: { season, team:{totalPlayers, gw:[{event,points,gwRank,orRank,bank,
    value,transfers,transferCost,bench,captain,off1m,off500k,off100k,transferDiff}],
    chips:{name:points}}, players:{ "<id>": {"<gw>":points} } }
+   Newer feeds also publish the owner's official per-week history on each gw
+   row: picks [{id,pos,multiplier,isC,isVC}] (1-11 the XI in formation order,
+   12-15 the bench, auto subs already applied by the API), autoSubs [{out,in}],
+   chip/chipLabel, totalPoints, ftAvailable (free transfers into that week) and
+   ftNext (the builder-reconciled count into the following week). Every reader
+   falls back to today's behaviour when those fields are absent (an old feed).
    Unreachable or not yet built: every consumer already renders a clean waiting
    state, so this fails silently rather than blocking the main load. */
 const ACTUALS_URL="/data/feeds/actuals.json";
@@ -177,33 +183,23 @@ function ftFromFeed(){
   const g=S.model.next.id;
   const rows=S.tracker.gw.slice().sort((a,b)=>a.event-b.event);
   if(!rows.length)return null;
-  /* Prefer an explicit ftAvailable if the feed ever publishes one. Otherwise
-     rebuild it from the official per-gameweek transfer counts, which ARE
-     published, using the confirmed FPL rules: 1 granted per deadline, banked
-     up to 5, and a Wildcard or Free Hit week consumes that week's transfer
-     while leaving the bank otherwise untouched (its squad changes are not
-     ordinary transfers, so they must not be counted as such). */
-  const explicit=rows.filter(r=>r.ftAvailable!=null);
-  if(explicit.length){
-    const last=explicit[explicit.length-1];
-    if(last.event>=g)return clamp(last.ftAvailable,0,5);
-    const used=Math.min(last.ftAvailable,(last.transfers||0));
-    return clamp(Math.min(5,(last.ftAvailable-used)+1),0,5);
-  }
-  if(rows.every(r=>r.transfers==null))return null;
-  /* Which gameweeks a chip was played, from the feed's own chip record. */
-  const chipWeeks=new Set();
-  const cm=(S.tracker.chips&&typeof S.tracker.chips==="object")?S.tracker.chips:null;
-  if(cm)Object.entries(cm).forEach(([name,ev])=>{
-    if(/wild|free hit/i.test(name)&&Number.isFinite(+ev))chipWeeks.add(+ev);});
-  let ft=1;                                   // GW1 starts with one
-  rows.forEach(r=>{
-    if(r.event>=g)return;                     // only completed weeks are known
-    if(r.event>1)ft=clamp(ft+1,0,5);          // each new deadline grants one, capped
-    if(chipWeeks.has(r.event))return;         // chip week: bank left alone
-    ft=clamp(ft-Math.min(ft,r.transfers||0),0,5);
-  });
-  return clamp(ft+1,0,5);                     // plus the allowance for the upcoming week
+  /* Only the builder's reconciled number is ever reported here. The builder
+     follows the official rules (start at 1, +1 a week capped at 5, Wildcard
+     and Free Hit weeks carry the bank unchanged) and reconciles against the
+     hits actually charged, then publishes ftNext, the count carried INTO the
+     following gameweek, on every row. Rebuilding the count client-side went
+     wrong twice (the +1 applied in GW1, and S.tracker.chips read as
+     name→gameweek when it stores name→points), so no local reconstruction
+     remains: a feed without these fields returns null and the header falls
+     back to the local tracker, labelled as such, never as official. */
+  const prev=rows.filter(r=>r.event<g);
+  const last=prev[prev.length-1];
+  if(last&&last.event===g-1&&last.ftNext!=null)return clamp(last.ftNext,0,5);
+  /* The viewed week has already started (its row exists): its own published
+     ftAvailable is the count that was available at that deadline. */
+  const cur=rows.find(r=>r.event===g);
+  if(cur&&cur.ftAvailable!=null)return clamp(cur.ftAvailable,0,5);
+  return null;
 }
 function freeTransfers(){const f=ftFromFeed();return f==null?(S.ft??1):f;}
 /* Whether the shown count is the feed's, local tracking's, or just the raw
@@ -615,7 +611,15 @@ async function loadAll(force){
        and the server is close enough that a fresh fetch per session is fine.
        The commit is kept so "Check now" can skip an unchanged dataset. */
     S.datasetCommit=commit;
-    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);
+    /* A planner seeded BEFORE the feeds landed could only use the hard-coded
+       GW1 seed. Now that the actuals feed is here, upgrade that provisional
+       seed to the latest official picks. Saved drafts are untouched: the flag
+       is only ever set when this very load had to seed an empty planner. */
+    if(S.seedProvisional&&typeof resolveOfficial==="function"&&resolveOfficial(true)){
+      S.seedProvisional=false;dedupeSquad();
+    }
+    toast("Live data loaded");
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
   }
@@ -1670,7 +1674,12 @@ function buildModel(){
     S._oddsTried=true;
     setTimeout(()=>loadOdds(),400);
   }
-  if(!S.seeded&&(!S.squad||!S.squad.length)){S.seeded=true;resolveSeed(true);}
+  if(!S.seeded&&(!S.squad||!S.squad.length)){S.seeded=true;
+    /* resolveSeed prefers the latest official picks from the feed; it only
+       falls back to the hard-coded GW1 seed when no history is loaded. On the
+       cold path the feeds land after this, so a seed-sourced squad is marked
+       provisional and upgraded to the official picks as soon as they arrive. */
+    S.seedProvisional=resolveSeed(true)==="seed";}
   render();
 }
 /* "Expected back 30 Aug" → 30-Aug */
