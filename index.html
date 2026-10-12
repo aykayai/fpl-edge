@@ -549,6 +549,10 @@ details[open]>summary::after{content:" ▴"}
 .sgcols.one{grid-template-columns:1fr}.sgcols.one .sgrow{grid-template-columns:18px minmax(0,1fr) auto auto}
 .sgcols.one .sgcolh{display:none}
 .sgchip{font:600 10.5px Sora,sans-serif;padding:3px 7px;border-radius:6px;background:#2A1A20;color:#FF9AAE}
+/* Player Data: the count and the show-all control under the table (F5) */
+.pdmore{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-top:1px solid var(--ink3)}
+/* keyboard focus on elements given a button role (F10) */
+[role="button"][tabindex]:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:6px}
 /* Instant start: the saved picture of the last page shows while the model is
    rebuilt; clicks wait until the real page replaces it a moment later */
 #app.booting{pointer-events:none}

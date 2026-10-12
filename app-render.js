@@ -403,7 +403,8 @@ function tableHTML(){
     xmins:p=>p.xMins+"′", saves:p=>(p.sv90||0).toFixed(1), cs:p=>(p.csRate||0).toFixed(2),
     bonus:p=>p.bonus, ict:p=>p.ict.toFixed(0),
     tin:p=>p.tIn>999?(p.tIn/1000).toFixed(0)+"k":p.tIn};
-  const rows=a.slice(0,320).map(p=>{
+  const lim=S.pdLimit||320;
+  const rows=a.slice(0,lim).map(p=>{
     const q=p.gw[g]||{fixtures:[]};
     const nx=q.fixtures.length?q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f))).join(" ")
       :`<span style="color:var(--mute);font-size:9.5px">BLANK</span>`;
@@ -424,7 +425,11 @@ function tableHTML(){
         :(POSKEY.has(k)?"color:var(--amber);":(KEY[k]?"color:var(--cyan);":""));
       tds+=`<td style="text-align:right;${hot}">${CELL[k]?CELL[k](p):""}</td>`;});
     return `<tr style="${p.avail===0?"opacity:.4;":""}${own?"opacity:.45":""}" title="${own?"Already in your squad":""}">${tds}</tr>`;}).join("");
-  return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  /* F5: the table used to stop at 320 with no way to reach the rest */
+  const more=a.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${a.length} players</span>
+    <button onclick="act('pdmore')">Show all ${a.length}</button></div>`:
+    (lim>320&&a.length>320?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
+  return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${more}`;
 }
 /* Predicted squad total for an arbitrary gameweek — weekPts() is hard-wired to
    VG() (the planner's own GW selector), so the xFPL comparison widget needs its

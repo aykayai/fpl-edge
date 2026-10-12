@@ -81,6 +81,9 @@ async function loadActuals(){
     const d=JSON.parse(await dataText(ACTUALS_URL));
     if(d.team&&Array.isArray(d.team.gw)){
       S.tracker={season:d.season,totalPlayers:d.team.totalPlayers,gw:d.team.gw,chips:d.team.chips||null};
+      /* F8: the header's overall rank was never set; it is the latest week's */
+      const ranked=d.team.gw.filter(r=>r.orRank!=null);
+      if(ranked.length){const lr=ranked.reduce((x,y)=>(y.event>x.event?y:x));S.entryRank=lr.orRank;S.entryRankGw=lr.event;}
       const am={};d.team.gw.forEach(row=>{if(row.event!=null&&row.points!=null)am[row.event]=row.points;});
       S.actuals=am;
     }
@@ -104,7 +107,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.2.0";
+const APP_VERSION="12.3.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

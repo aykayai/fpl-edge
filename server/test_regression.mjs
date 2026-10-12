@@ -190,6 +190,11 @@ function normalise(text, isNew) {
   t = t.replace(/Free transfers\s+(Unlimited|\d+)\s+(official|tracked locally|untracked) · max 5/g, "Free transfers X");
   t = t.replace(/Transfers\s*[∞\d]+\s*(?=Rank)/g, "Transfers X ");
   t = t.replace(/data \d{1,2} \w{3}, \d{2}:\d{2}/g, "data X");         /* xFPL load stamp */
+  /* PLANNED (broken-items batch): overall rank now read from the feed, and
+     Player Data states its count with a show-all control */
+  t = t.replace(/Overall rank\s+(—|[\d,]+)\s+(from GW1|after GW\d+|waiting)/g, "Overall rank X");
+  t = t.replace(/Rank\s*(—|[\d,]+)\s*(?=Value)/g, "Rank X ");
+  t = t.replace(/Showing (all )?\d+ (of \d+ )?players\s*(Show all \d+|Show fewer)/g, "");
   return t.replace(/\s+/g, " ").trim();
 }
 

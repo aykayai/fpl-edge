@@ -842,7 +842,41 @@ function provHTML(){
     <span>News: <b>${esc(agoText(news.fetchedAt))}</b></span>
     <span>Odds: <b>${esc(ukWhen(odds.fetchedAt))}</b></span></div>`;
 }
+/* The outer guard (F7): if even the header cannot be drawn, show the menu and
+   a plain message rather than a frozen page. The pass after it makes every
+   clickable element reachable by keyboard and named for screen readers. */
 function render(){
+  try{renderPage();}
+  catch(e){
+    try{console.error("render failed",e);}catch(_){}
+    const app=document.getElementById("app");
+    let nav="";try{nav=navHTML();}catch(_){}
+    app.innerHTML=`<div class="stick">${nav}</div><div class="panel"><div class="pbody"><div class="warn" role="alert">
+      <b>This page hit a problem and could not be drawn.</b> Try another page or Check now. <span class="mono" style="font-size:11px">${esc(String(e&&e.message||e))}</span></div></div></div>`;
+  }
+  try{a11yPass();}catch(_){}
+}
+/* F10, F11, F89: after every render. Elements that act on click but are not
+   buttons or links get a tab stop and a button role (Enter and Space press
+   them, see the key handler in app-main.js); inputs without a label take
+   their placeholder or title as their name; the document title names the
+   page. */
+function a11yPass(){
+  const app=document.getElementById("app");if(!app)return;
+  app.querySelectorAll("[onclick]:not(button):not(a):not(input):not(select):not(textarea)").forEach(el=>{
+    if(!el.hasAttribute("tabindex"))el.setAttribute("tabindex","0");
+    if(!el.hasAttribute("role"))el.setAttribute("role","button");});
+  app.querySelectorAll("input:not([aria-label]),select:not([aria-label]),textarea:not([aria-label])").forEach(el=>{
+    const id=el.id&&app.querySelector(`label[for="${el.id}"]`);if(id)return;
+    const name=el.getAttribute("placeholder")||el.getAttribute("title")||el.name||(el.closest("label")?"":"Value");
+    if(name)el.setAttribute("aria-label",name);});
+  app.querySelectorAll("button:not([aria-label])").forEach(b=>{
+    if(!b.textContent.trim()){const t=b.getAttribute("title");b.setAttribute("aria-label",t||"Button");}});
+  const t=document.getElementById("toast");if(t&&!t.hasAttribute("role")){t.setAttribute("role","status");t.setAttribute("aria-live","polite");}
+  const cur=NAV.flatMap(g=>g.items).find(([k])=>k===S.tab);
+  document.title=(cur?cur[1]+" · ":"")+"FPL Signals";
+}
+function renderPage(){
   const app=document.getElementById("app");
   /* Instant start: while the saved picture of the last page is showing and the
      model is still being built from the saved data, leave the picture alone
@@ -870,6 +904,10 @@ function render(){
   const rating=teamRating();
   const tabs=NAV.flatMap(gp=>gp.items);
   let main="";
+  /* F7: a throw in one page builder used to freeze the whole app. It is caught
+     here, so the header, the menu and every other page keep working, and the
+     page says what went wrong instead of going blank. */
+  try{
   if(S.tab==="squad"){
     const first=S.model.next.id;
     const hSlider=`<div class="chipbar" style="align-items:center;justify-content:space-between">
@@ -993,6 +1031,11 @@ function render(){
   else if(S.tab==="rivals")main=rivalsHTML();
   else if(S.tab==="news")main=newsHTML();
   else if(S.tab==="signals")main=signalsHTML();
+  }catch(e){
+    try{console.error("page failed",S.tab,e);}catch(_){}
+    main=`<div class="panel"><div class="pbody"><div class="warn" role="alert"><b>This page hit a problem and could not be drawn.</b>
+      Every other page still works. <span class="mono" style="font-size:11px;opacity:.85">${esc(String(e&&e.message||e))}</span></div></div></div>`;
+  }
 
   app.innerHTML=`
    <div class="panel" style="background:linear-gradient(135deg,#161C26 0%,#10161E 55%,#0C0E12 100%);border-color:#2B3442">
@@ -1016,7 +1059,7 @@ function render(){
           {feed:"official · max 5",local:"tracked locally · max 5",default:"untracked · max 5"}[ftSource()]}</div></div>
       <div class="stat"><div class="k">Overall rank</div>
         <div class="v">${S.entryRank?S.entryRank.toLocaleString():"—"}</div>
-        <div class="s">${S.entryRank?"live":"from GW1"}</div></div>
+        <div class="s">${S.entryRank?"after GW"+S.entryRankGw:"waiting"}</div></div>
       <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div><div class="s">of £100.0</div></div>
       <div class="stat"><div class="k">In the bank</div><div class="v" style="color:${bank<0?"var(--red)":raised>0?"var(--mint)":"var(--cream)"}">£${bank.toFixed(1)}</div><div class="s">${raised>0?`incl. £${raised.toFixed(1)} from sales`:"to spend"}</div></div></div>
    </div>
@@ -1041,7 +1084,7 @@ function render(){
        </span>
      </div>
      ${navHTML()}</div>
-   ${main}
+   <main id="main" style="display:block;max-width:100%">${main}</main>
    ${provHTML()}`;
 }
 
