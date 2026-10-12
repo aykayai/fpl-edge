@@ -221,8 +221,12 @@ async function main() {
 
   /* jittered start so a fleet of restarts does not hit upstreams in step */
   const jitter = Math.floor(Math.random() * Math.max(CONFIG.JITTER_MS, 1));
+  /* A test run sets SIGNALS_TICK_MS to hold the scheduler still. That must
+     include the start-up pass too, or a new upstream commit can be pulled into
+     the state dir mid-test (seen 12 Oct 2026). */
+  const frozen = CONFIG.TICK_MS >= 3600000;
   setTimeout(() => {
-    tick();
+    if (!frozen) tick();
     setInterval(tick, CONFIG.TICK_MS);
   }, jitter);
 }
