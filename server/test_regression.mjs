@@ -193,6 +193,8 @@ function normalise(text, isNew) {
   /* PLANNED (broken-items batch): overall rank now read from the feed, and
      Player Data states its count with a show-all control */
   t = t.replace(/Overall rank\s+(—|[\d,]+)\s+(from GW1|after GW\d+|waiting)/g, "Overall rank X");
+  /* PLANNED (F59): the squad value now says it is buy prices beside FPL's own value */
+  t = t.replace(/Squad value\s*£[\d.]+\s*(of £100\.0|buy prices · FPL £[\d.]+)/g, "Squad value X");
   t = t.replace(/Rank\s*(—|[\d,]+)\s*(?=Value)/g, "Rank X ");
   t = t.replace(/Showing (all )?\d+ (of \d+ )?players\s*(Show all \d+|Show fewer)/g, "");
   return t.replace(/\s+/g, " ").trim();
@@ -259,6 +261,10 @@ try {
       if (examples.length < 5) examples.push(`id ${id}: ${OLD.players[id]} -> ${NEW.players[id]}`);
     }
   }
+  /* the size of any movement, so an intended model change is measured, not assumed */
+  const moves = ids.map(id => ({ id, d: (NEW.players[id] ?? 0) - (OLD.players[id] ?? 0) })).filter(x => Math.abs(x.d) > 0.0005)
+    .sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+  if (moves.length) console.log(`INFO  projection moves: ${moves.length} players, largest ${moves.slice(0, 5).map(x => `id ${x.id} ${x.d > 0 ? "+" : ""}${x.d.toFixed(3)}`).join(", ")}; over 0.05: ${moves.filter(x => Math.abs(x.d) > 0.05).length}`);
   check(ptsDiffs === 0, `per-player GW${OLD.next} pts identical to 3dp (${ids.length} players)`, `${ptsDiffs} differ; ${examples.join("; ")}`);
 
   for (const k of ["bankFromFeed", "planBank"]) {
