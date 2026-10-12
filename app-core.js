@@ -141,7 +141,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.5.0";
+const APP_VERSION="12.6.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1323,6 +1323,18 @@ function learnFromResults(){
   LS.set("learn",out);
   applyLearning();
 }
+/* D1 (approved 12 Oct 2026). The projection was effectively "points if he
+   plays": everyone on 17+ expected minutes was taken as 98.5% to appear, yet
+   over GW1-5 only a third of players on 31-45 xMins appeared, and about four
+   in five on 76-90. The whole projection is scaled by the observed share in
+   his band, relative to the 0.985 it assumed. Under 31 xMins the old ramp was
+   already level with reality, so it is left alone. */
+const APPEAR_SHARE=[[45,.33],[60,.54],[75,.71],[90,.81]];
+function appearFactor(xMins){
+  if(!(xMins>30))return 1;
+  const band=APPEAR_SHARE.find(([hi])=>xMins<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
+  return band[1]/.985;
+}
 function buildModel(){
   clearModelCaches();
   const teams={};S.teams.forEach(t=>teams[t.id]=t);
@@ -1739,7 +1751,7 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot),fixtures:fx,blank:false};
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(p.xMins)),fixtures:fx,blank:false};
     }
     /* --- fixture sensitivity ---
        Applied per player: hold his average across the horizon fixed and stretch
