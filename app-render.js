@@ -1211,25 +1211,28 @@ function chipsHTML(){
     const max=Math.max(0.1,...Object.values(all));
     const best=plan[0];
     const det=locked?lockedDetail(k,locked):"";
+    const played=chipPlayed(k);
     return `<div class="chipblock">
       <div class="chiphead">
         <span><span class="chipname">${n}</span>
           <span class="note" style="margin-left:8px">${esc(basis[chipKind(k)])}</span></span>
         <span class="note">you average ${hist.toFixed(1)}</span></div>
-      ${locked?`<div class="chiplocked">
+      ${played!=null?`<div class="chiplocked used"><span>Played in GW${played} · used</span></div>`
+      :locked?`<div class="chiplocked">
         <span>GW${locked}${det?` · ${det}`:""} · +${(all[locked]||0).toFixed(1)} pts</span>
         <button onclick="act('clearchip','${k}')">Clear</button></div>`
         :best?`<div class="chipbest">Best week — <b>GW${best.e}</b>, +${best.up.toFixed(1)} pts${best.note?` · ${esc(best.note)}`:""}</div>`:""}
-      <div class="tl">
+      ${played!=null?"":`<div class="tl">
         ${Object.keys(all).map(Number).sort((a,b)=>a-b).map(e=>{
           const v=all[e]||0, h=Math.max(3,Math.round(v/max*34));
           const isBest=best&&best.e===e, isSel=locked===e;
-          return `<button class="tlweek ${isSel?"sel":""} ${isBest&&!isSel?"best":""}"
-            onclick="act('setchip','${k}',${e})" title="GW${e} · +${v.toFixed(1)} pts">
+          const why=isSel?null:chipRuleBreak(k,e);
+          return `<button class="tlweek ${isSel?"sel":""} ${isBest&&!isSel&&!why?"best":""} ${why?"no":""}"
+            onclick="act('setchip','${k}',${e})" title="${why?esc(why):`GW${e} · +${v.toFixed(1)} pts`}"${why?' aria-disabled="true"':""}>
             <span class="tlval">${v>=0.05?"+"+v.toFixed(1):""}</span>
             <span class="tlbar" style="height:${h}px"></span>
             <span class="tlnum">${e}</span></button>`;}).join("")}
-      </div></div>`;
+      </div>`}</div>`;
   };
   /* Two per row: Wildcard + Bench Boost, then Free Hit + Triple Captain */
   const set=[["wildcard","Wildcard"],["bboost","Bench Boost"],["freehit","Free Hit"],["3xc","Triple Captain"]];

@@ -1054,8 +1054,8 @@ function renderPage(){
         <div class="v" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</div>
         <div class="s">${rating?`best legal XI ${rating.best.toFixed(1)}`:"out of 100"}</div></div>
       <div class="stat"><div class="k">Free transfers</div>
-        <div class="v" style="${chipForWeek(VG())==="freehit"?"color:var(--amber)":""}">${chipForWeek(VG())==="freehit"?"Unlimited":freeTransfers()}</div>
-        <div class="s">${chipForWeek(VG())==="freehit"?"Free Hit — this week only":
+        <div class="v" style="${["freehit","wildcard"].includes(chipForWeek(VG()))?"color:var(--amber)":""}">${["freehit","wildcard"].includes(chipForWeek(VG()))?"Unlimited":freeTransfers()}</div>
+        <div class="s">${chipForWeek(VG())==="freehit"?"Free Hit this week only":chipForWeek(VG())==="wildcard"?"Wildcard this week only":
           {feed:"official · max 5",local:"tracked locally · max 5",default:"untracked · max 5"}[ftSource()]}</div></div>
       <div class="stat"><div class="k">Overall rank</div>
         <div class="v">${S.entryRank?S.entryRank.toLocaleString():"—"}</div>
@@ -1070,7 +1070,7 @@ function renderPage(){
        <span class="msrow">
          ${[["Predicted",weekPts().toFixed(1),"var(--mint)"],
             ["Rating",rating?rating.pct:"—",rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"],
-            ["Transfers",chipForWeek(VG())==="freehit"?"∞":freeTransfers(),chipForWeek(VG())==="freehit"?"var(--amber)":"var(--cream)"],
+            ["Transfers",["freehit","wildcard"].includes(chipForWeek(VG()))?"∞":freeTransfers(),["freehit","wildcard"].includes(chipForWeek(VG()))?"var(--amber)":"var(--cream)"],
             ["Rank",S.entryRank?S.entryRank.toLocaleString():"—","var(--cream)"],
             ["Value","£"+sv.toFixed(1),"var(--cream)"],
             ["Bank","£"+bank.toFixed(1),bank<0?"var(--red)":"var(--cream)"]]

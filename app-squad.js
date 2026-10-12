@@ -453,12 +453,14 @@ function bestCombo(outIds){
       .reduce((a,x)=>a+minFor(x.pos),0);
     let best=null;
     S.model.players.forEach(p=>{
-      if(p.pos!==o.pos||taken.has(p.id)||p.avail<=0)return;
+      /* F60: the players being sold are not candidates for their own slots */
+      if(p.pos!==o.pos||taken.has(p.id)||outIds.includes(p.id)||p.avail<=0)return;
       if(p.price>budget-cheapestRest+.001)return;
       if((club[p.team]||0)>=3)return;
       const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
       if(!best||gain>best.gain)best={out:o,inn:p,gain};});
-    if(best){picks.push(best);taken.add(best.inn.id);
+    /* F60: a move that gains nothing is not a move; that player stays */
+    if(best&&best.gain>0.05){picks.push(best);taken.add(best.inn.id);
       club[best.inn.team]=(club[best.inn.team]||0)+1;budget-=best.inn.price;budget+=0;}
   });
   const spent=picks.reduce((a,m)=>a+m.inn.price,0);
@@ -606,6 +608,34 @@ function planBank(){
 const TRANSFER_MIN=1.0;   // a suggestion has to be worth the transfer
 const CHIP_HISTORY={wildcard:10.2,bboost:23.7,freehit:10.7,"3xc":14.2};
 const chipKind=k=>k.replace(/[12]$/,"");
+const CHIP_NAME={wildcard:"Wildcard",freehit:"Free Hit",bboost:"Bench Boost","3xc":"Triple Captain"};
+/* The gameweek a chip (key like "freehit1") was actually played, from the
+   official history in the feed; null when it has not been played. */
+function chipPlayed(k){
+  const kind=chipKind(k), half2=k.endsWith("2");
+  const rows=(S.tracker&&S.tracker.gw)||[];
+  const r=rows.find(r=>r.chip===kind&&((r.event>=20)===half2));
+  return r?r.event:null;
+}
+/* F47: the official chip rules, checked for every planned chip. Returns the
+   reason a plan is not allowed, or null when it is. */
+function chipRuleBreak(k,e){
+  const kind=chipKind(k), half2=k.endsWith("2"), name=CHIP_NAME[kind]||kind;
+  const played=chipPlayed(k);
+  if(played!=null)return `${name} ${half2?"2":"1"} was already played in GW${played}`;
+  if(half2?(e<20||e>38):(e<1||e>19))return `${name} ${half2?"2":"1"} can only be played in GW${half2?"20 to 38":"1 to 19"}`;
+  if(kind==="freehit"&&e===1)return "Free Hit cannot be played in GW1";
+  const other=Object.entries(S.chips||{}).find(([kk,v])=>kk!==k&&v===e);
+  if(other)return `Only one chip per gameweek: GW${e} already has ${CHIP_NAME[chipKind(other[0])]||other[0]}`;
+  const playedThatWeek=((S.tracker&&S.tracker.gw)||[]).find(r=>r.event===e&&r.chip);
+  if(playedThatWeek)return `GW${e} already had ${CHIP_NAME[playedThatWeek.chip]||playedThatWeek.chip} played`;
+  if(kind==="freehit"){
+    const near=["freehit1","freehit2"].filter(kk=>kk!==k).map(kk=>S.chips&&S.chips[kk]).concat(
+      ((S.tracker&&S.tracker.gw)||[]).filter(r=>r.chip==="freehit").map(r=>r.event));
+    if(near.some(v=>v===e-1||v===e+1))return "Free Hit cannot be played in two gameweeks in a row";
+  }
+  return null;
+}
 
 /* ---------- chip planning ----------
    Each chip is judged on what actually makes it pay, not one shared formula. */

@@ -236,7 +236,11 @@ function act(k,a,b){
          chip applied. */
       const w=VG(), half=w>=20?"2":"1", next={...S.chips};
       ["bboost","3xc","freehit","wildcard"].forEach(k=>{if(next[k+half]===w)delete next[k+half];});
-      if(a!=="none")next[a+half]=w;
+      if(a!=="none"){
+        const keep=S.chips;S.chips=Object.fromEntries(Object.entries(next));   /* the rule sees the week cleared */
+        const why=chipRuleBreak(a+half,w);S.chips=keep;
+        if(why){toast(why,{warn:true});break;}
+        next[a+half]=w;}
       S.chips=next;saveState();break;}
     case"save":{if(S.bank<-0.001){toast("You're £"+Math.abs(S.bank).toFixed(1)+" over budget — sell someone first");break;}
       S.original=S.squad;saveState();toast("Squad saved");break;}
@@ -260,7 +264,8 @@ function act(k,a,b){
       S.bank=+(S.bank+cur-org).toFixed(1);S.squad=S.original;S.flagged=[];S.forceXI=null;
       S.pendingOpt=null;saveState();toast("Reverted to saved squad");break;}
     case"seed":resolveSeed();break;
-    case"setchip":S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;
+    case"setchip":{const why=chipRuleBreak(a,b);if(why){toast(why,{warn:true});break;}
+      S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;}
     case"clearchip":{const c={...S.chips};delete c[a];S.chips=c;saveState();break;}
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
     case"fixgw":S.fixGW=clamp(+a,1,38);break;
