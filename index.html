@@ -571,6 +571,11 @@ details[open]>summary::after{content:" ▴"}
  .sigs{gap:2px;flex-wrap:wrap;justify-content:center}.sig{width:13px;height:14px}
  .phead{flex-wrap:wrap}.phead .note{white-space:normal}
 }
+/* a refused action (F46, F47): warning colour, shown for longer */
+.toast.warn{background:var(--amber);color:#20130A}
+/* Chips (F47): a chip already played, and weeks a chip may not be played */
+.chiplocked.used{opacity:.75}
+.tlweek.no{opacity:.3}
 /* Instant start: the saved picture of the last page shows while the model is
    rebuilt; clicks wait until the real page replaces it a moment later */
 #app.booting{pointer-events:none}

@@ -409,6 +409,44 @@ function chipForWeek(w){
     if(S.chips[k+half]===w)return k;
   return null;
 }
+/* ---------- F19: free transfers and hits for planned weeks ----------
+   The rule is the one the feed builder verified against FPL's own charged
+   hits (scripts/build-actuals.mjs): one free transfer is added each week up
+   to 5; a Wildcard or Free Hit week is free and carries the bank forward
+   unchanged; every transfer beyond the free ones costs 4 points. A Free Hit
+   squad reverts afterwards, so the week after one is compared with the
+   squad from before it. */
+const FT_MAX=5,HIT=4;
+function officialBaseIds(){
+  const off=(typeof latestOfficialPicks==="function")?latestOfficialPicks():null;
+  return off?off.picks.map(pk=>pk.id):((S.original||S.squad||[]).slice());
+}
+function squadBefore(g){
+  const next=S.model?S.model.next.id:1;
+  let e=g-1;
+  while(e>=next&&chipForWeek(e)==="freehit")e--;
+  return e<next?officialBaseIds():(((effectiveSquadIds(e)||{}).ids)||[]);
+}
+function transfersIn(g){
+  if(!S.model||g<S.model.next.id)return 0;
+  const cur=((effectiveSquadIds(g)||{}).ids)||[], prev=squadBefore(g);
+  return cur.filter(i=>!prev.includes(i)).length;
+}
+function freeWeek(g){const c=chipForWeek(g);return c==="wildcard"||c==="freehit";}
+/* free transfers available going into week g */
+function planFT(g){
+  const next=S.model?S.model.next.id:1;
+  let ft=freeTransfers();
+  for(let e=next;e<g;e++){if(freeWeek(e))continue;ft=Math.min(FT_MAX,Math.max(0,ft-transfersIn(e))+1);}
+  return ft;
+}
+function hitCost(g){return freeWeek(g)?0:Math.max(0,transfersIn(g)-planFT(g))*HIT;}
+function hitsOver(g,h){let s=0;for(let e=g;e<g+(h||1);e++)s+=hitCost(e);return s;}
+/* free transfers still unused in week g (Infinity in a free-squad week) */
+function freeLeft(g){return freeWeek(g)?Infinity:Math.max(0,planFT(g)-transfersIn(g));}
+/* the gain a suggested move must reach: a free move needs TRANSFER_MIN, a move
+   that would cost a hit must also beat the 4 points it costs */
+function moveBar(g){return freeLeft(g)>0?TRANSFER_MIN:TRANSFER_MIN+HIT;}
 function weekPts(){
   const xi=startingXI();if(!xi.length)return 0;
   const g=VG();
@@ -419,7 +457,7 @@ function weekPts(){
   const chip=chipForWeek(g);
   if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,S.horizon),0);
   if(chip==="3xc"&&cap)s+=hPts(cap,g,S.horizon);
-  return s;
+  return s-hitsOver(g,S.horizon);
 }
 /* ---------- transfer engine ---------- */
 function bestSwaps(limit){
@@ -432,7 +470,7 @@ function bestSwaps(limit){
     S.model.players.forEach(p=>{
       if(p.pos!==o.pos||S.squad.includes(p.id)||p.avail<=0)return;
       if((S.ignored||[]).includes(p.id))return;
-      if(p.price>S.bank+o.price+.001)return;
+      if(p.price>S.bank+sellPrice(o)+.001)return;
       if((cc[p.team]||0)>=3)return;
       const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
       /* where gains are level, prefer the player carrying signals */
@@ -447,7 +485,7 @@ function bestCombo(outIds){
   if(!S.model||!outIds.length)return null;
   const g=S.model.next.id;
   const outs=outIds.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  let budget=S.bank+outs.reduce((a,p)=>a+p.price,0);
+  let budget=S.bank+outs.reduce((a,p)=>a+sellPrice(p),0);
   const keep=(S.squad||[]).filter(i=>!outIds.includes(i));
   const club={};keep.forEach(i=>{const p=S.model.players.find(x=>x.id===i);
     if(p)club[p.team]=(club[p.team]||0)+1;});
@@ -462,16 +500,18 @@ function bestCombo(outIds){
       .reduce((a,x)=>a+minFor(x.pos),0);
     let best=null;
     S.model.players.forEach(p=>{
-      if(p.pos!==o.pos||taken.has(p.id)||p.avail<=0)return;
+      /* F60: the players being sold are not candidates for their own slots */
+      if(p.pos!==o.pos||taken.has(p.id)||outIds.includes(p.id)||p.avail<=0)return;
       if(p.price>budget-cheapestRest+.001)return;
       if((club[p.team]||0)>=3)return;
       const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
       if(!best||gain>best.gain)best={out:o,inn:p,gain};});
-    if(best){picks.push(best);taken.add(best.inn.id);
+    /* F60: a move that gains nothing is not a move; that player stays */
+    if(best&&best.gain>0.05){picks.push(best);taken.add(best.inn.id);
       club[best.inn.team]=(club[best.inn.team]||0)+1;budget-=best.inn.price;budget+=0;}
   });
   const spent=picks.reduce((a,m)=>a+m.inn.price,0);
-  const freed=S.bank+outs.reduce((a,p)=>a+p.price,0);
+  const freed=S.bank+outs.reduce((a,p)=>a+sellPrice(p),0);
   return{picks,gain:picks.reduce((a,m)=>a+m.gain,0),left:+(freed-spent).toFixed(1),freed:+freed.toFixed(1)};
 }
 /* Persist an edit to the viewed gameweek's plan. Snapshots the currently-effective
@@ -568,12 +608,18 @@ function applySwap(oid,iid){
      twice (and a man short elsewhere). */
   if(iid!==oid&&cur.includes(iid)){toast(i.web_name+" is already in your squad");return;}
   const ids=cur.map(x=>x===oid?iid:x);
-  const bank=+((planBank())+o.price-i.price).toFixed(1);
+  /* F26: a sale credits the selling price (purchase price plus half the
+     rise, rounded down), not the current price. F46: a swap the bank cannot
+     cover is refused here, where every route to a swap passes, and the bank
+     is left untouched. */
+  const bank=+((planBank())+sellPrice(o)-i.price).toFixed(1);
+  if(bank<-0.001){toast(`Not enough in the bank: £${(-bank).toFixed(1)} short for ${i.web_name}`,{warn:true});return false;}
   const extra={bank};
   if(S.captain===oid)extra.captain=iid;
   if(S.vice===oid)extra.vice=iid;
   writePlan(g,ids,extra);
   S.flagged=S.flagged.filter(x=>x!==oid);S.forceXI=null;saveState();
+  return true;
 }
 /* A squad should never contain the same player twice. Repairs any state that
    already went wrong before the guard above existed, rather than leaving a
@@ -617,6 +663,34 @@ function planBank(){
 const TRANSFER_MIN=1.0;   // a suggestion has to be worth the transfer
 const CHIP_HISTORY={wildcard:10.2,bboost:23.7,freehit:10.7,"3xc":14.2};
 const chipKind=k=>k.replace(/[12]$/,"");
+const CHIP_NAME={wildcard:"Wildcard",freehit:"Free Hit",bboost:"Bench Boost","3xc":"Triple Captain"};
+/* The gameweek a chip (key like "freehit1") was actually played, from the
+   official history in the feed; null when it has not been played. */
+function chipPlayed(k){
+  const kind=chipKind(k), half2=k.endsWith("2");
+  const rows=(S.tracker&&S.tracker.gw)||[];
+  const r=rows.find(r=>r.chip===kind&&((r.event>=20)===half2));
+  return r?r.event:null;
+}
+/* F47: the official chip rules, checked for every planned chip. Returns the
+   reason a plan is not allowed, or null when it is. */
+function chipRuleBreak(k,e){
+  const kind=chipKind(k), half2=k.endsWith("2"), name=CHIP_NAME[kind]||kind;
+  const played=chipPlayed(k);
+  if(played!=null)return `${name} ${half2?"2":"1"} was already played in GW${played}`;
+  if(half2?(e<20||e>38):(e<1||e>19))return `${name} ${half2?"2":"1"} can only be played in GW${half2?"20 to 38":"1 to 19"}`;
+  if(kind==="freehit"&&e===1)return "Free Hit cannot be played in GW1";
+  const other=Object.entries(S.chips||{}).find(([kk,v])=>kk!==k&&v===e);
+  if(other)return `Only one chip per gameweek: GW${e} already has ${CHIP_NAME[chipKind(other[0])]||other[0]}`;
+  const playedThatWeek=((S.tracker&&S.tracker.gw)||[]).find(r=>r.event===e&&r.chip);
+  if(playedThatWeek)return `GW${e} already had ${CHIP_NAME[playedThatWeek.chip]||playedThatWeek.chip} played`;
+  if(kind==="freehit"){
+    const near=["freehit1","freehit2"].filter(kk=>kk!==k).map(kk=>S.chips&&S.chips[kk]).concat(
+      ((S.tracker&&S.tracker.gw)||[]).filter(r=>r.chip==="freehit").map(r=>r.event));
+    if(near.some(v=>v===e-1||v===e+1))return "Free Hit cannot be played in two gameweeks in a row";
+  }
+  return null;
+}
 
 /* ---------- chip planning ----------
    Each chip is judged on what actually makes it pay, not one shared formula. */
@@ -832,9 +906,11 @@ function hits(title){
    RENDER
    ============================================================ */
 let tT=null;
-function toast(m){let el=document.getElementById("toast");
+function toast(m,o){let el=document.getElementById("toast");
   if(!el){el=document.createElement("div");el.id="toast";el.className="toast";document.body.appendChild(el);}
-  el.textContent=m;el.style.display="block";clearTimeout(tT);tT=setTimeout(()=>el.style.display="none",3000);}
+  /* o.warn: a refusal, shown in the warning colour for longer so it is read */
+  el.textContent=m;el.classList.toggle("warn",!!(o&&o.warn));el.style.display="block";clearTimeout(tT);
+  tT=setTimeout(()=>el.style.display="none",(o&&o.ms)||(o&&o.warn?6000:3000));}
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 

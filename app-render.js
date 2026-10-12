@@ -449,7 +449,7 @@ function weekPtsFor(g){
   const chip=chipForWeek(g);
   if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,1),0);
   if(chip==="3xc"&&cap)s+=hPts(cap,g,1);
-  return s;
+  return s-hitCost(g);
 }
 
 /* F45: the two accuracy tiles compare next week's projection with each
@@ -597,7 +597,7 @@ function swapCardHTML(m,g){
     <span class="tp"><span class="n">${esc(m.inn.web_name)}</span>
       <span class="s">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${(m.inn.gw[g]?.pts||0).toFixed(1)} xPts</span>
       <span style="display:flex;gap:5px;align-items:center;margin-top:3px">${sigHTML(m.inn,g)}</span></span>
-    <span class="gain">+${m.gain.toFixed(1)}</span></div>
+    <span class="gain">+${m.gain.toFixed(1)}${freeLeft(g)>0?"":`<span style="display:block;font-size:10px;color:var(--red)">-${HIT} hit</span>`}</span></div>
     <span style="display:flex;gap:6px;margin-top:8px">
       <button style="flex:1" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button>
       <button onclick="act('ignore',${m.inn.id})" title="Stop suggesting this player">Ignore</button></span></div>`;
@@ -764,7 +764,7 @@ function transfersHTML(){
      live week unless planned edits moved it), not the locally tracked S.bank,
      which read £0.0 beside the header's £0.4 */
   const budget=outIds
-    ? planBank()+outIds.reduce((a,i)=>a+(S.model.players.find(p=>p.id===i)?.price||0),0)
+    ? planBank()+outIds.reduce((a,i)=>{const q=S.model.players.find(p=>p.id===i);return a+(q?sellPrice(q):0);},0)
     : planBank();
   const top=pool[0];
   const posName={1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
@@ -800,12 +800,12 @@ function transfersHTML(){
           <span class="gain" style="font-size:16px">+${combo.gain.toFixed(1)} pts</span></div>
         <button style="margin-top:9px;width:100%" onclick="act('docombo')">Make these transfers</button>
       </div></div>`:"";
-  const headScout=(top&&pool.length&&top.gain>=TRANSFER_MIN)?`<div class="panel" style="border-color:var(--amber);background:#33240B">
+  const headScout=(top&&pool.length&&top.gain>=moveBar(g))?`<div class="panel" style="border-color:var(--amber);background:#33240B">
       <div class="phead" style="border-color:#5A3F10"><h2 style="color:var(--amber)">Head Scout</h2>
       <span class="note">GW${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span></div>
     <div class="pbody">
       <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700;margin-bottom:8px">Top target</div>
-      ${top.gain>=TRANSFER_MIN?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers — the best available move is worth only +${top.gain.toFixed(1)} points.</p>`}</div></div>`
+      ${top.gain>=moveBar(g)?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers: the best available move is worth only +${top.gain.toFixed(1)} points${freeLeft(g)>0?"":`, not enough to cover a ${HIT}-point hit`}.</p>`}</div></div>`
     :`<div class="panel"><div class="phead"><h2>Head Scout</h2></div><div class="pbody">
       <p class="note">No transfer improves your predicted total within budget and the three-per-club limit.</p></div></div>`;
 
@@ -817,7 +817,7 @@ function transfersHTML(){
     const seen=new Set();
     const list=pool.filter(m=>{
       if(m.inn.pos!==pos||(S.squad||[]).includes(m.inn.id))return false;
-      if(m.gain<TRANSFER_MIN)return false;
+      if(m.gain<moveBar(g))return false;
       if(seen.has(m.out.id))return false;
       seen.add(m.out.id);return true;}).slice(0,4);
     return `<div class="panel"><div class="phead"><h2>${posName[pos]}</h2>
@@ -1281,25 +1281,28 @@ function chipsHTML(){
     const max=Math.max(0.1,...Object.values(all));
     const best=plan[0];
     const det=locked?lockedDetail(k,locked):"";
+    const played=chipPlayed(k);
     return `<div class="chipblock">
       <div class="chiphead">
         <span><span class="chipname">${n}</span>
           <span class="note" style="margin-left:8px">${esc(basis[chipKind(k)])}</span></span>
         ${histNote(hist)}</div>
-      ${locked?`<div class="chiplocked">
+      ${played!=null?`<div class="chiplocked used"><span>Played in GW${played} · used</span></div>`
+      :locked?`<div class="chiplocked">
         <span>GW${locked}${det?` · ${det}`:""} · +${(all[locked]||0).toFixed(1)} pts</span>
         <button onclick="act('clearchip','${k}')">Clear</button></div>`
         :best?`<div class="chipbest">Best week — <b>GW${best.e}</b>, +${best.up.toFixed(1)} pts${best.note?` · ${esc(best.note)}`:""}</div>`:""}
-      <div class="tl">
+      ${played!=null?"":`<div class="tl">
         ${Object.keys(all).map(Number).sort((a,b)=>a-b).map(e=>{
           const v=all[e]||0, h=Math.max(3,Math.round(v/max*34));
           const isBest=best&&best.e===e, isSel=locked===e;
-          return `<button class="tlweek ${isSel?"sel":""} ${isBest&&!isSel?"best":""}"
-            onclick="act('setchip','${k}',${e})" title="GW${e} · +${v.toFixed(1)} pts">
+          const why=isSel?null:chipRuleBreak(k,e);
+          return `<button class="tlweek ${isSel?"sel":""} ${isBest&&!isSel&&!why?"best":""} ${why?"no":""}"
+            onclick="act('setchip','${k}',${e})" title="${why?esc(why):`GW${e} · +${v.toFixed(1)} pts`}"${why?' aria-disabled="true"':""}>
             <span class="tlval">${v>=0.05?"+"+v.toFixed(1):""}</span>
             <span class="tlbar" style="height:${h}px"></span>
             <span class="tlnum">${e}</span></button>`;}).join("")}
-      </div></div>`;
+      </div>`}</div>`;
   };
   /* Two per row: Wildcard + Bench Boost, then Free Hit + Triple Captain */
   const set=[["wildcard","Wildcard"],["bboost","Bench Boost"],["freehit","Free Hit"],["3xc","Triple Captain"]];
