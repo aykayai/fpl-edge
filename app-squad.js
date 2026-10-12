@@ -367,12 +367,21 @@ function startingXI(){
   }
   if(S.forceXI?.length===11){const xi=S.forceXI.map(i=>sp.find(p=>p.id===i)).filter(Boolean);
     if(xi.length===11)return xi;}
+  return legalBestXI(sp,p=>p.gw[g]?.pts||0);
+}
+/* The best legal XI from a 15-man squad by any value: one keeper, at least
+   three defenders and one forward, then the best six outfielders left. From
+   a legal squad (2/5/5/3) that is the true best, since the upper limits of
+   five defenders, five midfielders and three forwards cannot be broken.
+   Shared by the header XI and the Chips page's "your XI" (F34), which used
+   to take the top 11 by points with no formation check. */
+function legalBestXI(sp,val){
   const by={};sp.forEach(p=>(by[p.pos]=by[p.pos]||[]).push(p));
-  Object.values(by).forEach(a=>a.sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0)));
+  Object.values(by).forEach(a=>a.sort((x,y)=>val(y)-val(x)));
   const xi=[];if(by[1]?.[0])xi.push(by[1][0]);
   (by[2]||[]).slice(0,3).forEach(p=>xi.push(p));(by[4]||[]).slice(0,1).forEach(p=>xi.push(p));
   [...(by[2]||[]).slice(3),...(by[3]||[]),...(by[4]||[]).slice(1)]
-    .sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0)).slice(0,11-xi.length).forEach(p=>xi.push(p));
+    .sort((a,b)=>val(b)-val(a)).slice(0,11-xi.length).forEach(p=>xi.push(p));
   return xi;
 }
 function legalXI(ids){const ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
@@ -586,6 +595,14 @@ function bankFromFeed(){
   if(!rows.length)return null;
   return +rows[rows.length-1].bank;
 }
+/* F59: FPL's own team value for the latest published week (it includes the
+   bank), so the header can set it beside the squad's buy prices. */
+function valueFromFeed(){
+  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
+  const g=S.model.next.id;
+  const rows=S.tracker.gw.filter(r=>r.value!=null&&r.event<=g).sort((a,b)=>a.event-b.event);
+  return rows.length?{value:+rows[rows.length-1].value,event:rows[rows.length-1].event}:null;
+}
 function planBank(){
   const g=VG(), next=S.model?S.model.next.id:1;
   if(g>next&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)return S.planByGw[g].bank;
@@ -603,12 +620,16 @@ const chipKind=k=>k.replace(/[12]$/,"");
 
 /* ---------- chip planning ----------
    Each chip is judged on what actually makes it pay, not one shared formula. */
+/* "Your XI" for a week: the legal best XI plus the captain (its top scorer),
+   and the four left on the bench (F34; was the top 11 with no formation). */
 function weekScore(sp,e){
-  const xi=[...sp].sort((a,b)=>(b.gw[e]?.pts||0)-(a.gw[e]?.pts||0));
-  const start=xi.slice(0,11);
-  return{xi:start,bench:xi.slice(11),
-    pts:start.reduce((a,p)=>a+(p.gw[e]?.pts||0),0)+(start[0]?.gw[e]?.pts||0),
-    benchPts:xi.slice(11).reduce((a,p)=>a+(p.gw[e]?.pts||0),0)};
+  const v=p=>p.gw[e]?.pts||0;
+  const start=legalBestXI(sp,v);
+  const bench=sp.filter(p=>!start.includes(p)).sort((a,b)=>v(b)-v(a));
+  const cap=start.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
+  return{xi:start,bench,
+    pts:start.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0),
+    benchPts:bench.reduce((a,p)=>a+v(p),0)};
 }
 function bestXIScore(e){
   const pool=S.model.players.filter(p=>p.avail>0&&p.gw[e]&&!p.gw[e].blank);
@@ -924,9 +945,11 @@ function cardHTML(p,bench,ctx){
      :(hasActual
        ?`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">no prediction stored</div>`
        :(()=>{const[fb,ff]=ptsCol(p.form||0);
-        return `<div class="fxpill formpill" style="background:${fb};color:${ff}">
+        /* F56: form from last season, blended or estimated is muted and tagged */
+        const ft=formTag(p);
+        return `<div class="fxpill formpill${ft?" prior":""}" style="background:${fb};color:${ff}">
           <svg viewBox="0 0 14 10" width="10" height="8" aria-hidden="true"><path d="M0.5 8.5 L4 4.5 L6.5 6.5 L13.5 1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b></div>`;})())}
+          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b>${ft}</div>`;})())}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }
@@ -1066,7 +1089,7 @@ function dashData(){
   const risks=[];
   sp.forEach(p=>{
     if(p.avail===0)risks.push({sev:3,who:p.web_name,what:p.back?`out · back ${p.back}`:"unavailable"});
-    else if(p.avail<1)risks.push({sev:2,who:p.web_name,what:`doubt · ${Math.round(p.avail*100)}% to play`});
+    else if(p.avail<1)risks.push({sev:2,who:p.web_name,what:`doubt · ${Math.round(p.avail*100)}% to play${p.availAssumed?" (assumed)":""}`});
     else if(p.xMins<55&&xi.includes(p))risks.push({sev:1,who:p.web_name,what:`rotation risk · ${p.xMins}′`});
   });
   for(let e=g;e<g+5&&e<=38;e++){
@@ -1157,10 +1180,20 @@ function dashHTML(){
          `${st[k].got.toFixed(1)} / ${st[k].best.toFixed(1)}`,
          st[k].pct<0.75?"color:var(--red)":st[k].pct>=0.9?"color:var(--mint)":"")).join("")}`,
       barPct>=88?"color:var(--mint)":barPct>=75?"color:var(--amber)":"color:var(--red)")}
-    ${cell("caps","Captain",d.caps.length?`${esc(d.caps[0].p.web_name)} ${(d.caps[0].pts*2).toFixed(1)}`:"—",
-      d.caps.map(c=>plLine(c.p,(c.pts*2).toFixed(1),"color:var(--mint)")).join("")
-      +`<p class="note" style="margin:8px 0 0">Doubled score for GW${g}.</p>`,
-      "color:var(--mint)")}
+    ${(()=>{
+      /* F63: this cell is a ranking of options, and it used to be titled
+         "Captain" while the captain actually picked was someone else. The
+         picked captain now leads, then the options by projected points. */
+      const capId=_histCaptain!=null?_histCaptain:effectiveCaptainVice(g).captain;
+      const mine=sp.find(p=>p.id===capId)||null, mp=mine?(mine.gw[g]?.pts||0)*2:0;
+      const head=mine?`${esc(mine.web_name)} ${mp.toFixed(1)}`
+        :(d.caps.length?`${esc(d.caps[0].p.web_name)} ${(d.caps[0].pts*2).toFixed(1)}`:"—");
+      return cell("caps","Captain options",head,
+        (mine?`<p class="dsub">Your captain</p>${plLine(mine,mp.toFixed(1),"color:var(--cream)")}<p class="dsub">Best options</p>`:"")
+        +d.caps.map(c=>plLine(c.p,(c.pts*2).toFixed(1),"color:var(--mint)")).join("")
+        +`<p class="note" style="margin:8px 0 0">Doubled score for GW${g}. The options are ranked by projected points.</p>`,
+        mine?"color:var(--cream)":"color:var(--mint)");
+    })()}
     ${cell("risk","Points at risk",
       `${d.riskPts.toFixed(1)} of ${d.xiPts.toFixed(1)}`,
       d.risky.length?d.risky.map(p=>plLine(p,(p.gw[g]?.pts||0).toFixed(1),
@@ -1169,8 +1202,8 @@ function dashHTML(){
         :`<p class="note" style="margin:0">Nothing flagged.</p>`,
       d.riskPts/Math.max(1,d.xiPts)>0.25?"color:var(--red)":d.riskPts>0?"color:var(--amber)":"")}
     ${cell("form","Form",byForm.length?`${esc(byForm[0].web_name)} ${byForm[0].form.toFixed(1)}`:"—",
-      `<p class="dsub">Best</p>${byForm.slice(0,3).map(p=>plLine(p,p.form.toFixed(1),"color:var(--mint)")).join("")}
-       <p class="dsub">Worst</p>${byForm.slice(-3).reverse().map(p=>plLine(p,p.form.toFixed(1),"color:var(--red)")).join("")}`,
+      `<p class="dsub">Best</p>${byForm.slice(0,3).map(p=>plLine(p,p.form.toFixed(1)+formTag(p),"color:var(--mint)")).join("")}
+       <p class="dsub">Worst</p>${byForm.slice(-3).reverse().map(p=>plLine(p,p.form.toFixed(1)+formTag(p),"color:var(--red)")).join("")}`,
       "color:var(--mint)")}
     ${cell("aout","Attack outlook",
       att.length?`${esc(att[0].p.web_name)} ${att[0].good}/${att[0].n}`:"none kind",

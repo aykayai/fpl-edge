@@ -25,7 +25,8 @@ const SEASON="2026-2027", LAST="2025-2026";
    row: picks [{id,pos,multiplier,isC,isVC}] (1-11 the XI in formation order,
    12-15 the bench, auto subs already applied by the API), autoSubs [{out,in}],
    chip/chipLabel, totalPoints, ftAvailable (free transfers into that week) and
-   ftNext (the builder-reconciled count into the following week). Every reader
+   ftNext (the builder-reconciled count into the following week), and
+   finished/dataChecked from FPL's own event flags (read by weekFinal). Every reader
    falls back to today's behaviour when those fields are absent (an old feed).
    Unreachable or not yet built: every consumer already renders a clean waiting
    state, so this fails silently rather than blocking the main load. */
@@ -89,6 +90,39 @@ async function loadActuals(){
     }
     if(d.players)S.playerActuals=d.players;
   }catch(e){ /* feed not published yet — leave the waiting states in place */ }
+}
+/* F55: is a gameweek's score final? The feed publishes a row as soon as a
+   week kicks off, so the latest row can be a partial, in-play score. A
+   finished flag on the feed row wins when the builder publishes one;
+   otherwise the dataset's own finished flag for that week decides. Until
+   then the score is shown as "so far" with a live tag, never as final. */
+function weekFinal(e){
+  const row=S.tracker&&Array.isArray(S.tracker.gw)?S.tracker.gw.find(r=>r.event===e):null;
+  if(row&&row.finished!=null)return !!row.finished;
+  const ev=(S.events||[]).find(x=>x.id===e);
+  return !!(ev&&ev.finished);
+}
+const LIVE_TAG=`<span class="livetag" title="This gameweek is still being played. The score is partial until FPL marks the week finished.">live</span>`;
+/* F56: a figure taken from last season, blended with pre-season, estimated
+   or assumed used to print exactly like this season's own. Each helper
+   returns a small muted tag naming its source, or nothing when the figure is
+   this season's own. The title says what was used and why. */
+const srcTag=(t,why)=>`<span class="srctag" title="${String(why).replace(/"/g,"&quot;")}">${t}</span>`;
+function formTag(p){
+  if(!p)return "";
+  if(p.formSrc==="2025/26")return srcTag("25/26","Form is last season's (2025/26): he has no minutes this season yet.");
+  if(p.formSrc==="25/26 + pre-season")return srcTag("25/26+","Form blends last season (2025/26) with pre-season: he has no minutes this season yet.");
+  if(p.formSrc==="price prior")return srcTag("est.","Form is estimated from his price and club: no minutes this season or last.");
+  return "";
+}
+function minsTag(p){
+  if(!p||!(p.xMins>0))return "";
+  if(p.minsSrc==="no history")return srcTag("est.","Expected minutes estimated from his price within his club: no Premier League minutes to go on.");
+  if(p.minsSrc==="pre-season")return srcTag("pre","Expected minutes taken from pre-season: no Premier League minutes to go on.");
+  return "";
+}
+function availTag(p){
+  return p&&p.availAssumed?srcTag("assumed","FPL flags him but gives no chance of playing, so 50% is assumed."):"";
 }
 const TEAM_ID="301830", STATE_VERSION=4;
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
@@ -1103,6 +1137,19 @@ function teamMaxPrice(teamId){
     S._tmax[p.team]=Math.max(S._tmax[p.team]||0,p.price);});}
   return S._tmax[teamId]||10;
 }
+/* F39: four caches hold figures derived from one dataset: the per-90 windows
+   above, the club price ceilings, the target clubs (app-squad.js) and the
+   Chips squads (app-render.js). None of their keys names the dataset, so
+   after "Check now" brought in new data they kept serving the old figures
+   until a reload. buildModel() empties all four before it builds. The other
+   two live in later files, so each is looked up by name and skipped when
+   that file has not loaded. */
+function clearModelCaches(){
+  for(const k in _wsCache)delete _wsCache[k];
+  S._tmax=null;
+  if(typeof _tcCache!=="undefined")_tcCache=null;
+  if(typeof _sqCache!=="undefined")for(const k in _sqCache)delete _sqCache[k];
+}
 
 /* ---- expected minutes ----
    Fitted per position against Fantasy Football Hub's published xMins
@@ -1277,6 +1324,7 @@ function learnFromResults(){
   applyLearning();
 }
 function buildModel(){
+  clearModelCaches();
   const teams={};S.teams.forEach(t=>teams[t.id]=t);
   const byCode={};S.teams.forEach(t=>byCode[t.code]=t);
   const refs=new Set();S.fixtures.forEach(f=>{refs.add(f.h);refs.add(f.a);});
@@ -1408,10 +1456,11 @@ function buildModel(){
 
     /* availability, and a parsed return date where the game gives one */
     const st=s.status||"a";
-    let av=1;
+    let av=1, availAssumed=false;
     if(st==="u"||st==="n"||st==="s")av=0;
     else if(st==="i"||st==="d"){const c=s.chance_of_playing_next_round;
-      av=(c===""||c==null)?0.5:num(c)/100;}
+      availAssumed=(c===""||c==null);              // F56: shown with an "assumed" tag
+      av=availAssumed?0.5:num(c)/100;}
     const back=parseReturn(s.news||"");
 
     /* expected minutes */
@@ -1535,7 +1584,7 @@ function buildModel(){
 
     return{id:p.id,code:String(p.code||""),web_name:p.web_name,first:p.first,last:p.last,pos:p.pos,
       team:team.id,teamName:team.short||"",teamFull:team.name||"",price,
-      form,formSrc,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
+      form,formSrc,availAssumed,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
       priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,ppg:num(s.points_per_game),total:num(s.total_points),
       owned:num(s.selected_by_percent),minutes:mins,status:st,news:s.news||"",back,
       minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,

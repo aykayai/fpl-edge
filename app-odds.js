@@ -952,8 +952,9 @@ function renderPage(){
             <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+offRow.points).toFixed(0)}</span>
             <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">${offRow.transfers||0} transfer${(offRow.transfers||0)===1?"":"s"}${offRow.transferCost>0?`, <span style="font-weight:700;color:var(--red)">-${offRow.transferCost} hit</span>`:""}${offRow.chipLabel?` · <span style="color:var(--amber)">${esc(offRow.chipLabel)}</span>`:""}</span>
             <span style="display:block;font-size:9px;color:var(--mint);margin-top:1px" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`;
+              /* F55: a week in play shows its score so far, tagged live */
               if(S.actuals&&S.actuals[g]!=null)return `
-            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${g} actual</span>
+            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${g} ${weekFinal(g)?"actual":"so far"+LIVE_TAG}</span>
             <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+S.actuals[g]).toFixed(0)}</span>
             <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">pred ${weekPts().toFixed(1)} · <span style="font-weight:700;color:${S.actuals[g]-weekPts()>=0?"var(--mint)":"var(--red)"}">${S.actuals[g]-weekPts()>=0?"+":""}${(S.actuals[g]-weekPts()).toFixed(1)}</span></span>`;
               return `
@@ -1060,7 +1061,12 @@ function renderPage(){
       <div class="stat"><div class="k">Overall rank</div>
         <div class="v">${S.entryRank?S.entryRank.toLocaleString():"—"}</div>
         <div class="s">${S.entryRank?"after GW"+S.entryRankGw:"waiting"}</div></div>
-      <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div><div class="s">of £100.0</div></div>
+      <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div>${(()=>{
+        /* F59: "of £100.0" was a literal and read as £0.5 over budget. The
+           figure is today's buy prices of the planned squad; FPL's own team
+           value (which includes the bank) sits beside it when published. */
+        const fv=valueFromFeed();
+        return `<div class="s" title="Today's prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan, before any bank.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included. FPL's figure is taken at its own time and prices, so the two can differ.`:""}">buy prices${fv?` · FPL £${fv.value.toFixed(1)}`:""}</div>`;})()}</div>
       <div class="stat"><div class="k">In the bank</div><div class="v" style="color:${bank<0?"var(--red)":raised>0?"var(--mint)":"var(--cream)"}">£${bank.toFixed(1)}</div><div class="s">${raised>0?`incl. £${raised.toFixed(1)} from sales`:"to spend"}</div></div></div>
    </div>
    ${S.cardId?playerCardHTML():""}

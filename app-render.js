@@ -49,7 +49,7 @@ function playerCardHTML(){
         <div class="note">${esc(p.teamFull||p.teamName)} · ${POS[p.pos]} · ${p.owned.toFixed(1)}% owned</div>
         <div style="margin-top:7px">${sigHTML(p,g)}</div>
       </div>
-      ${p.avail<1?`<div class="warn" style="margin:12px 0 0">${esc(p.news||"Fitness doubt")}${p.back?` · back ${esc(p.back)}`:""}</div>`:""}
+      ${p.avail<1?`<div class="warn" style="margin:12px 0 0">${esc(p.news||"Fitness doubt")}${p.back?` · back ${esc(p.back)}`:""}${p.availAssumed?` · 50% to play${availTag(p)}`:""}</div>`:""}
       <div class="pclab">Next five</div>
       <div class="pcbars">${five.map(x=>{
         const h=Math.max(5,Math.round(x.pts/mx*54));
@@ -62,8 +62,8 @@ function playerCardHTML(){
         ${stat("Bought",`£${buy.toFixed(1)}`)}
         ${stat("Sells for",`£${sellPrice(p).toFixed(1)}`,
           sellPrice(p)>buy?"color:var(--mint)":sellPrice(p)<buy?"color:var(--red)":"")}
-        ${stat("Form",p.form.toFixed(1))}
-        ${stat("xMins",p.xMins+"′")}
+        ${stat("Form",p.form.toFixed(1)+formTag(p))}
+        ${stat("xMins",p.xMins+"′"+minsTag(p))}
       </div>
       <div class="pclab">${POS[p.pos]} detail</div>
       <div class="pcgrid">${posStats(p).map(([k,v])=>stat(k,v)).join("")}</div>
@@ -119,6 +119,15 @@ const fix3=(p,g)=>{let h='';const LENS=p2=>p2.pos<=2?'def':'att';for(let e=g;e<g
   const f=q.fixtures[0],[b,c]=fdrCol(p.pos<=2?(f.diffDef??f.diff):(f.diffAtt??f.diff));
   h+=`<span class="fdrpill" style="background:${b};color:${c};font-size:8px;padding:1px 4px">${esc(f.opp.slice(0,3))}</span>`;}
   return `<span style="display:inline-flex;gap:2px">${h}</span>`;};
+/* F35: one expression for each figure Player Data shows, so its sort and
+   the Transfers radar read the same number the cell prints. The CS % sort
+   read p.csRate, which model players never carry, so it sorted on 0; the
+   BPS/90 sort and the radar used the season total. */
+function csProbNext(p,g){
+  const f=p.gw[g]?.fixtures?.[0];
+  return f?Math.exp(-clamp(p.gc90/(1+(3-(f.diffDef??3))*0.18),.25,3.2)):null;
+}
+function bpsPer90(p,q){return q&&q.mins>0?p.bps*90/Math.max(1,p.minutes||q.mins):null;}
 const SORTVAL=(p,k,g)=>{
   const W=ws(String(p.code||""),p.pos,S.lWin||38)||{};
   const f0=p.gw[g]?.fixtures?.[0];
@@ -131,7 +140,7 @@ const SORTVAL=(p,k,g)=>{
   mins:p.minutes,xmins:p.xMins,bonus:p.bonus,tin:p.tIn,
   startpct:W.startPct||0,xgi:(W.xg90||0)+(W.xa90||0),
   npxg:W.npxg90||0,dchit:W.dcHit||0,cc:W.cc90||0,box:W.box90||0,
-  bps:p.bps||0,csp:p.csRate||0,sv90:W.sv90||0,
+  bps:bpsPer90(p,W)??-1,csp:csProbNext(p,g)??-1,sv90:W.sv90||0,
   spthreat:p.spThreat||0,penord:p.penOrder||99,
   /* position-specific columns — previously missing, so their headers did not sort */
   oppatt:f0?(f0.oppAtt??3):0,teamdef:team?team.def:0,
@@ -371,11 +380,10 @@ function tableHTML(){
     xgi:p=>{const q=w(p);return q?(q.xg90+q.xa90).toFixed(2):"—";},
     npxg:p=>{const q=w(p);return q?q.npxg90.toFixed(2):"—";},
     dchit:p=>{const q=w(p);return q?pct(q.dcHit):"—";},
-    csp:p=>{const f=p.gw[g]?.fixtures?.[0];
-      return f?pct(Math.exp(-clamp(p.gc90/(1+(3-(f.diffDef??3))*0.18),.25,3.2))):"—";},
+    csp:p=>{const v=csProbNext(p,g);return v!=null?pct(v):"—";},
     cc:p=>{const q=w(p);return q?q.cc90.toFixed(2):"—";},
     box:p=>{const q=w(p);return q?q.box90.toFixed(1):"—";},
-    bps:p=>{const q=w(p);return q&&q.mins>0?(p.bps*90/Math.max(1,p.minutes||q.mins)).toFixed(1):"—";},
+    bps:p=>{const v=bpsPer90(p,w(p));return v!=null?v.toFixed(1):"—";},
     sv90:p=>{const q=w(p);return q?q.sv90.toFixed(2):"—";},
     xgot:p=>{const q=w(p);return q?q.xgot90.toFixed(2):"—";},
     gprev:p=>{const q=w(p);return q?q.gp.toFixed(1):"—";},
@@ -395,12 +403,12 @@ function tableHTML(){
     bcm:p=>{const q=w(p);return q?q.bcm:"—";},
     conv:p=>{const q=w(p);return q&&q.xg90>0?((q.g/Math.max(.1,q.xg90*q.mins/90))).toFixed(2):"—";},
     price:p=>`£${p.price.toFixed(1)}${arw(p.priceChange)}`,
-    form:p=>p.form.toFixed(1), lastform:p=>p.lastForm?p.lastForm.toFixed(1):"—",
+    form:p=>p.form.toFixed(1)+formTag(p), lastform:p=>p.lastForm?p.lastForm.toFixed(1):"—",
     pred:p=>hPts(p,g,1).toFixed(1),prxfpl:p=>{const r=lGwRange();return hPts(p,r.from,r.count).toFixed(1);},
     pred5:p=>hPts(p,g,5).toFixed(1), avg:p=>avgFP(p,g,S.horizon).toFixed(1),
     ppg:p=>p.ppg.toFixed(1), total:p=>p.total, owned:p=>p.owned.toFixed(1),
     xg:p=>p.xg90.toFixed(2), xa:p=>p.xa90.toFixed(2), dc:p=>p.dc90.toFixed(1),
-    xmins:p=>p.xMins+"′", saves:p=>(p.sv90||0).toFixed(1), cs:p=>(p.csRate||0).toFixed(2),
+    xmins:p=>p.xMins+"′"+minsTag(p), saves:p=>(p.sv90||0).toFixed(1), cs:p=>(p.csRate||0).toFixed(2),
     bonus:p=>p.bonus, ict:p=>p.ict.toFixed(0),
     tin:p=>p.tIn>999?(p.tIn/1000).toFixed(0)+"k":p.tIn};
   const lim=S.pdLimit||320;
@@ -444,6 +452,20 @@ function weekPtsFor(g){
   return s;
 }
 
+/* F45: the two accuracy tiles compare next week's projection with each
+   player's season average so far. That smooths away the week-to-week swings
+   and is partly built from the same weeks, so it reads far better than a real
+   one-week error and must not be set beside other tools' figures. The (i)
+   says what it measures and gives the honest one-week figure from the audit's
+   pre-deadline backtest (GW1 to GW5, players owned by 1% or more). */
+const XFPL_BACKTEST={mae:2.38,field:2.10,gws:"GW1 to GW5",n:970};
+function xfplAccuracyInfo(g,played,n){
+  return `<details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>What the MAE and bias tiles measure</summary>
+    <div class="infobox">
+      <p style="margin:0 0 6px">They compare each player's GW${g} projection with his points so far divided by the ${played} finished gameweek${played===1?"":"s"} (${n} players expected to play 45 minutes or more). An average over ${played} weeks smooths out the big week-to-week swings, and the projection is partly built from those same weeks, so these figures look much better than a true one-week error. They are not comparable with other tools.</p>
+      <p style="margin:0">The true one-week figure comes from a backtest of projections made before each deadline, ${XFPL_BACKTEST.gws}: the model missed by ${XFPL_BACKTEST.mae.toFixed(2)} points per player on average (${XFPL_BACKTEST.n} player-weeks, players owned by 1% or more), against ${XFPL_BACKTEST.field.toFixed(2)} for the best published models on the same measure. It will be measured live once a projection is saved before every deadline.</p>
+    </div></details>`;
+}
 function xfplHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
   const g=S.model.next.id;
@@ -499,7 +521,7 @@ function xfplHTML(){
           <span class="note" style="display:block">GW${xg}</span>
           ${xDiff!=null?`<span style="display:block;font-weight:800;font-family:'Barlow Condensed',sans-serif;font-size:15px;color:${xDiff>=0?"var(--mint)":"var(--red)"}">${xDiff>=0?"+":""}${xDiff.toFixed(1)}</span>`:`<span class="note" style="display:block">—</span>`}</div>
         <div style="text-align:center;min-width:96px">
-          <span class="note" style="display:block">Actual</span>
+          <span class="note" style="display:block">${xActual!=null&&!weekFinal(xg)?"So far"+LIVE_TAG:"Actual"}</span>
           <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:${xActual!=null?"var(--mint)":"var(--ink3)"}">${xActual!=null?xActual.toFixed(1):"—"}</span></div>
         <button onclick="act('xfplgw','next')" ${xg>=38?"disabled":""} aria-label="Later">→</button>
       </div>
@@ -512,11 +534,12 @@ function xfplHTML(){
     <div class="pbody">
       <p class="note" style="margin:0 0 10px">Projections come from the FPL Core Insights dataset, then get calibrated per position. Once gameweeks finish, the model compares what each position actually returns per appearance with what it projected and nudges the calibration toward the truth — it needs 25+ regular starters and 4+ finished gameweeks in a position before anything moves, and every adjustment is capped.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${[[played,"GW finished"],["GW"+g,"projecting"],[overall?overall.mae.toFixed(2):"—","MAE (pts)"],[overall?(overall.bias>0?"+":"")+overall.bias.toFixed(2):"—","bias"]]
+        ${[[played,"GW finished"],["GW"+g,"projecting"],[overall?overall.mae.toFixed(2):"—","MAE vs season avg"],[overall?(overall.bias>0?"+":"")+overall.bias.toFixed(2):"—","bias vs season avg"]]
           .map(([v,l])=>`<span style="flex:1;min-width:88px;background:var(--ink2);border:1px solid var(--ink3);border-radius:9px;padding:8px 10px;text-align:center">
             <b style="display:block;font-family:'Barlow Condensed';font-size:22px;font-weight:800;color:var(--mint)">${v}</b>
             <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)">${l}</span></span>`).join("")}
       </div>
+      ${overall?xfplAccuracyInfo(g,played,overall.n):""}
       ${played<1?`<p class="note" style="margin:10px 0 0;color:var(--amber)">No finished gameweeks in the data yet — showing projections and the current calibration baseline. Predicted-vs-actual fills in once results land.</p>`:""}
     </div></div>`;
 
@@ -535,7 +558,7 @@ function xfplHTML(){
     </div>`;
 
   const pva=played<1?"":`<div class="panel"><div class="phead"><h2>Predicted vs actual</h2>
-    <span class="note">projection vs actual pts / appearance</span></div>
+    <span class="note">projection vs season average per gameweek</span></div>
     <div class="scroll"><table><thead><tr>
       <th style="text-align:left">Position</th><th>N</th><th>Predicted</th><th>Actual</th><th>MAE</th><th>Bias</th></tr></thead><tbody>
     ${[1,2,3,4].map(k=>{const s=summ(acc[k]);
@@ -545,9 +568,11 @@ function xfplHTML(){
         <td class="mono">${mp.toFixed(2)}</td><td class="mono">${ma.toFixed(2)}</td>
         <td class="mono">${s.mae.toFixed(2)}</td><td class="mono">${(s.bias>0?"+":"")+s.bias.toFixed(2)}</td></tr>`;}).join("")}
     </tbody></table></div>
-    <div class="pbody"><p class="note" style="margin:0">Actual is points per appearance across the ${played} finished gameweek${played>1?"s":""} — a proxy until per-gameweek projection snapshots are published. Positive bias = the model projects higher than players are returning.</p></div></div>`;
+    <div class="pbody"><p class="note" style="margin:0">Actual is each player's points so far divided by the ${played} finished gameweek${played>1?"s":""}, so a week he missed counts as zero. It is a season average, not a one-week result, so this is not an accuracy figure (see the (i) under the tiles above). Positive bias means the model projects higher than players are returning.</p></div></div>`;
 
-  const movers=`<div class="panel"><div class="phead"><h2>Projection movers &amp; xMins shifts</h2></div>
+  /* F67: S.model.report is never set, so this panel only ever showed its
+     waiting text. It now says why it is empty and where the figures are. */
+  const movers=`<div class="panel"><div class="phead"><h2>Projection Movers and xMins Shifts</h2></div>
     <div class="pbody">
     ${rep&&rep.movers&&rep.movers.length?`<span class="note" style="color:var(--cyan)">Biggest projection movers</span>
       <div class="scroll"><table><thead><tr><th style="text-align:left">Player</th><th>Before</th><th>After</th><th>Δ</th></tr></thead><tbody>
@@ -555,7 +580,7 @@ function xfplHTML(){
     ${rep&&rep.xminsShifts&&rep.xminsShifts.length?`<span class="note" style="color:var(--cyan);display:block;margin-top:10px">Expected-minutes shifts</span>
       <div class="scroll"><table><thead><tr><th style="text-align:left">Player</th><th>Before</th><th>After</th><th>Δ</th></tr></thead><tbody>
       ${rep.xminsShifts.slice(0,12).map(m=>`<tr><td style="text-align:left">${esc(m.name)}</td><td class="mono">${Math.round(m.before)}′</td><td class="mono">${Math.round(m.after)}′</td><td class="mono">${arrow(m.after-m.before,true)}</td></tr>`).join("")}</tbody></table></div>`:""}
-    ${(!rep||((!rep.movers||!rep.movers.length)&&(!rep.xminsShifts||!rep.xminsShifts.length)))?`<p class="note" style="margin:0">Waiting on per-gameweek snapshots — the biggest projection movers and expected-minutes shifts appear here once the model stores a projection snapshot each gameweek.</p>`:""}
+    ${(!rep||((!rep.movers||!rep.movers.length)&&(!rep.xminsShifts||!rep.xminsShifts.length)))?`<p class="note" style="margin:0">Empty for now. The app does not yet keep the previous build's projections, so it has nothing to compare against and cannot list who moved. Each player's current projection and expected minutes are in Player Data, in the xFPL and xMins columns. This panel fills once the server saves a projection snapshot each gameweek; that job is not running yet.</p>`:""}
     </div></div>`;
 
   const foot=`<div class="panel"><div class="pbody"><p class="note" style="margin:0">Richer per-gameweek actuals — live points, bonus, minutes — come from the official FPL API, which the browser can't read directly. A scheduled job publishes them to the data repo, and the model reads them like every other file.</p></div></div>`;
@@ -608,10 +633,14 @@ function radarHTML(){
     "npxG/90":p=>W(p).npxg90||0,"xA/90":p=>W(p).xa90||0,"CC/90":p=>W(p).cc90||0,
     "xG/90":p=>W(p).xg90||0,"Shots/90":p=>W(p).sh90||0,"SoT/90":p=>W(p).sot90||0,
     "DefCon/90":p=>W(p).dc90||W(p).cbit90||0,"CBIT/90":p=>W(p).cbit90||0,
-    "CS %":p=>(p.csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,
-    "G prevented":p=>W(p).gp||0,"xGoT/90":p=>W(p).xgot90||0,"Start %":p=>(p.startPct||0)*100,
+    /* F35: CS % and Start % read the player's match record (share of his
+       60-minute games with a clean sheet, share of appearances he started);
+       they read fields model players never carry, so they always plotted 0.
+       BPS/90 plotted the season total. */
+    "CS %":p=>(W(p).csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,
+    "G prevented":p=>W(p).gp||0,"xGoT/90":p=>W(p).xgot90||0,"Start %":p=>(W(p).startPct||0)*100,
     "Dribbles/90":p=>W(p).drb90||0,"F3 pass/90":p=>W(p).f390||0,"Box/90":p=>W(p).box90||0,
-    "Bonus":p=>p.bonus||0,"BPS/90":p=>p.bps||0,"Owned %":p=>p.owned||0};
+    "Bonus":p=>p.bonus||0,"BPS/90":p=>bpsPer90(p,W(p))||0,"Owned %":p=>p.owned||0};
   const DEFAULT_AXSET={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
     2:["xFPL","Form","DefCon/90","CS %","Aerials/90","xMins"],
     3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
@@ -731,9 +760,12 @@ function transfersHTML(){
   const outIds=S.outList.length?S.outList:null;
   const all=bestSwaps(400);
   const pool=outIds?all.filter(m=>outIds.includes(m.out.id)):all;
+  /* F41: the same bank as the header (planBank: the official figure for the
+     live week unless planned edits moved it), not the locally tracked S.bank,
+     which read £0.0 beside the header's £0.4 */
   const budget=outIds
-    ? S.bank+outIds.reduce((a,i)=>a+(S.model.players.find(p=>p.id===i)?.price||0),0)
-    : S.bank;
+    ? planBank()+outIds.reduce((a,i)=>a+(S.model.players.find(p=>p.id===i)?.price||0),0)
+    : planBank();
   const top=pool[0];
   const posName={1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
   const chosen=S.outList.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
@@ -949,13 +981,17 @@ function fixturesHTML(){
 }
 /* Last 3 completed results before a given gameweek — derived from fixture
    scores the app already loads (S.fixtures[].hs/as populate once a match has
-   actually been played), so no new data source is needed. */
+   actually been played), so no new data source is needed.
+   F21: fixture rows carry club codes, not club ids, and four codes equal
+   another club's id, so matching f.h against team.id showed the wrong club's
+   results. buildModel() already resolves each row to its club (f.ht, f.at),
+   so the match is on that resolved club. */
 function lastResults(team,beforeGw){
-  const played=(S.fixtures||[]).filter(f=>(f.h===team.id||f.a===team.id)&&f.hs!=null&&f.as!=null&&f.event<beforeGw)
+  const played=(S.fixtures||[]).filter(f=>(f.ht===team||f.at===team)&&f.hs!=null&&f.as!=null&&f.event<beforeGw)
     .sort((a,b)=>b.event-a.event).slice(0,3).reverse();
   if(!played.length)return `<span class="note" style="font-size:9px">no results yet</span>`;
   return played.map(f=>{
-    const home=f.h===team.id;
+    const home=f.ht===team;
     const gf=home?f.hs:f.as, ga=home?f.as:f.hs;
     const res=gf>ga?"W":gf<ga?"L":"D";
     const col=res==="W"?"var(--mint)":res==="L"?"var(--red)":"var(--mute)";
@@ -1124,8 +1160,10 @@ function buildSquad(kind,gw,form,budget){
 function myScore(gw,weeks){
   const sp=squadPlayers();if(!sp.length)return 0;
   const v=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
-  const xi=[...sp].sort((a,b)=>v(b)-v(a)).slice(0,11);
-  return xi.reduce((a,p)=>a+v(p),0)+(xi[0]?v(xi[0]):0);
+  /* F34: the legal best XI, not the top 11 by points */
+  const xi=legalBestXI(sp,v);
+  const cap=xi.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
+  return xi.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0);
 }
 function chipsHTML(){
   const g=VG();
@@ -1202,8 +1240,40 @@ function chipsHTML(){
     }
     return "";                                   // wildcard and free hit: week + uplift only
   };
+  /* F62: the Wildcard has no model uplift, so its row shows the team's own
+     three-week projected totals instead of pretending to one. */
+  const wcRow=(k,n,hist)=>{
+    const plan=chipPlan(k)||[], locked=S.chips[k], all=wcWindowTotals(k), best=plan[0];
+    const tots=Object.values(all).filter(Boolean).map(o=>o.tot);
+    const hi=Math.max(...tots,0), lo=Math.min(...tots,hi);
+    const span=w=>`GW${w.span[0]} to GW${w.span[2]}`;
+    return `<div class="chipblock">
+      <div class="chiphead">
+        <span><span class="chipname">${n}</span>
+          <span class="note" style="margin-left:8px">${esc(basis.wildcard)}</span></span>
+        ${histNote(hist)}</div>
+      ${locked?`<div class="chiplocked">
+        <span>GW${locked} · ${all[locked]?`your team projects ${all[locked].tot.toFixed(1)} over ${span(all[locked])}`:"too late in the half for a three-week window"}</span>
+        <button onclick="act('clearchip','${k}')">Clear</button></div>`
+        :best?`<div class="chipbest">Best week: <b>GW${best.e}</b> · your team projects only ${best.tot.toFixed(1)} over GW${best.span[0]} to GW${best.span[2]}</div>`:""}
+      <div class="tl">
+        ${Object.keys(all).map(Number).sort((a,b)=>a-b).map(e=>{
+          const w=all[e], isBest=best&&best.e===e, isSel=locked===e;
+          const h=w?Math.max(3,Math.round((hi-w.tot)/((hi-lo)||1)*31)+3):3;
+          const tip=w?`${span(w)}: your team projects ${w.tot.toFixed(1)} points. The lower the total, the taller the bar and the better the week to rebuild.`
+            :`GW${e}: fewer than three gameweeks left in this half`;
+          return `<button class="tlweek ${isSel?"sel":""} ${isBest&&!isSel?"best":""}"
+            onclick="act('setchip','${k}',${e})" title="${esc(tip)}">
+            <span class="tlval">${w?w.tot.toFixed(0):""}</span>
+            <span class="tlbar" style="height:${h}px"></span>
+            <span class="tlnum">${e}</span></button>`;}).join("")}
+      </div>
+      <p class="note" style="margin:6px 0 0;font-size:10px">Bars: your team's projected points over each three-week run. Lowest is best to rebuild before.</p></div>`;
+  };
+  const histNote=hist=>`<span class="note" title="The average gain from this chip in your past seasons. A record of what you did, not a projection.">your past average +${hist.toFixed(1)}</span>`;
   const chipRow=(k,n)=>{
     const plan=chipPlan(k)||[], locked=S.chips[k], hist=CHIP_HISTORY[chipKind(k)];
+    if(chipKind(k)==="wildcard")return wcRow(k,n,hist);
     const isHalf2=k.endsWith("2");
     const from=isHalf2?Math.max(20,g):g, to=isHalf2?38:19;
     const byWeek={};plan.forEach(o=>byWeek[o.e]=o.up);
@@ -1215,7 +1285,7 @@ function chipsHTML(){
       <div class="chiphead">
         <span><span class="chipname">${n}</span>
           <span class="note" style="margin-left:8px">${esc(basis[chipKind(k)])}</span></span>
-        <span class="note">you average ${hist.toFixed(1)}</span></div>
+        ${histNote(hist)}</div>
       ${locked?`<div class="chiplocked">
         <span>GW${locked}${det?` · ${det}`:""} · +${(all[locked]||0).toFixed(1)} pts</span>
         <button onclick="act('clearchip','${k}')">Clear</button></div>`
@@ -1261,6 +1331,24 @@ function chipsHTML(){
     </div>
     ${halfPanel(half)}${halfPanel(half===1?2:1)}`;
 }
+/* F62: the Wildcard bars used to be the owner's historical average (+10.2)
+   on the three weakest windows and 60% of it (+6.1) on every other week,
+   which read as model uplifts. The choice is really made on the team's own
+   projected total over each three-week run, so that is what each week holds:
+   {tot, span} for a full window, null when fewer than three weeks remain. */
+function wcWindowTotals(kind){
+  const sp=squadPlayers();const out={};
+  if(!sp.length||!S.model)return out;
+  const g=VG(),half=kind.endsWith("2");
+  const from=half?Math.max(20,g):g, to=half?38:19;
+  const weeks=[];for(let e=from;e<=to;e++)if(sp.some(p=>p.gw[e]&&!p.gw[e].blank))weeks.push(e);
+  weeks.forEach((e,i)=>{
+    if(i+2>=weeks.length){out[e]=null;return;}
+    const span=[e,weeks[i+1],weeks[i+2]];
+    out[e]={tot:span.reduce((a,w)=>a+weekScore(sp,w).pts,0),span};
+  });
+  return out;
+}
 /* uplift for every legal week, so the timeline has a full row */
 function chipAllWeeks(kind){
   const sp=squadPlayers();const out={};
@@ -1274,8 +1362,13 @@ function chipAllWeeks(kind){
     if(!sp.some(p=>p.gw[e]&&!p.gw[e].blank))continue;
     if(known[e]!=null){out[e]=known[e];continue;}
     const xi=[...sp].sort((a,b)=>(b.gw[e]?.pts||0)-(a.gw[e]?.pts||0));
-    if(k==="bboost")out[e]=xi.slice(11).reduce((a,p)=>a+(p.gw[e]?.pts||0),0);
+    if(k==="bboost")out[e]=weekScore(sp,e).benchPts;          // F34: the bench of the legal XI
     else if(k==="3xc")out[e]=xi[0]?.gw[e]?.pts||0;
+    /* Free Hit: the same gap chipPlan measures (best available XI minus
+       yours), for every week. It used to fill every week outside the top
+       three with 60% of the third best, a made-up figure (as F62 found on the
+       Wildcard row). */
+    else if(k==="freehit")out[e]=Math.max(0,bestXIScore(e)-weekScore(sp,e).pts);
     else out[e]=known[e]!=null?known[e]:(plan.length?plan[plan.length-1].up*0.6:0);
   }
   return out;
@@ -1435,7 +1528,7 @@ function signalsHTML(){
     const why=[],nx=hPts(p,G,H);
     if(p.form<SIG.replaceForm)why.push(`Form ${sgF1(p.form)}`);
     if(nx<posAvg[p.pos]*SIG.replaceShare)why.push(`Next ${H} ${sgF1(nx)}`);
-    if(p.status!=="a")why.push(p.status==="d"?`${Math.round((p.avail??0.75)*100)}% fit`:"Unavailable");
+    if(p.status!=="a")why.push(p.status==="d"?`${Math.round((p.avail??0.75)*100)}% fit${p.availAssumed?" (assumed)":""}`:"Unavailable");
     if((p.xMins||0)<SIG.replaceMins)why.push(`${p.xMins||0}′ expected`);
     return {p,why,score:why.length*10-nx};
   }).filter(x=>x.why.length>=2).sort((a,b)=>b.score-a.score).slice(0,4);
@@ -1452,7 +1545,7 @@ function signalsHTML(){
   const flags=mine.filter(p=>p.status!=="a").map(p=>`<div class="sgrow" onclick="act('card',${p.id})">
     <span class="sgrank">${sgIcon("triangle-alert",p.status==="d"?"warn":"bad")}</span>
     <span class="sgwho"><b>${esc(p.web_name)}</b><em>${esc(p.news||(p.status==="d"?"Doubtful":"Unavailable"))}</em></span>
-    <span class="sgfig"><b>${p.status==="d"?Math.round((p.avail??0.75)*100)+"%":"Out"}</b><em>chance</em></span></div>`).join("")
+    <span class="sgfig"><b>${p.status==="d"?Math.round((p.avail??0.75)*100)+"%":"Out"}</b><em>chance${p.status==="d"?availTag(p):""}</em></span></div>`).join("")
     ||empty("Everyone in your squad is fit.");
 
   /* ----- players ----- */

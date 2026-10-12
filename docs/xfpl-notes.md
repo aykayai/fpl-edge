@@ -13,26 +13,67 @@ achievable in FPL by anyone. Keep them, but label them for what they are.
 They remain useful as a **regression guard**: the reference set is a pre-GW1
 snapshot, so anything gated on this-season data must leave them untouched.
 
-### Real accuracy — first measurement, GW1–4 of 2026/27
-Pre-season projections vs actual points, 54 of 55 players matched, 216
-observations (GW5 excluded, still in play):
+### Pre-Season Sample, GW1 to GW4 of 2026/27 (Re-Scoped 12 Oct 2026)
+These notes used to carry "MAE 3.156, bias minus 0.151 over 216 observations"
+and concluded that the level was right and must not be fixed. That figure is
+narrower than it looked, and the conclusion does not hold:
 
-| | MAE | bias |
-|---|---|---|
-| Per gameweek, all | **3.156** | **−0.151** |
-| DEF | 2.890 | −0.277 |
-| MID | 3.306 | +0.094 |
-| FWD | 4.093 | −0.429 |
-| GK (n=4 only) | 3.425 | +2.725 |
+- It is the pre-season projection, not the projection made before each
+  deadline, scored on 55 premium players (54 matched, 4 weeks). The reference
+  set (`ref_gws.csv`) is not in the repo, so it cannot be re-run.
+- The nearest reconstruction (top 55 by GW1 projection, n 220) gives MAE 3.238
+  and bias **+0.557**, not minus 0.151.
+- Across every player with any chance of playing, projections made before
+  each deadline ran **+0.65** too high on average over GW1 to GW5, almost all
+  of it in the appearance term (players expected to play who did not).
 
-MAE around 3.2 is normal for an FPL model; the week-to-week noise is
-irreducible. **Bias of −0.15 over 216 observations is the important number**:
-the level is right. Do not "fix" the level on the strength of MAE alone.
+So the small bias was a feature of that premium sample. Do not quote it as the
+model's accuracy, and do not use it to argue the level is right.
 
-Rank correlation against actual four-week totals: GK 0.58, DEF 0.28, MID 0.42,
-FWD 0.61 (n=289). Not comparable with the reference-set figures above. Four
-gameweeks of FPL points are mostly variance, so DEF at 0.28 is weak but not yet
-damning — revisit at GW10 before acting.
+The rank correlations once quoted here (GK 0.58, DEF 0.28, MID 0.42, FWD 0.61
+against four-week totals) were not reproduced by the audit. The per-gameweek
+pre-deadline Spearman is 0.37 to 0.49.
+
+### Pre-Deadline Accuracy, GW1 to GW5 of 2026/27 (Audit Backtest)
+From the FPL Edge audit (Stage 2, section 3c): the current model run on the
+dataset as it stood before each deadline, scored against the official live
+points. These are the current model's numbers on past data, not what the site
+served at the time.
+
+Every player with any chance of playing:
+
+| GW | n | MAE | Bias | Spearman | FPL ep_next MAE |
+|---|---|---|---|---|---|
+| 1 | 505 | 2.22 | +0.81 | 0.478 | 1.91 |
+| 2 | 509 | 2.16 | +0.97 | 0.444 | 1.77 |
+| 3 | 506 | 2.19 | +1.01 | 0.371 | 1.68 |
+| 4 | 496 | 1.96 | +0.22 | 0.392 | 1.63 |
+| 5 | 482 | 1.88 | +0.21 | 0.490 | 1.59 |
+| All | 2,498 | 2.08 | +0.65 | 0.424 | 1.72 |
+
+Players owned by 1% or more with a fixture (the FPL Bench measure, the only
+cut comparable with other tools):
+
+| GW | n | MAE | Bias | FPL ep_next MAE |
+|---|---|---|---|---|
+| 1 | 193 | 2.56 | +0.19 | 2.29 |
+| 2 | 202 | 2.43 | +0.27 | 2.25 |
+| 3 | 199 | 2.27 | +0.25 | 2.59 |
+| 4 | 189 | 2.49 | minus 0.59 | 2.58 |
+| 5 | 187 | 2.18 | +0.12 | 2.19 |
+| All | 970 | **2.38** | +0.05 | 2.38 |
+
+On that measure the best published models (FPL Review, Fantasy Football
+Scout, Solio and others on FPL Bench) score 2.10 to 2.17, so the model sits
+about 16th or 17th of 19, level with FPL's own `ep_next`. With n 970 the
+standard error of a difference is about 0.1: the gap to the leaders is real,
+the gap to `ep_next` is not.
+
+The xFPL page's "MAE vs season avg" tiles are not this figure. They compare
+next week's projection with each player's season average, which hides most of
+the week-to-week noise; the page says so behind its (i). Until a projection is
+saved before every deadline (`data/predictions.json`), every accuracy number
+here is self-reported.
 
 ## Shape of the model
 Per-position calibration `output = A × minutesFactor + B × rawComponents`.
@@ -73,7 +114,8 @@ pushing calibration the wrong way. Fixed:
    league gameweeks, not the player's appearances. ~80% of qualifying starters
    had missed at least one of GW1–4, understating `actual` by roughly 40% and
    driving `scale` to its 0.7 floor — a ~30% cut to every projection, against a
-   measured bias of only −0.15. Players must now have featured in
+   measured bias of only −0.15 (a premium-sample figure, re-scoped above; the
+   pre-deadline bias across all players is +0.65). Players must now have featured in
    `LEARN_MIN_APP` (75%) of completed gameweeks.
 3. **Mismatched quantities.** A flat season mean against one fixture-adjusted
    gameweek. Both sides are now per gameweek; fixtures largely cancel across a

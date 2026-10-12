@@ -510,6 +510,10 @@ async function main() {
     if (r.ftNext != null) row.ftNext = r.ftNext;
     const chip = ownChipAt.get(r.event);
     if (chip) { row.chip = chip.name; row.chipLabel = chip.label; }
+    /* F55: a week in play is published with partial points; these flags let
+       the app call its score "so far" until FPL marks the week finished. */
+    const ev = events.find(e => e.id === r.event);
+    if (ev) { row.finished = !!ev.finished; row.dataChecked = !!ev.data_checked; }
     return row;
   });
 

@@ -170,13 +170,18 @@ function trkSummaryHTML(){
   const last=t.gw[t.gw.length-1],tp=t.totalPlayers||TRACKER_HISTORY.totalPlayers["2026"];
   const pct=r=>r&&tp?trkNum(r/tp*100,2)+"%":"—";
   const tile=(v,l,c)=>`<span class="tsum"><b style="${c?`color:${c}`:""}">${v}</b><span>${l}</span></span>`;
-  return `<div class="panel"><div class="phead"><h2>This season</h2><span class="note">GW${last.event}</span></div>
+  /* F55: a week still in play is a partial score. It is shown as "so far"
+     with a live tag, and kept out of the best and worst weeks until FPL
+     marks it finished. */
+  const lastLive=!weekFinal(last.event);
+  const done=t.gw.filter(r=>weekFinal(r.event)).map(r=>r.points);
+  return `<div class="panel"><div class="phead"><h2>This season</h2><span class="note">GW${last.event}${lastLive?" · in play":""}</span></div>
     <div class="pbody"><div class="tsumrow">
       ${tile("#"+trkRank(last.orRank),"Overall rank","var(--mint)")}
       ${tile(pct(last.orRank),"Top %",null)}
-      ${tile(last.points,"Last GW",null)}
-      ${tile(trkMax(t.gw.map(r=>r.points)),"Best GW","var(--mint)")}
-      ${tile(trkMin(t.gw.map(r=>r.points)),"Worst GW","var(--red)")}
+      ${tile(last.points+(lastLive?LIVE_TAG:""),lastLive?`GW${last.event} so far`:"Last GW",null)}
+      ${tile(trkMax(done)??"—","Best GW","var(--mint)")}
+      ${tile(trkMin(done)??"—","Worst GW","var(--red)")}
       ${tile("£"+trkNum(last.value,1),"Team value",null)}
     </div></div></div>`;
 }
@@ -194,7 +199,7 @@ function trkTableHTML(){
   const rows=t.gw.map((r,i)=>{const prev=i?t.gw[i-1].orRank:null;const rc=prev?prev-r.orRank:null;
     const rcp=prev?trkNum((prev-r.orRank)/prev*100,1):"—";
     return `<tr><td style="text-align:center">${r.event}</td>
-      <td style="text-align:right">${r.points}</td>
+      <td style="text-align:right">${r.points}${weekFinal(r.event)?"":LIVE_TAG}</td>
       <td style="text-align:right">${trkRank(r.gwRank)}</td><td style="text-align:right">${pct(r.gwRank)}</td>
       <td style="text-align:right">${trkRank(r.orRank)}</td><td style="text-align:right">${pct(r.orRank)}</td>
       <td style="text-align:right;color:${rc>0?"var(--mint)":rc<0?"var(--red)":""}">${trkSigned(rc)}</td>
@@ -208,17 +213,39 @@ function trkTableHTML(){
 }
 
 /* ---------- chips ---------- */
+/* F32: the actuals feed's chips map holds each chip week's whole score (51
+   for Free Hit 1), which this table printed as if it were the gain. The
+   gain is worked out by the feed builder and published per chip in the
+   league feed (rivals.json, the owner's entry): Free Hit and Wildcard
+   against last week's team on the same scores, Bench Boost as the bench's
+   points, Triple Captain as the extra captain points. That is what the 2027
+   column shows; the week's score moves to the cell's tooltip. */
+function trkChipUplifts(){
+  const own=S.rivalsFeed&&S.rivalsFeed.entries&&S.rivalsFeed.entries[TEAM_ID];
+  const out={};
+  (own&&Array.isArray(own.chips)?own.chips:[]).forEach(ch=>{if(ch&&ch.label)out[ch.label]=ch;});
+  return out;
+}
 function trkChipHTML(){
-  const c=TRACKER_HISTORY.chips,cur=(S.tracker&&S.tracker.chips)||{};
+  const c=TRACKER_HISTORY.chips,raw=(S.tracker&&S.tracker.chips)||{},up=trkChipUplifts();
   const cell=v=>v==null?`<td style="color:var(--ink3)">—</td>`
     :`<td style="color:${v>0?"var(--mint)":v<0?"var(--red)":"var(--cream)"}">${v>0?"+":""}${v}</td>`;
+  const curCell=name=>{
+    const ch=up[name],score=raw[name];
+    if(ch&&ch.uplift!=null){
+      const tip=`GW${ch.event}: scored ${score??"?"} points, ${ch.uplift>=0?"+":""}${ch.uplift} from the chip`;
+      return cell(ch.uplift).replace("<td ",`<td title="${esc(tip)}" `);
+    }
+    if(score!=null||ch)return `<td style="color:var(--mute)" title="Played${ch?" in GW"+ch.event:""}. The gain is not published yet.">used</td>`;
+    return cell(null);
+  };
   const head=`<th>Chip</th><th style="color:var(--mint)">2027</th>${c.labels.map(l=>`<th>${l}</th>`).join("")}`;
   const rows=Object.keys(c.rows).map(name=>
-    `<tr><td>${name}</td>${cell(cur[name]??null)}${c.rows[name].map(cell).join("")}</tr>`).join("");
+    `<tr><td>${name}</td>${curCell(name)}${c.rows[name].map(cell).join("")}</tr>`).join("");
   return `<div class="panel"><div class="phead"><h2>Chip performance</h2>
-      <span class="note">points gained vs an average week</span></div>
+      <span class="note">points each chip gained</span></div>
     <div class="scroll"><table class="trktable"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="pbody"><p class="note" style="margin:0">2027 column fills in as each chip gets used this season.</p></div></div>`;
+    <div class="pbody"><p class="note" style="margin:0">2027 column fills in as each chip gets used this season. Free Hit and Wildcard are measured against last week's team on the same scores, Bench Boost is the bench's points and Triple Captain the extra captain points.</p></div></div>`;
 }
 
 /* ---------- career finishes (official FPL season data) ---------- */
@@ -263,13 +290,18 @@ function trkFinishesHTML(){
       <td>${avg("pct").toFixed(1)}%</td></tr>`;
 
   /* 2027 — the season in progress, shaded to show it's not a completed result yet. */
-  const pending=(S.tracker&&S.tracker.gw&&S.tracker.gw.length)
-    ?{pts:S.tracker.gw.reduce((s,r)=>s+(r.points||0),0),
-      rank:S.tracker.gw[S.tracker.gw.length-1].orRank}:null;
-  const pendingRow=`<tr class="trkpending"><td>2026/27</td>
+  /* F33: the average used to divide by 38 after a handful of weeks (368
+     points after five read 9.7 a week). It now divides by the weeks played,
+     and says how many. F55: a week still in play is left out of the row, so
+     points, average and rank all stand after the last finished week. */
+  const doneRows=(S.tracker&&S.tracker.gw||[]).filter(r=>weekFinal(r.event));
+  const pending=doneRows.length
+    ?{pts:doneRows.reduce((s,r)=>s+(r.points||0),0),n:doneRows.length,
+      gw:doneRows[doneRows.length-1].event,rank:doneRows[doneRows.length-1].orRank}:null;
+  const pendingRow=`<tr class="trkpending"><td>2026/27${pending?` <span class="note" style="font-style:normal">to GW${pending.gw}</span>`:""}</td>
       <td>${pending?pending.pts:"—"}</td>
-      <td>${pending?(pending.pts/38).toFixed(1):"—"}</td>
-      <td>${pending?pending.rank.toLocaleString("en-GB"):"—"}</td>
+      <td>${pending?`${(pending.pts/pending.n).toFixed(1)} <span class="note" style="font-style:normal">(${pending.n} GW${pending.n===1?"":"s"})</span>`:"—"}</td>
+      <td>${pending&&pending.rank!=null?pending.rank.toLocaleString("en-GB"):"—"}</td>
       <td>—</td><td>—</td></tr>`;
 
   return `<div class="panel"><div class="phead"><h2>Career finishes</h2>
