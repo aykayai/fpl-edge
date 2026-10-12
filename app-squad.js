@@ -423,7 +423,7 @@ function bestSwaps(limit){
     S.model.players.forEach(p=>{
       if(p.pos!==o.pos||S.squad.includes(p.id)||p.avail<=0)return;
       if((S.ignored||[]).includes(p.id))return;
-      if(p.price>S.bank+o.price+.001)return;
+      if(p.price>S.bank+sellPrice(o)+.001)return;
       if((cc[p.team]||0)>=3)return;
       const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
       /* where gains are level, prefer the player carrying signals */
@@ -438,7 +438,7 @@ function bestCombo(outIds){
   if(!S.model||!outIds.length)return null;
   const g=S.model.next.id;
   const outs=outIds.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  let budget=S.bank+outs.reduce((a,p)=>a+p.price,0);
+  let budget=S.bank+outs.reduce((a,p)=>a+sellPrice(p),0);
   const keep=(S.squad||[]).filter(i=>!outIds.includes(i));
   const club={};keep.forEach(i=>{const p=S.model.players.find(x=>x.id===i);
     if(p)club[p.team]=(club[p.team]||0)+1;});
@@ -462,7 +462,7 @@ function bestCombo(outIds){
       club[best.inn.team]=(club[best.inn.team]||0)+1;budget-=best.inn.price;budget+=0;}
   });
   const spent=picks.reduce((a,m)=>a+m.inn.price,0);
-  const freed=S.bank+outs.reduce((a,p)=>a+p.price,0);
+  const freed=S.bank+outs.reduce((a,p)=>a+sellPrice(p),0);
   return{picks,gain:picks.reduce((a,m)=>a+m.gain,0),left:+(freed-spent).toFixed(1),freed:+freed.toFixed(1)};
 }
 /* Persist an edit to the viewed gameweek's plan. Snapshots the currently-effective
@@ -559,12 +559,18 @@ function applySwap(oid,iid){
      twice (and a man short elsewhere). */
   if(iid!==oid&&cur.includes(iid)){toast(i.web_name+" is already in your squad");return;}
   const ids=cur.map(x=>x===oid?iid:x);
-  const bank=+((planBank())+o.price-i.price).toFixed(1);
+  /* F26: a sale credits the selling price (purchase price plus half the
+     rise, rounded down), not the current price. F46: a swap the bank cannot
+     cover is refused here, where every route to a swap passes, and the bank
+     is left untouched. */
+  const bank=+((planBank())+sellPrice(o)-i.price).toFixed(1);
+  if(bank<-0.001){toast(`Not enough in the bank: £${(-bank).toFixed(1)} short for ${i.web_name}`,{warn:true});return false;}
   const extra={bank};
   if(S.captain===oid)extra.captain=iid;
   if(S.vice===oid)extra.vice=iid;
   writePlan(g,ids,extra);
   S.flagged=S.flagged.filter(x=>x!==oid);S.forceXI=null;saveState();
+  return true;
 }
 /* A squad should never contain the same player twice. Repairs any state that
    already went wrong before the guard above existed, rather than leaving a
@@ -811,9 +817,11 @@ function hits(title){
    RENDER
    ============================================================ */
 let tT=null;
-function toast(m){let el=document.getElementById("toast");
+function toast(m,o){let el=document.getElementById("toast");
   if(!el){el=document.createElement("div");el.id="toast";el.className="toast";document.body.appendChild(el);}
-  el.textContent=m;el.style.display="block";clearTimeout(tT);tT=setTimeout(()=>el.style.display="none",3000);}
+  /* o.warn: a refusal, shown in the warning colour for longer so it is read */
+  el.textContent=m;el.classList.toggle("warn",!!(o&&o.warn));el.style.display="block";clearTimeout(tT);
+  tT=setTimeout(()=>el.style.display="none",(o&&o.ms)||(o&&o.warn?6000:3000));}
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 

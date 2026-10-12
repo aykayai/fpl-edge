@@ -732,7 +732,7 @@ function transfersHTML(){
   const all=bestSwaps(400);
   const pool=outIds?all.filter(m=>outIds.includes(m.out.id)):all;
   const budget=outIds
-    ? S.bank+outIds.reduce((a,i)=>a+(S.model.players.find(p=>p.id===i)?.price||0),0)
+    ? S.bank+outIds.reduce((a,i)=>{const q=S.model.players.find(p=>p.id===i);return a+(q?sellPrice(q):0);},0)
     : S.bank;
   const top=pool[0];
   const posName={1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
