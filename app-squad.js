@@ -400,6 +400,44 @@ function chipForWeek(w){
     if(S.chips[k+half]===w)return k;
   return null;
 }
+/* ---------- F19: free transfers and hits for planned weeks ----------
+   The rule is the one the feed builder verified against FPL's own charged
+   hits (scripts/build-actuals.mjs): one free transfer is added each week up
+   to 5; a Wildcard or Free Hit week is free and carries the bank forward
+   unchanged; every transfer beyond the free ones costs 4 points. A Free Hit
+   squad reverts afterwards, so the week after one is compared with the
+   squad from before it. */
+const FT_MAX=5,HIT=4;
+function officialBaseIds(){
+  const off=(typeof latestOfficialPicks==="function")?latestOfficialPicks():null;
+  return off?off.picks.map(pk=>pk.id):((S.original||S.squad||[]).slice());
+}
+function squadBefore(g){
+  const next=S.model?S.model.next.id:1;
+  let e=g-1;
+  while(e>=next&&chipForWeek(e)==="freehit")e--;
+  return e<next?officialBaseIds():(((effectiveSquadIds(e)||{}).ids)||[]);
+}
+function transfersIn(g){
+  if(!S.model||g<S.model.next.id)return 0;
+  const cur=((effectiveSquadIds(g)||{}).ids)||[], prev=squadBefore(g);
+  return cur.filter(i=>!prev.includes(i)).length;
+}
+function freeWeek(g){const c=chipForWeek(g);return c==="wildcard"||c==="freehit";}
+/* free transfers available going into week g */
+function planFT(g){
+  const next=S.model?S.model.next.id:1;
+  let ft=freeTransfers();
+  for(let e=next;e<g;e++){if(freeWeek(e))continue;ft=Math.min(FT_MAX,Math.max(0,ft-transfersIn(e))+1);}
+  return ft;
+}
+function hitCost(g){return freeWeek(g)?0:Math.max(0,transfersIn(g)-planFT(g))*HIT;}
+function hitsOver(g,h){let s=0;for(let e=g;e<g+(h||1);e++)s+=hitCost(e);return s;}
+/* free transfers still unused in week g (Infinity in a free-squad week) */
+function freeLeft(g){return freeWeek(g)?Infinity:Math.max(0,planFT(g)-transfersIn(g));}
+/* the gain a suggested move must reach: a free move needs TRANSFER_MIN, a move
+   that would cost a hit must also beat the 4 points it costs */
+function moveBar(g){return freeLeft(g)>0?TRANSFER_MIN:TRANSFER_MIN+HIT;}
 function weekPts(){
   const xi=startingXI();if(!xi.length)return 0;
   const g=VG();
@@ -410,7 +448,7 @@ function weekPts(){
   const chip=chipForWeek(g);
   if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,S.horizon),0);
   if(chip==="3xc"&&cap)s+=hPts(cap,g,S.horizon);
-  return s;
+  return s-hitsOver(g,S.horizon);
 }
 /* ---------- transfer engine ---------- */
 function bestSwaps(limit){

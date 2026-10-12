@@ -958,7 +958,9 @@ function renderPage(){
             <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">pred ${weekPts().toFixed(1)} · <span style="font-weight:700;color:${S.actuals[g]-weekPts()>=0?"var(--mint)":"var(--red)"}">${S.actuals[g]-weekPts()>=0?"+":""}${(S.actuals[g]-weekPts()).toFixed(1)}</span></span>`;
               return `
             <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${g} predicted</span>
-            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>`;
+            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>
+            ${(()=>{const t=transfersIn(g);if(!t||freeWeek(g))return "";const h=hitCost(g);
+              return `<span style="display:block;font-size:10px;color:${h?"var(--red)":"var(--mute)"};margin-top:1px">${t} transfer${t>1?"s":""} · ${h?`-${h} hit`:"free"}</span>`;})()}`;
             })()}
           </span>
           <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button>
@@ -1049,7 +1051,7 @@ function renderPage(){
     <div class="stats">
       <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
         <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
-        <div class="s">XI + captain${chipForWeek(VG())?" + "+chipForWeek(VG()):""}</div></div>
+        <div class="s">XI + captain${chipForWeek(VG())?" + "+chipForWeek(VG()):""}${hitsOver(VG(),S.horizon)?` · <span style="color:var(--red);font-weight:700">-${hitsOver(VG(),S.horizon)} hit</span>`:""}</div></div>
       <div class="stat"><div class="k">Team rating</div>
         <div class="v" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</div>
         <div class="s">${rating?`best legal XI ${rating.best.toFixed(1)}`:"out of 100"}</div></div>

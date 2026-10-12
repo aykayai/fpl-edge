@@ -441,7 +441,7 @@ function weekPtsFor(g){
   const chip=chipForWeek(g);
   if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,1),0);
   if(chip==="3xc"&&cap)s+=hPts(cap,g,1);
-  return s;
+  return s-hitCost(g);
 }
 
 function xfplHTML(){
@@ -572,7 +572,7 @@ function swapCardHTML(m,g){
     <span class="tp"><span class="n">${esc(m.inn.web_name)}</span>
       <span class="s">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${(m.inn.gw[g]?.pts||0).toFixed(1)} xPts</span>
       <span style="display:flex;gap:5px;align-items:center;margin-top:3px">${sigHTML(m.inn,g)}</span></span>
-    <span class="gain">+${m.gain.toFixed(1)}</span></div>
+    <span class="gain">+${m.gain.toFixed(1)}${freeLeft(g)>0?"":`<span style="display:block;font-size:10px;color:var(--red)">-${HIT} hit</span>`}</span></div>
     <span style="display:flex;gap:6px;margin-top:8px">
       <button style="flex:1" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button>
       <button onclick="act('ignore',${m.inn.id})" title="Stop suggesting this player">Ignore</button></span></div>`;
@@ -768,12 +768,12 @@ function transfersHTML(){
           <span class="gain" style="font-size:16px">+${combo.gain.toFixed(1)} pts</span></div>
         <button style="margin-top:9px;width:100%" onclick="act('docombo')">Make these transfers</button>
       </div></div>`:"";
-  const headScout=(top&&pool.length&&top.gain>=TRANSFER_MIN)?`<div class="panel" style="border-color:var(--amber);background:#33240B">
+  const headScout=(top&&pool.length&&top.gain>=moveBar(g))?`<div class="panel" style="border-color:var(--amber);background:#33240B">
       <div class="phead" style="border-color:#5A3F10"><h2 style="color:var(--amber)">Head Scout</h2>
       <span class="note">GW${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span></div>
     <div class="pbody">
       <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700;margin-bottom:8px">Top target</div>
-      ${top.gain>=TRANSFER_MIN?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers — the best available move is worth only +${top.gain.toFixed(1)} points.</p>`}</div></div>`
+      ${top.gain>=moveBar(g)?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers: the best available move is worth only +${top.gain.toFixed(1)} points${freeLeft(g)>0?"":`, not enough to cover a ${HIT}-point hit`}.</p>`}</div></div>`
     :`<div class="panel"><div class="phead"><h2>Head Scout</h2></div><div class="pbody">
       <p class="note">No transfer improves your predicted total within budget and the three-per-club limit.</p></div></div>`;
 
@@ -785,7 +785,7 @@ function transfersHTML(){
     const seen=new Set();
     const list=pool.filter(m=>{
       if(m.inn.pos!==pos||(S.squad||[]).includes(m.inn.id))return false;
-      if(m.gain<TRANSFER_MIN)return false;
+      if(m.gain<moveBar(g))return false;
       if(seen.has(m.out.id))return false;
       seen.add(m.out.id);return true;}).slice(0,4);
     return `<div class="panel"><div class="phead"><h2>${posName[pos]}</h2>
