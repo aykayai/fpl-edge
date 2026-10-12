@@ -141,7 +141,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.6.0";
+const APP_VERSION="12.7.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1335,6 +1335,14 @@ const APPEAR_SHARE=[[45,.494],[60,.682],[75,.786],[90,.882]];
 /* D15: weeks over which this season's minutes take over for a player without
    ten appearances of history, and whether no minutes so far counts as evidence */
 const MINS_RAMP_GW=4, MINS_RAMP_ZERO=true;
+/* D6 (13 Oct 2026): how fast this season's per-90 rates take over from the
+   prior. RATE_SHRINK>0 weights this season by minutes/(minutes+RATE_SHRINK);
+   0 keeps the linear ramp to NOW_FULL minutes. Chosen by backtest. */
+const NOW_FULL=250, RATE_SHRINK=450;
+/* D8 (13 Oct 2026): clean sheets and goals conceded from the fixture's own
+   expected goals against, scaled by the player's on-pitch xGC against his
+   team's, rather than from his xGC/90 divided by a powered difficulty. */
+const CS_FROM_FIXTURE=true;
 function appearFactor(xMins){
   if(!(xMins>30))return 1;
   const band=APPEAR_SHARE.find(([hi])=>xMins<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
@@ -1467,7 +1475,8 @@ function buildModel(){
     if(lastPPG>0)baseForm=lastPPG;
     else{
       const cs=S.coldStart&&S.coldStart[p.pos];
-      const rel=clamp(price/Math.max(4,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100)*10,0.4,1.4);
+      /* D14: now_cost is in pounds, so the old x10 pinned this at 1.4 for everyone */
+      const rel=clamp(price/Math.max(4,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100),0.4,1.4);
       baseForm=cs?clamp(1.6*rel+(p.pos>=3?cs.xg90*2.2:cs.dc90*0.16),0.6,5.5):pricePrior;
     }
     const form=liveForm>0?liveForm
@@ -1572,12 +1581,11 @@ function buildModel(){
        At mins=0 the ramp is 0 and cur is 0, so this returns the prior exactly
        as before: pre-season projections, and the published GW1-8 reference
        set, are untouched. */
-    const NOW_FULL=250;
     const pick=(a,b,fb,lim)=>{const cur=num(a);
       const rel=clamp(lastMins/(lastMins+420),0,0.95);
       const y=L?num(b):0;
       const prior=y>0?(y*rel+fb*(1-rel)):fb;
-      const nowTrust=cur>0?clamp(mins/NOW_FULL,0,1):0;
+      const nowTrust=cur>0?(RATE_SHRINK>0?mins/(mins+RATE_SHRINK):clamp(mins/NOW_FULL,0,1)):0;
       const v=cur>0?cur*nowTrust+prior*(1-nowTrust):prior;
       return lim?clamp(v,0,lim):v;};
     const posPrior={1:0,2:.06,3:.16,4:.34}[p.pos]||.15;
@@ -1757,11 +1765,20 @@ function buildModel(){
           def=def*(1-FDR_MIX)+nD*FDR_MIX;
         }
         const od=oddsFor(team,opp,f.home);
-        if(od){                       // odds override the ratings when available
-          atk=clamp(od.xg/1.42,.40,1.75);
-          def=clamp(1.42/Math.max(.35,od.xgc),.45,1.70);
+        /* D10 (13 Oct 2026): odds override the ratings when available, through
+           the same power and limits, so switching odds on keeps the fixture
+           spread instead of flattening it */
+        if(od){
+          atk=clamp(Math.pow(od.xg/PL_GF,1.9),.30,2.40);
+          def=clamp(Math.pow(PL_GF/Math.max(.35,od.xgc),1.9),.35,2.30);
         }
-        const xGC=clamp(p.gc90/def,.25,3.2);
+        /* D8: the fixture's expected goals against (odds when priced), scaled by
+           how his on-pitch xGC compares with his team's */
+        const fxGC=od?od.xgc:f.xgc;
+        const teamGA=((team.defH||0)+(team.defA||0))/2;
+        const xGC=CS_FROM_FIXTURE&&fxGC!=null&&teamGA>0
+          ? clamp(fxGC*clamp(p.gc90/teamGA,0.75,1.33),.25,3.2)
+          : clamp(p.gc90/def,.25,3.2);
         const app=p60*2+(pPlay-p60);
         /* Keepers score almost entirely from clean sheets and concessions;
            saves pay only one point per three, and a busy keeper behind a poor
@@ -1777,7 +1794,8 @@ function buildModel(){
         let csP=Math.exp(-xGC);
         if(p.pos===1&&p.gpRate)csP=clamp(csP*(1+clamp(p.gpRate,-0.25,0.25)),0.02,0.75);
         const cs=(CS_PTS[p.pos]||0)*csP*p60;
-        const conc=p.pos<=2?-0.5*clamp(xGC/2,0,1.6)*p60:0;
+        /* D11: -1 per two conceded is, in expectation, xGC/2 - (1 - e^-2xGC)/4 */
+        const conc=p.pos<=2?-(xGC/2-(1-Math.exp(-2*xGC))/4)*p60:0;
         /* DefCon pays only when a player clears the threshold in that match.
            Modelling it from his average badly overstates it — Tielemans averages
            9.8 actions, which the old curve scored as 1.29 points a game, when he
@@ -1796,7 +1814,8 @@ function buildModel(){
       const rawTot=tot;
       /* the flat term scales with minutes too, and capping it at 80 meant every
          regular shared an identical floor regardless of expected minutes */
-      tot=c.A*clamp(mE/88,0,1.02)*availE+c.B*tot;
+      /* D3: the flat term is per match, so a double carries it twice */
+      tot=c.A*clamp(mE/88,0,1.02)*availE*fx.length+c.B*tot;
       if(e===S.model.next.id)p.rawPts=rawTot;
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
@@ -1807,7 +1826,10 @@ function buildModel(){
        Applied per player: hold his average across the horizon fixed and stretch
        the deviations around it. Cross-player calibration is unaffected, so the
        accuracy fit holds, but a kind fixture now reads clearly above a hard one. */
-    const ws=Object.keys(p.gw).map(Number).filter(w=>p.gw[w]&&!p.gw[w].blank);
+    /* D3: single weeks only. A double stretched around a single-week mean was
+       pushed to over 2.5x a single; doubles keep their own sum. */
+    const ws=Object.keys(p.gw).map(Number).filter(w=>p.gw[w]&&!p.gw[w].blank&&p.gw[w].fixtures.length===1);
+    Object.keys(p.gw).forEach(w=>{const q=p.gw[w];if(q&&!q.blank&&q.fixtures.length>1)q.pre=q.pts;});
     if(ws.length>1){
       const mean=ws.reduce((a,w)=>a+p.gw[w].pts,0)/ws.length;
       if(mean>0.3)ws.forEach(w=>{

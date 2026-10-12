@@ -195,36 +195,16 @@ function marketPoints(p,rec,fx){
   }
   return pts*clamp(p.avail,0,1)*(0.55+0.45*mins);
 }
-/* Turn match prices into expected goals per side, margin removed. */
+/* Turn match prices into expected goals per side, margin removed. D10
+   (13 Oct 2026): the same conversion the Odds page shows (Correct Score when
+   priced, else match result + totals), so the page and the model agree. */
 function buildOddsTeams(){
   const M={};
-  (S.odds||[]).forEach(ev=>{
-    const h=ev.home||ev.home_team||ev.homeTeam,a=ev.away||ev.away_team||ev.awayTeam;
-    if(!h||!a)return;
-    const bm=(ev.bookmakers||[])[0];if(!bm)return;
-    const h2h=(bm.markets||[]).find(m=>m.key==="h2h");
-    const tot=(bm.markets||[]).find(m=>/^totals$/i.test(m.key||"")&&m.hdp===2.5)
-      ||(bm.markets||[]).find(m=>/goals? totals|^totals$/i.test(m.key||""));
-    if(!h2h)return;
-    const pick=n=>(h2h.outcomes||[]).find(o=>String(o.name).toLowerCase()===n);
-    const oH=pick("home"),oD=pick("draw"),oA=pick("away");
-    if(!oH||!oD||!oA)return;
-    const inv=[oH,oD,oA].map(o=>1/o.price),sum=inv.reduce((s2,x)=>s2+x,0);
-    const pH=inv[0]/sum,pA=inv[2]/sum;
-    let total=2.7;
-    if(tot){const ov=(tot.outcomes||[]).find(x=>/over/i.test(x.name));
-      const un=(tot.outcomes||[]).find(x=>/under/i.test(x.name));
-      if(ov&&un){const i2=[1/ov.price,1/un.price],s3=i2[0]+i2[1];
-        total=(tot.hdp||2.5)+(i2[0]/s3-0.5)*2.2;}}
-    const tilt=clamp(0.5+(pH-pA)*0.55,0.2,0.8);
-    const teams=S.model?S.model.teams:S.teams;
-    /* the feed gives full club names ("Brentford FC", "Tottenham Hotspur"),
-       so match on the longest overlapping token rather than an exact string */
-    const find=clubFromName;
-    const th=find(h),ta=find(a);
-    if(!th||!ta)return;
-    M[th.short+"|"+ta.short+"|H"]={xg:total*tilt,xgc:total*(1-tilt)};
-    M[ta.short+"|"+th.short+"|A"]={xg:total*(1-tilt),xgc:total*tilt};
+  oddsFixtures().forEach(fx=>{
+    const g=fx.goals,th=fx.ht,ta=fx.at;
+    if(!g||!th||!ta||!(g.xgHome>0)||!(g.xgAway>0))return;
+    M[th.short+"|"+ta.short+"|H"]={xg:g.xgHome,xgc:g.xgAway};
+    M[ta.short+"|"+th.short+"|A"]={xg:g.xgAway,xgc:g.xgHome};
   });
   S.oddsTeams=Object.keys(M).length?M:null;
   return S.oddsTeams;
