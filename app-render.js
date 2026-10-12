@@ -410,13 +410,11 @@ function tableHTML(){
       :`<span style="color:var(--mute);font-size:9.5px">BLANK</span>`;
     const own=(S.squad||[]).includes(p.id);
     let tds=`<td class="nm"><span style="display:flex;align-items:center;gap:6px">
-        <button onclick="act('star',${p.id})" title="Shortlist"
-          style="border:none;background:none;padding:0;cursor:pointer;font-size:16px;line-height:1;flex:none;color:${S.stars.includes(p.id)?"var(--amber)":"var(--ink3)"}">★</button>
+        <button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="${S.stars.includes(p.id)?"Remove from shortlist":"Shortlist"}" aria-label="${S.stars.includes(p.id)?"Remove "+esc(p.web_name)+" from shortlist":"Shortlist "+esc(p.web_name)}" aria-pressed="${S.stars.includes(p.id)}">★</button>
         ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
       <span style="min-width:0"><span style="display:flex;align-items:center;gap:5px">
         <span style="font-weight:600;font-size:12px">${esc(p.web_name)}</span>${INJ(p)}
-        ${own?"":`<button onclick="act('addplan',${p.id})" title="Add to Team Planner"
-          style="border:none;background:none;padding:0 2px;cursor:pointer;font-size:14px;line-height:1;color:var(--ink3)">+</button>`}</span>
+        ${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to Team Planner" aria-label="Add ${esc(p.web_name)} to Team Planner">+</button>`}</span>
       <span style="display:flex;gap:4px;align-items:center;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>`;
     cols.slice(1).forEach(([k])=>{
       if(k==="signals"){tds+=`<td style="text-align:center">${iconCell(p)}</td>`;return;}
