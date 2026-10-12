@@ -992,6 +992,7 @@ function render(){
   else if(S.tab==="odds")main=oddsHTML();
   else if(S.tab==="rivals")main=rivalsHTML();
   else if(S.tab==="news")main=newsHTML();
+  else if(S.tab==="signals")main=signalsHTML();
 
   app.innerHTML=`
    <div class="panel" style="background:linear-gradient(135deg,#161C26 0%,#10161E 55%,#0C0E12 100%);border-color:#2B3442">

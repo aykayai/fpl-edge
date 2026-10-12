@@ -91,11 +91,11 @@ const TEAM_ID="301830", STATE_VERSION=4;
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
 const NAV=[
   {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["chips","Chips"],["rivals","Rivals"],["tracker","Tracker"]]},
-  {group:"Tools",items:[["table","Player Data"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]},
+  {group:"Tools",items:[["signals","Signals"],["table","Player Data"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]},
   {group:"Models",items:[["xfpl","xFPL Model"]]}
 ];
 const TABPATH={squad:"team-planner",transfers:"transfers",rivals:"rivals",chips:"chips",tracker:"tracker",
-  table:"player-data",xfpl:"xfpl-model",odds:"odds",fixtures:"fixtures",news:"news"};
+  table:"player-data",xfpl:"xfpl-model",odds:"odds",fixtures:"fixtures",news:"news",signals:"signals"};
 const FROM_ROUTE=Object.fromEntries(Object.entries(TABPATH).map(([k,v])=>[v,k]));
 function routeFor(tab){return "#/"+(TABPATH[tab]||"team-planner");}
 function applyHash(){
@@ -104,7 +104,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.1.0";
+const APP_VERSION="12.2.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -384,6 +384,13 @@ async function loadAll(force,opts){
     S.progress="last season…";render();
     let lastStats=[];
     try{lastStats=await getCSV(`${LAST}/playerstats.csv`);}catch(e){}
+    /* playerstats holds one row per player per gameweek, in no fixed order,
+       and every join below keeps the LAST row it meets. Sorted by gameweek
+       first, that last row is always the latest one. Unsorted, 326 of 667
+       players were read from an older week on 12 Oct 2026 (stale totals,
+       form, prices and injury flags shown as current). */
+    const byGw=(a,b)=>(num(a.gw)||0)-(num(b.gw)||0);
+    pstats.sort(byGw);lastStats.sort(byGw);
 
     S.progress="fixtures…";render();
     const fixtures=[];

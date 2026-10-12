@@ -1340,3 +1340,183 @@ const CREATORS=[["Ben Crellin","Blanks, doubles and fixture swings","https://x.c
  ["FPL BlackBox","Deep tactical discussion","https://www.youtube.com/@FPLBlackBox"],
  ["Let's Talk FPL","Daily video round-ups","https://www.youtube.com/@LetsTalkFPL"]];
 
+
+/* ============================================================
+   SIGNALS
+   Player and team signals for transfers and the current squad, agreed from
+   the mock-up on 12 Oct 2026. Every figure comes from the model and this
+   season's data the rest of the app already uses, so a card can never
+   disagree with Player Data, Fixtures or the planner. Card anatomy follows
+   Fintel's Reports page: icon tile, Title Case heading, the explanation
+   behind (i), and a fold arrow; colours are FPL Signals' own.
+   Icons are Lucide (ISC licence), inlined so nothing is fetched.
+   ============================================================ */
+const SIG_ICONS={
+  "trending-down":'<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
+  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  sparkles:'<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>',
+  "triangle-alert":'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  "chevron-down":'<path d="m6 9 6 6 6-6"/>',
+  "calendar-range":'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M16 2v3"/><path d="M3 9h18"/><path d="M8 2v3"/><path d="M17 13h-6"/><path d="M13 17H7"/><path d="M7 13h.01"/><path d="M17 17h.01"/>',
+  "arrow-left-right":'<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
+  flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  "shield-off":'<path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"/><path d="M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"/>',
+  gem:'<path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/>',
+  crosshair:'<circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/>',
+  trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>'
+};
+const sgIcon=(k,cls="")=>`<svg class="sgi ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SIG_ICONS[k]||""}</svg>`;
+/* thresholds, agreed with the mock-up */
+const SIG={formHot:5,diffOwned:5,diffMins:60,sellOwned:10,sellForm:3,threatMins:270,replaceForm:3,replaceShare:0.8,replaceMins:45,swapHorizon:5,runWeeks:5};
+const sgF1=v=>(Math.round(v*10)/10).toFixed(1);
+const sgAvail=p=>p.status==="a"||p.status==="d";
+
+function signalsHTML(){
+  if(!S.model)return "";
+  const M=S.model,G=VG(),H=S.sigH||3,posF=S.sigPos||0;
+  const squad=new Set(S.squad||[]);
+  const bank=+(S.bank||0);
+  const pa=S.playerActuals||{};
+  const lastGws=[];for(let e=G-6;e<G;e++)if(e>=1)lastGws.push(e);
+  const pool=M.players.filter(p=>p.minutes>0);
+  const posOk=p=>!posF||p.pos===posF;
+  const fold=new Set(S.sigFold||[]);
+
+  const spark=p=>{
+    const a=pa[p.id]||pa[String(p.id)]||{};
+    const vals=lastGws.map(e=>a[e]??a[String(e)]??null);
+    const max=Math.max(8,...vals.map(v=>v||0)),bw=6,gap=3,h=22,wd=Math.max(1,vals.length*(bw+gap)-gap);
+    const bars=vals.map((v,i)=>{
+      if(v==null)return `<rect x="${i*(bw+gap)}" y="${h-2}" width="${bw}" height="2" rx="1" fill="var(--ink3)"/>`;
+      const bh=Math.max(2,Math.round(Math.max(v,0)/max*h));
+      const col=v>=8?"var(--mint)":v>=4?"#7FA8C9":"#55606F";
+      return `<rect x="${i*(bw+gap)}" y="${h-bh}" width="${bw}" height="${bh}" rx="1.5" fill="${col}"><title>GW${lastGws[i]}: ${v} pts</title></rect>`;}).join("");
+    return `<svg class="sgspark" width="${wd}" height="${h}" viewBox="0 0 ${wd} ${h}" role="img" aria-label="Points in the last ${vals.length} gameweeks">${bars}</svg>`;
+  };
+  const pills=(p,n,lens)=>{
+    const out=[];
+    for(let e=G;e<G+n;e++){
+      const wk=p.gw[e];
+      if(!wk||!wk.fixtures||!wk.fixtures.length){out.push(`<span class="sgfx blank" title="No fixture">-</span>`);continue;}
+      wk.fixtures.forEach(f=>{const d=lens==="def"?(f.diffDef||f.diff):(f.diffAtt||f.diff);
+        out.push(`<span class="sgfx d${d}" title="GW${e} ${esc(f.oppName||f.opp)} ${f.home?"home":"away"}">${esc(f.opp)}<i>${f.home?"H":"A"}</i></span>`);});
+    }
+    return `<span class="sgfxrow">${out.join("")}</span>`;
+  };
+  const posTag=p=>`<span class="sgpos p${p.pos}">${POS[p.pos]}</span>`;
+  const row=(p,rank,fig,sub,o={})=>`<div class="sgrow" onclick="act('card',${p.id})">
+    <span class="sgrank">${rank}</span>
+    <span class="sgwho"><b>${esc(p.web_name)}</b>${squad.has(p.id)?`<span class="sgmine" title="In your squad">You</span>`:""}
+      <em>${esc(p.teamName)} · ${posTag(p)} · £${sgF1(p.price)}${o.owned===false?"":` · ${sgF1(p.owned)}%`}</em></span>
+    ${o.spark===false?"":spark(p)}
+    <span class="sgfig"><b>${fig}</b>${sub?`<em>${sub}</em>`:""}</span></div>`;
+  const card=(key,ic,tone,title,info,body,wide)=>{
+    const shut=fold.has(key);
+    return `<section class="sgcard ${tone}${shut?" shut":""}${wide?" wide":""}">
+      <header><span class="sgico">${sgIcon(ic)}</span><h3>${title}</h3>
+        <span class="sginfo" tabindex="0" title="${esc(info)}" aria-label="${esc(info)}">${sgIcon("info")}</span>
+        <button class="sgfold" onclick="act('sigfold','${key}')" aria-label="${shut?"Open":"Fold"} ${esc(title)}" aria-expanded="${!shut}">${sgIcon("chevron-down")}</button></header>
+      ${shut?"":body}</section>`;
+  };
+  const empty=t=>`<p class="sgempty">${t}</p>`;
+
+  /* ----- your squad ----- */
+  const mine=M.players.filter(p=>squad.has(p.id));
+  const posAvg={};[1,2,3,4].forEach(pos=>{const xs=mine.filter(p=>p.pos===pos).map(p=>hPts(p,G,H));
+    posAvg[pos]=xs.reduce((a,b)=>a+b,0)/Math.max(1,xs.length);});
+  const keep=mine.filter(p=>p.form>=SIG.formHot&&sgAvail(p)).sort((a,b)=>b.form-a.form).slice(0,5)
+    .map((p,i)=>row(p,i+1,sgF1(p.form),"form")).join("")||empty(`No one in your squad is on ${sgF1(SIG.formHot)} form or better.`);
+  const weak=mine.map(p=>{
+    const why=[],nx=hPts(p,G,H);
+    if(p.form<SIG.replaceForm)why.push(`Form ${sgF1(p.form)}`);
+    if(nx<posAvg[p.pos]*SIG.replaceShare)why.push(`Next ${H} ${sgF1(nx)}`);
+    if(p.status!=="a")why.push(p.status==="d"?`${Math.round((p.avail??0.75)*100)}% fit`:"Unavailable");
+    if((p.xMins||0)<SIG.replaceMins)why.push(`${p.xMins||0}′ expected`);
+    return {p,why,score:why.length*10-nx};
+  }).filter(x=>x.why.length>=2).sort((a,b)=>b.score-a.score).slice(0,4);
+  const replace=weak.map(({p,why})=>{
+    const budget=p.price+bank;
+    const sub=M.players.filter(q=>q.pos===p.pos&&!squad.has(q.id)&&sgAvail(q)&&q.price<=budget+1e-9)
+      .sort((a,b)=>hPts(b,G,SIG.swapHorizon)-hPts(a,G,SIG.swapHorizon))[0];
+    const gain=sub?hPts(sub,G,SIG.swapHorizon)-hPts(p,G,SIG.swapHorizon):0;
+    return `<div class="sgrep">
+      <div class="sgreph" onclick="act('card',${p.id})"><b>${esc(p.web_name)}</b><em>${esc(p.teamName)} · ${posTag(p)} · £${sgF1(p.price)}</em>${pills(p,SIG.runWeeks,p.pos<=2?"def":"att")}</div>
+      <div class="sgwhy">${why.map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>
+      ${sub&&gain>0?`<div class="sgswap" onclick="act('card',${sub.id})">${sgIcon("arrow-left-right")}<span>Swap to <b>${esc(sub.web_name)}</b> <em>${esc(sub.teamName)} · £${sgF1(sub.price)}</em></span><span class="sggain">+${sgF1(gain)}<em>next ${SIG.swapHorizon}</em></span></div>`:""}
+    </div>`;}).join("")||empty("Nothing in your squad flags on two counts at once.");
+  const flags=mine.filter(p=>p.status!=="a").map(p=>`<div class="sgrow" onclick="act('card',${p.id})">
+    <span class="sgrank">${sgIcon("triangle-alert",p.status==="d"?"warn":"bad")}</span>
+    <span class="sgwho"><b>${esc(p.web_name)}</b><em>${esc(p.news||(p.status==="d"?"Doubtful":"Unavailable"))}</em></span>
+    <span class="sgfig"><b>${p.status==="d"?Math.round((p.avail??0.75)*100)+"%":"Out"}</b><em>chance</em></span></div>`).join("")
+    ||empty("Everyone in your squad is fit.");
+
+  /* ----- players ----- */
+  const byPos=(sortFn,fig,sub,filt)=>`<div class="sgcols${posF?" one":""}">${[1,2,3,4].filter(pos=>!posF||pos===posF).map(pos=>{
+    const top=pool.filter(p=>p.pos===pos&&(!filt||filt(p))).sort(sortFn).slice(0,posF?10:5);
+    return `<div class="sgcol"><div class="sgcolh">${POS[pos]}</div>${top.map((p,i)=>row(p,i+1,fig(p),sub(p),{spark:!!posF,owned:false})).join("")||empty("None yet.")}</div>`;}).join("")}</div>`;
+  const topScorers=byPos((a,b)=>b.total-a.total,p=>p.total,p=>`${sgF1(p.ppg)} ppg`);
+  const topPred=byPos((a,b)=>hPts(b,G,H)-hPts(a,G,H),p=>sgF1(hPts(p,G,H)),p=>`${p.xMins||0}′`,sgAvail);
+  const list=(arr,fig,sub)=>arr.map((p,i)=>row(p,i+1,fig(p),sub)).join("")||empty("No players match right now.");
+  const inForm=list(pool.filter(p=>p.minutes>=180&&sgAvail(p)&&posOk(p)).sort((a,b)=>b.form-a.form).slice(0,6),p=>sgF1(p.form),"form");
+  const diffs=list(pool.filter(p=>p.owned<SIG.diffOwned&&(p.xMins||0)>=SIG.diffMins&&sgAvail(p)&&posOk(p))
+    .sort((a,b)=>hPts(b,G,H)-hPts(a,G,H)).slice(0,6),p=>sgF1(hPts(p,G,H)),`next ${H}`);
+  const sells=list(pool.filter(p=>p.owned>=SIG.sellOwned&&p.form<=SIG.sellForm&&posOk(p)).sort((a,b)=>b.owned-a.owned).slice(0,6),p=>sgF1(p.form),"form");
+  const threat=list(pool.filter(p=>p.minutes>=SIG.threatMins&&p.pos>=2&&posOk(p))
+    .sort((a,b)=>((b.xg90||0)+(b.xa90||0))-((a.xg90||0)+(a.xa90||0))).slice(0,6),p=>sgF1((p.xg90||0)+(p.xa90||0)),"xGI per 90");
+
+  /* ----- teams ----- */
+  const ts=S.curTeamStats||{};
+  const teams=(S.teams||[]).map(t=>{const c=ts[t.short]||{},n=c.n||0;
+    return {t,n,gf:c.gf||0,ga:c.ga||0,xg:n?c.xg/n:0,xga:n?c.xga/n:0};}).filter(x=>x.n>0);
+  const trow=(x,i,fig,sub)=>`<div class="sgrow"><span class="sgrank">${i+1}</span>
+    <span class="sgwho"><b>${esc(x.t.name)}</b><em>${sub}</em></span><span class="sgfig"><b>${fig}</b></span></div>`;
+  const tl=(arr,fig,sub)=>arr.slice(0,5).map((x,i)=>trow(x,i,fig(x),sub(x))).join("")||empty("Waiting on this season's matches.");
+  const bestAtt=tl(teams.slice().sort((a,b)=>b.xg-a.xg),x=>sgF1(x.xg),x=>`xG per game · ${x.gf} scored`);
+  const weakAtt=tl(teams.slice().sort((a,b)=>a.xg-b.xg),x=>sgF1(x.xg),x=>`xG per game · ${x.gf} scored`);
+  const bestDef=tl(teams.slice().sort((a,b)=>a.xga-b.xga),x=>sgF1(x.xga),x=>`xGA per game · ${x.ga} conceded`);
+  const leaky=tl(teams.slice().sort((a,b)=>b.ga-a.ga||b.xga-a.xga),x=>x.ga,x=>`conceded · ${sgF1(x.xga)} xGA per game`);
+  const rep={};M.players.forEach(p=>{if(!rep[p.team]||p.minutes>rep[p.team].minutes)rep[p.team]=p;});
+  const runs=Object.values(rep).map(p=>{let s=0,n=0;
+    for(let e=G;e<G+SIG.runWeeks;e++)(p.gw[e]&&p.gw[e].fixtures||[]).forEach(f=>{s+=(f.diffAtt||f.diff);n++;});
+    return {p,avg:n?s/n:9};});
+  const runRow=(x,i)=>`<div class="sgrow"><span class="sgrank">${i+1}</span>
+    <span class="sgwho"><b>${esc(x.p.teamFull||x.p.teamName)}</b><em>avg difficulty ${sgF1(x.avg)}</em></span>${pills(x.p,SIG.runWeeks,"att")}</div>`;
+  const easy=runs.slice().sort((a,b)=>a.avg-b.avg).slice(0,5).map(runRow).join("");
+  const hard=runs.slice().sort((a,b)=>b.avg-a.avg).slice(0,5).map(runRow).join("");
+
+  const seg=(items,cur,k)=>`<div class="sgseg" role="group">${items.map(([v,l])=>
+    `<button class="${cur===v?"on":""}" aria-pressed="${cur===v}" onclick="act('${k}',${v})">${l}</button>`).join("")}</div>`;
+  const ds=S.status&&S.status.dataset;
+  return `<div class="sgpage">
+    <div class="sghead"><div><h2>Signals</h2><p>Gameweek ${G} · players and teams worth a look, ranked from the model and this season's data${ds&&ds.committedAt?` · stats ${esc(ukWhen(ds.committedAt))}`:""}</p></div>
+      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}</div></div>
+    <h4 class="sgsec">Your Squad</h4>
+    <div class="sggrid g3">
+      ${card("sqform","flame","good","In Form",`Your players on ${sgF1(SIG.formHot)} form or better (average points per game over the last 30 days). Bars: points in each of the last six gameweeks.`,keep)}
+      ${card("sqrep","trending-down","warn","Consider Replacing",`Your players flagged on at least two of: form under ${SIG.replaceForm}, the next ${H} gameweeks under ${Math.round(SIG.replaceShare*100)}% of your squad's average for the position, a fitness doubt, under ${SIG.replaceMins} expected minutes. The swap is the best player at the position you can afford with your bank, over the next ${SIG.swapHorizon}.`,replace)}
+      ${card("sqflag","triangle-alert","bad","Availability","Your players with an injury, suspension or doubt flag from FPL.",flags)}
+    </div>
+    <h4 class="sgsec">Players</h4>
+    <div class="sggrid g1">${card("scorers","trophy","","Top Scorers By Position","Season total points, with points per game.",topScorers)}</div>
+    <div class="sggrid g1">${card("pred","sparkles","","Top Predicted By Position",`Model points over the next ${H} gameweek${H>1?"s":""}, with expected minutes. Available and doubtful players only.`,topPred)}</div>
+    <div class="sggrid g3">
+      ${card("form","flame","good","In Form","Highest form (average points per game over the last 30 days), 180 minutes or more this season.",inForm)}
+      ${card("diff","gem","accent","Differentials",`Under ${SIG.diffOwned}% owned, ${SIG.diffMins} or more expected minutes, ranked by model points over the next ${H}.`,diffs)}
+      ${card("sell","trending-down","bad","Sell Signals",`Owned by ${SIG.sellOwned}% or more with form at ${SIG.sellForm} or under: template players who have gone cold.`,sells)}
+    </div>
+    <div class="sggrid g1">${card("threat","crosshair","","Underlying Threat",`Expected goals plus expected assists per 90 minutes, outfield players with ${SIG.threatMins} minutes or more.`,`<div class="sgsplit">${threat}</div>`)}</div>
+    <h4 class="sgsec">Teams</h4>
+    <div class="sggrid g4">
+      ${card("att","target","good","Best Attacks","Expected goals created per game this season, with goals scored.",bestAtt)}
+      ${card("watt","target","bad","Weakest Attacks","Lowest expected goals per game this season, with goals scored.",weakAtt)}
+      ${card("def","shield","good","Best Defences","Fewest expected goals conceded per game this season, with goals conceded.",bestDef)}
+      ${card("leak","shield-off","bad","Leakiest Defences","Most goals conceded this season, with expected goals conceded per game.",leaky)}
+    </div>
+    <div class="sggrid g2">
+      ${card("easy","calendar-range","good","Easiest Fixture Runs",`Average attacking difficulty over the next ${SIG.runWeeks} gameweeks from the model's own ratings, 1 easiest to 5 hardest.`,easy)}
+      ${card("hard","calendar-range","bad","Toughest Fixture Runs",`The hardest next ${SIG.runWeeks} gameweeks for attackers.`,hard)}
+    </div>
+  </div>`;
+}

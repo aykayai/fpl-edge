@@ -168,7 +168,10 @@ async function runApp(dir, statusOverride) {
 /* ---------- strip the planned differences ---------- */
 function normalise(text, isNew) {
   let t = text;
-  if (isNew) {
+  /* the FPL Signals era is recognised by its brand, so a baseline from after
+     the rebrand is normalised the same way as the new side */
+  if (isNew || /FPL Signals/.test(text)) {
+    t = t.replace(/Signals(?=\s*Player Data)/g, "");                     /* the new Signals menu entry */
     t = t.replace(/FPL Signals v[\d.]+.*$/, "");                       /* provenance footer */
     t = t.replace(/(Server unreachable|Up to date|Live|Waiting on)[^]*?Check now/g, ""); /* status chip */
     t = t.replace(/FPL Signals/g, "FPL Edge");                         /* brand */
