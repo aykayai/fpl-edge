@@ -1393,8 +1393,12 @@ function buildModel(){
   S._tmaxRaw={};
   S.players.forEach(p=>{
     const v=num(p.stats?.now_cost);if(!v)return;
-    const t=S.teams.find(x=>x.code===p.teamCode||x.id===p.teamCode);
-    [p.teamCode,t&&t.code,t&&t.id].forEach(k=>{if(k!=null)S._tmaxRaw[k]=Math.max(S._tmaxRaw[k]||0,v);});
+    /* F22: keyed by the club code only. It used to be stored under the code
+       AND the id, and four clubs' codes are other clubs' ids, so those clubs
+       read another club's price ceiling (15 players' minutes projected 5 to
+       15 low on 9 Oct 2026). Every reader looks it up by p.teamCode. */
+    const k=String(p.teamCode);
+    S._tmaxRaw[k]=Math.max(S._tmaxRaw[k]||0,v);
   });
   S.bandCuts=null;buildBands();
   const players=S.players.map(p=>{
