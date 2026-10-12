@@ -199,13 +199,20 @@ function marketPoints(p,rec,fx){
    (13 Oct 2026): the same conversion the Odds page shows (Correct Score when
    priced, else match result + totals), so the page and the model agree. */
 function buildOddsTeams(){
-  const M={};
+  const M={},rej=[];
   oddsFixtures().forEach(fx=>{
     const g=fx.goals,th=fx.ht,ta=fx.at;
     if(!g||!th||!ta||!(g.xgHome>0)||!(g.xgAway>0))return;
+    /* A side priced under 1.10 is a stale or in-play line, not a pre-match
+       market (13 Oct 2026 the feed had Coventry 1.03 v Newcastle 151). Such a
+       fixture is left to the ratings and listed in S.oddsRejected. */
+    const ml=fx.mk&&fx.mk.h2h&&fx.mk.h2h[0];
+    const fav=ml?Math.min(...(ml.outcomes||[]).map(o=>+o.price||99)):99;
+    if(fav<1.10){rej.push(fx.home+" v "+fx.away);return;}
     M[th.short+"|"+ta.short+"|H"]={xg:g.xgHome,xgc:g.xgAway};
     M[ta.short+"|"+th.short+"|A"]={xg:g.xgAway,xgc:g.xgHome};
   });
+  S.oddsRejected=rej;
   S.oddsTeams=Object.keys(M).length?M:null;
   return S.oddsTeams;
 }
