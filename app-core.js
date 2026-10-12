@@ -1324,12 +1324,17 @@ function learnFromResults(){
   applyLearning();
 }
 /* D1 (approved 12 Oct 2026). The projection was effectively "points if he
-   plays": everyone on 17+ expected minutes was taken as 98.5% to appear, yet
-   over GW1-5 only a third of players on 31-45 xMins appeared, and about four
-   in five on 76-90. The whole projection is scaled by the observed share in
-   his band, relative to the 0.985 it assumed. Under 31 xMins the old ramp was
-   already level with reality, so it is left alone. */
-const APPEAR_SHARE=[[45,.33],[60,.54],[75,.71],[90,.81]];
+   plays": everyone on 17+ expected minutes was taken as 98.5% to appear. The
+   whole projection is now scaled by the share of players in his expected-
+   minutes band who actually appeared, relative to the 0.985 it assumed.
+   Shares re-fitted 12 Oct 2026 on the bundle-1 minutes (D2, D7, D9, D15) over
+   GW1-5, players with no flag; the flag itself is applied separately (D9).
+   Out of sample: MAE 1.695 against 2.110 before, bias +0.03 (was +0.72).
+   Under 31 xMins the old ramp was already level with reality. */
+const APPEAR_SHARE=[[45,.494],[60,.682],[75,.786],[90,.882]];
+/* D15: weeks over which this season's minutes take over for a player without
+   ten appearances of history, and whether no minutes so far counts as evidence */
+const MINS_RAMP_GW=4, MINS_RAMP_ZERO=true;
 function appearFactor(xMins){
   if(!(xMins>30))return 1;
   const band=APPEAR_SHARE.find(([hi])=>xMins<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
@@ -1519,7 +1524,6 @@ function buildModel(){
       xMins=clamp((srP*ws2+(1-srP)*offBench)*MP.sc,0,90);
       minsSrc="appearances";
     }
-    else if(gwPlayed>2&&mins>0){xMins=clamp(mins/gwPlayed,0,90);minsSrc="this season";}
     else{
       /* No Premier League history. For a player signed from abroad, pre-season
          is the only evidence of his role and is worth using once he has 180+
@@ -1538,8 +1542,19 @@ function buildModel(){
         xMins=clamp(rel*66+preSignal*0.22, 6, 86);
         minsSrc="no history";
       }
+      /* D15 (12 Oct 2026). This season's minutes per gameweek take over from
+         the estimate gradually, fully from MINS_RAMP_GW weeks played, instead
+         of replacing it for 300+ players in one step at GW3. */
+      if(gwPlayed>=1&&(mins>0||MINS_RAMP_ZERO)){
+        const w=clamp(gwPlayed/MINS_RAMP_GW,0,1);
+        xMins=xMins*(1-w)+clamp(mins/gwPlayed,0,90)*w;
+        minsSrc=w>=1?"this season":"this season (blend)";
+      }
     }
-    if(av===0)xMins=0; else xMins*=clamp(av,0,1);
+    /* D9: the normal role, before any flag. The flag is applied once, to the
+       points of the week it is about, so a return date can bring him back. */
+    const roleMins=xMins;
+    xMins=av===0?0:xMins*clamp(av,0,1);
 
     /* 30% last season, 30% season to date, 40% last six gameweeks — the
        weighting the public component models converge on. `form` already is
@@ -1603,54 +1618,22 @@ function buildModel(){
       form,formSrc,availAssumed,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
       priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,ppg:num(s.points_per_game),total:num(s.total_points),
       owned:num(s.selected_by_percent),minutes:mins,status:st,news:s.news||"",back,
-      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,
+      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,roleMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),
       pensSaved:num(s.penalties_saved),ownGoals:num(s.own_goals),
       spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
   });
 
-  /* keepers: exactly one starts */
-  const gkClub={};
-  players.filter(p=>p.pos===1).forEach(p=>{(gkClub[p.team]=gkClub[p.team]||[]).push(p);});
-  Object.values(gkClub).forEach(list=>{
-    /* An unavailable first choice does not keep the shirt — the deputy starts.
-       Hull's pinned keeper was injured and the club ended up with nobody
-       projected to play at all. */
-    const rank=p=>(p.avail>0?1e9:0)
-      +(GK_FIRST.includes(norm(p.web_name))?1e7:0)
-      +p.lastMins*3+p.price*400+(p.preMinPerApp||0)*4;
-    list.sort((a,b)=>rank(b)-rank(a));
-    list.forEach((p,i)=>{if(p.avail<=0){p.xMins=0;return;}
-      /* only one keeper plays: the understudy is projected at zero, not a fraction */
-      p.xMins=(i===0?GK_START*clamp(p.avail,0,1):0);
-      if(i>0)p.backup=true;});
-  });
-  /* an absent team-mate frees minutes for whoever is fit behind him */
-  const cp={};players.forEach(p=>{(cp[p.team+"|"+p.pos]=cp[p.team+"|"+p.pos]||[]).push(p);});
-  Object.values(cp).forEach(list=>{
-    const out=list.filter(p=>p.avail<=0), fit=list.filter(p=>p.avail>0);
-    if(!out.length||!fit.length)return;
-    const lift=clamp(1+out.reduce((a,p)=>a+clamp(p.price/8,.25,1.2),0)*0.12,1,1.3);
-    fit.forEach(p=>{if(p.xMins>=84||p.pos===1)return;p.xMins=Math.round(clamp(p.xMins*lift,0,89));p.lifted=true;});
-  });
-
-  /* per-gameweek projection */
+  /* D9 (12 Oct 2026): when each absent player is due back (0 = available
+     now). A known return date resumes his normal role from that gameweek;
+     without one he is assumed out about four gameweeks; a player who has left
+     or is not registered (status u or n) never returns. */
+  const nextId=S.model.next.id;
+  const evDl=(S.events||[]).filter(x=>x.deadline).sort((a,b)=>a.id-b.id);
   players.forEach(p=>{
-    const team=p._team;
-    /* Appearance behaviour is what gives cameo players their floor: a 15-minute
-       average means he features most weeks, just briefly. */
-    /* These used to saturate at 75 and 80 minutes, so two-thirds of the active
-       pool were treated identically however many minutes they were expected to
-       play — a player on 81 scored exactly like one on 90. Extended so the
-       75-90 band still separates, which is where most regulars sit. */
-    const pPlay=clamp(p.xMins/17,0,.985);
-    const p60=clamp((p.xMins-22)/62,0,.985);
-    const share=clamp(p.xMins/90,0,1);
-    /* An injury suppresses the next few weeks, not the whole season. A player
-       with a known return date misses until then and resumes his normal role
-       after; without one, he is assumed out about four gameweeks then eased in. */
-    const outUntil=(()=>{
+    p.outUntil=(()=>{
       if(p.avail>0)return 0;
+      if(p.status==="u"||p.status==="n")return 39;
       if(p.back&&p.back!=="unknown"){
         const m=/^(\d{2})-([A-Za-z]{3})$/.exec(p.back);
         if(m){
@@ -1660,18 +1643,92 @@ function buildModel(){
             let yr=now.getFullYear();
             if(mi<now.getMonth()-3)yr++;
             const back=new Date(yr,mi,+m[1]);
-            const ev=(S.events||[]).filter(x=>x.deadline).sort((a,b)=>a.id-b.id);
-            const first=ev.find(x=>new Date(x.deadline)>=back);
-            return first?first.id:S.model.next.id+4;
+            const first=evDl.find(x=>new Date(x.deadline)>=back);
+            return first?first.id:nextId+4;
           }
         }
-        return S.model.next.id+8;
+        return nextId+8;
       }
-      return S.model.next.id+4;
+      return nextId+4;
     })();
+    p.coverMins=0;p.coverUntil=0;
+  });
+
+  /* keepers: exactly one starts. D2 (12 Oct 2026): once two gameweeks are
+     played, this season's minutes decide who holds the shirt and the GK_FIRST
+     list only breaks ties (before that the list leads). An absent first
+     choice hands the shirt to the best fit deputy until he is due back. */
+  const gkClub={};
+  players.filter(p=>p.pos===1).forEach(p=>{(gkClub[p.team]=gkClub[p.team]||[]).push(p);});
+  Object.values(gkClub).forEach(list=>{
+    const score=p=>p.lastMins*3+p.price*400+(p.preMinPerApp||0)*4;
+    const listed=p=>GK_FIRST.includes(norm(p.web_name))?1:0;
+    const gone=p=>p.outUntil>38?1:0;
+    list.sort((a,b)=>gone(a)-gone(b)
+      ||(gwPlayed>=2?b.minutes-a.minutes:0)
+      ||listed(b)-listed(a)
+      ||score(b)-score(a));
+    /* only one keeper plays: the understudy is projected at zero, not a fraction */
+    list.forEach((p,i)=>{p.roleMins=i===0?GK_START:0;if(i>0)p.backup=true;});
+    const first=list[0];
+    if(first&&first.outUntil){
+      const dep=list.slice(1).find(p=>p.avail>0);
+      if(dep){dep.coverMins=GK_START;dep.coverUntil=first.outUntil;if(first.outUntil>nextId)dep.backup=false;}
+    }
+  });
+  /* An absent team-mate frees minutes for whoever is fit behind him. D7
+     (12 Oct 2026): the extra is capped at the minutes the absentees leave
+     free and at the shirts the position has, and lasts only until they are
+     due back. Uncapped it lifted 357 players, putting 22,535 outfield
+     minutes a week on the league against 16,746 played. */
+  const SLOTS={1:1,2:4.3,3:4.3,4:2.0};
+  const cp={};players.forEach(p=>{(cp[p.team+"|"+p.pos]=cp[p.team+"|"+p.pos]||[]).push(p);});
+  Object.values(cp).forEach(list=>{
+    if(list[0].pos===1)return;
+    const out=list.filter(p=>p.avail<=0), fit=list.filter(p=>p.avail>0);
+    if(!out.length||!fit.length)return;
+    const lift=clamp(1+out.reduce((a,p)=>a+clamp(p.price/8,.25,1.2),0)*0.12,1,1.3);
+    const want=fit.map(p=>p.roleMins>=84?0:Math.max(0,Math.min(p.roleMins*lift,89)-p.roleMins));
+    const E=want.reduce((a,x)=>a+x,0);
+    if(!(E>0))return;
+    const freed=out.reduce((a,p)=>a+p.roleMins,0);
+    const headroom=Math.max(0,SLOTS[list[0].pos]*90-fit.reduce((a,p)=>a+p.roleMins,0));
+    const k=Math.min(E,freed,headroom)/E;
+    const until=Math.max(...out.map(p=>p.outUntil));
+    fit.forEach((p,i)=>{const m=want[i]*k;if(m<0.5)return;
+      p.coverMins=m;p.coverUntil=until;p.lifted=true;});
+  });
+
+  /* per-gameweek projection */
+  players.forEach(p=>{
+    const team=p._team;
+    /* minutes in week e: the normal role plus any cover for an absent
+       team-mate while he is out */
+    const minsAt=e=>clamp(p.roleMins+(e<p.coverUntil?p.coverMins:0),0,90);
+    /* D9: availability for THIS gameweek. A doubt applies to the next week
+       only, and once (to the points, not to the minutes as well); an absent
+       player misses until he is due back, then is eased in over two weeks. */
+    const availAt=e=>{
+      if(p.outUntil){
+        if(e<p.outUntil)return 0;
+        if(e<p.outUntil+2)return 0.55+0.25*(e-p.outUntil);
+        return 1;
+      }
+      return e===nextId?clamp(p.avail,0,1):1;
+    };
     for(let e=S.model.next.id;e<=38;e++){
       const fx=teamFix(team,e);
       if(!fx.length){p.gw[e]={pts:0,fixtures:[],blank:true};continue;}
+      const mE=minsAt(e), availE=availAt(e);
+      /* Appearance behaviour is what gives cameo players their floor: a 15-minute
+         average means he features most weeks, just briefly. */
+      /* These used to saturate at 75 and 80 minutes, so two-thirds of the active
+         pool were treated identically however many minutes they were expected to
+         play — a player on 81 scored exactly like one on 90. Extended so the
+         75-90 band still separates, which is where most regulars sit. */
+      const pPlay=clamp(mE/17,0,.985);
+      const p60=clamp((mE-22)/62,0,.985);
+      const share=clamp(mE/90,0,1);
       let tot=0;
       fx.forEach(f=>{
         const opp=f.oppT||{};
@@ -1733,25 +1790,18 @@ function buildModel(){
         /* penalties earned scale with how often the side attacks */
         const teamAtk=clamp((team.att||PL_GF)/PL_GF,0.55,1.45);
         const extras=(p.penBoost*teamAtk*atk+p.setBoost)*share;
-        /* availability for THIS gameweek rather than for the season */
-        let availE=p.avail;
-        if(outUntil){
-          if(e<outUntil)availE=0;
-          else if(e<outUntil+2)availE=0.55+0.25*(e-outUntil);   // easing back in
-          else availE=1;
-        }
-        tot+=(app+attack+cs+conc+defcon+bon+extras)*clamp(availE,0,1);
+        tot+=(app+attack+cs+conc+defcon+bon+extras)*availE;
       });
       const c=CAL[p.pos]||{A:0,B:1};
       const rawTot=tot;
       /* the flat term scales with minutes too, and capping it at 80 meant every
          regular shared an identical floor regardless of expected minutes */
-      tot=c.A*clamp(p.xMins/88,0,1.02)+c.B*tot;
+      tot=c.A*clamp(mE/88,0,1.02)*availE+c.B*tot;
       if(e===S.model.next.id)p.rawPts=rawTot;
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(p.xMins)),fixtures:fx,blank:false};
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)),fixtures:fx,blank:false};
     }
     /* --- fixture sensitivity ---
        Applied per player: hold his average across the horizon fixed and stretch
@@ -1764,7 +1814,8 @@ function buildModel(){
         p.gw[w].pre=p.gw[w].pts;
         p.gw[w].pts=Math.max(0,mean+(p.gw[w].pts-mean)*FIXTURE_AMP);});
     }
-    p.xMins=Math.round(p.xMins);
+    /* the figure every page shows: next week's minutes, flag applied */
+    p.xMins=Math.round(minsAt(nextId)*availAt(nextId));
     delete p._team;
   });
 
@@ -1782,7 +1833,6 @@ function buildModel(){
      eleven shirts allow, somebody is going to be rotated — and last season's
      record cannot say who. Flag the ones most at risk rather than silently
      adjusting them, because nothing in the data says by how much. */
-  const SLOTS={1:1,2:4.3,3:4.3,4:2.0};
   const byClubPos={};
   players.forEach(p=>{(byClubPos[p.team+"|"+p.pos]=byClubPos[p.team+"|"+p.pos]||[]).push(p);});
   Object.entries(byClubPos).forEach(([k,list])=>{
