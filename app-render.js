@@ -460,12 +460,16 @@ function weekPtsFor(g){
    one-week error and must not be set beside other tools' figures. The (i)
    says what it measures and gives the honest one-week figure from the audit's
    pre-deadline backtest (GW1 to GW5, players owned by 1% or more). */
-const XFPL_BACKTEST={mae:2.38,field:2.10,gws:"GW1 to GW5",n:970};
-function xfplAccuracyInfo(g,played,n){
+/* X3 (13 Oct 2026): the tiles show the true one-week error from
+   pre-deadline projections (trueAccuracy); the old season-average proxy is
+   kept as a second line, labelled. */
+function xfplAccuracyInfo(g,played,n,T){
+  const wk=T?T.weeks.map(w=>`GW${w.g} ${w.mae.toFixed(2)}${w.src==="backtest"?" (backtest)":""}`).join(" · "):"";
   return `<details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>What the MAE and bias tiles measure</summary>
     <div class="infobox">
-      <p style="margin:0 0 6px">They compare each player's GW${g} projection with his points so far divided by the ${played} finished gameweek${played===1?"":"s"} (${n} players expected to play 45 minutes or more). An average over ${played} weeks smooths out the big week-to-week swings, and the projection is partly built from those same weeks, so these figures look much better than a true one-week error. They are not comparable with other tools.</p>
-      <p style="margin:0">The true one-week figure comes from a backtest of projections made before each deadline, ${XFPL_BACKTEST.gws}: the model missed by ${XFPL_BACKTEST.mae.toFixed(2)} points per player on average (${XFPL_BACKTEST.n} player-weeks, players owned by 1% or more), against ${XFPL_BACKTEST.field.toFixed(2)} for the best published models on the same measure. It will be measured live once a projection is saved before every deadline.</p>
+      <p style="margin:0 0 6px">MAE is how far, on average, each player's projection made before the deadline was from the points he scored that week; bias is whether it ran high (+) or low (−). Every player with a projection counts, including those who did not play, finished weeks only.${T?` By week: ${wk}.`:""}</p>
+      <p style="margin:0 0 6px">Weeks marked backtest (GW1 to GW6) are what this version of the model projects from the data as it stood before each deadline, without odds: a fair test of the model, but not a record of what the page showed at the time. From GW7 the server saves the real projection 60 and 15 minutes before every deadline, and those live weeks replace the backtest.</p>
+      <p style="margin:0">The second line, against season average, is the older proxy: each player's GW${g} projection against his points so far divided by ${played} week${played===1?"":"s"} (${n} players on 45+ expected minutes). It smooths the weekly swings, so it reads better than a true one-week error.</p>
     </div></details>`;
 }
 function xfplHTML(){
@@ -493,6 +497,7 @@ function xfplHTML(){
     return {n,mae:arr.reduce((s,x)=>s+Math.abs(x.p-x.a),0)/n,
       bias:arr.reduce((s,x)=>s+(x.p-x.a),0)/n};};
   const overall=summ([].concat(acc[1],acc[2],acc[3],acc[4]));
+  const T=trueAccuracy();
 
   /* Squad-level predicted vs actual, navigable GW by GW.
      "Predicted" prefers the true snapshot the model job now takes right after
@@ -534,14 +539,15 @@ function xfplHTML(){
   const status=`<div class="panel"><div class="phead"><h2>xFPL model</h2>
     <span class="note">data ${esc(stamp)}</span></div>
     <div class="pbody">
-      <p class="note" style="margin:0 0 10px">Projections come from the FPL Core Insights dataset, then get calibrated per position. Once gameweeks finish, the model compares what each position actually returns per appearance with what it projected and nudges the calibration toward the truth — it needs 25+ regular starters and 4+ finished gameweeks in a position before anything moves, and every adjustment is capped.</p>
+      <p class="note" style="margin:0 0 10px">Projections come from the FPL Core Insights dataset, then get calibrated per position. Automatic learning from results is off: position levels are re-fitted by a backtest instead, checked before anything changes (half applied 13 Oct, the full re-fit after GW10).</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${[[played,"GW finished"],["GW"+g,"projecting"],[overall?overall.mae.toFixed(2):"—","MAE vs season avg"],[overall?(overall.bias>0?"+":"")+overall.bias.toFixed(2):"—","bias vs season avg"]]
+        ${[[played,"GW finished"],["GW"+g,"projecting"],[T?T.all.mae.toFixed(2):"—","one-week MAE"],[T?(T.all.bias>0?"+":"")+T.all.bias.toFixed(2):"—","one-week bias"]]
           .map(([v,l])=>`<span style="flex:1;min-width:88px;background:var(--ink2);border:1px solid var(--ink3);border-radius:9px;padding:8px 10px;text-align:center">
             <b style="display:block;font-family:'Barlow Condensed';font-size:22px;font-weight:800;color:var(--mint)">${v}</b>
             <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)">${l}</span></span>`).join("")}
       </div>
-      ${overall?xfplAccuracyInfo(g,played,overall.n):""}
+      ${T?`<p class="note" style="margin:8px 0 0">${T.all.n.toLocaleString()} player-weeks · ${T.live?T.live+" live":""}${T.live&&T.back?" + ":""}${T.back?T.back+" backtest":""} week${T.live+T.back===1?"":"s"}${overall?` · vs season average: MAE ${overall.mae.toFixed(2)}, bias ${(overall.bias>0?"+":"")+overall.bias.toFixed(2)}`:""}</p>`:""}
+      ${overall||T?xfplAccuracyInfo(g,played,overall?overall.n:0,T):""}
       ${played<1?`<p class="note" style="margin:10px 0 0;color:var(--amber)">No finished gameweeks in the data yet — showing projections and the current calibration baseline. Predicted-vs-actual fills in once results land.</p>`:""}
     </div></div>`;
 
@@ -556,7 +562,7 @@ function xfplHTML(){
         <td class="note" style="text-align:left">${L?`${L.n} players · ${L.gw} GW`:"baseline (no learning yet)"}</td></tr>`;}).join("")}
     </tbody></table></div>
     ${Object.keys(learn).length&&!LEARN_APPLY
-      ?`<div class="pbody" style="border-top:1px solid var(--ink3)"><p class="note" style="margin:0">Adjustments are recorded from results but not applied: every projection stays on the baseline until learning is switched on (owner decision D4).</p></div>`:""}
+      ?`<div class="pbody" style="border-top:1px solid var(--ink3)"><p class="note" style="margin:0">Adjustments are recorded from results but not applied (decision D4, 13 Oct): levels are re-fitted by backtest at GW10 instead.</p></div>`:""}
     </div>`;
 
   const pva=played<1?"":`<div class="panel"><div class="phead"><h2>Predicted vs actual</h2>

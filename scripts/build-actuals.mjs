@@ -578,6 +578,13 @@ async function main() {
     for (const g of teamGw) {
       const p = preds.gw[g.event];
       if (p && p.squad != null) { g.predicted = p.squad; predCount++; }
+      /* snapshots taken before the deadline cannot see the picks; the squad
+         figure is the official picks (with their multipliers) against the
+         per-player projections recorded before the deadline */
+      else if (p && p.players && g.picks?.length) {
+        g.predicted = Math.round(g.picks.reduce((s, k) => s + (p.players[k.id] ?? 0) * (k.multiplier || 0), 0) * 100) / 100;
+        predCount++;
+      }
     }
   }
 

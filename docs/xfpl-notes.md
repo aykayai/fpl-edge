@@ -34,6 +34,23 @@ The rank correlations once quoted here (GK 0.58, DEF 0.28, MID 0.42, FWD 0.61
 against four-week totals) were not reproduced by the audit. The per-gameweek
 pre-deadline Spearman is 0.37 to 0.49.
 
+### Current Model, Pre-Deadline, GW1 to GW5 (13 Oct 2026, v12.8.0 onwards)
+After the expected-minutes and scoring changes (decisions D1 to D15, ROADMAP
+bundles 1 and 2), the same backtest method, every player with a projection,
+scored against official points:
+
+| Population | Before (v12.5.0) | Now | FPL ep_next |
+|---|---|---|---|
+| All players, MAE | 1.650 | 1.31 | 1.377 |
+| All players, bias | +0.565 | about 0.0 | +0.003 |
+| Available at the deadline, MAE | 2.110 | 1.669 | 1.753 |
+
+The appearance bands were fitted out of sample (each week scored with bands
+measured on the other four). From GW7 the server saves the real projection
+before every deadline (`/data/feeds/predictions.json`), and the xFPL page's
+one-week MAE switches from this backtest to those live weeks as they finish.
+Learning (D4) is off; position levels are re-fitted by backtest at GW10.
+
 ### Pre-Deadline Accuracy, GW1 to GW5 of 2026/27 (Audit Backtest)
 From the FPL Edge audit (Stage 2, section 3c): the current model run on the
 dataset as it stood before each deadline, scored against the official live

@@ -71,6 +71,38 @@ async function dataText(url){
   if(S.capture)S.capture[url]=t;
   return t;
 }
+/* F2/X3 (13 Oct 2026): what the model said before each deadline. Live
+   snapshots (predictions.json) are taken by the server from GW7; the GW1-6
+   series (backtest.json) is today's model run on the data as it stood before
+   each deadline, and is always labelled as a backtest. */
+async function loadPredictions(){
+  const one=async u=>{try{const d=JSON.parse(await dataText(u));return d&&d.gw?d:null;}catch(e){return null;}};
+  const [live,back]=await Promise.all([one("/data/feeds/predictions.json"),one("/data/feeds/backtest.json")]);
+  S.predLive=live;S.predBack=back;
+}
+/* The true one-week error: each player's pre-deadline projection against
+   the points he scored, every player with both, finished weeks only. A live
+   snapshot is used where one exists, else the backtest. */
+function trueAccuracy(){
+  const A=S.playerActuals;if(!A)return null;
+  const weeks=[],rows=[];
+  for(let g=1;g<=38;g++){
+    if(!weekFinal(g))continue;
+    const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g], back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
+    const snap=live||back;if(!snap||!snap.players)continue;
+    const src=live?"live":"backtest";
+    let n=0,ae=0,b=0;
+    Object.entries(snap.players).forEach(([id,pred])=>{
+      const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
+      const pl=S.model&&S.model.players.find(p=>p.id==id);
+      n++;ae+=Math.abs(pred-pts);b+=pred-pts;rows.push({pos:pl?pl.pos:0,e:pred-pts});});
+    if(n)weeks.push({g,src,n,mae:ae/n,bias:b/n});
+  }
+  if(!rows.length)return null;
+  const sum=r=>({n:r.length,mae:r.reduce((s,x)=>s+Math.abs(x.e),0)/r.length,bias:r.reduce((s,x)=>s+x.e,0)/r.length});
+  const byPos={};[1,2,3,4].forEach(k=>{const r=rows.filter(x=>x.pos===k);if(r.length)byPos[k]=sum(r);});
+  return {all:sum(rows),weeks,byPos,live:weeks.filter(w=>w.src==="live").length,back:weeks.filter(w=>w.src==="backtest").length};
+}
 async function loadRivals(){
   try{
     const d=JSON.parse(await dataText(RIVALS_URL));
@@ -142,7 +174,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.10.1";
+const APP_VERSION="12.11.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -400,7 +432,7 @@ async function loadAll(force,opts){
     /* nothing new on the server (or the server is unreachable): keep the
        built model, refresh the light feeds, and re-render once */
     S.capture={};
-    await Promise.all([loadActuals(),loadRivals()]);
+    await Promise.all([loadActuals(),loadRivals(),loadPredictions()]);
     if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();
       if(st){_snap.status=st;_snap.statusAt=S.statusAt;}IDB.set("snap",_snap);}
     S.capture=null;
@@ -704,7 +736,7 @@ async function loadAll(force,opts){
     /* The commit is kept so "Check now" can skip an unchanged dataset. The
        copy itself goes to IndexedDB below (localStorage had no room for it). */
     S.datasetCommit=commit;
-    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions()]);
     /* Bring the planner onto the latest official squad when a newer one has
        been published (this also upgrades a seed made before the feeds landed). */
     syncOfficialSquad();
@@ -1219,7 +1251,9 @@ let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE
    which would have armed that path silently, so the switch is now explicit:
    every build projects from CAL_BASE, however many builds a session runs,
    until LEARN_APPLY is flipped by the owner. */
-const LEARN_APPLY=false;   /* D4: owner decision pending */
+/* D4 (13 Oct 2026, Andy): learning stays off. Position levels are re-fitted
+   by backtest instead (D5 half applied 13 Oct, full re-fit after GW10). */
+const LEARN_APPLY=false;
 function applyLearning(){
   CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
   if(!LEARN_APPLY)return;

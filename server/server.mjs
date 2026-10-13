@@ -24,7 +24,7 @@ import { initDataset, pollDataset, datasetStatus, datasetGW, currentDir } from "
 import { fetchBootstrap, fetchLive, nearDeadline, anyFixtureLive, priceFetchDue, fplStatus } from "./lib/fpl.mjs";
 import { refreshNews, newsPayload, newsStatus, playerNews } from "./lib/news.mjs";
 import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
-import { buildFeeds, feedsStatus, FEEDS_DIR } from "./lib/feeds.mjs";
+import { buildFeeds, feedsStatus, FEEDS_DIR, SNAP_DIR } from "./lib/feeds.mjs";
 import { snapshotTick, snapshotStatus } from "./lib/snapshot.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -143,8 +143,10 @@ async function handle(req, res) {
 
     if (path.startsWith("/data/feeds/")) {
       const name = path.slice("/data/feeds/".length);
-      if (!/^(actuals|rivals)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
-      const full = join(FEEDS_DIR(), name);
+      /* predictions.json (live pre-deadline snapshots) and backtest.json (the
+         labelled GW1-6 backtest series) live in the snapshot dir */
+      if (!/^(actuals|rivals|predictions|backtest)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
+      const full = join(/^(predictions|backtest)/.test(name) ? SNAP_DIR() : FEEDS_DIR(), name);
       let mtime = "";
       try { mtime = (await stat(full)).mtime.toISOString(); } catch { /* 404s below */ }
       await serveFile(res, method, full, {
