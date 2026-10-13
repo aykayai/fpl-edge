@@ -205,7 +205,12 @@ function listHTML(){
   const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
     ${cols.map(([k,n])=>`<span class="lc ${S.lSort===k?"act":""}" data-k="${k}" onclick="act('lsort','${k}')">${n}</span>`).join("")}</div>`;
-  return head+a.slice(0,150).map(p=>{
+  /* F77 (bundle 9): the pool was 84% of the Planner's page (150 rows, ~4,000
+     elements); 50 at a time, more on request */
+  const plim=S.poolLimit||50;
+  const pmore=a.length>plim?`<div class="pdmore"><span class="note">Showing ${plim} of ${Math.min(a.length,150)}</span>
+    <button onclick="act('poolmore')">Show ${Math.min(50,Math.min(a.length,150)-plim)} more</button></div>`:"";
+  return head+a.slice(0,Math.min(plim,150)).map(p=>{
     const own=ownIds.includes(p.id);
     /* everything stays selectable; unaffordable players are simply dimmed */
     const afford=!flags.length || p.price<=budget+0.001 || own;
@@ -231,7 +236,7 @@ function listHTML(){
         delta==null?hPts(p,g,S.horizon).toFixed(1):sgn1(delta)}</span>
       <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,3).toFixed(1)}</span>
       <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,5).toFixed(1)}</span>
-    </button>`;}).join("");
+    </button>`;}).join("")+(plim<150?pmore:"");
 }
 function plannerControls(){
   const g=S.model.next.id;
