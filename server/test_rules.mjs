@@ -136,8 +136,9 @@ try {
   doSwaps(ftW + 1);
   check(g.transfersIn(W) === ftW + 1 && g.hitCost(W) === 4, `F19 ${ftW} free and ${ftW + 1} transfers costs 4`, `transfers ${g.transfersIn(W)} hit ${g.hitCost(W)}`);
   g.render();
-  const header = [...doc.querySelectorAll(".stat")].find(s => /Predicted/i.test(s.textContent));
-  check(header && /-4 hit/.test(header.textContent), "F19 the header shows the hit beside the predicted figure", header && header.textContent.replace(/\s+/g, " "));
+  /* header figures are cards (.fc) since bundle 8 */
+  const header = [...doc.querySelectorAll(".fc, .stat")].find(s => /Predicted/i.test(s.textContent));
+  check(header && /[-−]4 hit/.test(header.textContent), "F19 the header shows the hit beside the predicted figure", header && header.textContent.replace(/\s+/g, " "));
   check(new RegExp(`${ftW + 1} transfers · -4 hit`).test(doc.getElementById("app").textContent), "F19 the planner shows the transfers and the hit");
   restore(clean); S.startGW = W; g.render();
   doSwaps(ftW);
@@ -154,8 +155,8 @@ try {
     for (const o of sq.filter(p => p.pos >= 2).slice(0, 4)) { const i = cheapSwap(o, used3); if (!i) continue; used3.push(i.id); g.applySwap(o.id, i.id); }
     check(g.hitCost(wcWeek) === 0, "F19 a Wildcard week costs nothing however many transfers", `transfers ${g.transfersIn(wcWeek)} hit ${g.hitCost(wcWeek)}`);
     g.render();
-    const ftStat = [...doc.querySelectorAll(".stat")].find(s => /Free transfers/i.test(s.textContent));
-    check(ftStat && /Unlimited/.test(ftStat.textContent) && /Wildcard this week only/.test(ftStat.textContent), "F61 a Wildcard week shows Unlimited", ftStat && ftStat.textContent.replace(/\s+/g, " "));
+    const ftStat = [...doc.querySelectorAll(".fc, .stat")].find(s => /Free transfers/i.test(s.textContent));
+    check(ftStat && /Unlimited/.test(ftStat.textContent) && /Wildcard this week/.test(ftStat.textContent), "F61 a Wildcard week shows Unlimited", ftStat && ftStat.textContent.replace(/\s+/g, " "));
   } else check(false, "F61 setup: Wildcard could be planned for the next week", g.chipRuleBreak("wildcard" + half, wcWeek));
   restore(clean); g.render();
 

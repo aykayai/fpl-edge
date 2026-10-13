@@ -100,10 +100,11 @@ try {
   const feed = await (await fetch(BASE + "/data/feeds/actuals.json")).json();
   const ranked = (feed.team.gw || []).filter(r => r.orRank != null).sort((a, b) => b.event - a.event)[0];
   show("squad");
-  const rankStat = [...doc.querySelectorAll(".stat")].find(s => /Overall rank/i.test(s.textContent));
-  const shown = rankStat ? rankStat.querySelector(".v").textContent.replace(/,/g, "") : "";
+  /* header figures are cards (.fc: .fcv figure, .fcc change line) since bundle 8 */
+  const rankStat = [...doc.querySelectorAll(".fc, .stat")].find(s => /Overall rank/i.test(s.textContent));
+  const shown = rankStat ? rankStat.querySelector(".fcv, .v").textContent.replace(/,/g, "") : "";
   check(ranked && +shown === ranked.orRank, "F8 header overall rank is the feed's latest week", `page ${shown} feed ${ranked && ranked.orRank} (GW${ranked && ranked.event})`);
-  check(rankStat && rankStat.querySelector(".s").textContent.trim() === "after GW" + ranked.event, "F8 the rank says which week it is from", rankStat && rankStat.querySelector(".s").textContent);
+  check(rankStat && rankStat.querySelector(".fcc, .s").textContent.trim().endsWith("after GW" + ranked.event), "F8 the rank says which week it is from", rankStat && rankStat.querySelector(".fcc, .s").textContent);
 
   /* F7: make one page builder throw */
   const real = vm.runInContext("signalsHTML", ctx);

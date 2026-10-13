@@ -115,9 +115,9 @@ function filtered(scope){
   return out;
 }
 const fix3=(p,g)=>{let h='';const LENS=p2=>p2.pos<=2?'def':'att';for(let e=g;e<g+3&&e<=38;e++){const q=p.gw[e];
-  if(!q||q.blank){h+='<span class="fdrpill" style="background:var(--ink3);color:var(--mute);font-size:8px;padding:1px 4px">—</span>';continue;}
+  if(!q||q.blank){h+='<span class="fdrpill" style="background:var(--ink3);color:var(--mute);font-size:10px;padding:1px 4px">—</span>';continue;}
   const f=q.fixtures[0],[b,c]=fdrCol(p.pos<=2?(f.diffDef??f.diff):(f.diffAtt??f.diff));
-  h+=`<span class="fdrpill" style="background:${b};color:${c};font-size:8px;padding:1px 4px">${esc(f.opp.slice(0,3))}</span>`;}
+  h+=`<span class="fdrpill" style="background:${b};color:${c};font-size:10px;padding:1px 4px">${esc(f.opp.slice(0,3))}</span>`;}
   return `<span style="display:inline-flex;gap:2px">${h}</span>`;};
 /* F35: one expression for each figure Player Data shows, so its sort and
    the Transfers radar read the same number the cell prints. The CS % sort
@@ -174,14 +174,14 @@ function replHTML(){
       .filter(m=>m.gain>=0.1)
       .sort((a,b)=>b.gain-a.gain).slice(0,3);
     return `<div class="repl"><div style="padding:9px 12px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
-      <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--cyan)">
+      <span style="font-size:10px;font-weight:700;color:var(--cyan)">
         Replace ${esc(o.web_name)} · ${POS[o.pos]}</span>
       <span class="note">£${(planBank()+sellPrice(o)).toFixed(1)} to spend · sells for £${sellPrice(o).toFixed(1)}</span></div>
       ${opts.length?opts.map(m=>`<button class="prow" onclick="act('doswap',${o.id},${m.inn.id})">
         ${shirtSVG(m.inn.teamName.toUpperCase(),m.inn.pos===1,24)}
         <span style="flex:1;min-width:0">
           <span style="display:flex;align-items:center;gap:5px"><span style="font-size:12.5px;font-weight:600">${esc(m.inn.web_name)}</span>${sigHTML(m.inn,g)}</span>
-          <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${m.inn.xMins}′ xMins</span></span>
+          <span style="display:block;font-size:10px;color:var(--mute)">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${m.inn.xMins}′ xMins</span></span>
         <span class="mono" style="color:var(--mint);font-weight:700">+${m.gain.toFixed(1)}</span></button>`).join("")
         :`<div class="pbody"><p class="note">No option improves this pick by +0.1 or more.</p></div>`}</div>`;
   }).join("");
@@ -219,7 +219,7 @@ function listHTML(){
         <span style="display:flex;align-items:center;gap:5px">
           <span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.web_name)}</span>
           ${INJ(p)}</span>
-        <span style="display:block;font-size:9.5px;color:var(--mute);margin-top:1px">${esc(p.teamName)} · ${POS[p.pos]}${own?' · <span style="color:var(--mint)">in squad</span>':""}</span>
+        <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">${esc(p.teamName)} · ${POS[p.pos]}${own?' · <span style="color:var(--mint)">in squad</span>':""}</span>
         <span style="display:block;margin-top:2px">${fix3(p,g)}</span>
         <span class="poolsigs">${sigHTML(p,g)}</span></span>
       <span class="lc mono" style="font-size:11px">£${p.price.toFixed(1)}${arw(p.priceChange)}</span>
@@ -415,7 +415,7 @@ function tableHTML(){
   const rows=a.slice(0,lim).map(p=>{
     const q=p.gw[g]||{fixtures:[]};
     const nx=q.fixtures.length?q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f))).join(" ")
-      :`<span style="color:var(--mute);font-size:9.5px">BLANK</span>`;
+      :`<span style="color:var(--mute);font-size:10px">BLANK</span>`;
     const own=(S.squad||[]).includes(p.id);
     let tds=`<td class="nm"><span style="display:flex;align-items:center;gap:6px">
         <button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="${S.stars.includes(p.id)?"Remove from shortlist":"Shortlist"}" aria-label="${S.stars.includes(p.id)?"Remove "+esc(p.web_name)+" from shortlist":"Shortlist "+esc(p.web_name)}" aria-pressed="${S.stars.includes(p.id)}">★</button>
@@ -423,7 +423,7 @@ function tableHTML(){
       <span style="min-width:0"><span style="display:flex;align-items:center;gap:5px">
         <span style="font-weight:600;font-size:12px">${esc(p.web_name)}</span>${INJ(p)}
         ${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to Team Planner" aria-label="Add ${esc(p.web_name)} to Team Planner">+</button>`}</span>
-      <span style="display:flex;gap:4px;align-items:center;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>`;
+      <span style="display:flex;gap:4px;align-items:center;font-size:10px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>`;
     cols.slice(1).forEach(([k])=>{
       if(k==="signals"){tds+=`<td style="text-align:center">${iconCell(p)}</td>`;return;}
       if(k==="next"){tds+=`<td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>`;return;}
@@ -523,13 +523,13 @@ function xfplHTML(){
         <button onclick="act('xfplgw','prev')" ${xg<=1?"disabled":""} aria-label="Earlier">←</button>
         <div style="text-align:center;min-width:96px">
           <span class="note" style="display:block">Predicted${snapPred!=null?"":(isPastGw?"":" (live)")}</span>
-          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:${xPred!=null?"var(--cyan)":"var(--ink3)"}">${xPred!=null?xPred.toFixed(1):"—"}</span></div>
+          <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:30px;color:${xPred!=null?"var(--cyan)":"var(--ink3)"}">${xPred!=null?xPred.toFixed(1):"—"}</span></div>
         <div style="text-align:center;min-width:64px">
           <span class="note" style="display:block">GW${xg}</span>
-          ${xDiff!=null?`<span style="display:block;font-weight:800;font-family:'Barlow Condensed',sans-serif;font-size:15px;color:${xDiff>=0?"var(--mint)":"var(--red)"}">${xDiff>=0?"+":""}${xDiff.toFixed(1)}</span>`:`<span class="note" style="display:block">—</span>`}</div>
+          ${xDiff!=null?`<span style="display:block;font-weight:800;font-family:'Geist',system-ui,sans-serif;font-size:15px;color:${xDiff>=0?"var(--mint)":"var(--red)"}">${xDiff>=0?"+":""}${xDiff.toFixed(1)}</span>`:`<span class="note" style="display:block">—</span>`}</div>
         <div style="text-align:center;min-width:96px">
           <span class="note" style="display:block">${xActual!=null&&!weekFinal(xg)?"So far"+LIVE_TAG:"Actual"}</span>
-          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:${xActual!=null?"var(--mint)":"var(--ink3)"}">${xActual!=null?xActual.toFixed(1):"—"}</span></div>
+          <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:30px;color:${xActual!=null?"var(--mint)":"var(--ink3)"}">${xActual!=null?xActual.toFixed(1):"—"}</span></div>
         <button onclick="act('xfplgw','next')" ${xg>=38?"disabled":""} aria-label="Later">→</button>
       </div>
       ${xActual==null?`<p class="note" style="margin:8px 0 0;text-align:center">Actual score for GW${xg} lands once the live-actuals feed publishes it.</p>`
@@ -543,8 +543,8 @@ function xfplHTML(){
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${[[played,"GW finished"],["GW"+g,"projecting"],[T?T.all.mae.toFixed(2):"—","one-week MAE"],[T?(T.all.bias>0?"+":"")+T.all.bias.toFixed(2):"—","one-week bias"]]
           .map(([v,l])=>`<span style="flex:1;min-width:88px;background:var(--ink2);border:1px solid var(--ink3);border-radius:9px;padding:8px 10px;text-align:center">
-            <b style="display:block;font-family:'Barlow Condensed';font-size:22px;font-weight:800;color:var(--mint)">${v}</b>
-            <span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)">${l}</span></span>`).join("")}
+            <b style="display:block;font-family:'Geist';font-size:22px;font-weight:800;color:var(--mint)">${v}</b>
+            <span style="font-size:10px;color:var(--mute)">${l}</span></span>`).join("")}
       </div>
       ${T?`<p class="note" style="margin:8px 0 0">${T.all.n.toLocaleString()} player-weeks · ${T.live?T.live+" live":""}${T.live&&T.back?" + ":""}${T.back?T.back+" backtest":""} week${T.live+T.back===1?"":"s"}${overall?` · vs season average: MAE ${overall.mae.toFixed(2)}, bias ${(overall.bias>0?"+":"")+overall.bias.toFixed(2)}`:""}</p>`:""}
       ${overall||T?xfplAccuracyInfo(g,played,overall?overall.n:0,T):""}
@@ -784,7 +784,7 @@ function transfersHTML(){
       <p class="note" style="margin:0 0 8px">Tap players to sell. Recommendations use the combined budget.</p>
       ${[1,2,3,4].map(pos=>{const list=squadPlayers().filter(p=>p.pos===pos);if(!list.length)return"";
         return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-          <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;width:34px">${POS[pos]}</span>
+          <span style="font-size:10px;color:var(--mute);font-weight:700;width:34px">${POS[pos]}</span>
           ${list.slice().sort((a,b)=>b.price-a.price).map(p=>`<button class="chipbtn ${S.outList.includes(p.id)?"on":""}"
             onclick="act('toggleout',${p.id})">${esc(p.web_name)} £${p.price.toFixed(1)}</button>`).join("")}</div>`;}).join("")}
       ${chosen.length?`<p class="note" style="margin-top:8px">Selling ${chosen.map(p=>esc(p.web_name)).join(", ")} frees £${budget.toFixed(1)}.
@@ -812,7 +812,7 @@ function transfersHTML(){
       <div class="phead" style="border-color:#5A3F10"><h2 style="color:var(--amber)">Head Scout</h2>
       <span class="note">GW${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span></div>
     <div class="pbody">
-      <div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700;margin-bottom:8px">Top target</div>
+      <div style="font-size:10px;color:var(--mint);font-weight:700;margin-bottom:8px">Top target</div>
       ${top.gain>=moveBar(g)?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers: the best available move is worth only +${top.gain.toFixed(1)} points${freeLeft(g)>0?"":`, not enough to cover a ${HIT}-point hit`}.</p>`}</div></div>`
     :`<div class="panel"><div class="phead"><h2>Head Scout</h2></div><div class="pbody">
       <p class="note">No transfer improves your predicted total within budget and the three-per-club limit.</p></div></div>`;
@@ -885,7 +885,7 @@ function fixturesHTML(){
       ${list.length?list.map(x=>`<div class="fixrow">
         <span class="fixteam" style="flex:none;width:148px;gap:8px">${badgeOrShirt(x.t,20)}
           <b>${esc(x.t.name||x.t.short)}</b></span>
-        <span class="note" style="flex:none;width:60px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:${kind==="att"?"var(--mint)":"var(--cyan)"}">${x.avg.toFixed(2)}</span>
+        <span class="note" style="flex:none;width:60px;text-align:right;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:14px;color:${kind==="att"?"var(--mint)":"var(--cyan)"}">${x.avg.toFixed(2)}</span>
         <span class="note" style="flex:none;width:64px">${x.good} of ${x.runs.length}</span>
         <span class="pillrow">${x.runs.map(r=>
           fdrPill(r.opp,r.home,r.d,{short:true})).join("")}</span></div>`).join("")
@@ -975,13 +975,13 @@ function fixturesHTML(){
           ${fdrPill(a.short,true,hd,{short:true})}</span>
         <span style="flex:none;width:112px;text-align:center;line-height:1.25">
           <span style="display:block;color:var(--cream);font-size:11px;font-weight:600">${esc(tm)}</span>
-          <span style="display:block;color:var(--mute);font-size:9px">${esc(d)}</span></span>
+          <span style="display:block;color:var(--mute);font-size:10px">${esc(d)}</span></span>
         <span class="fixteam away" style="gap:8px">${fdrPill(h.short,false,ad,{short:true})}
           ${strongSide(a)}<span style="font-weight:600">${esc(a.name||a.short)}</span>
           ${badgeOrShirt(a,22)}</span>
         <span style="flex-basis:100%;display:flex;gap:14px;justify-content:center;margin-top:5px">
           <span class="last3">${lastResults(h,g)}</span>
-          <span class="note" style="font-size:9px;align-self:center">vs</span>
+          <span class="note" style="font-size:10px;align-self:center">vs</span>
           <span class="last3">${lastResults(a,g)}</span></span></div>`;
     });
   }
@@ -997,7 +997,7 @@ function fixturesHTML(){
 function lastResults(team,beforeGw){
   const played=(S.fixtures||[]).filter(f=>(f.ht===team||f.at===team)&&f.hs!=null&&f.as!=null&&f.event<beforeGw)
     .sort((a,b)=>b.event-a.event).slice(0,3).reverse();
-  if(!played.length)return `<span class="note" style="font-size:9px">no results yet</span>`;
+  if(!played.length)return `<span class="note" style="font-size:10px">no results yet</span>`;
   return played.map(f=>{
     const home=f.ht===team;
     const gf=home?f.hs:f.as, ga=home?f.as:f.hs;
@@ -1230,7 +1230,7 @@ function chipsHTML(){
     return `<div class="panel">
       <div class="phead"><h2>${title}</h2>
         <span style="text-align:right">
-          <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;
+          <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:22px;
             line-height:1;color:${delta>0?"var(--mint)":"var(--mute)"}">${delta>0?"+":""}${delta.toFixed(1)}</span>
           <span class="note">vs your team · ${label}</span></span></div>
       <div class="pbody" style="border-bottom:1px solid var(--ink3)">
@@ -1243,7 +1243,7 @@ function chipsHTML(){
         </div>`}
         ${t?`<p class="note" style="margin:8px 0 0">${t.total.toFixed(1)} projected · ${how} · £${t.value.toFixed(1)} of £${budget.toFixed(1)} · bench £${t.benchValue.toFixed(1)}</p>`:""}
         ${actualTotal!=null?`<p style="margin:6px 0 0;font-size:12.5px;color:var(--cream)">
-          <b style="font-family:'Barlow Condensed',sans-serif;font-size:19px;color:var(--mint)">${actualTotal.toFixed(0)}</b> actual ·
+          <b style="font-family:'Geist',system-ui,sans-serif;font-size:19px;color:var(--mint)">${actualTotal.toFixed(0)}</b> actual ·
           <span style="color:${actualTotal-t.total>=0?"var(--mint)":"var(--red)"};font-weight:700">${actualTotal-t.total>=0?"+":""}${(actualTotal-t.total).toFixed(1)}</span> vs projected</p>`:""}
       </div>
       ${t?`<div class="pitch">${[1,2,3,4].map(pos=>{const r=t.xi.filter(p=>p.pos===pos);

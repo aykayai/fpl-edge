@@ -403,7 +403,7 @@ function oddsHTML(){
       return c?(k==="model"?c.model:c.mkt):0;})();
   const mdl=sum("model"), mkt=sum("mkt");
   const priced=rows.filter(r=>r.mkt!=null).length;
-  const big=(v,c)=>`<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;line-height:1;color:${c}">${v}</span>`;
+  const big=(v,c)=>`<span style="font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:30px;line-height:1;color:${c}">${v}</span>`;
   const delta=mkt-mdl;
   const squadPanel=`<div class="panel">
     <div class="phead"><h2>Your squad · market vs model</h2>
@@ -439,7 +439,7 @@ function oddsHTML(){
           <td class="nm"><span style="display:flex;align-items:center;gap:7px">
             ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,20)}
             <span><b>${esc(r.p.web_name)}</b>${r.p.id===capId?'<span class="tag c">C</span>':""}
-            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
+            <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
           <td class="mono" style="text-align:right;color:var(--mint)">${r.model.toFixed(1)}</td>
           <td class="mono" style="text-align:right;color:${r.mkt==null?"var(--mute)":"var(--cyan)"}">${r.mkt==null?"—":r.mkt.toFixed(1)}</td>
           <td class="mono" style="text-align:right;font-weight:700;color:${r.d==null?"var(--mute)":r.d>0.4?"var(--mint)":r.d<-0.4?"var(--red)":"var(--cream)"}">${r.d==null?"—":(r.d>0?"+":"")+r.d.toFixed(1)}</td>
@@ -479,7 +479,7 @@ function oddsHTML(){
         <td class="nm"><span style="display:flex;align-items:center;gap:6px">
           ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,18)}
           <span><b>${esc(r.p.web_name)}</b>${owned(r.p.id)?' <span class="tag c">✓</span>':""}
-          <span style="display:block;font-size:9px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
+          <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
         <td class="mono" style="text-align:right;color:var(--amber);font-weight:700">${r.ret?pct(r.ret):"—"}</td>
         <td class="mono" style="text-align:right">${r.goal?pct(r.goal):"—"}</td>
         <td class="mono" style="text-align:right">${r.assist?pct(r.assist):"—"}</td>
@@ -581,7 +581,7 @@ function rivalsHTML(){
           <td style="text-align:left">${mv(r)}</td>
           <td style="text-align:left">
             <span style="font-weight:700;color:${isMe?"var(--mint)":isSel?"var(--amber)":"var(--cream)"}">${esc(r.entryName||"—")}</span>
-            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.manager||"")}${isMe?" · you":""}</span></td>
+            <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.manager||"")}${isMe?" · you":""}</span></td>
           <td>${r.gwPoints??"—"}</td><td>${r.totalPoints??"—"}</td></tr>`;}).join("")}
     </tbody></table></div>
     <div class="pbody"><p class="note" style="margin:0">Tap a rival for their squad, chips, transfers and differentials.</p></div></div>`;
@@ -608,7 +608,7 @@ function rivalsHTML(){
     ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
     <span style="flex:1;min-width:0">
       <span style="font-size:12.5px;font-weight:600">${esc(p.web_name)}</span>
-      <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)}${sub?" · "+sub:""}</span></span>
+      <span style="display:block;font-size:10px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)}${sub?" · "+sub:""}</span></span>
     <span class="mono" style="font-weight:700;color:var(--mint)">${right}</span></div>`;
 
   const summary=`<div class="rvsum">
@@ -737,12 +737,12 @@ function newsHTML(){
        ${Object.keys(S.srcLog||{}).length?`<div class="mono" style="font-size:10px;margin-bottom:8px">${Object.entries(S.srcLog).map(([k,v])=>esc(k)+": "+v).join("<br>")}</div>`:""}The server returned no news items. It refetches every 15 minutes; squad data is unaffected.</div></div>`:""}
      ${S.newsState==="ok"?`<div class="pbody" style="border-top:1px solid var(--ink3);display:flex;flex-direction:column;gap:8px">
        <span style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-         <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;width:46px">Source</span>
+         <span style="font-size:10px;color:var(--mute);font-weight:700;width:46px">Source</span>
          <button class="chipbtn ${sf?"":"on"}" onclick="act('srcf','')">All</button>
          ${Object.entries(srcCount).sort((a,b)=>b[1]-a[1]).slice(0,14)
            .map(([k,v])=>`<button class="chipbtn ${sf===k?"on":""}" onclick="act('srcf','${esc(k).replace(/'/g,"")}')">${esc(k)} ${v}</button>`).join("")}</span>
        <span style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-         <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;width:46px">Player</span>
+         <span style="font-size:10px;color:var(--mute);font-weight:700;width:46px">Player</span>
          <button class="chipbtn ${pf?"":"on"}" onclick="act('plf','')">All</button>
          ${squadPlayers().map(p=>`<button class="chipbtn ${pf===p.web_name?"on":""}" onclick="act('plf','${esc(p.web_name).replace(/'/g,"")}')">${esc(p.web_name)}</button>`).join("")}</span>
        </div>`:""}</div>`;
@@ -921,14 +921,14 @@ function renderPage(){
     const hSlider=`<div class="chipbar" style="align-items:center;justify-content:space-between">
       <button onclick="act('vgw',${Math.max(1,g-1)})" ${g<=1?"disabled style=\"opacity:.35\"":""}>←</button>
       <span style="text-align:center">
-        <span style="display:block;font-family:'Barlow Condensed';font-weight:700;font-size:18px;letter-spacing:.05em">
+        <span style="display:block;font-family:'Geist';font-weight:700;font-size:18px;">
           GAMEWEEK ${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span>
-        <span style="display:block;font-size:9.5px;color:var(--mute)">${g===first?"next deadline":`${g-first} week${g-first>1?"s":""} ahead`}${S.horizon>1?` · ${S.horizon}-week total`:""}</span>
+        <span style="display:block;font-size:10px;color:var(--mute)">${g===first?"next deadline":`${g-first} week${g-first>1?"s":""} ahead`}${S.horizon>1?` · ${S.horizon}-week total`:""}</span>
         ${(g<first&&S.tracker&&(S.tracker.gw||[]).find(r=>r.event===g&&r.picks&&r.picks.length))
-          ?`<span style="display:block;font-size:8.5px;color:var(--mint)" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`:""}</span>
+          ?`<span style="display:block;font-size:10px;color:var(--mint)" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`:""}</span>
       <button onclick="act('vgw',${Math.min(38,g+1)})" ${g>=38?"disabled style=\"opacity:.35\"":""}>→</button></div>`;
     const chipBarUnused=`<div class="chipzone">
-      <span style="font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#9E86C6;font-weight:700;width:100%;text-align:center">Play a chip</span>
+      <span style="font-size:10px;color:#9E86C6;font-weight:700;width:100%;text-align:center">Play a chip</span>
       ${[["none","None"],["bboost","Bench Boost"],["3xc","Triple Captain"],["freehit","Free Hit"],["wildcard","Wildcard"]]
         .map(([k,n])=>{
           /* a chip is only lit on the gameweek it is actually assigned to */
@@ -939,14 +939,14 @@ function renderPage(){
       <div class="phead"><h2 style="color:var(--mint)">Transfer Advice</h2></div>
       <div class="pbody"><p class="note">Top ${S.pendingOpt.length} by predicted gain. Nothing changes until you confirm.</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:8px">
-          ${S.pendingOpt.map(m=>`<div><div style="font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+          ${S.pendingOpt.map(m=>`<div><div style="font-size:10px;
             color:var(--cyan);font-weight:700;margin-bottom:4px">${POS[m.out.pos]}</div>${swapCardHTML(m,g)}</div>`).join("")}</div>
         <button style="margin-top:10px" onclick="act('cancelopt')">Cancel</button></div></div>`:"";
     main=`<div class="grid2"><div>
       <div class="panel"><div class="phead"><h2>Planner</h2>
 
         <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="act('reset')" style="background:var(--amber);color:#20130A;border-color:var(--amber);font-weight:800">Reset</button><button onclick="act('save')" style="background:var(--mint);color:var(--ink);border-color:var(--mint);font-weight:800">Save</button></span></div>
+          <button onclick="act('reset')">Reset</button><button class="pri" onclick="act('save')">Save</button></span></div>
         <div class="gwbar">
           <button onclick="act('startgw',${Math.max(1,VG()-1)})" title="Earlier gameweek">←</button>
           <span style="text-align:center;min-width:130px">
@@ -956,18 +956,18 @@ function renderPage(){
               const offRow=(g<first&&S.tracker&&Array.isArray(S.tracker.gw))
                 ?(S.tracker.gw.find(r=>r.event===g&&Array.isArray(r.picks)&&r.picks.length)||null):null;
               if(offRow)return `
-            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${g} official</span>
-            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+offRow.points).toFixed(0)}</span>
+            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} official</span>
+            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+offRow.points).toFixed(0)}</span>
             <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">${offRow.transfers||0} transfer${(offRow.transfers||0)===1?"":"s"}${offRow.transferCost>0?`, <span style="font-weight:700;color:var(--red)">-${offRow.transferCost} hit</span>`:""}${offRow.chipLabel?` · <span style="color:var(--amber)">${esc(offRow.chipLabel)}</span>`:""}</span>
-            <span style="display:block;font-size:9px;color:var(--mint);margin-top:1px" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`;
+            <span style="display:block;font-size:10px;color:var(--mint);margin-top:1px" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`;
               /* F55: a week in play shows its score so far, tagged live */
               if(S.actuals&&S.actuals[g]!=null)return `
-            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${g} ${weekFinal(g)?"actual":"so far"+LIVE_TAG}</span>
-            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+S.actuals[g]).toFixed(0)}</span>
+            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} ${weekFinal(g)?"actual":"so far"+LIVE_TAG}</span>
+            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+S.actuals[g]).toFixed(0)}</span>
             <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">pred ${weekPts().toFixed(1)} · <span style="font-weight:700;color:${S.actuals[g]-weekPts()>=0?"var(--mint)":"var(--red)"}">${S.actuals[g]-weekPts()>=0?"+":""}${(S.actuals[g]-weekPts()).toFixed(1)}</span></span>`;
               return `
-            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${g} predicted</span>
-            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>
+            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} predicted</span>
+            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>
             ${(()=>{const t=transfersIn(g);if(!t||freeWeek(g))return "";const h=hitCost(g);
               return `<span style="display:block;font-size:10px;color:${h?"var(--red)":"var(--mute)"};margin-top:1px">${t} transfer${t>1?"s":""} · ${h?`-${h} hit`:"free"}</span>`;})()}`;
             })()}
@@ -1010,7 +1010,7 @@ function renderPage(){
       <span class="note">${filtered("list").length} players · tap any column to sort</span></div>
     ${filtersHTML(false,'list')}
     <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
-      <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;flex:none">Show only</span>
+      <span style="font-size:10px;color:var(--mute);font-weight:700;flex:none">Show only</span>
       ${SIGDEF.map(([l,c,t],ix)=>`<button class="fbtn fbtn-icon ${S.iconF.includes(ix)?"on":""}"
         onclick="act('iconf',${ix})" title="${t==="Stats caution"?"Hide players whose stats may be unreliable":esc(t)}" style="--fc:${c}">
         <span class="sig">${l}</span></button>`).join("")}
@@ -1020,7 +1020,7 @@ function renderPage(){
       <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
         <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button>
     </div>
-    <p class="note" style="margin:0;padding:2px 14px 0;font-size:9px">Hover an icon for what it filters.</p>
+    <p class="note" style="margin:0;padding:2px 14px 0;font-size:10px">Hover an icon for what it filters.</p>
     <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
       <span style="flex:1;min-width:200px">
         <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)">
@@ -1048,56 +1048,72 @@ function renderPage(){
       Every other page still works. <span class="mono" style="font-size:11px;opacity:.85">${esc(String(e&&e.message||e))}</span></div></div></div>`;
   }
 
+  /* F83/F82 (bundle 8, 13 Oct 2026): the header figures are cards (title
+     with (i), figure, change line; what used to be the caption lives in the
+     (i)), and the sticky bar is one line: gameweek, Predicted and Bank, with
+     Rating, Transfers and Rank added on a laptop. */
+  const gv=VG(), freeSq=["freehit","wildcard"].includes(chipForWeek(gv));
+  const fRows=((S.tracker&&S.tracker.gw)||[]).slice().sort((x,y)=>x.event-y.event);
+  const lastRow=fRows[fRows.length-1], prevRow=fRows[fRows.length-2];
+  const chg=(d,f,goodUp)=>(d==null||!isFinite(d)||Math.abs(d)<1e-9)?"":
+    `<span class="${(d>0)===goodUp?"up":"dn"}">${d>0?"▲":"▼"} ${f(Math.abs(d))}</span> `;
+  const pred=weekPts(), hits=hitsOver(gv,S.horizon), lastAct=S.actuals?S.actuals[gv-1]:null;
+  const fv=valueFromFeed();
+  const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
+  const card=(title,tip,v,change,tone,vstyle)=>`<div class="fc${tone?" "+tone:""}">
+      <div class="fct">${title}<button class="fci" aria-label="About ${title}" data-tip="${esc(tip)}">i</button></div>
+      <div class="fcv"${vstyle?` style="${vstyle}"`:""}>${v}</div>
+      <div class="fcc">${change||"&nbsp;"}</div></div>`;
+  const cards=[
+    card(S.horizon===1?`Predicted GW${gv}`:`Predicted GW${gv}–${Math.min(38,gv+S.horizon-1)}`,
+      "Your XI and captain, plus cover from the vice-captain and bench"+(chipForWeek(gv)?", with "+CHIP_NAME[chipKind(chipForWeek(gv))]:"")
+        +(S.oddsTeams?". Bookmaker odds included, fetched "+ukWhen(S.oddsFetchedAt):"")+(hits?". Less a "+hits+"-point hit":"")+".",
+      pred.toFixed(1),
+      (S.horizon===1&&lastAct!=null?chg(pred-lastAct,x=>x.toFixed(1),true)+`vs GW${gv-1}'s ${lastAct}`:"")
+        +(hits?` · <span class="dn">−${hits} hit</span>`:""),"mint"),
+    card("Team Rating",`Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.`,
+      rating?rating.pct:"—",rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100","",`color:${rateCol}`),
+    card("Free Transfers","Free transfers into this week, maximum 5. Official means taken from FPL's own history.",
+      freeSq?"Unlimited":freeTransfers(),
+      chipForWeek(gv)==="freehit"?"Free Hit this week":chipForWeek(gv)==="wildcard"?"Wildcard this week":
+        ({feed:"official",local:"tracked locally",default:"untracked"}[ftSource()]),"",freeSq?"color:var(--amber)":""),
+    card("Overall Rank","Your overall rank after the last finished gameweek, from FPL.",
+      S.entryRank?S.entryRank.toLocaleString():"—",
+      S.entryRank?(prevRow&&lastRow&&prevRow.orRank&&lastRow.orRank?chg(prevRow.orRank-lastRow.orRank,x=>Math.round(x).toLocaleString(),true):"")+"after GW"+S.entryRankGw:"waiting"),
+    card("Squad Value",`Today's buy prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan, before any bank.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included, taken at its own time and prices.`:""}`,
+      "£"+sv.toFixed(1),
+      fv?(prevRow&&lastRow&&prevRow.value!=null?chg(lastRow.value-prevRow.value,x=>x.toFixed(1),true):"")+`FPL £${fv.value.toFixed(1)}`:"buy prices"),
+    card("In the Bank","Money to spend in this week's plan, after planned transfers and any sales.",
+      "£"+bank.toFixed(1),
+      raised>0?`incl. £${raised.toFixed(1)} from sales`:(prevRow&&lastRow&&prevRow.bank!=null?chg(lastRow.bank-prevRow.bank,x=>x.toFixed(1),true)+"since GW"+prevRow.event:"to spend"),
+      "",bank<0?"color:var(--red)":"")
+  ].join("");
+  const capWarn=capWarnHTML().replace(/^ · /,"");
   app.innerHTML=`
-   <div class="panel" style="background:linear-gradient(135deg,#161C26 0%,#10161E 55%,#0C0E12 100%);border-color:#2B3442">
+   <div class="panel">
     <div class="phead bare">
       <div style="display:flex;gap:11px;align-items:center">
         ${LOGO}
-        <div><div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700">FPL Signals · Gameweek ${g}</div>
-        <h1 style="font-size:29px">Armitage Shanks</h1>
-        <div style="font-size:11px;color:var(--mute)">Andrew Kenny · team ${TEAM_ID}</div></div></div>
+        <div><div style="font-size:12px;color:var(--mint);font-weight:600">FPL Signals · Gameweek ${g}</div>
+        <h1 style="font-size:24px">Armitage Shanks</h1>
+        <div style="font-size:12px;color:var(--mute)">Andrew Kenny · team ${TEAM_ID}</div></div></div>
       ${statusChipHTML()}</div>
-    <div class="stats">
-      <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
-        <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
-        <div class="s">XI + captain${chipForWeek(VG())==="bboost"?"":" + cover"}${S.oddsTeams?` · odds ${esc(ukWhen(S.oddsFetchedAt))}`:""}${chipForWeek(VG())?" + "+chipForWeek(VG()):""}${capWarnHTML()}${hitsOver(VG(),S.horizon)?` · <span style="color:var(--red);font-weight:700">-${hitsOver(VG(),S.horizon)} hit</span>`:""}</div></div>
-      <div class="stat"><div class="k">Team rating</div>
-        <div class="v" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</div>
-        <div class="s" title="Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.">${rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100"}</div></div>
-      <div class="stat"><div class="k">Free transfers</div>
-        <div class="v" style="${["freehit","wildcard"].includes(chipForWeek(VG()))?"color:var(--amber)":""}">${["freehit","wildcard"].includes(chipForWeek(VG()))?"Unlimited":freeTransfers()}</div>
-        <div class="s">${chipForWeek(VG())==="freehit"?"Free Hit this week only":chipForWeek(VG())==="wildcard"?"Wildcard this week only":
-          {feed:"official · max 5",local:"tracked locally · max 5",default:"untracked · max 5"}[ftSource()]}</div></div>
-      <div class="stat"><div class="k">Overall rank</div>
-        <div class="v">${S.entryRank?S.entryRank.toLocaleString():"—"}</div>
-        <div class="s">${S.entryRank?"after GW"+S.entryRankGw:"waiting"}</div></div>
-      <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div>${(()=>{
-        /* F59: "of £100.0" was a literal and read as £0.5 over budget. The
-           figure is today's buy prices of the planned squad; FPL's own team
-           value (which includes the bank) sits beside it when published. */
-        const fv=valueFromFeed();
-        return `<div class="s" title="Today's prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan, before any bank.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included. FPL's figure is taken at its own time and prices, so the two can differ.`:""}">buy prices${fv?` · FPL £${fv.value.toFixed(1)}`:""}</div>`;})()}</div>
-      <div class="stat"><div class="k">In the bank</div><div class="v" style="color:${bank<0?"var(--red)":raised>0?"var(--mint)":"var(--cream)"}">£${bank.toFixed(1)}</div><div class="s">${raised>0?`incl. £${raised.toFixed(1)} from sales`:"to spend"}</div></div></div>
+    <div class="fcgrid">${cards}</div>
+    ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}
    </div>
    ${S.cardId?playerCardHTML():""}
    <div class="stick">
      <div class="ministats">
-       ${LOGO}
-       <span class="msrow">
-         ${[["Predicted",weekPts().toFixed(1),"var(--mint)"],
-            ["Rating",rating?rating.pct:"—",rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"],
-            ["Transfers",["freehit","wildcard"].includes(chipForWeek(VG()))?"∞":freeTransfers(),["freehit","wildcard"].includes(chipForWeek(VG()))?"var(--amber)":"var(--cream)"],
-            ["Rank",S.entryRank?S.entryRank.toLocaleString():"—","var(--cream)"],
-            ["Value","£"+sv.toFixed(1),"var(--cream)"],
-            ["Bank","£"+bank.toFixed(1),bank<0?"var(--red)":"var(--cream)"]]
-           .map(([k,v,c])=>`<span class="mspill"><span class="msk">${k}</span>
-             <span class="msv" style="color:${c}">${v}</span></span>`).join("")}
-       </span>
-       <span class="gwpill">
-         <button onclick="act('startgw',${Math.max(1,VG()-1)})" aria-label="Earlier">←</button>
-         <span class="gwv">GW${VG()}</span>
-         <button onclick="act('startgw',${Math.min(38,VG()+1)})" aria-label="Later">→</button>
-       </span>
+       <span class="slogo">${LOGO}</span>
+       <span class="sgw">
+         <button onclick="act('startgw',${Math.max(1,gv-1)})" aria-label="Previous gameweek">‹</button>
+         <b>GW${gv}</b>
+         <button onclick="act('startgw',${Math.min(38,gv+1)})" aria-label="Next gameweek">›</button></span>
+       <span class="sfig"><span class="sk">Predicted</span><span class="sv mint">${pred.toFixed(1)}</span></span>
+       <span class="sfig"><span class="sk">Bank</span><span class="sv"${bank<0?' style="color:var(--red)"':""}>£${bank.toFixed(1)}</span></span>
+       <span class="sfig hide-ph"><span class="sk">Rating</span><span class="sv" style="color:${rateCol}">${rating?rating.pct:"—"}</span></span>
+       <span class="sfig hide-ph"><span class="sk">Transfers</span><span class="sv">${freeSq?"∞":freeTransfers()}</span></span>
+       <span class="sfig hide-ph"><span class="sk">Rank</span><span class="sv">${S.entryRank?S.entryRank.toLocaleString():"—"}</span></span>
      </div>
      ${navHTML()}</div>
    <main id="main" style="display:block;max-width:100%">${main}</main>

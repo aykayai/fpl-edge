@@ -1054,6 +1054,7 @@ function cardHTML(p,bench,ctx){
     ${controls}</div>
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
+   ${p.avail<1?injLine(p):""}
    <div class="ptsbar" style="background:${noHistData?"var(--ink3)":bg};color:${noHistData?"var(--mute)":fg}${elite&&!noHistData?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
     <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):(hasPred?shownPts.toFixed(1):"—"))}</div>
     ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}</div>
@@ -1070,6 +1071,14 @@ function cardHTML(p,bench,ctx){
           <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b>${ft}</div>`;})())}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
+}
+/* F108 (bundle 8, 13 Oct 2026): the flag is readable on the pitch, not
+   hover-only: "75% · Knee", "Out · Hamstring", "Suspended". */
+function injLine(p){
+  const n=String(p.news||"");
+  const what=(/suspend/i.test(n)?"Suspended":n.replace(/\s*-\s*.*$/,"").replace(/\s*injury$/i,"").trim())||"Doubt";
+  const pct=p.avail>0?Math.round(p.avail*100)+"%":"Out";
+  return `<div class="injline${p.avail===0?" out":""}" title="${esc(n||what)}">${pct} · ${esc(what)}</div>`;
 }
 /* keep any explicit bench order the optimiser set, else best first */
 function orderBench(list){
@@ -1150,8 +1159,8 @@ function compareHTML(){
     <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:14px;flex-wrap:wrap">
       ${deltas.map(d=>{const diff=d.theirs-d.mine;
         return `<span style="flex:1;min-width:96px;text-align:center">
-          <span style="display:block;font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800">${d.w===1?"This GW":d.w+" GW"}</span>
-          <span style="display:block;font-family:'Barlow Condensed';font-weight:800;font-size:22px;line-height:1.1;
+          <span style="display:block;font-size:10px;color:var(--mute);font-weight:800">${d.w===1?"This GW":d.w+" GW"}</span>
+          <span style="display:block;font-family:'Geist';font-weight:800;font-size:22px;line-height:1.1;
             color:${diff>0.05?"var(--mint)":diff<-0.05?"var(--red)":"var(--cream)"}">${diff>0?"+":""}${diff.toFixed(1)}</span>
           <span style="display:block;font-size:10px;color:var(--mute)" class="mono">${d.theirs.toFixed(1)} v ${d.mine.toFixed(1)}</span></span>`;}).join("")}
     </div>
@@ -1159,7 +1168,7 @@ function compareHTML(){
       return r.length?`<div class="row">${r.map(card).join("")}</div>`:"";}).join("")}</div>
     <div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map(card).join("")}</div></div>
     ${(C.flagged||[]).length?`<div class="repl">
-      <div style="padding:9px 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);font-weight:700">
+      <div style="padding:9px 12px;font-size:10px;color:var(--cyan);font-weight:700">
         Replace ${(C.flagged||[]).map(id=>esc(S.model.players.find(p=>p.id===id)?.web_name||"")).join(", ")} — pick from the player pool</div></div>`:""}
   </div>`;
 }
@@ -1380,7 +1389,7 @@ function squadListHTML(){
           <button class="lname" onclick="act('card',${p.id})">${esc(p.web_name)}</button>
           ${capId===p.id?'<span class="tag c">C</span>':""}${viceId===p.id?'<span class="tag v">V</span>':""}
           ${starting?"":'<span class="tag s">SUB</span>'}
-          <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]}</span>
+          <span style="display:block;font-size:10px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]}</span>
         </span></span></td>
       <td class="mono" style="text-align:right">£${buy.toFixed(1)}</td>
       <td class="mono" style="text-align:right;color:${sell>buy?"var(--mint)":sell<buy?"var(--red)":"var(--cream)"}">£${sell.toFixed(1)}</td>

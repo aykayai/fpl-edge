@@ -188,7 +188,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.12.1";
+const APP_VERSION="12.13.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -371,7 +371,7 @@ function fdrPill(opp,home,diff,opts){
   const o=opts||{};
   const[b,c]=fdrCol(diff);
   const label=o.short?String(opp).slice(0,3):String(opp);
-  const sz=o.tiny?"font-size:8px;padding:1px 4px;":"";
+  const sz=o.tiny?"font-size:10px;padding:1px 4px;":"";
   return `<span class="fdrpill" style="background:${b};color:${c};${sz}${home?"":"font-style:italic;"}${o.style||""}"
     title="${esc(opp)} ${home?"(home)":"(away)"} · difficulty ${diff}">${esc(label)}</span>`;
 }
