@@ -15,6 +15,7 @@
      /api/odds              odds-api.io cache, { state:"nokey" } without a key */
 
 import { createServer } from "node:http";
+import { gzipSync } from "node:zlib";
 import { readFile, stat, mkdir, writeFile, rename } from "node:fs/promises";
 import { join, dirname, resolve, sep, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,12 +89,31 @@ async function serveFile(res, method, fullPath, extraHeaders = {}) {
      deploy is picked up on the next online load */
   const cache = (ext === ".html" || ext === ".js" || ext === ".mjs")
     ? "no-cache" : "public, max-age=300";
-  send(res, method, 200, {
-    "Content-Type": type,
-    "Content-Length": s.size,
-    "Cache-Control": cache,
-    ...extraHeaders
-  }, body);
+  /* F81 (bundle 9, 13 Oct 2026): "no-cache" now costs a 304 instead of a
+     full download (ETag from size and modified time), and text goes out
+     gzipped (the app's scripts ~4x smaller, the dataset CSVs more). */
+  const req = res.req;
+  const etag = `W/"${s.size.toString(16)}-${Math.floor(s.mtimeMs).toString(16)}"`;
+  const head = { "Content-Type": type, "Cache-Control": cache, "ETag": etag, ...extraHeaders };
+  if (req && req.headers["if-none-match"] === etag) { send(res, method, 304, head); return; }
+  let out = body;
+  if (s.size > 1024 && /^(text\/|application\/(json|javascript|manifest))/.test(type)
+      && /\bgzip\b/.test((req && req.headers["accept-encoding"]) || "")) {
+    out = gzipFor(fullPath, s, body);
+    head["Content-Encoding"] = "gzip";
+    head["Vary"] = "Accept-Encoding";
+  }
+  head["Content-Length"] = out.length;
+  send(res, method, 200, head, out);
+}
+/* compressed copies, kept until the file changes */
+const _gz = new Map();
+function gzipFor(path, st, body) {
+  const hit = _gz.get(path);
+  if (hit && hit.size === st.size && hit.mtime === st.mtimeMs) return hit.buf;
+  const buf = gzipSync(body, { level: 6 });
+  _gz.set(path, { size: st.size, mtime: st.mtimeMs, buf });
+  return buf;
 }
 
 /* ---------------- request handling ---------------- */
