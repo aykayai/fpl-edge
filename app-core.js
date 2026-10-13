@@ -141,7 +141,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.7.1";
+const APP_VERSION="12.8.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1343,6 +1343,11 @@ const NOW_FULL=250, RATE_SHRINK=450;
    expected goals against, scaled by the player's on-pitch xGC against his
    team's, rather than from his xGC/90 divided by a powered difficulty. */
 const CS_FROM_FIXTURE=true;
+/* D5 (13 Oct 2026, Andy: apply half now, re-fit at GW10). Per-position level
+   on the final projection. Full out-of-sample scales over GW1-5 were GK 1.334,
+   DEF 1.095, MID 0.896, FWD 1.098 (leans -0.33/-0.17/+0.22/-0.17 a week);
+   these are halfway, so each lean is roughly halved until ten weeks of data. */
+const POS_LEVEL={1:1.167,2:1.048,3:0.948,4:1.049};
 function appearFactor(xMins){
   if(!(xMins>30))return 1;
   const band=APPEAR_SHARE.find(([hi])=>xMins<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
@@ -1820,7 +1825,7 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)),fixtures:fx,blank:false};
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false};
     }
     /* --- fixture sensitivity ---
        Applied per player: hold his average across the horizon fixed and stretch
