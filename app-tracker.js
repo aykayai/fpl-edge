@@ -42,7 +42,7 @@ function trkAll(key){
 }
 
 const TSTATS=[
-  {key:"points",     name:"GW Pts",      dir:"hi", fmt:n=>trkNum(n,1)},
+  {key:"points",     name:"GW Pts (Gross)", dir:"hi", fmt:n=>trkNum(n,1)},
   {key:"gwRank",     name:"GW Rank",     dir:"lo", fmt:trkCompact},
   {key:"orRank",     name:"OR Rank",     dir:"lo", fmt:trkCompact},
   {key:"rankChange", name:"Rank Change", dir:"hi", fmt:trkCompactSigned},
@@ -161,7 +161,7 @@ function trkChartHTML(){
 function trkSummaryHTML(){
   const t=S.tracker;
   const ls=TRACKER_HISTORY.seasons["2026"];
-  const recap=`Last season: finished #${trkRank(ls.orRank[ls.orRank.length-1])} · best GW ${trkMax(ls.points)} · avg ${trkNum(trkAvg(ls.points),1)}`;
+  const recap=`Last season: finished #${trkRank(ls.orRank[ls.orRank.length-1])} · best GW ${trkMax(ls.points)} · avg ${trkNum(trkAvg(ls.points),1)} gross (before hits)`;
   if(!t||!t.gw||!t.gw.length){
     return `<div class="panel"><div class="phead"><h2>This season</h2><span class="note">${S.model?`GW${VG()}`:""}</span></div>
       <div class="pbody"><p class="note" style="margin:0 0 8px;color:var(--amber)">Current-season stats appear here once the FPL-API feed is connected (the same GitHub Action as the xFPL page).</p>

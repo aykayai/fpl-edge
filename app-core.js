@@ -188,7 +188,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.13.0";
+const APP_VERSION="12.14.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -326,7 +326,7 @@ function ftSource(){return ftFromFeed()!=null?"feed":(S.ftLastGw?"local":"defaul
 function badgeOrShirt(t,size){
   const sz=size||20;
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;flex:none">
-    <img src="https://resources.premierleague.com/premierleague/badges/50/t${esc(String(t.code||""))}.png"
+    <img src="/img/badge/${esc(String(t.code||""))}.png"
       alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;display:block"
       onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
     <span style="display:none">${shirtSVG((t.short||"").toUpperCase(),false,sz)}</span></span>`;

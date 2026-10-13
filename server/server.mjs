@@ -15,7 +15,7 @@
      /api/odds              odds-api.io cache, { state:"nokey" } without a key */
 
 import { createServer } from "node:http";
-import { readFile, stat, mkdir } from "node:fs/promises";
+import { readFile, stat, mkdir, writeFile, rename } from "node:fs/promises";
 import { join, dirname, resolve, sep, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG } from "./lib/config.mjs";
@@ -138,6 +138,32 @@ async function handle(req, res) {
         "X-Source-Time": ds.committedAt || "",
         "X-Fetched-At": ds.fetchedAt || ""
       });
+      return;
+    }
+
+    /* F107 (bundle 8, 13 Oct 2026): club badges and player photos are fetched
+       from the Premier League once, kept in STATE_DIR/img and served from
+       here, instead of 20+ hot-linked images per visit. A missing image is a
+       404 and the page falls back to its shirt drawing as before. */
+    const im = /^\/img\/(badge|player)\/(\d{1,7})\.png$/.exec(path);
+    if (im) {
+      const dir = join(CONFIG.STATE_DIR, "img", im[1]);
+      const full = join(dir, im[2] + ".png");
+      let have = false;
+      try { have = (await stat(full)).isFile(); } catch { /* not cached yet */ }
+      if (!have) {
+        const url = im[1] === "badge"
+          ? `https://resources.premierleague.com/premierleague/badges/50/t${im[2]}.png`
+          : `https://resources.premierleague.com/premierleague/photos/players/110x140/p${im[2]}.png`;
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!r.ok) { sendJson(res, method, 404, { error: "not found" }); return; }
+          await mkdir(dir, { recursive: true });
+          await writeFile(full + ".tmp", Buffer.from(await r.arrayBuffer()));
+          await rename(full + ".tmp", full);
+        } catch { sendJson(res, method, 502, { error: "image source unavailable" }); return; }
+      }
+      await serveFile(res, method, full, { "Cache-Control": "public, max-age=604800" });
       return;
     }
 

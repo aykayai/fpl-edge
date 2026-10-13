@@ -953,6 +953,8 @@ function toast(m,o){let el=document.getElementById("toast");
   /* o.warn: a refusal, shown in the warning colour for longer so it is read */
   el.textContent=m;el.classList.toggle("warn",!!(o&&o.warn));el.style.display="block";clearTimeout(tT);
   tT=setTimeout(()=>el.style.display="none",(o&&o.ms)||(o&&o.warn?6000:3000));}
+/* F93: a signed one-decimal figure that never shows "-0.0" */
+const sgn1=x=>{const r=Math.round(x*10)/10;return (r>0?"+":r<0?"−":"")+Math.abs(r).toFixed(1);};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 

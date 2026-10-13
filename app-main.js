@@ -277,7 +277,11 @@ function act(k,a,b){
     case"clearout":S.outList=[];break;
     case"ignore":S.ignored=[...(S.ignored||[]),a];LS.set("ignored",S.ignored);
       toast("Won't suggest "+(P(a)?.web_name||"that player")+" again");break;
-    case"unignore":S.ignored=[];LS.set("ignored",[]);toast("Ignore list cleared");break;
+    case"unignore":{
+      /* F95: one player back, or everyone when no player is given */
+      const id=a==null?null:+a;
+      S.ignored=id?(S.ignored||[]).filter(x=>x!==id):[];LS.set("ignored",S.ignored);
+      toast(id?"Will suggest "+(P(id)?.web_name||"that player")+" again":"Suggesting everyone again");break;}
     case"docombo":{const c=bestCombo(S.outList);if(!c){break;}
       c.picks.forEach(m=>applySwap(m.out.id,m.inn.id));S.outList=[];
       toast("Transfers made · +"+c.gain.toFixed(1)+" pts");break;}

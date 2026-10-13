@@ -32,7 +32,7 @@ function playerCardHTML(){
   if(!p)return "";
   const g=VG();
   const w=ws(String(p.code||""),p.pos,38,p.price,teamMaxPrice(p.team));
-  const pu=purchaseOf(p), buy=pu.paid;
+  const pu=purchaseOf(p), buy=pu.paid, owns=(S.squad||[]).includes(p.id);
   const five=[];for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];
     five.push({e,pts:q&&!q.blank?q.pts:0,f:q&&q.fixtures[0]});}
   const mx=Math.max(1,...five.map(x=>x.pts));
@@ -42,7 +42,7 @@ function playerCardHTML(){
       <button class="pcx" onclick="act('card',0)">✕</button>
       <div class="pchead">
         <span class="pcimgwrap">
-          <img class="pcimg" alt="" src="https://resources.premierleague.com/premierleague/photos/players/110x140/p${esc(String(p.code||""))}.png"
+          <img class="pcimg" alt="" src="/img/player/${esc(String(p.code||""))}.png"
             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
           <span style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,72)}</span></span>
         <div class="pcname">${esc(p.web_name)}</div>
@@ -59,7 +59,7 @@ function playerCardHTML(){
           <span class="op" style="${x.f&&!x.f.home?"font-style:italic":""}">${x.f?esc(x.f.opp):"—"}</span>
           <span class="gw">GW${x.e}</span></span>`;}).join("")}</div>
       <div class="pcgrid">
-        ${stat("Bought",`£${buy.toFixed(1)}`+(pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):""))}
+        ${owns?stat("Bought",`£${buy.toFixed(1)}`+(pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):"")):stat("Price",`£${p.price.toFixed(1)}`)}
         ${stat("Sells for",`£${sellPrice(p).toFixed(1)}`,
           sellPrice(p)>buy?"color:var(--mint)":sellPrice(p)<buy?"color:var(--red)":"")}
         ${stat("Form",p.form.toFixed(1)+formTag(p))}
@@ -227,7 +227,7 @@ function listHTML(){
       <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.form.toFixed(1)}</span>
       <span class="lc mono" style="font-size:12px;font-weight:700;color:${
         delta==null?"var(--mint)":(delta<0?"var(--red)":"var(--mint)")}">${
-        delta==null?hPts(p,g,S.horizon).toFixed(1):(delta>0?"+":"")+delta.toFixed(1)}</span>
+        delta==null?hPts(p,g,S.horizon).toFixed(1):sgn1(delta)}</span>
       <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,3).toFixed(1)}</span>
       <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,5).toFixed(1)}</span>
     </button>`;}).join("");
@@ -435,6 +435,8 @@ function tableHTML(){
   const more=a.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${a.length} players</span>
     <button onclick="act('pdmore')">Show all ${a.length}</button></div>`:
     (lim>320&&a.length>320?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
+  /* F92 (bundle 8): an empty shortlist says why, instead of a bare header row */
+  if(S.starOnly&&!S.stars.length)return `<div class="pbody"><p class="note" style="margin:0">No shortlisted players yet. Tap ★ on any row to add one.</p></div>`;
   return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${more}`;
 }
 /* Predicted squad total for an arbitrary gameweek — weekPts() is hard-wired to
@@ -723,7 +725,7 @@ function radarHTML(){
     const topWins=Math.max(...wins);
     const thead=`<tr><td></td>${active.map((p,j)=>{
       if(!p)return "<th></th>";
-      const photoUrl=`https://resources.premierleague.com/premierleague/photos/players/110x140/p${esc(String(p.code||""))}.png`;
+      const photoUrl=`/img/player/${esc(String(p.code||""))}.png`;
       return `<th style="color:${COL[j]}">
         <span class="rphotowrap"><img class="rphoto" alt="" src="${photoUrl}"
           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -817,7 +819,12 @@ function transfersHTML(){
     :`<div class="panel"><div class="phead"><h2>Head Scout</h2></div><div class="pbody">
       <p class="note">No transfer improves your predicted total within budget and the three-per-club limit.</p></div></div>`;
 
-  const suggestTitle=`<div class="panel"><div class="phead"><h2>Head Scout suggestions</h2>
+  /* F95 (bundle 8): players taken off the suggestions can be put back */
+  const ignoredP=(S.ignored||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+  const ignoredPanel=ignoredP.length?`<div class="panel"><div class="phead"><h2>Not Suggesting</h2>
+      <button onclick="act('unignore')">Suggest all again</button></div>
+    <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap">${ignoredP.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}</div></div>`:"";
+  const suggestTitle=ignoredPanel+`<div class="panel"><div class="phead"><h2>Head Scout suggestions</h2>
       <span class="note">best four per position</span></div></div>`;
   const byPos=[1,2,3,4].map(pos=>{
     /* One recommendation per player being sold, not a list of near-identical
