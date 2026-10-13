@@ -14,8 +14,14 @@
 /* Shields rather than discs, with a gloss highlight so they read as objects
    rather than flat labels. One silhouette throughout keeps the set coherent. */
 let _bid=0;
+/* keyed on the design itself: badges built during a render (e.g. a number
+   that changes) reuse their symbol instead of adding a new one each time */
+const _bKey=new Map();
 function badge(glyph,fill,ring){
-  const id=++_bid;
+  const key=glyph+"|"+fill+"|"+ring;
+  if(_bKey.has(key)&&_spriteDone.has("b"+_bKey.get(key)))
+    return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${_bKey.get(key)}"/></svg>`;
+  const id=++_bid;_bKey.set(key,id);
   const full=badgeFull(id,glyph,fill,ring);
   /* Bundle 9: drawn once in the sprite, referenced everywhere after */
   const m=/<defs>([\s\S]*?)<\/defs>([\s\S]*)<\/svg>/.exec(full);

@@ -189,6 +189,7 @@ function replHTML(){
 const backTag=p=>p.back?`<span class="src" style="background:#4A1220;color:#FFC9D2" title="${esc(p.news)}">${p.back==="unknown"?"no date":esc(p.back)}</span>`:"";
 const INJ=p=>p.avail===0?`<span title="${esc(p.news||"Unavailable")}" style="color:var(--red);font-size:11px">✚</span>`
   :(p.avail<1?`<span title="${esc(p.news||"Doubt")}" style="color:var(--amber);font-size:11px">✚</span>`:"");
+const PD_PAGE=100;
 function listHTML(){
   const g=VG();
   const a=sortList(filtered("planner"),S.lSort,S.lDir,g);
@@ -411,7 +412,9 @@ function tableHTML(){
     xmins:p=>p.xMins+"′"+minsTag(p), saves:p=>(p.sv90||0).toFixed(1), cs:p=>(p.csRate||0).toFixed(2),
     bonus:p=>p.bonus, ict:p=>p.ict.toFixed(0),
     tin:p=>p.tIn>999?(p.tIn/1000).toFixed(0)+"k":p.tIn};
-  const lim=S.pdLimit||320;
+  /* F77 (bundle 9): 100 rows at a time; laying out 320 took most of a
+     redraw (about 70 ms on a laptop, several times that on a phone) */
+  const lim=S.pdLimit||PD_PAGE;
   const rows=a.slice(0,lim).map(p=>{
     const q=p.gw[g]||{fixtures:[]};
     const nx=q.fixtures.length?q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f))).join(" ")
@@ -433,8 +436,8 @@ function tableHTML(){
     return `<tr style="${p.avail===0?"opacity:.4;":""}${own?"opacity:.45":""}" title="${own?"Already in your squad":""}">${tds}</tr>`;}).join("");
   /* F5: the table used to stop at 320 with no way to reach the rest */
   const more=a.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${a.length} players</span>
-    <button onclick="act('pdmore')">Show all ${a.length}</button></div>`:
-    (lim>320&&a.length>320?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
+    <button onclick="act('pdmore')">Show ${Math.min(PD_PAGE,a.length-lim)} more</button><button onclick="act('pdall')">Show all ${a.length}</button></div>`:
+    (lim>PD_PAGE&&a.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
   /* F92 (bundle 8): an empty shortlist says why, instead of a bare header row */
   if(S.starOnly&&!S.stars.length)return `<div class="pbody"><p class="note" style="margin:0">No shortlisted players yet. Tap ★ on any row to add one.</p></div>`;
   return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${more}`;

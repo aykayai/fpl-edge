@@ -89,12 +89,15 @@ try {
   show("table");
   const total = doc.querySelector(".pdmore .note")?.textContent || "";
   const m = /Showing (\d+) of (\d+) players/.exec(total);
-  check(!!m && +m[1] === 320, "F5 Player Data states it shows 320 of the full list", total);
+  /* bundle 9: pages of 100 (was one cut at 320) */
+  check(!!m && +m[1] === 100, "F5 Player Data states it shows 100 of the full list", total);
   g.act("pdmore");
+  check(doc.querySelectorAll(".tallscroll tbody tr").length === 200, "F5 Show more adds the next 100");
+  g.act("pdall");
   const rows = doc.querySelectorAll(".tallscroll tbody tr").length;
   check(m && rows === +m[2], "F5 Show all reaches every player", `${rows} rows of ${m && m[2]}`);
   g.act("pdless");
-  check(doc.querySelectorAll(".tallscroll tbody tr").length === 320, "F5 Show fewer returns to 320");
+  check(doc.querySelectorAll(".tallscroll tbody tr").length === 100, "F5 Show fewer returns to 100");
 
   /* F8: independent read of the feed */
   const feed = await (await fetch(BASE + "/data/feeds/actuals.json")).json();

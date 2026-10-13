@@ -37,8 +37,9 @@ function act(k,a,b){
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
-    case"pdmore":S.pdLimit=1000;break;
-    case"pdless":S.pdLimit=320;break;
+    case"pdmore":S.pdLimit=(S.pdLimit||PD_PAGE)+PD_PAGE;break;
+    case"pdall":S.pdLimit=1000;break;
+    case"pdless":S.pdLimit=PD_PAGE;break;
     case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[]});break;
     case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[]});break;
     case"sigfold":{const f=new Set(S.sigFold||[]);f.has(a)?f.delete(a):f.add(a);S.sigFold=[...f];
