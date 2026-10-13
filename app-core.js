@@ -188,7 +188,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.14.0";
+const APP_VERSION="12.15.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -331,7 +331,33 @@ function badgeOrShirt(t,size){
       onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
     <span style="display:none">${shirtSVG((t.short||"").toUpperCase(),false,sz)}</span></span>`;
 }
+/* Bundle 9 (13 Oct 2026): the sprite. A design is registered once (its
+   gradients and clip paths go in the sprite's defs, the drawing in a
+   <symbol>) and every copy on the page is a two-element <use>. The Planner
+   carried 500+ full inline SVGs (about 500 KB) for ~130 distinct designs. */
+const _spriteDone=new Set();
+function spriteAdd(id,defs,symbol){
+  if(_spriteDone.has(id))return;
+  const sp=typeof document!=="undefined"&&document.getElementById&&document.getElementById("sprite");
+  if(!sp||!sp.insertAdjacentHTML)return;           // no page (snapshot vm): callers keep working
+  _spriteDone.add(id);
+  if(defs)sp.querySelector("defs").insertAdjacentHTML("beforeend",defs);
+  sp.insertAdjacentHTML("beforeend",symbol);
+}
 function shirtSVG(short,isGK,size){
+  const sid="k"+String(short||"d").replace(/[^A-Za-z0-9]/g,"")+(isGK?"g":"o");
+  if(_spriteDone.has(sid)||(typeof document!=="undefined"&&document.getElementById&&document.getElementById("sprite"))){
+    if(!_spriteDone.has(sid)){
+      const full=shirtSVGFull(short,isGK);
+      const m=/<defs>([\s\S]*?)<\/defs>([\s\S]*)<\/svg>/.exec(full);
+      spriteAdd(sid,m[1],`<symbol id="${sid}" viewBox="0 0 40 40">${m[2]}</symbol>`);
+    }
+    if(_spriteDone.has(sid))return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" aria-hidden="true" style="display:block;flex:none"><use href="#${sid}"/></svg>`;
+  }
+  return shirtSVGFull(short,isGK,size);
+}
+function shirtSVGFull(short,isGK,size){
+  size=size||40;
   const k=isGK?GK_KIT:(KITS[short]||KITS._d);
   const light=["#FFFFFF","#FFF200","#F5A12D","#FDB913","#78D0F3"].includes(k.b);
   const st=light?"#4A4458":"rgba(0,0,0,.4)";const id="c"+(short||"d")+(isGK?"g":"o");
@@ -427,6 +453,13 @@ async function loadStatus(){
    ~12 MB, so it is only re-downloaded when the server's mirrored commit
    differs from the copy the model was built from (S.datasetCommit); the
    status, feeds and everything light refresh every time. */
+/* F75 (bundle 9): progress shows on the Check now / Load buttons without
+   redrawing the whole page; with no such button on screen it draws once. */
+function setProgress(t){
+  S.progress=t;
+  const bs=typeof document!=="undefined"&&document.querySelectorAll?document.querySelectorAll('button[onclick="act(\'load\')"]'):[];
+  if(bs.length)bs.forEach(b=>{b.textContent=t||"…";});else render();
+}
 async function loadAll(force,opts){
   /* opts.fromSnap: the instant start. Build from the saved snapshot with no
      network wait and no status call; the normal load that follows checks the
@@ -452,20 +485,20 @@ async function loadAll(force,opts){
     S.capture=null;
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();
     syncOfficialSquad();
-    S.loading=false;S.progress="";render();
+    S.loading=false;setProgress("");
     savePaint();
     return;
   }
   S.fromCache=fromSnap;S.capture=fromSnap?null:{};
   S.loadWarnings=[];S.fixFail=[];let calendarFailed=false;
   try{
-    S.progress="players and prices…";render();
+    setProgress("players and prices…");
     const [players,pstats,teams]=await Promise.all([
       getCSV(`${SEASON}/players.csv`),
       getCSV(`${SEASON}/playerstats.csv`),
       getCSV(`${SEASON}/teams.csv`)]);
 
-    S.progress="last season…";render();
+    setProgress("last season…");
     let lastStats=[];
     try{lastStats=await getCSV(`${LAST}/playerstats.csv`);}catch(e){loadWarn("last season's player stats");}
     /* playerstats holds one row per player per gameweek, in no fixed order,
@@ -476,7 +509,7 @@ async function loadAll(force,opts){
     const byGw=(a,b)=>(num(a.gw)||0)-(num(b.gw)||0);
     pstats.sort(byGw);lastStats.sort(byGw);
 
-    S.progress="fixtures…";render();
+    setProgress("fixtures…");
     const fixtures=[];
     /* Current-season team output, accumulated from the very rows already being
        parsed for the fixture list. No extra requests: the xG columns are in the
@@ -511,11 +544,11 @@ async function loadAll(force,opts){
           });
         }
       }));
-      S.progress=`fixtures… ${Math.min(38,batch+7)}/38`;render();
+      setProgress(`fixtures… ${Math.min(38,batch+7)}/38`);
     }
     /* Pre-season friendlies carry the only real signal on who is starting
        before a ball is kicked in the league */
-    S.progress="pre-season minutes…";render();
+    setProgress("pre-season minutes…");
     const pre={};
     try{
       const rows=await getCSV(`${SEASON}/By%20Tournament/Friendlies/GW0/playermatchstats.csv`);
@@ -625,7 +658,7 @@ async function loadAll(force,opts){
     /* ---- per-match player history ----
        63 columns per player per match, which is what makes real rolling windows,
        venue splits and a proper minutes model possible. ~3MB a season, cached. */
-    S.progress="match history…";render();
+    setProgress("match history…");
     /* player_id is re-issued every season — only player_code is stable, so the
        history is keyed by code and joined to this season's ids at the end. */
     const idToCode={};
@@ -768,7 +801,7 @@ async function loadAll(force,opts){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
   }
   S.fromCache=false;S.capture=null;
-  S.loading=false;S.progress="";render();
+  S.loading=false;setProgress("");
   /* the picture for the next open is taken only after a load that spoke to
      the server, never from the in-between instant-start frame */
   if(S.model&&!fromSnap)savePaint();

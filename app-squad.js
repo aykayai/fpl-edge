@@ -16,6 +16,13 @@
 let _bid=0;
 function badge(glyph,fill,ring){
   const id=++_bid;
+  const full=badgeFull(id,glyph,fill,ring);
+  /* Bundle 9: drawn once in the sprite, referenced everywhere after */
+  const m=/<defs>([\s\S]*?)<\/defs>([\s\S]*)<\/svg>/.exec(full);
+  spriteAdd("b"+id,m[1],`<symbol id="b${id}" viewBox="0 0 26 28">${m[2]}</symbol>`);
+  return _spriteDone.has("b"+id)?`<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${id}"/></svg>`:full;
+}
+function badgeFull(id,glyph,fill,ring){
   return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true">
     <defs>
       <linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1">

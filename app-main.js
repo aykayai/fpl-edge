@@ -349,6 +349,9 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
      the saved data with no network wait, then run the normal load, which
      checks the server and refreshes only what changed. With nothing saved
      (first visit on a device, or no IndexedDB) this is the plain load. */
+  /* Bundle 9: every club's shirts go into the sprite before a saved page is
+     repainted, so its <use> references have something to point at */
+  Object.keys(KITS).forEach(k=>{shirtSVG(k,false,20);shirtSVG(k,true,20);});
   (async()=>{
     const [snap,paint]=await Promise.all([IDB.get("snap"),IDB.get("paint")]);
     const app=document.getElementById("app");
