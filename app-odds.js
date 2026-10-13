@@ -391,16 +391,20 @@ function oddsHTML(){
     return{p,fx,rec,model,mkt,cs,d:mkt==null?null:mkt-model,start:xi.includes(p)};
   });
   const capId=S.captain;
-  const sum=k=>rows.filter(r=>r.start).reduce((a,r)=>a+(k==="model"?r.model:(r.mkt||0)),0)
-    +(()=>{const c=rows.find(r=>r.p.id===capId&&r.start);
-      return c?(k==="model"?c.model:(c.mkt||0)):0;})();
+  /* Like for like (13 Oct 2026): both totals cover only the starters the
+     market prices. Summing the market over 6 priced players against the
+     model over all eleven read as the market rating the team far lower. */
+  const cmp=rows.filter(r=>r.start&&r.mkt!=null);
+  const sum=k=>cmp.reduce((a,r)=>a+(k==="model"?r.model:r.mkt),0)
+    +(()=>{const c=cmp.find(r=>r.p.id===capId);
+      return c?(k==="model"?c.model:c.mkt):0;})();
   const mdl=sum("model"), mkt=sum("mkt");
   const priced=rows.filter(r=>r.mkt!=null).length;
   const big=(v,c)=>`<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;line-height:1;color:${c}">${v}</span>`;
   const delta=mkt-mdl;
   const squadPanel=`<div class="panel">
     <div class="phead"><h2>Your squad · market vs model</h2>
-      <span class="note">GW${g} · ${priced} of 15 priced · captain doubled</span></div>
+      <span class="note">GW${g} · ${cmp.length} of ${rows.filter(r=>r.start).length} starters priced, compared on those only · captain doubled</span></div>
     <div class="pbody" style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--ink3)">
       <span><span class="note" style="display:block">Model</span>${big(mdl.toFixed(1),"var(--mint)")}</span>
       <span><span class="note" style="display:block">Market</span>${big(mkt.toFixed(1),"var(--cyan)")}</span>
@@ -833,12 +837,14 @@ function refreshStatusUI(){
    last known values keep showing (S.status is only replaced on success). */
 function provHTML(){
   const st=S.status||{};
-  const ds=st.dataset||{},fpl=st.fpl||{},news=st.news||{},odds=st.odds||{};
+  const ds=st.dataset||{},fpl=st.fpl||{},news=st.news||{},odds=st.odds||{},feeds=st.feeds||{};
   return `<div class="prov"><span>FPL Signals v${APP_VERSION}</span>
     <span>Stats: <b>FPL Core Insights, ${esc(ukWhen(ds.committedAt))}</b>${ds.committedAt?` (${esc(agoText(ds.committedAt))})`:""}</span>
     <span>Prices, flags and deadlines: <b>FPL, ${esc(agoText(fpl.fetchedAt))}</b></span>
     <span>News: <b>${esc(agoText(news.fetchedAt))}</b></span>
-    <span>Odds: <b>${esc(ukWhen(odds.fetchedAt))}</b></span></div>`;
+    <span>Odds: <b>${esc(ukWhen(odds.fetchedAt))}</b></span>
+    <span>Your team and rivals: <b style="${feeds.error?"color:var(--red)":""}">${feeds.error?"last build failed, showing "+esc(agoText(feeds.lastOk))+" copy":esc(agoText(feeds.lastOk))}</b></span>
+    ${(S.loadWarnings||[]).length||(S.fixFail||[]).length?`<span style="color:var(--amber);flex-basis:100%">Did not load: ${esc([...(S.loadWarnings||[]),...((S.fixFail||[]).length?["fixtures for GW"+S.fixFail.join(", GW")+" (those weeks show no projection)"]:[])].join("; "))}. Figures that use them are less reliable; Check now retries.</span>`:""}</div>`;
 }
 /* The outer guard (F7): if even the header cannot be drawn, show the menu and
    a plain message rather than a frozen page. The pass after it makes every
@@ -1050,7 +1056,7 @@ function renderPage(){
     <div class="stats">
       <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
         <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
-        <div class="s">XI + captain${chipForWeek(VG())==="bboost"?"":" + cover"}${chipForWeek(VG())?" + "+chipForWeek(VG()):""}${capWarnHTML()}${hitsOver(VG(),S.horizon)?` · <span style="color:var(--red);font-weight:700">-${hitsOver(VG(),S.horizon)} hit</span>`:""}</div></div>
+        <div class="s">XI + captain${chipForWeek(VG())==="bboost"?"":" + cover"}${S.oddsTeams?` · odds ${esc(ukWhen(S.oddsFetchedAt))}`:""}${chipForWeek(VG())?" + "+chipForWeek(VG()):""}${capWarnHTML()}${hitsOver(VG(),S.horizon)?` · <span style="color:var(--red);font-weight:700">-${hitsOver(VG(),S.horizon)} hit</span>`:""}</div></div>
       <div class="stat"><div class="k">Team rating</div>
         <div class="v" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</div>
         <div class="s" title="Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.">${rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100"}</div></div>

@@ -30,6 +30,8 @@ const SEASON="2026-2027", LAST="2025-2026";
    falls back to today's behaviour when those fields are absent (an old feed).
    Unreachable or not yet built: every consumer already renders a clean waiting
    state, so this fails silently rather than blocking the main load. */
+/* the season label the feed builder writes (FPL_SEASON) */
+const FEED_SEASON="2027";
 const ACTUALS_URL="/data/feeds/actuals.json";
 const RIVALS_URL="/data/feeds/rivals.json";
 /* ---------- instant start ----------
@@ -103,15 +105,23 @@ function trueAccuracy(){
   const byPos={};[1,2,3,4].forEach(k=>{const r=rows.filter(x=>x.pos===k);if(r.length)byPos[k]=sum(r);});
   return {all:sum(rows),weeks,byPos,live:weeks.filter(w=>w.src==="live").length,back:weeks.filter(w=>w.src==="backtest").length};
 }
+/* F53 (13 Oct 2026): every part of the load that fails is named here and
+   listed under the footer, instead of the page quietly using a weaker model */
+function loadWarn(what){(S.loadWarnings=S.loadWarnings||[]).includes(what)||S.loadWarnings.push(what);}
 async function loadRivals(){
   try{
     const d=JSON.parse(await dataText(RIVALS_URL));
+    if(d&&d.season&&String(d.season)!==FEED_SEASON){loadWarn("rivals feed (season "+d.season+")");return;}
     if(d&&Array.isArray(d.standings))S.rivalsFeed=d;
-  }catch(e){ /* feed not published yet — the page shows its waiting state */ }
+  }catch(e){ /* a 404 is the waiting state; anything else is named (F53) */
+    if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("rivals feed");
+  }
 }
 async function loadActuals(){
   try{
     const d=JSON.parse(await dataText(ACTUALS_URL));
+    /* F54: a feed from another season is not shown under this season's labels */
+    if(d.season&&String(d.season)!==FEED_SEASON){loadWarn("your team feed (season "+d.season+", expected "+FEED_SEASON+")");return;}
     if(d.team&&Array.isArray(d.team.gw)){
       S.tracker={season:d.season,totalPlayers:d.team.totalPlayers,gw:d.team.gw,chips:d.team.chips||null,
         purchase:d.team.purchase||null};
@@ -122,7 +132,11 @@ async function loadActuals(){
       S.actuals=am;
     }
     if(d.players)S.playerActuals=d.players;
-  }catch(e){ /* feed not published yet — leave the waiting states in place */ }
+  }catch(e){
+    /* F53: a 404 means not published yet (waiting states stay); anything
+       else is a failure and is named under the footer */
+    if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("your team feed");
+  }
 }
 /* F55: is a gameweek's score final? The feed publishes a row as soon as a
    week kicks off, so the latest row can be a partial, in-play score. A
@@ -174,7 +188,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.11.0";
+const APP_VERSION="12.12.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -443,6 +457,7 @@ async function loadAll(force,opts){
     return;
   }
   S.fromCache=fromSnap;S.capture=fromSnap?null:{};
+  S.loadWarnings=[];S.fixFail=[];let calendarFailed=false;
   try{
     S.progress="players and prices…";render();
     const [players,pstats,teams]=await Promise.all([
@@ -452,7 +467,7 @@ async function loadAll(force,opts){
 
     S.progress="last season…";render();
     let lastStats=[];
-    try{lastStats=await getCSV(`${LAST}/playerstats.csv`);}catch(e){}
+    try{lastStats=await getCSV(`${LAST}/playerstats.csv`);}catch(e){loadWarn("last season's player stats");}
     /* playerstats holds one row per player per gameweek, in no fixed order,
        and every join below keeps the LAST row it meets. Sorted by gameweek
        first, that last row is always the latest one. Unsorted, 326 of 667
@@ -470,7 +485,7 @@ async function loadAll(force,opts){
     for(let batch=1;batch<=38;batch+=8){
       const jobs=[];
       for(let gw=batch;gw<batch+8&&gw<=38;gw++){
-        jobs.push(getCSV(`${SEASON}/By%20Gameweek/GW${gw}/fixtures.csv`).catch(()=>[]));
+        jobs.push(getCSV(`${SEASON}/By%20Gameweek/GW${gw}/fixtures.csv`).catch(e=>{if(!/HTTP 404/.test(e.message))S.fixFail.push(gw);return[];}));
       }
       (await Promise.all(jobs)).forEach(rows=>rows.forEach(f=>{
         /* the gameweek folders also carry EFL Cup ties — those are not FPL
@@ -517,7 +532,7 @@ async function loadAll(force,opts){
         o.dcList=(o.dcList||[]);o.dcList.push(dcv);
       });
       S.preMax=Math.max(1,...Object.values(pre).map(v=>v.apps));
-    }catch(e){}
+    }catch(e){loadWarn("pre-season friendlies (minutes before GW1)");}
     S.pre=pre;
     let events=[];
     /* Sorted by numeric id before anything scans for the first unfinished
@@ -525,7 +540,11 @@ async function loadAll(force,opts){
        silently pointed the whole app at the wrong gameweek. */
     try{events=(await getCSV(`${SEASON}/gameweek_summaries.csv`)).map(e=>({
       id:Math.round(num(e.id)),name:e.name,deadline:e.deadline_time,
-      finished:String(e.finished).toLowerCase()==="true"})).sort((a,b)=>a.id-b.id);}catch(e){}
+      finished:String(e.finished).toLowerCase()==="true"})).sort((a,b)=>a.id-b.id);}catch(e){calendarFailed=true;}
+    if(calendarFailed){
+      if(S.status&&S.status.fpl&&S.status.fpl.gw)loadWarn("gameweek calendar (using FPL's own gameweek from the server)");
+      else throw new Error("the gameweek calendar did not load and the server gave no gameweek, so the app cannot tell which week to plan");
+    }
 
     /* merge players + stats */
     const byId={};players.forEach(p=>byId[p.player_id]={
@@ -542,7 +561,7 @@ async function loadAll(force,opts){
     try{
       const lp=await getCSV(`${LAST}/players.csv`);
       lp.forEach(r=>{lastIdToCode[String(Math.round(num(r.player_id)))]=String(r.player_code);});
-    }catch(e){}
+    }catch(e){loadWarn("last season's player ids");}
     const lastByCode2={};
     lastStats.forEach(s=>{const code=lastIdToCode[String(Math.round(num(s.id)))];
       if(code)lastByCode2[code]=s;});
@@ -592,7 +611,7 @@ async function loadAll(force,opts){
         (lt[f.h]=lt[f.h]||{gf:0,ga:0,games:0});(lt[f.a]=lt[f.a]||{gf:0,ga:0,games:0});
         lt[f.h].gf+=f.hs;lt[f.h].ga+=f.as;lt[f.h].games++;
         lt[f.a].gf+=f.as;lt[f.a].ga+=f.hs;lt[f.a].games++;});
-    }catch(e){}
+    }catch(e){loadWarn("last season's team results (ratings base)");}
     S.lastTeams=lt;S.lastTeamStats=tstat;
     /* the closing eight matches of the season, as a recent-form window */
     const recent={};
@@ -613,7 +632,7 @@ async function loadAll(force,opts){
     try{
       const lastPlayers=await getCSV(`${LAST}/players.csv`);
       lastPlayers.forEach(r=>{idToCode["last|"+Math.round(num(r.player_id))]=String(r.player_code);});
-    }catch(e){}
+    }catch(e){loadWarn("last season's player list");}
     players.forEach(r=>{idToCode["now|"+Math.round(num(r.player_id))]=String(r.player_code);});
     const hist={};                       // player_code -> [match rows, oldest first]
     const teamMatch={};                  // match_id -> {h,a,gw}
@@ -660,7 +679,7 @@ async function loadAll(force,opts){
           });
         }
       }
-    }catch(e){}
+    }catch(e){loadWarn("match history (per-match stats)");}
     /* stamp each appearance with venue and opponent */
     Object.values(hist).forEach(rows=>rows.forEach(r=>{
       const m=teamMatch[r.mid];if(!m)return;r.mgw=m.gw;}));
@@ -1430,12 +1449,15 @@ function buildModel(){
   S.strSorted=strSorted;
 
   const evs=(S.events||[]).slice().sort((a,b)=>a.id-b.id);
-  const gwPlayed=evs.filter(e=>e.finished).length;
   /* The official FPL API (via /api/status) knows the upcoming gameweek before
-     the dataset's finished flags catch up, so it wins when both exist. */
+     the dataset's finished flags catch up, so it wins when both exist. F51
+     (13 Oct 2026): without the calendar file the server's gameweek still
+     decides; it used to fall back to GW1. */
   const statusGw=Number(S.status&&S.status.fpl&&S.status.fpl.gw)||0;
+  const gwPlayed=evs.length?evs.filter(e=>e.finished).length:Math.max(0,statusGw-1);
   const nextEv=(statusGw?evs.find(e=>e.id===statusGw&&!e.finished):null)
-    ||evs.find(e=>!e.finished)||{id:1,name:"Gameweek 1"};
+    ||evs.find(e=>!e.finished)
+    ||(statusGw&&!evs.length?{id:statusGw,name:"Gameweek "+statusGw}:null)||{id:1,name:"Gameweek 1"};
 
   const byEv={};S.fixtures.forEach(f=>{f.ht=anyTeam(f.h);f.at=anyTeam(f.a);
     (byEv[f.event]=byEv[f.event]||[]).push(f);});
