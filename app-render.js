@@ -1024,6 +1024,9 @@ const _sqCache={};
    replaces it as "proven optimal". Results are cached until the model is
    rebuilt (F76). buildSquad() below is the fallback if the solver fails. */
 const OPT_TIMEOUT={fast:4000,full:15000};
+/* bench weights shared by the solver and the comparison with your own team */
+const BENCH_W={wildcard:{1:0.12,2:0.38,3:0.38,4:0.38},freehit:{1:0,2:0,3:0,4:0}};
+const benchPart=(kind,bench,val)=>bench.reduce((a,p)=>a+BENCH_W[kind][p.pos]*val(p),0);
 const _optPending={};
 function buildOptimal(kind,gw,budget,full,form){
   if(typeof solver==="undefined"||!solver.Solve)return null;   // library failed to load — fall back
@@ -1031,7 +1034,7 @@ function buildOptimal(kind,gw,budget,full,form){
   if(_sqCache[key]!==undefined)return _sqCache[key];
   const weeks=kind==="wildcard"?5:1;
   const val=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
-  const benchW=kind==="wildcard"?{1:0.12,2:0.38,3:0.38,4:0.38}:{1:0,2:0,3:0,4:0};
+  const benchW=BENCH_W[kind];
   /* F37: available players count even at zero points (a blank or cheap
      enabler can still fill a bench) */
   const pool=S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank);
@@ -1057,7 +1060,7 @@ function buildOptimal(kind,gw,budget,full,form){
   new Set(cand.map(p=>p.team)).forEach(c=>constraints["club_"+c]={max:3});
   cand.forEach(p=>{
     const pk=posKey[p.pos],v=val(p),w=benchW[p.pos];
-    vars["x_"+p.id]={squad_total:1,["squad_"+pk]:1,budget:p.price,["club_"+p.team]:1,["link_"+p.id]:-1,profit:w*v};
+    vars["x_"+p.id]={squad_total:1,["squad_"+pk]:1,budget:p.price,["club_"+p.team]:1,["link_"+p.id]:-1,profit:w*v-1e-4*p.price};
     vars["y_"+p.id]={xi_total:1,xi_gk:p.pos===1?1:0,xi_def:p.pos===2?1:0,xi_fwd:p.pos===4?1:0,
       ["link_"+p.id]:1,["captainlink_"+p.id]:-1,profit:(1-w)*v};
     vars["c_"+p.id]={captain_total:1,["captainlink_"+p.id]:1,profit:v};
@@ -1091,7 +1094,7 @@ function buildOptimal(kind,gw,budget,full,form){
   const bspend=bench.reduce((a,p)=>a+p.price,0);
   /* bench in the order it would come on: keeper first, then best outfielder */
   const benchOrdered=[...bench.filter(p=>p.pos===1),...bench.filter(p=>p.pos!==1).sort(rank)];
-  const out={xi:xi.slice().sort(rank),bench:benchOrdered,cap,total:xi.reduce((a,p)=>a+val(p),0)+val(cap),
+  const out={xi:xi.slice().sort(rank),bench:benchOrdered,cap,total:xi.reduce((a,p)=>a+val(p),0)+val(cap)+benchPart(kind,bench,val),
     shape:`${xiPos[2]}-${xiPos[3]}-${xiPos[4]}`,value:+spend.toFixed(1),
     benchValue:+bspend.toFixed(1),weeks,val,full:!!full,proven:!!full&&ms<timeout*0.95};
   _sqCache[key]=out;
@@ -1171,7 +1174,7 @@ function buildSquad(kind,gw,form,budget){
         if(dd>=-1e-9&&(!pick||dd>pick.dd))pick={out,inn:q,dd};});});
       if(pick){club[pick.out.team]--;xi.splice(xi.indexOf(pick.out),1);add(pick.inn);up=true;}}
     const cap=xi.slice().sort(rank)[0];
-    const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0);
+    const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0)+benchPart(kind,bench,val);
     if(!best||total>best.total)
       best={xi:xi.slice().sort(rank),bench,cap,total,shape:`${d}-${m}-${f}`,
         value:+spend().toFixed(1),benchValue:+bspend.toFixed(1),weeks,val,heuristic:true};
@@ -1179,13 +1182,15 @@ function buildSquad(kind,gw,form,budget){
   _sqCache[key]=best;
   return best;
 }
-function myScore(gw,weeks){
+function myScore(gw,weeks,kind){
   const sp=squadPlayers();if(!sp.length)return 0;
   const v=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
   /* F34: the legal best XI, not the top 11 by points */
   const xi=legalBestXI(sp,v);
   const cap=xi.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
-  return xi.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0);
+  /* a Wildcard squad is scored with its bench, so yours is too */
+  const bench=kind==="wildcard"?sp.filter(p=>!xi.includes(p)):[];
+  return xi.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0)+(bench.length?benchPart("wildcard",bench,v):0);
 }
 function chipsHTML(){
   const g=VG();
@@ -1201,7 +1206,7 @@ function chipsHTML(){
     const how=!t?"":t.heuristic?"best found (quick builder)":t.proven?`proven optimal (${t.shape})`
       :t.checking?`best found (${t.shape}) · checking every player…`:`best found (${t.shape}) · solver time limit`;
     const weeks=kind==="wildcard"?5:1;
-    const mine=myScore(g,weeks);
+    const mine=myScore(g,weeks,kind);
     const delta=t?t.total-mine:0;
     const label=kind==="wildcard"?`GW${g}–${Math.min(38,g+4)} average`:`GW${g}`;
     /* Free Hit is a single-week team, so once that week's actuals land we can show
