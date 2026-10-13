@@ -81,7 +81,8 @@ async function loadActuals(){
   try{
     const d=JSON.parse(await dataText(ACTUALS_URL));
     if(d.team&&Array.isArray(d.team.gw)){
-      S.tracker={season:d.season,totalPlayers:d.team.totalPlayers,gw:d.team.gw,chips:d.team.chips||null};
+      S.tracker={season:d.season,totalPlayers:d.team.totalPlayers,gw:d.team.gw,chips:d.team.chips||null,
+        purchase:d.team.purchase||null};
       /* F8: the header's overall rank was never set; it is the latest week's */
       const ranked=d.team.gw.filter(r=>r.orRank!=null);
       if(ranked.length){const lr=ranked.reduce((x,y)=>(y.event>x.event?y:x));S.entryRank=lr.orRank;S.entryRankGw=lr.event;}
@@ -141,7 +142,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.8.0";
+const APP_VERSION="12.9.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -191,7 +192,6 @@ const SEED=[["Raya","ARS",1,6.0],["Dubravka","TOT",1,4.0],
  ["B.Fernandes","MUN",3,12.0],["Mbeumo","MUN",3,8.0],["Szoboszlai","LIV",3,7.0],
  ["Tzolis","ARS",3,6.5],["Slater","HUL",3,4.5],
  ["Haaland","MCI",4,15.5],["João Pedro","CHE",4,7.5],["Calvert-Lewin","LEE",4,6.0]];
-const REAL_PRICE={};SEED.forEach(([n,,,pr])=>{REAL_PRICE[n]=pr;});
 const norm=s=>(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");
 
 /* Community chip consensus, gathered Aug 2026 */
@@ -1348,6 +1348,12 @@ const CS_FROM_FIXTURE=true;
    DEF 1.095, MID 0.896, FWD 1.098 (leans -0.33/-0.17/+0.22/-0.17 a week);
    these are halfway, so each lean is roughly halved until ten weeks of data. */
 const POS_LEVEL={1:1.167,2:1.048,3:0.948,4:1.049};
+/* D17: chance he appears at all in a week, on the same evidence as D1 */
+function appearShare(m){
+  if(!(m>30))return clamp(m/17,0,.985);
+  const band=APPEAR_SHARE.find(([hi])=>m<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
+  return band[1];
+}
 function appearFactor(xMins){
   if(!(xMins>30))return 1;
   const band=APPEAR_SHARE.find(([hi])=>xMins<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
@@ -1825,7 +1831,8 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false};
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false,
+        pPlay:clamp(availE,0,1)*appearShare(mE)*Math.min(1,fx.length)};
     }
     /* --- fixture sensitivity ---
        Applied per player: hold his average across the horizon fixed and stretch
@@ -1904,9 +1911,18 @@ function parseReturn(news){
 }
 
 const VG=()=>clamp(S.startGW||(S.model?S.model.next.id:1),1,38);
+/* D13 (13 Oct 2026): what he paid. The feed publishes the price of every
+   player he owns (his transfers, or the start price for the GW1 squad); a
+   player he does not own is a planned buy at today's price. Without the feed
+   the season-start price is the estimate, and says so. */
+function purchaseOf(p){
+  const pm=S.tracker&&S.tracker.purchase&&S.tracker.purchase.players;
+  if(pm){const r=pm[p.id]||pm[String(p.id)];return{paid:r?r.paid:p.price,est:false};}
+  return{paid:+(p.price-(p.seasonChange||0)).toFixed(1),est:true};
+}
 /* FPL sells at purchase price plus half the rise, rounded down to 0.1 */
 function sellPrice(p){
-  const bought=+(p.price-(p.seasonChange||0)).toFixed(1);
+  const bought=purchaseOf(p).paid;
   const rise=+(p.price-bought).toFixed(1);
   return rise<=0?p.price:+(bought+Math.floor(rise*10/2)/10).toFixed(1);
 }

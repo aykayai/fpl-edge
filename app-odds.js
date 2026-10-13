@@ -195,6 +195,17 @@ function marketPoints(p,rec,fx){
   }
   return pts*clamp(p.avail,0,1)*(0.55+0.45*mins);
 }
+/* D17: say so when the captain will not score as the armband suggests */
+function capWarnHTML(){
+  const g=VG();if(!S.model||g<S.model.next.id)return "";
+  const xi=startingXI(),cap=S.model.players.find(p=>p.id===S.captain);
+  if(!cap)return "";
+  if(!xi.includes(cap))return ` · <span style="color:var(--red);font-weight:700">captain benched</span>`;
+  const q=cap.gw[g];
+  if(cap.avail<1||(q&&q.pPlay!=null&&q.pPlay<0.7))
+    return ` · <span style="color:var(--amber);font-weight:700">captain ${cap.avail<1?Math.round(cap.avail*100)+"%":"may not start"}</span>`;
+  return "";
+}
 /* Turn match prices into expected goals per side, margin removed. D10
    (13 Oct 2026): the same conversion the Odds page shows (Correct Score when
    priced, else match result + totals), so the page and the model agree. */
@@ -1039,10 +1050,10 @@ function renderPage(){
     <div class="stats">
       <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
         <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
-        <div class="s">XI + captain${chipForWeek(VG())?" + "+chipForWeek(VG()):""}${hitsOver(VG(),S.horizon)?` · <span style="color:var(--red);font-weight:700">-${hitsOver(VG(),S.horizon)} hit</span>`:""}</div></div>
+        <div class="s">XI + captain${chipForWeek(VG())==="bboost"?"":" + cover"}${chipForWeek(VG())?" + "+chipForWeek(VG()):""}${capWarnHTML()}${hitsOver(VG(),S.horizon)?` · <span style="color:var(--red);font-weight:700">-${hitsOver(VG(),S.horizon)} hit</span>`:""}</div></div>
       <div class="stat"><div class="k">Team rating</div>
         <div class="v" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</div>
-        <div class="s">${rating?`best legal XI ${rating.best.toFixed(1)}`:"out of 100"}</div></div>
+        <div class="s" title="Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.">${rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100"}</div></div>
       <div class="stat"><div class="k">Free transfers</div>
         <div class="v" style="${["freehit","wildcard"].includes(chipForWeek(VG()))?"color:var(--amber)":""}">${["freehit","wildcard"].includes(chipForWeek(VG()))?"Unlimited":freeTransfers()}</div>
         <div class="s">${chipForWeek(VG())==="freehit"?"Free Hit this week only":chipForWeek(VG())==="wildcard"?"Wildcard this week only":

@@ -339,7 +339,31 @@ async function buildEntry(entryId, gwPoints, cachedRows, lastEvent) {
     return out;
   });
 
-  return { history, rows, chips: withUplift };
+  return { history, rows, chips: withUplift, transfers: transfers || [] };
+}
+
+/* D13 (13 Oct 2026): what the manager actually paid for each player he owns,
+   so the app's selling prices follow FPL's rule (paid + half the rise, rounded
+   down) instead of assuming everyone was bought at the season-start price.
+   The owned squad is the latest non-Free-Hit week's picks (a Free Hit squad
+   reverts). For each player, the latest transfer in outside a Free Hit week
+   gives the price; a player never transferred in was in the GW1 squad and
+   cost his start price. */
+function purchasePrices(own, elements) {
+  const fhWeeks = new Set(own.chips.filter(c => c.name === "freehit").map(c => c.event));
+  const base = [...own.rows].reverse().find(r => r.picks?.length && !fhWeeks.has(r.event));
+  if (!base) return null;
+  const el = new Map((elements || []).map(e => [e.id, e]));
+  const out = {};
+  for (const pk of base.picks) {
+    const t = own.transfers
+      .filter(x => x.element_in === pk.id && !fhWeeks.has(x.event))
+      .sort((a, b) => (b.event - a.event) || String(b.time || "").localeCompare(String(a.time || "")))[0];
+    if (t) { out[pk.id] = { paid: r1(t.element_in_cost / 10), from: "transfer", event: t.event }; continue; }
+    const e = el.get(pk.id);
+    if (e) out[pk.id] = { paid: r1((e.now_cost - (e.cost_change_start || 0)) / 10), from: "start" };
+  }
+  return { asOf: base.event, players: out };
 }
 
 /* ---- free-transfer self-check ---------------------------------------------
@@ -559,7 +583,7 @@ async function main() {
 
   const actuals = {
     season: SEASON,
-    team: { totalPlayers, gw: teamGw, chips: chipsMap },
+    team: { totalPlayers, gw: teamGw, chips: chipsMap, purchase: purchasePrices(own, bootstrap.elements) },
     players
   };
 

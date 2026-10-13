@@ -134,8 +134,8 @@ function act(k,a,b){
       if((S.squad||[]).includes(p.id)){toast(p.web_name+" is already in your squad");break;}
       const target=(S.flagged||[]).map(x=>P(x)).find(o=>o&&o.pos===p.pos);
       if(target){
-        if(p.price>S.bank+sellPrice(target)+.001)
-          toast("Over budget by £"+(p.price-S.bank-sellPrice(target)).toFixed(1));
+        if(p.price>planBank()+sellPrice(target)+.001)
+          toast("Over budget by £"+(p.price-planBank()-sellPrice(target)).toFixed(1));
         applySwap(target.id,p.id);toast(target.web_name+" → "+p.web_name);break;}
       const cur=(S.squad||[]).filter(i=>!S.flagged.includes(i));
       if(cur.filter(i=>P(i)?.pos===p.pos).length>=SHAPE[p.pos]){

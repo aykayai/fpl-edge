@@ -32,7 +32,7 @@ function playerCardHTML(){
   if(!p)return "";
   const g=VG();
   const w=ws(String(p.code||""),p.pos,38,p.price,teamMaxPrice(p.team));
-  const buy=REAL_PRICE[p.web_name]??p.price;
+  const pu=purchaseOf(p), buy=pu.paid;
   const five=[];for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];
     five.push({e,pts:q&&!q.blank?q.pts:0,f:q&&q.fixtures[0]});}
   const mx=Math.max(1,...five.map(x=>x.pts));
@@ -59,7 +59,7 @@ function playerCardHTML(){
           <span class="op" style="${x.f&&!x.f.home?"font-style:italic":""}">${x.f?esc(x.f.opp):"—"}</span>
           <span class="gw">GW${x.e}</span></span>`;}).join("")}</div>
       <div class="pcgrid">
-        ${stat("Bought",`£${buy.toFixed(1)}`)}
+        ${stat("Bought",`£${buy.toFixed(1)}`+(pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):""))}
         ${stat("Sells for",`£${sellPrice(p).toFixed(1)}`,
           sellPrice(p)>buy?"color:var(--mint)":sellPrice(p)<buy?"color:var(--red)":"")}
         ${stat("Form",p.form.toFixed(1)+formTag(p))}
@@ -164,7 +164,7 @@ function replHTML(){
     const o=S.model.players.find(p=>p.id===id);if(!o)return"";
     /* every affordable, legal option ranked by projection — not just ones that
        happen to beat the outgoing player */
-    const budget=S.bank+sellPrice(o);
+    const budget=planBank()+sellPrice(o);
     const clubs={};(S.squad||[]).filter(x=>x!==id).forEach(x=>{const q=P2(x);
       if(q)clubs[q.team]=(clubs[q.team]||0)+1;});
     const opts=S.model.players
@@ -176,7 +176,7 @@ function replHTML(){
     return `<div class="repl"><div style="padding:9px 12px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
       <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--cyan)">
         Replace ${esc(o.web_name)} · ${POS[o.pos]}</span>
-      <span class="note">£${(S.bank+sellPrice(o)).toFixed(1)} to spend · sells for £${sellPrice(o).toFixed(1)}</span></div>
+      <span class="note">£${(planBank()+sellPrice(o)).toFixed(1)} to spend · sells for £${sellPrice(o).toFixed(1)}</span></div>
       ${opts.length?opts.map(m=>`<button class="prow" onclick="act('doswap',${o.id},${m.inn.id})">
         ${shirtSVG(m.inn.teamName.toUpperCase(),m.inn.pos===1,24)}
         <span style="flex:1;min-width:0">
@@ -449,6 +449,8 @@ function weekPtsFor(g){
   const chip=chipForWeek(g);
   if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,1),0);
   if(chip==="3xc"&&cap)s+=hPts(cap,g,1);
+  if(chip!=="bboost")s+=coverPts(xi,orderBench(bench),cap&&xi.includes(cap)?cap:null,
+    S.model.players.find(p=>p.id===S.vice),g,chip==="3xc"?3:2);
   return s-hitCost(g);
 }
 
@@ -1167,7 +1169,7 @@ function myScore(gw,weeks){
 }
 function chipsHTML(){
   const g=VG();
-  const budget=+(squadPlayers().reduce((a,p)=>a+p.price,0)+S.bank).toFixed(1);
+  const budget=squadBudget();
   const half=g>=20?2:1;
   const openHalf=S.chipHalf||half;                       // active half expands by default
 

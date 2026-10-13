@@ -457,6 +457,8 @@ function weekPts(){
   const chip=chipForWeek(g);
   if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,S.horizon),0);
   if(chip==="3xc"&&cap)s+=hPts(cap,g,S.horizon);
+  if(chip!=="bboost"){const ob=orderBench(bench),vice=S.model.players.find(p=>p.id===S.vice);
+    for(let e=g;e<g+S.horizon&&e<=38;e++)s+=coverPts(xi,ob,cap&&xi.includes(cap)?cap:null,vice,e,chip==="3xc"?3:2);}
   return s-hitsOver(g,S.horizon);
 }
 /* ---------- transfer engine ---------- */
@@ -470,7 +472,7 @@ function bestSwaps(limit){
     S.model.players.forEach(p=>{
       if(p.pos!==o.pos||S.squad.includes(p.id)||p.avail<=0)return;
       if((S.ignored||[]).includes(p.id))return;
-      if(p.price>S.bank+sellPrice(o)+.001)return;
+      if(p.price>planBank()+sellPrice(o)+.001)return;
       if((cc[p.team]||0)>=3)return;
       const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
       /* where gains are level, prefer the player carrying signals */
@@ -485,7 +487,7 @@ function bestCombo(outIds){
   if(!S.model||!outIds.length)return null;
   const g=S.model.next.id;
   const outs=outIds.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  let budget=S.bank+outs.reduce((a,p)=>a+sellPrice(p),0);
+  let budget=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
   const keep=(S.squad||[]).filter(i=>!outIds.includes(i));
   const club={};keep.forEach(i=>{const p=S.model.players.find(x=>x.id===i);
     if(p)club[p.team]=(club[p.team]||0)+1;});
@@ -511,7 +513,7 @@ function bestCombo(outIds){
       club[best.inn.team]=(club[best.inn.team]||0)+1;budget-=best.inn.price;budget+=0;}
   });
   const spent=picks.reduce((a,m)=>a+m.inn.price,0);
-  const freed=S.bank+outs.reduce((a,p)=>a+sellPrice(p),0);
+  const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
   return{picks,gain:picks.reduce((a,m)=>a+m.gain,0),left:+(freed-spent).toFixed(1),freed:+freed.toFixed(1)};
 }
 /* Persist an edit to the viewed gameweek's plan. Snapshots the currently-effective
@@ -649,6 +651,33 @@ function valueFromFeed(){
   const rows=S.tracker.gw.filter(r=>r.value!=null&&r.event<=g).sort((a,b)=>a.event-b.event);
   return rows.length?{value:+rows[rows.length-1].value,event:rows[rows.length-1].event}:null;
 }
+/* D12 (13 Oct 2026): what a Free Hit or Wildcard can spend, by FPL's rule:
+   the squad's selling value plus the bank. One function for the Chips page,
+   the Team Rating and anything else that needs the whole budget. */
+function squadBudget(){
+  return +(squadPlayers().reduce((a,p)=>a+sellPrice(p),0)+planBank()).toFixed(1);
+}
+/* D17 (13 Oct 2026): expected points the vice-captain and the bench add in
+   week e. If the captain does not play the vice's score is doubled instead:
+   (1 - P(captain plays)) x vice. A starter who does not play is replaced by
+   the bench in order: the keeper by the bench keeper, outfielders by the
+   outfield bench, each used with the probability that at least that many
+   outfield starters miss (formation limits ignored). */
+function coverPts(xi,bench,cap,vice,e,capMult){
+  const pp=p=>{const q=p&&p.gw[e];return q&&!q.blank&&q.pPlay!=null?q.pPlay:1;};
+  const pts=p=>(p&&p.gw[e]&&p.gw[e].pts)||0;
+  let s=0;
+  if(cap&&vice&&vice!==cap&&xi.includes(vice))s+=(1-pp(cap))*pts(vice)*((capMult||2)-1);
+  const gkS=xi.find(p=>p.pos===1), gkB=bench.find(p=>p.pos===1);
+  if(gkS&&gkB)s+=(1-pp(gkS))*pts(gkB);
+  /* distribution of how many outfield starters miss (Poisson binomial) */
+  let dist=[1];
+  xi.filter(p=>p.pos!==1).forEach(p=>{const q=1-pp(p),nd=new Array(dist.length+1).fill(0);
+    dist.forEach((v,k)=>{nd[k]+=v*(1-q);nd[k+1]+=v*q;});dist=nd;});
+  const atLeast=k=>dist.slice(k).reduce((a,v)=>a+v,0);
+  bench.filter(p=>p.pos!==1).forEach((p,i)=>{s+=atLeast(i+1)*pts(p);});
+  return s;
+}
 function planBank(){
   const g=VG(), next=S.model?S.model.next.id:1;
   if(g>next&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)return S.planByGw[g].bank;
@@ -701,8 +730,9 @@ function weekScore(sp,e){
   const start=legalBestXI(sp,v);
   const bench=sp.filter(p=>!start.includes(p)).sort((a,b)=>v(b)-v(a));
   const cap=start.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
+  const vice=start.filter(p=>p!==cap).reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
   return{xi:start,bench,
-    pts:start.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0),
+    pts:start.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0)+coverPts(start,[],cap,vice,e),   // vice only: compared with bestXIScore, which has no bench
     benchPts:bench.reduce((a,p)=>a+v(p),0)};
 }
 function bestXIScore(e){
@@ -716,8 +746,9 @@ function bestXIScore(e){
   const rest=[...by[2].slice(3),...by[3],...by[4].slice(1)].sort((a,b)=>b.gw[e].pts-a.gw[e].pts);
   for(const p of rest){if(take.length>=11)break;if(take.includes(p))continue;
     if((club[p.team]||0)>=3)continue;club[p.team]=(club[p.team]||0)+1;take.push(p);}
-  const c=take.slice().sort((a,b)=>b.gw[e].pts-a.gw[e].pts)[0];
-  return take.reduce((a,p)=>a+p.gw[e].pts,0)+(c?c.gw[e].pts:0);
+  const byPts=take.slice().sort((a,b)=>b.gw[e].pts-a.gw[e].pts),c=byPts[0];
+  /* D17: vice cover, as weekScore counts it, so the two compare like for like */
+  return take.reduce((a,p)=>a+p.gw[e].pts,0)+(c?c.gw[e].pts:0)+coverPts(take,[],c,byPts[1],e);
 }
 function chipPlan(kind){
   const sp=squadPlayers();if(!sp.length||!S.model)return[];
@@ -760,7 +791,9 @@ function chipPlan(kind){
 const FORMATIONS=[[3,4,3],[3,5,2],[4,3,3],[4,4,2],[4,5,1],[5,3,2],[5,4,1],[5,2,3]];
 function teamOfWeek(){
   if(!S.model)return null;
-  const g=VG(), BUDGET=100.0, BENCH_MAX=17.5, need={1:2,2:5,3:5,4:3};
+  /* D19 (13 Oct 2026): the same budget as the Free Hit card (D12), not a
+     fixed £100.0 */
+  const g=VG(), BUDGET=squadBudget(), BENCH_MAX=17.5, need={1:2,2:5,3:5,4:3};
   const pool=S.model.players.filter(p=>p.avail>0&&p.gw[g]&&!p.gw[g].blank&&p.gw[g].pts>0);
   if(!pool.length)return null;
   const by={1:[],2:[],3:[],4:[]};
@@ -839,7 +872,7 @@ function teamRating(){
   const g=VG();const xi=startingXI();if(!xi.length)return null;
   const cap=S.model.players.find(p=>p.id===S.captain);
   let mine=xi.reduce((a,p)=>a+(p.gw[g]?.pts||0),0)+(cap&&xi.includes(cap)?(cap.gw[g]?.pts||0):0);
-  return{pct:Math.round(clamp(mine/t.total,0,1)*100),mine,best:t.total,totw:t};
+  return{pct:Math.round(clamp(mine/t.total,0,1)*100),mine,best:t.total,totw:t,budget:squadBudget()};
 }
 
 /* ---------- news ---------- */
@@ -1310,7 +1343,7 @@ function squadListHTML(){
   const val={
     pos:p=>p.pos*100-(xi.includes(p)?50:0),
     name:p=>p.web_name.toLowerCase(),
-    buy:p=>REAL_PRICE[p.web_name]??p.price,
+    buy:p=>purchaseOf(p).paid,
     sell:p=>sellPrice(p),
     form:p=>p.form, xmins:p=>p.xMins,
     pred:p=>p.gw[g]?.pts||0, p3:p=>hPts(p,g,3), p5:p=>hPts(p,g,5)
@@ -1329,7 +1362,7 @@ function squadListHTML(){
   const body=rows.map(p=>{
     const starting=xi.includes(p);
     const q=p.gw[g]||{fixtures:[]};
-    const buy=REAL_PRICE[p.web_name]??p.price;
+    const buy=purchaseOf(p).paid;
     const sell=sellPrice(p);
     return `<tr class="${starting?"":"sub"}">
       <td class="nm"><span style="display:flex;align-items:center;gap:8px">
