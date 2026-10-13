@@ -384,7 +384,10 @@ function oddsHTML(){
   const rows=sp.map(p=>{
     const fx=teamFx[p.team]||null;
     const rec=players[p.id]||null;
-    const mkt=(fx||rec)?marketPoints(p,rec,fx):null;
+    /* 13 Oct 2026: a market figure needs the player's own markets (scorer,
+       assist). From match odds alone it is appearance and clean-sheet points
+       with no attacking returns (Haaland 2.0 against 8.7), so no figure. */
+    const mkt=rec?marketPoints(p,rec,fx):null;
     const model=p.gw[g]?.pts||0;
     const cs=fx&&fx.goals&&p.pos<=3
       ? (fx.ht&&fx.ht.id===p.team?fx.goals.csHome:fx.goals.csAway) : null;
@@ -405,7 +408,8 @@ function oddsHTML(){
   const squadPanel=`<div class="panel">
     <div class="phead"><h2>Your squad · market vs model</h2>
       <span class="note">GW${g} · ${cmp.length} of ${rows.filter(r=>r.start).length} starters priced, compared on those only · captain doubled</span></div>
-    <div class="pbody" style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--ink3)">
+    ${cmp.length?"":`<div class="pbody" style="border-bottom:1px solid var(--ink3)"><p class="note" style="margin:0">The odds feed has no player markets (goalscorer, assist) for this week, so there is no market figure per player to set against the model. Match odds still feed the model's fixture strengths, and the CS column below comes from them.</p></div>`}
+    <div class="pbody" style="display:${cmp.length?"flex":"none"};gap:22px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--ink3)">
       <span><span class="note" style="display:block">Model</span>${big(mdl.toFixed(1),"var(--mint)")}</span>
       <span><span class="note" style="display:block">Market</span>${big(mkt.toFixed(1),"var(--cyan)")}</span>
       <span><span class="note" style="display:block">Difference</span>
