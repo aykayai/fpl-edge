@@ -1,0 +1,28 @@
+name: Tests
+
+# F104 (bundle 10, 13 Oct 2026): the server gate runs on every push and pull
+# request. It is offline (stubbed upstreams) and needs no packages, so it
+# takes seconds. The fuller suites (regression, rules, signals, planner
+# history, broken items) need a dataset and jsdom and are run before each
+# deploy with: node server/run_tests.mjs (see README-SERVER.md).
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax check every script
+        run: for f in app-*.js server/*.mjs server/lib/*.mjs scripts/*.mjs; do node --check "$f"; done
+      - name: Server gate
+        run: node server/test_gate.mjs

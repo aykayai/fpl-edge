@@ -469,20 +469,25 @@ function dGain(inn,out,g,h){
   return s;
 }
 function moveBar(g){return freeWeek(g)?TRANSFER_MIN:freeLeft(g)>0?FT_VALUE:FT_VALUE+HIT;}
-function weekPts(){
+/* The squad's predicted total from week g over h weeks: XI, captain, chip,
+   vice and bench cover, less hits. The header uses the planner's week and
+   horizon; the xFPL comparison asks for any single week (F103: these were
+   two copies of the same sum). */
+function weekPtsFor(g,h){
+  h=h||1;
   const xi=startingXI();if(!xi.length)return 0;
-  const g=VG();
-  let s=xi.reduce((a,p)=>a+hPts(p,g,S.horizon),0);
+  let s=xi.reduce((a,p)=>a+hPts(p,g,h),0);
   const cap=S.model.players.find(p=>p.id===S.captain);
-  if(cap&&xi.includes(cap))s+=hPts(cap,g,S.horizon);
+  if(cap&&xi.includes(cap))s+=hPts(cap,g,h);
   const bench=squadPlayers().filter(p=>!xi.includes(p));
   const chip=chipForWeek(g);
-  if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,S.horizon),0);
-  if(chip==="3xc"&&cap)s+=hPts(cap,g,S.horizon);
+  if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,h),0);
+  if(chip==="3xc"&&cap)s+=hPts(cap,g,h);
   if(chip!=="bboost"){const ob=orderBench(bench),vice=S.model.players.find(p=>p.id===S.vice);
-    for(let e=g;e<g+S.horizon&&e<=38;e++)s+=coverPts(xi,ob,cap&&xi.includes(cap)?cap:null,vice,e,chip==="3xc"?3:2);}
-  return s-hitsOver(g,S.horizon);
+    for(let e=g;e<g+h&&e<=38;e++)s+=coverPts(xi,ob,cap&&xi.includes(cap)?cap:null,vice,e,chip==="3xc"?3:2);}
+  return s-hitsOver(g,h);
 }
+function weekPts(){return weekPtsFor(VG(),S.horizon);}
 /* ---------- transfer engine ---------- */
 function bestSwaps(limit){
   if(!S.model||!S.squad)return[];

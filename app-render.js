@@ -416,22 +416,6 @@ function tableHTML(){
   if(S.starOnly&&!S.stars.length)return `<div class="pbody"><p class="note" style="margin:0">No shortlisted players yet. Tap ★ on any row to add one.</p></div>`;
   return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${more}`;
 }
-/* Predicted squad total for an arbitrary gameweek — weekPts() is hard-wired to
-   VG() (the planner's own GW selector), so the xFPL comparison widget needs its
-   own version to browse independently. */
-function weekPtsFor(g){
-  const xi=startingXI();if(!xi.length)return 0;
-  let s=xi.reduce((a,p)=>a+hPts(p,g,1),0);
-  const cap=S.model.players.find(p=>p.id===S.captain);
-  if(cap&&xi.includes(cap))s+=hPts(cap,g,1);
-  const bench=squadPlayers().filter(p=>!xi.includes(p));
-  const chip=chipForWeek(g);
-  if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,1),0);
-  if(chip==="3xc"&&cap)s+=hPts(cap,g,1);
-  if(chip!=="bboost")s+=coverPts(xi,orderBench(bench),cap&&xi.includes(cap)?cap:null,
-    S.model.players.find(p=>p.id===S.vice),g,chip==="3xc"?3:2);
-  return s-hitCost(g);
-}
 
 /* F45: the two accuracy tiles compare next week's projection with each
    player's season average so far. That smooths away the week-to-week swings

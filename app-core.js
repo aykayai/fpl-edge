@@ -172,6 +172,9 @@ function availTag(p){
   return p&&p.availAssumed?srcTag("assumed","FPL flags him but gives no chance of playing, so 50% is assumed."):"";
 }
 const TEAM_ID="301830", STATE_VERSION=4;
+/* F101 (bundle 10): whose team this is, in one place (the server and feed
+   builder take the id from FPL_TEAM_ID / FPL_ENTRY_ID) */
+const IDENTITY={team:"Armitage Shanks",manager:"Andrew Kenny",id:TEAM_ID};
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
 const NAV=[
   {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["chips","Chips"],["rivals","Rivals"],["tracker","Tracker"]]},
@@ -188,7 +191,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.15.2";
+const APP_VERSION="12.16.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

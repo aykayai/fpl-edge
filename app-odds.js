@@ -894,7 +894,7 @@ function renderPage(){
   if(!S.model){
     app.innerHTML=`<div style="max-width:460px;margin:0 auto;padding:28px 4px">
       <h1 style="font-size:44px;line-height:.95;font-weight:800">FPL<br><span style="color:var(--mint)">Signals</span></h1>
-      <p class="note" style="margin-top:12px">Armitage Shanks · team 301830</p>
+      <p class="note" style="margin-top:12px">${esc(IDENTITY.team)} · team ${IDENTITY.id}</p>
       <div class="panel" style="border-color:var(--mint);margin-top:18px"><div class="pbody">
         <p class="note" style="margin:0 0 10px">Loads players, prices, fixtures and last season's underlying stats from this box's own FPL Signals server, which mirrors the FPL Core Insights dataset.</p>
         <button class="pri" style="width:100%" onclick="act('load')">${S.loading?esc(S.progress||"Loading…"):"Load data"}</button>
@@ -1095,8 +1095,8 @@ function renderPage(){
       <div style="display:flex;gap:11px;align-items:center">
         ${LOGO}
         <div><div style="font-size:12px;color:var(--mint);font-weight:600">FPL Signals · Gameweek ${g}</div>
-        <h1 style="font-size:24px">Armitage Shanks</h1>
-        <div style="font-size:12px;color:var(--mute)">Andrew Kenny · team ${TEAM_ID}</div></div></div>
+        <h1 style="font-size:24px">${esc(IDENTITY.team)}</h1>
+        <div style="font-size:12px;color:var(--mute)">${esc(IDENTITY.manager)} · team ${IDENTITY.id}</div></div></div>
       ${statusChipHTML()}</div>
     <div class="fcgrid">${cards}</div>
     ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}

@@ -466,6 +466,9 @@ async function main() {
         entryId: id, entryName: null, manager: null,
         rank: null, lastRank: null, gwPoints: null, totalPoints: null
       }));
+  /* F106 (bundle 10): a fixed order (rank, then entry id), so the API
+     returning tied entries in a different order is not a change */
+  members.sort((a, b) => ((a.rank ?? 1e9) - (b.rank ?? 1e9)) || a.entryId.localeCompare(b.entryId));
 
   if (table.length) {
     const ids = new Set(members.map(m => m.entryId));
