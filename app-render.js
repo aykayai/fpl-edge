@@ -238,28 +238,6 @@ function listHTML(){
       <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,5).toFixed(1)}</span>
     </button>`;}).join("")+(plim<150?pmore:"");
 }
-function plannerControls(){
-  const g=S.model.next.id;
-  return `<div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
-    <span style="flex:1;min-width:200px">
-      <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)"><span>Budget</span></span>
-      <span class="pricebox" style="margin:4px 0">
-        <input type="number" min="3.5" max="16" step="0.1" value="${S.fMax.toFixed(1)}" onchange="act('fmax',this.value)">
-        <input type="range" min="3.5" max="16" step="0.1" value="${S.fMax}" oninput="act('fmax',this.value)" style="flex:1"></span>
-    </span>
-    <span style="flex:1;min-width:200px">
-      <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)"><span>From gameweek</span></span>
-      <span class="pricebox" style="margin:4px 0">
-        <input type="number" min="${g}" max="38" step="1" value="${VG()}" onchange="act('startgw',this.value)">
-        <input type="range" min="${g}" max="38" step="1" value="${VG()}" oninput="act('startgw',this.value)" style="flex:1"></span>
-    </span>
-    <span style="flex:1;min-width:200px">
-      <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)"><span>Gameweeks</span></span>
-      <span class="pricebox" style="margin:4px 0">
-        <input type="number" min="1" max="8" step="1" value="${S.horizon}" onchange="act('horizon',this.value)">
-        <input type="range" min="1" max="8" step="1" value="${S.horizon}" oninput="act('horizon',this.value)" style="flex:1"></span>
-    </span></div>`;
-}
 /* A plain range slider packs many possible values into a short drag distance —
    for budget (0.1 steps across 12.5 units, 125 stops) or a gameweek number,
    that makes landing on an exact value genuinely hard. Nudge buttons at two
@@ -300,15 +278,6 @@ function filtersHTML(compact,scope){
         onchange="act('fmax',this.value)" style="width:70px"></span>`}
     <select ${compact?"":'style="width:auto"'} onchange="act('${A('team')}',this.value)"><option value="0">All clubs</option>
       ${S.model.teams.map(t=>`<option value="${t.id}" ${team===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
-  </div>`;
-}
-function filtersOLD(compact){
-  return `<div class="pbody" style="display:flex;${compact?"flex-direction:column":"flex-wrap:wrap;align-items:end"};gap:9px;border-bottom:1px solid var(--ink3)">
-    <input ${compact?"":'style="width:auto;min-width:150px;flex:1"'} placeholder="Search" value="${esc(S.fSearch)}" oninput="act('search',this.value)">
-    <span style="display:flex;gap:4px;flex-wrap:wrap">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]]
-      .map(([v,n])=>`<button class="${S.fPos===v?"on":""}" onclick="act('pos',${v})">${n}</button>`).join("")}</span>
-    <select ${compact?"":'style="width:auto"'} onchange="act('team',this.value)"><option value="0">All clubs</option>
-      ${S.model.teams.map(t=>`<option value="${t.id}" ${S.fTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
   </div>`;
 }
 function tableHTML(){
@@ -850,20 +819,6 @@ function transfersHTML(){
   }).join("");
 
   return radarHTML()+picker+comboPanel+headScout+suggestTitle+byPos;
-}
-function totwCard(p,cap){
-  const isCap=cap&&cap.id===p.id;
-  const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
-  const f0=q.fixtures[0];
-  const[bg,fg,elite]=ptsCol(q.pts);
-  const own=(S.squad||[]).includes(p.id);
-  return `<div class="card">
-    <div class="kit" style="cursor:pointer" onclick="act('card',${p.id})">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
-      ${cap&&cap.id===p.id?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)">C</span>`:""}
-      ${own?`<span class="badge" style="top:-2px;right:2px;background:var(--mint);color:var(--ink)">✓</span>`:""}</div>
-    <div class="namebar"><span class="nm">${esc(p.web_name)}</span><span class="pr">£${p.price.toFixed(1)}</span></div>
-    <div class="ptsbar" style="background:${bg};color:${fg};${elite?"box-shadow:0 0 0 2px var(--cyan) inset":""}"><div class="pv">${(q.pts*(isCap?2:1)).toFixed(1)}</div>
-      <div class="fx">${f0?esc(f0.opp+" ("+(f0.home?"H":"A")+")"):"No fixture"}</div></div></div>`;
 }
 function fixturesHTML(){
   const g=VG(), teams=S.model.teams;
@@ -1465,15 +1420,6 @@ function itemHTML(n,score){
     <div class="meta"><span class="src">${esc(n.src)}</span><span>${when}</span>
       ${score&&n.score?`<span>▲ ${n.score}</span>`:""}${n.comments?`<span>${n.comments} comments</span>`:""}
       ${n.extra?`<span>${esc(n.extra)}</span>`:""}</div></a>`;
-}
-function sectionHTML(key,title,items,score,empty){
-  const any=items.some(n=>hits(n.title).length),open=!!S.expand[key];
-  const shown=open?items.slice(0,40):items.slice(0,10);
-  return `<div class="panel"><div class="phead">
-      <h2 style="${any?"color:var(--mint)":""}">${title}${any?' <span style="font-size:11px">· your squad</span>':""}</h2>
-      <span class="note">${items.length}</span></div>
-    ${items.length?shown.map(n=>itemHTML(n,score)).join(""):`<div class="pbody"><p class="note">${esc(empty)}</p></div>`}
-    ${items.length>10?`<button style="margin:10px 13px 13px" onclick="act('expand','${key}')">${open?"Show less":"Read more · "+(items.length-10)+" more"}</button>`:""}</div>`;
 }
 const CREATORS=[["Ben Crellin","Blanks, doubles and fixture swings","https://x.com/BenCrellin"],
  ["FPL Harry","Data-led weekly analysis","https://x.com/FPLHarry"],

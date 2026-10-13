@@ -181,7 +181,7 @@ function act(k,a,b){
       break;}
     case"pick":S.selected=P(a);break;
     case"cancel":S.selected=null;break;
-    case"sub":console.log("[DIAG] sub fired, a=",a,"S.subFrom=",S.subFrom,"player=",P(a)?.web_name,"pos=",P(a)?.pos);
+    case"sub":
       if(S.subFrom===a){S.subFrom=null;break;}
       if(S.subFrom==null){S.subFrom=a;toast("Now tap who to swap with");break;}
       trySub(S.subFrom,a);break;

@@ -241,24 +241,6 @@ const SEED=[["Raya","ARS",1,6.0],["Dubravka","TOT",1,4.0],
 const norm=s=>(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");
 
 /* Community chip consensus, gathered Aug 2026 */
-const CHIP_CONSENSUS={
- bboost1:{weeks:"GW1–2, or straight after a Wildcard",
-  text:"Everyone starts with 15 fit players and clean fixtures, so an early Bench Boost needs no build-up. First-half doubles are rare and the chip expires at GW19 — don't hold it for a double that may never come."},
- freehit1:{weeks:"GW3–4 in the popular chip chain",
-  text:"A one-week rescue rather than a squad upgrade. Worth holding unless an early blank or a brutal fixture week hits your XI."},
- wildcard1:{weeks:"Around the international break before GW6 (GW5–10 range)",
-  text:"Wildcarding on the break before GW6 gives you real form data and sets up a GW7 Bench Boost. Scout flag Fulham, Bournemouth and Brighton home fixtures that week."},
- "3xc1":{weeks:"GW3, or GW7/16",
-  text:"Haaland at home to promoted sides is the consensus target — Coventry at home in GW3 is the first. Bruno Fernandes is the main alternative given United's run against promoted opposition."},
- wildcard2:{weeks:"Before the second-half double gameweek run",
-  text:"Rebuild for the doubles and blanks once the calendar is published, usually December."},
- freehit2:{weeks:"The major blank, historically GW29–32",
-  text:"Timing matters more than squad quality — target the week where half your squad has no fixture."},
- "3xc2":{weeks:"First big double gameweek, historically GW19–22",
-  text:"A premium with two fixtures is the textbook target. Remember only one chip per gameweek, so it competes with Bench Boost."},
- bboost2:{weeks:"A double gameweek where all 15 have two fixtures",
-  text:"Pair it with a Wildcard the week before so every bench slot is a starter rather than fodder."}
-};
 
 /* ---------- kits ---------- */
 const KITS={ARS:{b:"#EF0107",s:"#FFFFFF"},MCI:{b:"#6CABDD",s:"#6CABDD"},LIV:{b:"#C8102E",s:"#C8102E"},
@@ -381,9 +363,6 @@ const PBAND=[["#4A0010","#FFD9DF"],["#96122A","#FFE3E8"],["#D4545E","#3A0009"],
   ["#5FE083","#04250D"],["#7DFB9E","#042A0E"]];
 /* One seven-step ramp, dark red through to bright green, used for both
    projected points and fixture difficulty so the two read consistently. */
-const RAMP=[["#5C0011","#FFD9DF"],["#96122A","#FFE3E8"],["#C0392B","#FFF0F2"],
-  ["#E0631E","#2A1000"],["#F0A02A","#2A1000"],["#2E9E52","#EAFFF1"],
-  ["#3FBF63","#06240F"],["#7DFB9E","#042A0E"]];
 const fdrCol=d=>({5:["#4A0010","#FFD9DF"],4:["#C0182F","#FFF0F2"],3:["#F0A02A","#2A1000"],
   2:["#2E9E52","#EAFFF1"],1:["#7DFB9E","#042A0E"]}[d]||["#F0A02A","#2A1000"]);
 /* One pill renderer so every fixture looks the same wherever it appears.
@@ -820,14 +799,6 @@ function savePaint(){
    ============================================================ */
 const GOAL_PTS={1:10,2:6,3:5,4:4}, CS_PTS={1:4,2:4,3:1,4:0}, DC_THRESH={1:99,2:10,3:12,4:12};
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
-
-/* Elo spread → 1-5 difficulty, adjusted for venue */
-/* Difficulty 1-5 from the opponent's Elo, ranked against the league rather than
-   stretched between two extremes — one runaway team was skewing every band.
-   Home advantage is applied as an Elo shift (~65 pts), which is the accepted
-   figure, before the band is assigned. */
-function eloDiff(){return 3;}   /* superseded by fdrOf() */
-
 /* Fixture difficulty from FPL's own team strength ratings, banded into league
    quintiles. Elo alone put Newcastle near the top while they faced Liverpool. */
 /* ============================================================
@@ -848,6 +819,7 @@ const PROMOTED={
   IPS:{gf:80/46, ga:47/46, note:"best xGA in the division, 1.01 per 90"},
   HUL:{gf:62/46, ga:58/46, note:"6th, promoted via play-offs, overperformed xG"}
 };
+
 const CHAMP_ATT=0.62, PL_GF=1.42;   /* CHAMP_DEF removed at v11.3: declared, never read */
 
 /* ---- current-season blend -------------------------------------------------
@@ -1238,11 +1210,6 @@ function clearModelCaches(){
 /* ---- expected minutes ----
    Fitted per position against Fantasy Football Hub's published xMins
    (n=289). Keepers are role-based: one plays, the understudy does not. */
-const XM={
-  2:{a:77.1,last:0.16,pre:0.04,price:-1.41},
-  3:{a:56.0,last:0.23,pre:0.06,price:0.94},
-  4:{a:14.0,last:0.44,pre:0.22,price:3.60}
-};
 const GK_START=89, GK_BACKUP=15;
 /* How far a fixture moves a player's score around his own average. Retuned
    after the xG engine took over the fixture view: 1.26 against the published
