@@ -1008,87 +1008,107 @@ function navFix(start,span,g){
     <button onclick="act('fixgw',${Math.min(38,start+10)})" ${start+span>38?"disabled":""}>later →</button></div>`;
 }
 
-const FORMS=[[3,4,3],[3,5,2],[4,4,2],[4,3,3],[4,5,1],[5,3,2],[5,4,1]];
+const FORMS=[[3,4,3],[3,5,2],[4,4,2],[4,3,3],[4,5,1],[5,3,2],[5,4,1],[5,2,3]];
 const _sqCache={};
-/* ---------- Free Hit: true mathematical optimum, not a heuristic ----------
-   buildSquad() (below) is a fast greedy heuristic — good, but not provably
-   optimal: it fills each position by rank then makes local one-at-a-time
-   budget swaps, which can miss a genuinely better combination that trades
-   value across positions (e.g. skip the single highest-scoring forward for a
-   cheaper near-equal one, specifically to afford a much stronger midfielder).
-   This solves the ACTUAL problem — maximise predicted points of a legal
-   starting XI (any formation, chosen simultaneously rather than tried one
-   shape at a time) from a budget-and-club-legal 15-man squad — as a proper
-   0/1 Mixed-Integer Program via javascript-lp-solver (branch-and-cut),
-   proven correct against hand-built test cases before shipping. */
-function buildOptimalFreeHit(gw,budget){
+/* ---------- Free Hit and Wildcard: the optimiser ----------
+   Both chips are solved as a 0/1 integer programme (javascript-lp-solver):
+   maximise the projected points of a legal XI plus captain from a 15-man
+   squad inside the budget, three per club, any formation (or the one the
+   user picked). The Free Hit scores one week; the Wildcard scores the
+   five-week average, and its bench counts at the chance a bench player comes
+   on (keeper 0.12, outfielders 0.38, the D17 rates averaged) so it buys a
+   playable bench. Free Hit benches count nothing, as before.
+   D18 (13 Oct 2026): a filtered pool (top 32 and cheapest 10 per position)
+   answers at once and is labelled "best found"; the full pool is then solved
+   in the background (about 2 s) and, if it finishes inside its time limit,
+   replaces it as "proven optimal". Results are cached until the model is
+   rebuilt (F76). buildSquad() below is the fallback if the solver fails. */
+const OPT_TIMEOUT={fast:4000,full:15000};
+const _optPending={};
+function buildOptimal(kind,gw,budget,full,form){
   if(typeof solver==="undefined"||!solver.Solve)return null;   // library failed to load — fall back
-  const val=p=>p.gw[gw]?.pts||0;
-  const pool=S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank&&val(p)>0);
+  const key="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|"+(full?"full":"fast");
+  if(_sqCache[key]!==undefined)return _sqCache[key];
+  const weeks=kind==="wildcard"?5:1;
+  const val=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
+  const benchW=kind==="wildcard"?{1:0.12,2:0.38,3:0.38,4:0.38}:{1:0,2:0,3:0,4:0};
+  /* F37: available players count even at zero points (a blank or cheap
+     enabler can still fill a bench) */
+  const pool=S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank);
   if(pool.length<30)return null;
-  /* Keep the problem small enough to solve in well under a second without
-     ever losing the true optimum: for each position, keep the top scorers
-     (who could plausibly start) AND the cheapest options (needed to complete
-     a legal, affordable squad as "enablers") — verified against an unfiltered
-     search on test data to confirm this never changes the answer. */
   const byPos={1:[],2:[],3:[],4:[]};
   pool.forEach(p=>byPos[p.pos]&&byPos[p.pos].push(p));
-  const filtered=[];
-  Object.values(byPos).forEach(list=>{
-    const byValue=list.slice().sort((a,b)=>val(b)-val(a)).slice(0,32);
-    const byCheap=list.slice().sort((a,b)=>a.price-b.price).slice(0,10);
-    const seen=new Set();
-    [...byValue,...byCheap].forEach(p=>{if(!seen.has(p.id)){seen.add(p.id);filtered.push(p);}});
-  });
-  if(filtered.filter(p=>p.pos===1).length<2||filtered.filter(p=>p.pos===2).length<5
-    ||filtered.filter(p=>p.pos===3).length<5||filtered.filter(p=>p.pos===4).length<3)return null;
-
+  let cand=pool;
+  if(!full){
+    cand=[];
+    Object.values(byPos).forEach(list=>{
+      const byValue=list.slice().sort((a,b)=>val(b)-val(a)).slice(0,32);
+      const byCheap=list.slice().sort((a,b)=>a.price-b.price).slice(0,10);
+      const seen=new Set();
+      [...byValue,...byCheap].forEach(p=>{if(!seen.has(p.id)){seen.add(p.id);cand.push(p);}});
+    });
+  }
   const vars={};
   const constraints={squad_total:{equal:15},squad_gk:{equal:2},squad_def:{equal:5},
     squad_mid:{equal:5},squad_fwd:{equal:3},xi_total:{equal:11},xi_gk:{equal:1},
     xi_def:{min:3,max:5},xi_fwd:{min:1,max:3},captain_total:{equal:1},budget:{max:budget}};
+  if(form){const [d,,f]=form.split("-").map(Number);constraints.xi_def={equal:d};constraints.xi_fwd={equal:f};}
   const posKey={1:"gk",2:"def",3:"mid",4:"fwd"};
-  const clubs=new Set(filtered.map(p=>p.team));
-  clubs.forEach(c=>constraints["club_"+c]={max:3});
-  filtered.forEach(p=>{
-    const pk=posKey[p.pos],v=val(p);
-    vars["x_"+p.id]={squad_total:1,["squad_"+pk]:1,budget:p.price,["club_"+p.team]:1,["link_"+p.id]:-1};
+  new Set(cand.map(p=>p.team)).forEach(c=>constraints["club_"+c]={max:3});
+  cand.forEach(p=>{
+    const pk=posKey[p.pos],v=val(p),w=benchW[p.pos];
+    vars["x_"+p.id]={squad_total:1,["squad_"+pk]:1,budget:p.price,["club_"+p.team]:1,["link_"+p.id]:-1,profit:w*v};
     vars["y_"+p.id]={xi_total:1,xi_gk:p.pos===1?1:0,xi_def:p.pos===2?1:0,xi_fwd:p.pos===4?1:0,
-      ["link_"+p.id]:1,["captainlink_"+p.id]:-1,profit:v};
+      ["link_"+p.id]:1,["captainlink_"+p.id]:-1,profit:(1-w)*v};
     vars["c_"+p.id]={captain_total:1,["captainlink_"+p.id]:1,profit:v};
     constraints["link_"+p.id]={max:0};constraints["captainlink_"+p.id]={max:0};
   });
+  const timeout=full?OPT_TIMEOUT.full:OPT_TIMEOUT.fast;
   const model={optimize:"profit",opType:"max",constraints,variables:vars,
-    binaries:Object.fromEntries(Object.keys(vars).map(k=>[k,1])),timeout:4000};
-
+    binaries:Object.fromEntries(Object.keys(vars).map(k=>[k,1])),timeout};
+  const t0=Date.now();
   let result;
-  try{result=solver.Solve(model);}catch(e){return null;}
-  if(!result||!result.feasible)return null;
-
-  const byId={};filtered.forEach(p=>byId[p.id]=p);
+  try{result=solver.Solve(model);}catch(e){result=null;}
+  const ms=Date.now()-t0;
+  if(!result||!result.feasible){_sqCache[key]=null;return null;}
   const xi=[],bench=[];let cap=null;
-  filtered.forEach(p=>{
+  cand.forEach(p=>{
     if(result["x_"+p.id]===1){
       if(result["y_"+p.id]===1)xi.push(p);else bench.push(p);
       if(result["c_"+p.id]===1)cap=p;
     }
   });
   /* Defensive validation — never trust a solver result blindly. Anything off
-     falls back to the existing heuristic rather than risk showing a broken
-     or illegal team. */
+     falls back to the heuristic rather than risk showing an illegal team. */
   const xiPos={1:0,2:0,3:0,4:0};xi.forEach(p=>xiPos[p.pos]++);
   const clubCount={};[...xi,...bench].forEach(p=>{clubCount[p.team]=(clubCount[p.team]||0)+1;});
-  const legal=xi.length===11&&bench.length===4&&cap&&xiPos[1]===1&&xiPos[2]>=3&&xiPos[2]<=5
+  const legal=xi.length===11&&bench.length===4&&cap&&xi.includes(cap)&&xiPos[1]===1&&xiPos[2]>=3&&xiPos[2]<=5
     &&xiPos[4]>=1&&xiPos[4]<=3&&Object.values(clubCount).every(n=>n<=3)
     &&([...xi,...bench].reduce((s,p)=>s+p.price,0))<=budget+0.001;
-  if(!legal)return null;
-
+  if(!legal){_sqCache[key]=null;return null;}
   const rank=(a,b)=>(val(b)-val(a))||(b.owned-a.owned);
   const spend=xi.concat(bench).reduce((a,p)=>a+p.price,0);
   const bspend=bench.reduce((a,p)=>a+p.price,0);
-  return{xi:xi.slice().sort(rank),bench,cap,total:xi.reduce((a,p)=>a+val(p),0)+val(cap),
+  /* bench in the order it would come on: keeper first, then best outfielder */
+  const benchOrdered=[...bench.filter(p=>p.pos===1),...bench.filter(p=>p.pos!==1).sort(rank)];
+  const out={xi:xi.slice().sort(rank),bench:benchOrdered,cap,total:xi.reduce((a,p)=>a+val(p),0)+val(cap),
     shape:`${xiPos[2]}-${xiPos[3]}-${xiPos[4]}`,value:+spend.toFixed(1),
-    benchValue:+bspend.toFixed(1),weeks:1,val};
+    benchValue:+bspend.toFixed(1),weeks,val,full:!!full,proven:!!full&&ms<timeout*0.95};
+  _sqCache[key]=out;
+  return out;
+}
+/* The answer to show now: the full-pool result when it exists, else the fast
+   one, with the full solve queued in the background. */
+function optimalSquad(kind,gw,budget,form){
+  const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full";
+  if(_sqCache[fullKey])return _sqCache[fullKey];
+  const fast=buildOptimal(kind,gw,budget,false,form);
+  if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
+    _optPending[fullKey]=1;
+    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form);}finally{delete _optPending[fullKey];}
+      if(S.tab==="chips")render();},60);
+  }
+  return fast?Object.assign({},fast,{checking:!!_optPending[fullKey]}):null;
 }
 function buildSquad(kind,gw,form,budget){
   const key=kind+"|"+gw+"|"+(form||"auto")+"|"+budget.toFixed(1)+"|"+(S.model?S.model.players.length:0);
@@ -1154,7 +1174,7 @@ function buildSquad(kind,gw,form,budget){
     const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0);
     if(!best||total>best.total)
       best={xi:xi.slice().sort(rank),bench,cap,total,shape:`${d}-${m}-${f}`,
-        value:+spend().toFixed(1),benchValue:+bspend.toFixed(1),weeks,val};
+        value:+spend().toFixed(1),benchValue:+bspend.toFixed(1),weeks,val,heuristic:true};
   });
   _sqCache[key]=best;
   return best;
@@ -1176,8 +1196,10 @@ function chipsHTML(){
   /* ---- squad card, reusing the Planner pitch ---- */
   const sqCard=(kind,title,note,formKey)=>{
     const form=S[formKey]||null;
-    const t=kind==="freehit"?(buildOptimalFreeHit(g,budget)||buildSquad(kind,g,form,budget))
-      :buildSquad(kind,g,form,budget);
+    const t=optimalSquad(kind,g,budget,form)||buildSquad(kind,g,form,budget);
+    /* F57: say how sure the answer is */
+    const how=!t?"":t.heuristic?"best found (quick builder)":t.proven?`proven optimal (${t.shape})`
+      :t.checking?`best found (${t.shape}) · checking every player…`:`best found (${t.shape}) · solver time limit`;
     const weeks=kind==="wildcard"?5:1;
     const mine=myScore(g,weeks);
     const delta=t?t.total-mine:0;
@@ -1208,7 +1230,7 @@ function chipsHTML(){
           ${FORMS.map(f=>{const k=f.join("-");
             return `<button class="chipbtn ${form===k?"on":""}" onclick="act('${formKey}','${k}')">${k}</button>`;}).join("")}
         </div>`}
-        ${t?`<p class="note" style="margin:8px 0 0">${t.total.toFixed(1)} projected${kind==="freehit"?` · mathematically optimal (${t.shape})`:""} · £${t.value.toFixed(1)} of £${budget.toFixed(1)} · bench £${t.benchValue.toFixed(1)}</p>`:""}
+        ${t?`<p class="note" style="margin:8px 0 0">${t.total.toFixed(1)} projected · ${how} · £${t.value.toFixed(1)} of £${budget.toFixed(1)} · bench £${t.benchValue.toFixed(1)}</p>`:""}
         ${actualTotal!=null?`<p style="margin:6px 0 0;font-size:12.5px;color:var(--cream)">
           <b style="font-family:'Barlow Condensed',sans-serif;font-size:19px;color:var(--mint)">${actualTotal.toFixed(0)}</b> actual ·
           <span style="color:${actualTotal-t.total>=0?"var(--mint)":"var(--red)"};font-weight:700">${actualTotal-t.total>=0?"+":""}${(actualTotal-t.total).toFixed(1)}</span> vs projected</p>`:""}

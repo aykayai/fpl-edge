@@ -444,9 +444,18 @@ function hitCost(g){return freeWeek(g)?0:Math.max(0,transfersIn(g)-planFT(g))*HI
 function hitsOver(g,h){let s=0;for(let e=g;e<g+(h||1);e++)s+=hitCost(e);return s;}
 /* free transfers still unused in week g (Infinity in a free-squad week) */
 function freeLeft(g){return freeWeek(g)?Infinity:Math.max(0,planFT(g)-transfersIn(g));}
-/* the gain a suggested move must reach: a free move needs TRANSFER_MIN, a move
-   that would cost a hit must also beat the 4 points it costs */
-function moveBar(g){return freeLeft(g)>0?TRANSFER_MIN:TRANSFER_MIN+HIT;}
+/* D16 (13 Oct 2026, FPL Review's defaults). A move's gain counts week k of
+   the horizon at DECAY^k, because later weeks are less certain, and it must
+   beat FT_VALUE, what rolling the free transfer is worth; a move that costs a
+   hit must beat the hit as well. In a Free Hit or Wildcard week nothing is
+   given up, so TRANSFER_MIN applies. */
+const DECAY=0.85, FT_VALUE=1.75;
+function dGain(inn,out,g,h){
+  let s=0;
+  for(let k=0;k<(h||1)&&g+k<=38;k++)s+=Math.pow(DECAY,k)*((inn.gw[g+k]?.pts||0)-(out.gw[g+k]?.pts||0));
+  return s;
+}
+function moveBar(g){return freeWeek(g)?TRANSFER_MIN:freeLeft(g)>0?FT_VALUE:FT_VALUE+HIT;}
 function weekPts(){
   const xi=startingXI();if(!xi.length)return 0;
   const g=VG();
@@ -474,7 +483,7 @@ function bestSwaps(limit){
       if((S.ignored||[]).includes(p.id))return;
       if(p.price>planBank()+sellPrice(o)+.001)return;
       if((cc[p.team]||0)>=3)return;
-      const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
+      const gain=dGain(p,o,g,S.horizon);
       /* where gains are level, prefer the player carrying signals */
       const sig=signals(p,g).length;
       if(gain>0.05)out.push({out:o,inn:p,gain,sig});});});
@@ -506,7 +515,7 @@ function bestCombo(outIds){
       if(p.pos!==o.pos||taken.has(p.id)||outIds.includes(p.id)||p.avail<=0)return;
       if(p.price>budget-cheapestRest+.001)return;
       if((club[p.team]||0)>=3)return;
-      const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
+      const gain=dGain(p,o,g,S.horizon);
       if(!best||gain>best.gain)best={out:o,inn:p,gain};});
     /* F60: a move that gains nothing is not a move; that player stays */
     if(best&&best.gain>0.05){picks.push(best);taken.add(best.inn.id);
