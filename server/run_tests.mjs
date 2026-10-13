@@ -15,10 +15,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OLD_REF = process.env.OLD_REF || execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT }).toString().trim();
 const SUITES = [
   { name: "gate", file: "test_gate.mjs", env: {} },
-  { name: "regression", file: "test_regression.mjs", env: { PORT: "8093", OLD_REF } },
+  { name: "regression", file: "test_regression.mjs", env: { PORT: "8093", OLD_REF, SERVE_FULL_LAST: "1" } },
   { name: "planner history", file: "test_planner_history.mjs", env: { PORT: "8094" } },
   { name: "signals", file: "test_signals.mjs", env: { PORT: "8097" } },
   { name: "broken items", file: "test_broken.mjs", env: { PORT: "8098" } },
+  { name: "extra", file: "test_extra.mjs", env: { PORT: "8091" } },
   ...(process.env.EXTRA ? process.env.EXTRA.split(",").map((f, i) => ({ name: f, file: f, env: { PORT: String(8110 + i) } })) : []),
 ];
 

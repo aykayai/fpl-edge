@@ -429,7 +429,7 @@ function chipForWeek(w){
    unchanged; every transfer beyond the free ones costs 4 points. A Free Hit
    squad reverts afterwards, so the week after one is compared with the
    squad from before it. */
-const FT_MAX=5,HIT=4;
+const FT_MAX=RULES.ftMax,HIT=RULES.hit;
 function officialBaseIds(){
   const off=(typeof latestOfficialPicks==="function")?latestOfficialPicks():null;
   return off?off.picks.map(pk=>pk.id):((S.original||S.squad||[]).slice());
@@ -820,7 +820,7 @@ function teamOfWeek(){
   if(!S.model)return null;
   /* D19 (13 Oct 2026): the same budget as the Free Hit card (D12), not a
      fixed £100.0 */
-  const g=VG(), BUDGET=squadBudget(), BENCH_MAX=17.5, need={1:2,2:5,3:5,4:3};
+  const g=VG(), BUDGET=squadBudget(), BENCH_MAX=17.5, need=RULES.squad;
   const pool=S.model.players.filter(p=>p.avail>0&&p.gw[g]&&!p.gw[g].blank&&p.gw[g].pts>0);
   if(!pool.length)return null;
   const by={1:[],2:[],3:[],4:[]};

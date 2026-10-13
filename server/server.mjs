@@ -27,6 +27,7 @@ import { refreshNews, newsPayload, newsStatus, playerNews } from "./lib/news.mjs
 import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
 import { buildFeeds, feedsStatus, FEEDS_DIR, SNAP_DIR } from "./lib/feeds.mjs";
 import { snapshotTick, snapshotStatus } from "./lib/snapshot.mjs";
+import { finalRowsFile } from "./lib/trim.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -154,7 +155,16 @@ async function handle(req, res) {
       const full = safeJoin(currentDir(), path.slice("/data/insights/".length));
       if (!full) { sendJson(res, method, 400, { error: "bad path" }); return; }
       const ds = datasetStatus();
-      await serveFile(res, method, full, {
+      /* F79: a finished season's playerstats.csv goes out as each player's
+         final row only (the only row the app reads) */
+      const rel = path.slice("/data/insights/".length);
+      let file = full;
+      /* SERVE_FULL_LAST=1 sends the whole file (old-versus-new tests: the
+         old app read every row) */
+      if (process.env.SERVE_FULL_LAST !== "1" && ds.season && /^\d{4}-\d{4}\/playerstats\.csv$/.test(rel) && !rel.startsWith(ds.season + "/")) {
+        try { file = await finalRowsFile(full); } catch { file = full; }
+      }
+      await serveFile(res, method, file, {
         "X-Source-Time": ds.committedAt || "",
         "X-Fetched-At": ds.fetchedAt || ""
       });

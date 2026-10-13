@@ -160,7 +160,8 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .sqtable tr.sub{background:rgba(255,255,255,.025)}
 .lname{background:none;border:none;padding:0;color:var(--cream);font-weight:700;font-size:12.5px;cursor:pointer}
 .lname:hover{color:var(--mint);text-decoration:underline}
-.tag{font-size:10px;font-weight:800;padding:1px 5px;border-radius:5px;margin-left:5px;vertical-align:middle}
+.tag{display:inline-block;background:var(--mint);color:var(--ink);font-size:10px;font-weight:800;padding:1px 6px;
+ border-radius:4px;margin-left:5px;margin-right:4px;vertical-align:middle}
 .tag.c{background:var(--cream);color:var(--ink)}.tag.v{background:var(--cyan);color:var(--ink)}
 .tag.s{background:var(--ink3);color:var(--mute)}
 .mini{padding:3px 7px;font-size:10.5px;border-radius:6px;margin-left:3px}
@@ -247,8 +248,6 @@ td.nm{font-family:'Geist',system-ui,sans-serif}
 .item.hit{border-left:3px solid var(--mint);background:rgba(0,232,122,.06)}
 .item .ttl{font-size:13px;font-weight:600;line-height:1.4}
 .item .meta{font-size:10.5px;color:var(--mute);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
-.tag{display:inline-block;background:var(--mint);color:var(--ink);font-size:10px;font-weight:800;
- padding:1px 6px;border-radius:4px;margin-right:4px}
 .src{display:inline-block;background:var(--ink3);color:var(--cream);font-size:10px;padding:1px 6px;border-radius:4px}
 .note{font-size:11.5px;color:var(--mute);line-height:1.65}
 .warn{background:#3A0F1C;color:#FFD9DF;padding:10px 12px;border-radius:9px;font-size:12px;line-height:1.6}
@@ -455,8 +454,8 @@ details[open]>summary::after{content:" ▴"}
 .tmini .tv2{text-align:right;font-family:'Geist',system-ui,sans-serif;font-weight:500;font-size:16px;color:var(--cream);padding:5px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tmini .tnow{background:color-mix(in srgb, var(--acc) 13%, transparent)}
 .tmini tbody tr+tr td{border-top:1px solid rgba(255,255,255,.05)}
-.tbest{color:var(--mint) !important}
-.thibest{color:var(--amber) !important;font-weight:800 !important}
+.tbest,.trktable td.tbest,.tmini td.tbest{color:var(--mint)}
+.thibest,.trktable td.thibest,.tmini td.thibest{color:var(--amber);font-weight:800}
 .thibest .tstar{color:var(--amber)}
 .tstar{color:var(--mint);font-size:10px}
 /* Tracker tables (chip + finishes) — match site fonts */
@@ -467,9 +466,9 @@ details[open]>summary::after{content:" ▴"}
 .trktable td:first-child{font-family:'Geist',system-ui,sans-serif;font-weight:600;font-size:11px;text-align:left;color:var(--cream)}
 .trkrow2{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
 @media(min-width:900px){.trkrow2{grid-template-columns:1fr 1fr}}
-.trkavg td{color:var(--amber) !important;font-weight:800 !important;background:rgba(255,138,61,.08)}
-.trkpending td{color:var(--mute) !important;font-style:italic;background:rgba(255,255,255,.03)}
-.trkavg td:first-child{color:var(--amber) !important}
+.trktable .trkavg td,.trkavg td{color:var(--amber);font-weight:800;background:rgba(255,138,61,.08)}
+.trktable .trkpending td,.trkpending td{color:var(--mute);font-style:italic;background:rgba(255,255,255,.03)}
+.trktable .trkavg td:first-child,.trkavg td:first-child{color:var(--amber)}
 /* Signals page (agreed from the mock-up, 12 Oct 2026). Card anatomy follows
    Fintel's Reports: 12px cards, 5% ring, 3px tone edge, icon tile. */
 .sgpage{display:flex;flex-direction:column;gap:16px;padding:4px 0 8px}

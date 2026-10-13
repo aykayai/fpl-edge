@@ -357,7 +357,7 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
   (async()=>{
     const [snap,paint]=await Promise.all([IDB.get("snap"),IDB.get("paint")]);
     const app=document.getElementById("app");
-    if(snap&&snap.files){
+    if(snap&&snap.files&&snap.v===SNAP_V){
       _snap=snap;
       if(paint&&paint.html&&paint.tab===S.tab){
         app.innerHTML=paint.html;app.classList.add("booting");S.booting=true;}

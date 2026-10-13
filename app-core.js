@@ -59,7 +59,10 @@ const IDB={
     const t=db.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);});}
     catch(e){}}
 };
-/* The snapshot the instant start reads: {commit, files:{url:text}, at}. */
+/* The snapshot the instant start reads: {v, commit, files:{url:text}, at}.
+   SNAP_V changes when what is saved changes shape (2: last season's stats
+   arrive as final rows only, 13 Oct 2026); an older copy is not used. */
+const SNAP_V=2;
 let _snap=null;
 /* Every data read goes through here. In cache mode (the instant start) a file
    the snapshot holds is served from it; anything it lacks still comes from the
@@ -191,7 +194,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.16.0";
+const APP_VERSION="12.17.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -566,7 +569,6 @@ async function loadAll(force,opts){
       id:Math.round(num(p.player_id)),code:p.player_code,first:p.first_name,last:p.second_name,
       web_name:p.web_name,teamCode:p.team_code,pos:posOf(p.position)||3});
     pstats.forEach(s=>{const p=byId[s.id];if(p)Object.assign(p,{stats:s});});
-    const lastByCode={};lastStats.forEach(s=>{if(s.id)lastByCode[s.id]=s;});
     /* Keyed by player_code: web_name is not unique — 17 names are shared this
        season, and keying by name gave 29 players another player's history
        (Reece James's record landing on a Leeds midfielder, and so on). */
@@ -580,9 +582,6 @@ async function loadAll(force,opts){
     const lastByCode2={};
     lastStats.forEach(s=>{const code=lastIdToCode[String(Math.round(num(s.id)))];
       if(code)lastByCode2[code]=s;});
-    const lastByName={};lastStats.forEach(s=>{
-      const k=norm(s.web_name);
-      if(!lastByName[k])lastByName[k]=s; else lastByName[k]="__AMBIGUOUS__";});
 
     /* last season's team goals for and against — the base for the ratings */
     const lt={};const tstat={};
@@ -765,7 +764,7 @@ async function loadAll(force,opts){
     S.fixtures=fixtures.filter(f=>{
       const k=f.event+"|"+Math.min(f.h,f.a)+"|"+Math.max(f.h,f.a);
       if(fseen.has(k))return false;fseen.add(k);return true;});
-    S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
+    S.events=events;S.last={byCode:lastByCode2};
     S.stamp=Date.now();
     /* The commit is kept so "Check now" can skip an unchanged dataset. The
        copy itself goes to IndexedDB below (localStorage had no room for it). */
@@ -776,7 +775,7 @@ async function loadAll(force,opts){
     syncOfficialSquad();
     if(!fromSnap){
       /* save this load as the next instant start: dataset files and feeds */
-      _snap={commit,files:S.capture,at:Date.now(),status:st,statusAt:S.statusAt};IDB.set("snap",_snap);
+      _snap={v:SNAP_V,commit,files:S.capture,at:Date.now(),status:st,statusAt:S.statusAt};IDB.set("snap",_snap);
       toast("Live data loaded");
     }
   }catch(e){
@@ -800,7 +799,14 @@ function savePaint(){
 /* ============================================================
    MODEL
    ============================================================ */
-const GOAL_PTS={1:10,2:6,3:5,4:4}, CS_PTS={1:4,2:4,3:1,4:0}, DC_THRESH={1:99,2:10,3:12,4:12};
+/* X42 (13 Oct 2026): the game's rules in one place */
+const RULES={
+  squad:{1:2,2:5,3:5,4:3},        // keepers, defenders, midfielders, forwards
+  clubMax:3, ftMax:5, hit:4,
+  goal:{1:10,2:6,3:5,4:4}, cs:{1:4,2:4,3:1,4:0},
+  dcThresh:{1:99,2:10,3:12,4:12}  // defensive contributions for 2 points
+};
+const GOAL_PTS=RULES.goal, CS_PTS=RULES.cs, DC_THRESH=RULES.dcThresh;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 /* Fixture difficulty from FPL's own team strength ratings, banded into league
    quintiles. Elo alone put Newcastle near the top while they faced Liverpool. */
@@ -1499,10 +1505,12 @@ function buildModel(){
   const players=S.players.map(p=>{
     const s=p.stats, team=byCode[p.teamCode]||{};
     const price=num(s.now_cost), mins=num(s.minutes), starts=num(s.starts);
-    /* code first; fall back to name only when it is unambiguous */
-    let L=S.last?.byCode?.[String(p.code||"")];
-    if(!L){const cand=S.last?.byName?.[norm(p.web_name)];
-      if(cand&&cand!=="__AMBIGUOUS__")L=cand;}
+    /* Matched by player code only. A name fallback sat here, but last
+       season's file has a row per player per gameweek, so every name looked
+       ambiguous and it never matched anyone (found 13 Oct 2026). It was
+       removed rather than switched on: turning it on would change
+       projections, which is Andy's call. */
+    const L=S.last?.byCode?.[String(p.code||"")];
     const lastMins=L?num(L.minutes):0, lastPPG=L?num(L.points_per_game):0;
     const lastStarts=L?num(L.starts):0, lastApps=L?Math.max(num(L.starts),Math.round(num(L.minutes)/60)):0;
     const pr=S.pre?S.pre[p.id]:null;

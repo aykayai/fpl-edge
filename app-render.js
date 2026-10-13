@@ -1085,7 +1085,7 @@ function buildSquad(kind,gw,form,budget){
   const rank=(a,b)=>(val(b)-val(a))||(b.owned-a.owned);
   Object.values(by).forEach(a=>a.sort(rank));
   const shapes=form?[form.split("-").map(Number)]:FORMS;
-  const need={1:2,2:5,3:5,4:3};
+  const need=RULES.squad;
   /* A Wildcard bench has to be able to come on; a Free Hit bench never will, so
      it is squeezed harder. The floor is whatever four cheap bodies actually
      cost — around £17.5 this season — so the cap sits above that. */
@@ -1396,13 +1396,17 @@ function chipCard(p,t,showActual){
     <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }
 
+/* F12/F13 (re-checked 13 Oct 2026): the server cleans the feeds, but the
+   page no longer relies on it: only http(s) links, numbers as numbers */
+const safeUrl=u=>/^https?:\/\//i.test(String(u||""))?String(u):"#";
+const safeInt=v=>{const n=Number(v);return Number.isFinite(n)?Math.round(n):0;};
 function itemHTML(n,score){
   const h=hits(n.title),ago=Math.max(0,Math.round((Date.now()-n.time)/3600000));
   const when=ago<1?"just now":(ago<24?ago+"h ago":Math.round(ago/24)+"d ago");
-  return `<a class="item ${h.length?"hit":""}" href="${esc(n.url)}" target="_blank" rel="noopener">
+  return `<a class="item ${h.length?"hit":""}" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">
     <div class="ttl" ${h.length?'style="color:var(--mint)"':""}>${h.length?`<span class="tag">${esc(h.join(", "))}</span>`:""}${esc(n.title)}</div>
     <div class="meta"><span class="src">${esc(n.src)}</span><span>${when}</span>
-      ${score&&n.score?`<span>▲ ${n.score}</span>`:""}${n.comments?`<span>${n.comments} comments</span>`:""}
+      ${score&&safeInt(n.score)?`<span>▲ ${safeInt(n.score)}</span>`:""}${safeInt(n.comments)?`<span>${safeInt(n.comments)} comments</span>`:""}
       ${n.extra?`<span>${esc(n.extra)}</span>`:""}</div></a>`;
 }
 const CREATORS=[["Ben Crellin","Blanks, doubles and fixture swings","https://x.com/BenCrellin"],

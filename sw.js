@@ -4,7 +4,8 @@
    new version deployed to the server is picked up on the next load rather than
    being pinned to a stale cache. The API and /data are never cached here: the
    server is the source of truth and the app handles its own waiting states. */
-const CACHE = "fpl-signals-v12.16.0";
+const CACHE = "fpl-signals-v12.17.0";
+const IMG_CACHE = "fpl-signals-img";
 const SHELL = [
   "./",
   "./index.html",
@@ -28,7 +29,7 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== IMG_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -46,13 +47,22 @@ self.addEventListener("fetch", e => {
 
   if (url.hostname !== self.location.hostname) return;
 
+  /* Club badges and player photos (served by our server since bundle 8):
+     cache first, in a cache that survives releases. */
+  if (url.pathname.startsWith("/img/")) {
+    e.respondWith(caches.open(IMG_CACHE).then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }))));
+    return;
+  }
+
   /* The page: try the network first so updates arrive, fall back to cache. */
   if (req.mode === "navigate" || url.pathname.endsWith("index.html") || url.pathname.endsWith("/")) {
     e.respondWith(
       fetch(req)
         .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put("./index.html", copy));
+          if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put("./index.html", copy)); }
           return res;
         })
         .catch(() => caches.match("./index.html").then(r => r || caches.match("./")))
@@ -65,8 +75,7 @@ self.addEventListener("fetch", e => {
   if(url.pathname.endsWith(".js") && !url.pathname.endsWith("sw.js")){
     e.respondWith(
       fetch(req).then(res=>{
-        const copy=res.clone();
-        caches.open(CACHE).then(c=>c.put(req,copy));
+        if(res.ok){const copy=res.clone();caches.open(CACHE).then(c=>c.put(req,copy));}
         return res;
       }).catch(()=>caches.match(req))
     );
@@ -76,8 +85,7 @@ self.addEventListener("fetch", e => {
   /* Icons and the manifest rarely change: cache first, refresh in the background. */
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
     }))
   );
