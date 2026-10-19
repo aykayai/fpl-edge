@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 const KEY = process.env.ODDS_API_KEY;
 const BASE = process.env.ODDS_API_BASE || "https://api.odds-api.io/v3";
-const DIR = join(process.env.STATE_DIR || "./state", "odds-history");
+const DIR = process.env.ODDS_HIST_DIR || join(process.env.STATE_DIR || "./state", "odds-history");
 const FROM = process.argv[2] || "2026-08-14";
 if (!KEY) { console.error("ODDS_API_KEY is not set"); process.exit(2); }
 const sleep = ms => new Promise(r => setTimeout(r, ms));

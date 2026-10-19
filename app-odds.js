@@ -121,6 +121,14 @@ function oddsFixtures(){
   }).filter(Boolean);
 }
 /* player prices, keyed to our own player records */
+/* name words, accents and punctuation removed: "Gabriel dos Santos Magalhães" -> [gabriel,dos,santos,magalhaes] */
+const nameWords=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().split(/[^a-z]+/).filter(w=>w.length>1);
+function wordMatch(label,p){
+  const q=nameWords(label);if(q.length<2)return false;
+  const first=nameWords(p.first),last=nameWords(p.last);
+  if(!last.includes(q[q.length-1]))return false;
+  return first.includes(q[0])||last.includes(q[0]);
+}
 function oddsPlayers(){
   const out={};
   const P=S.model?S.model.players:[];
@@ -137,6 +145,12 @@ function oddsPlayers(){
       let sc=0;
       if(full&&full===q)sc=100;
       else if(web===q)sc=90;
+      /* 19 Oct 2026: FPL carries long legal surnames ("Borges Fernandes",
+         "dos Santos Magalhaes") that bookmakers shorten, so 12% of goalscorer
+         names matched nobody (Bruno Fernandes, Gabriel, Zubimendi, Merino).
+         Word by word: the bookmaker's last word must be one of his surname
+         words, and the first word his first name or another surname word. */
+      else if(wordMatch(name,p))sc=80;
       else if(last&&last.length>=4&&q.endsWith(last))sc=70+last.length;
       else if(last&&last.length>=4&&q.includes(last))sc=55+last.length;
       else if(web.length>=5&&q.includes(web))sc=40+web.length;
@@ -155,6 +169,7 @@ function oddsPlayers(){
           Math.max(1,(m.outcomes||[]).length)*0-0)+0.06;
         (m.outcomes||[]).forEach(o=>{
           if(!o.price)return;
+          if(/\((first|last)\)/i.test(o.name))return;     // first / last scorer, not anytime
           const pl=match(o.name,ids);if(!pl)return;
           const rec=out[pl.id]=out[pl.id]||{p:pl,fx};
           const prob=devig1(o.price,margin);
@@ -166,34 +181,6 @@ function oddsPlayers(){
     });
   });
   return out;
-}
-/* the market's own view of a player's FPL score */
-function marketPoints(p,rec,fx){
-  if(!rec&&!fx)return null;
-  const GOAL={1:10,2:6,3:5,4:4}[p.pos]||4, CS={1:4,2:4,3:1,4:0}[p.pos]||0;
-  const mins=clamp(p.xMins/90,0,1);
-  const app=p.xMins>=60?2:(p.xMins>0?1:0);
-  let pts=app;
-  if(rec){
-    if(rec.goal)pts+=rec.goal*GOAL;
-    if(rec.assist)pts+=rec.assist*3;
-    else if(rec.ret&&rec.goal)pts+=Math.max(0,rec.ret-rec.goal)*3;
-    if(rec.card)pts-=rec.card*1;
-  }
-  if(fx&&fx.goals&&p.pos<=3){
-    const mine=fx.ht&&fx.ht.id===p.team;
-    const cs=mine?fx.goals.csHome:(fx.at&&fx.at.id===p.team?fx.goals.csAway:0);
-    pts+=cs*CS;
-    if(p.pos<=2){
-      const conceded=mine?fx.goals.xgAway:fx.goals.xgHome;
-      pts-=Math.floor(conceded/2)*0.5;
-    }
-  }
-  if(p.pos===1&&fx&&fx.goals){
-    const shots=(fx.ht&&fx.ht.id===p.team?fx.goals.xgAway:fx.goals.xgHome)*3.4;
-    pts+=shots/3*0.6;
-  }
-  return pts*clamp(p.avail,0,1)*(0.55+0.45*mins);
 }
 /* S10 (Stage 1, 19 Oct 2026): captain options from the XI. Gap is the cost
    against the best option (the armband doubles it); Plays is the chance he
@@ -295,6 +282,8 @@ async function loadOdds(){
     if(d.error)S.oddsErr=String(d.error);
     S.oddsFetchedAt=d.fetchedAt||null;
     const rows=Array.isArray(d.rows)?d.rows:[];
+    /* the bookmakers behind the prices, for the coverage line */
+    S.oddsBooks=[...new Set(rows.flatMap(r=>Object.keys((r&&r.bookmakers)||{})))].filter(n=>!/no latency/i.test(n));
     /* Catalogue every market the feed returns, as before. Player-level
        markets are often gated behind paid tiers, and the design of the Odds
        tab depends on whether they come through; one raw player-market line
@@ -425,176 +414,96 @@ function oddsHTML(){
       <span style="display:flex;gap:6px;margin-top:10px">
         <button class="pri" onclick="act('odds')">↻ Fetch now</button></span></div></div>`;
 
-  const fixtures=oddsFixtures();
-  const players=oddsPlayers();
-  const pct=v=>Math.round(v*100)+"%";
-  const owned=id=>(S.squad||[]).includes(id);
-
-  /* ---- squad: what the market makes of your fifteen ---- */
-  const sp=squadPlayers(), xi=startingXI();
-  const teamFx={};fixtures.forEach(f=>{
-    if(f.ht)teamFx[f.ht.id]=f;if(f.at)teamFx[f.at.id]=f;});
-  const rows=sp.map(p=>{
-    const fx=teamFx[p.team]||null;
-    const rec=players[p.id]||null;
-    /* 13 Oct 2026: a market figure needs the player's own markets (scorer,
-       assist). From match odds alone it is appearance and clean-sheet points
-       with no attacking returns (Haaland 2.0 against 8.7), so no figure. */
-    const mkt=rec?marketPoints(p,rec,fx):null;
-    const model=p.gw[g]?.pts||0;
-    const cs=fx&&fx.goals&&p.pos<=3
-      ? (fx.ht&&fx.ht.id===p.team?fx.goals.csHome:fx.goals.csAway) : null;
-    return{p,fx,rec,model,mkt,cs,d:mkt==null?null:mkt-model,start:xi.includes(p)};
-  });
-  const capId=S.captain;
-  /* Like for like (13 Oct 2026): both totals cover only the starters the
-     market prices. Summing the market over 6 priced players against the
-     model over all eleven read as the market rating the team far lower. */
-  const cmp=rows.filter(r=>r.start&&r.mkt!=null);
-  const sum=k=>cmp.reduce((a,r)=>a+(k==="model"?r.model:r.mkt),0)
-    +(()=>{const c=cmp.find(r=>r.p.id===capId);
-      return c?(k==="model"?c.model:c.mkt):0;})();
-  const mdl=sum("model"), mkt=sum("mkt");
-  const priced=rows.filter(r=>r.mkt!=null).length;
-  const big=(v,c)=>`<span style="font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:30px;line-height:1;color:${c}">${v}</span>`;
-  const delta=mkt-mdl;
-  const squadPanel=`<div class="panel">
-    <div class="phead"><h2>Your squad · market vs model</h2>
-      <span class="note">GW${g} · ${cmp.length} of ${rows.filter(r=>r.start).length} starters priced, compared on those only · captain doubled</span></div>
-    ${cmp.length?"":`<div class="pbody" style="border-bottom:1px solid var(--ink3)"><p class="note" style="margin:0">The odds feed has no player markets (goalscorer, assist) for this week, so there is no market figure per player to set against the model. Match odds still feed the model's fixture strengths, and the CS column below comes from them.</p></div>`}
-    <div class="pbody" style="display:${cmp.length?"flex":"none"};gap:22px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--ink3)">
-      <span><span class="note" style="display:block">Model</span>${big(mdl.toFixed(1),"var(--mint)")}</span>
-      <span><span class="note" style="display:block">Market</span>${big(mkt.toFixed(1),"var(--cyan)")}</span>
-      <span><span class="note" style="display:block">Difference</span>
-        ${big((delta>0?"+":"")+delta.toFixed(1),delta>0.5?"var(--mint)":delta<-0.5?"var(--red)":"var(--cream)")}</span>
-      <span class="note" style="flex:1;min-width:180px">GK first, highest price first by default — click any column to sort by it.</span>
-    </div>
-    <div class="scroll"><table class="sqtable"><thead><tr>
-      ${[["name","Player","left"],["model","Model","right"],["mkt","Market","right"],
-         ["d","Diff","right"],["goal","Score","right"],["assist","Assist","right"],
-         ["cs","CS","right"]].map(([k,lbl,align])=>{
-        const on=S.oddsSort===k;
-        return `<th style="text-align:${align};cursor:pointer" onclick="act('oddssort','${k}')">${lbl}${on?(S.oddsSortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("")}
-      <th style="text-align:center">Fixture</th></tr></thead><tbody>
-      ${(()=>{
-        const dir=S.oddsSortDir==="asc"?1:-1;
-        const val={name:r=>r.p.web_name.toLowerCase(),model:r=>r.model,mkt:r=>r.mkt??-1,
-          d:r=>r.d??-999,goal:r=>(r.rec&&r.rec.goal)||-1,assist:r=>(r.rec&&r.rec.assist)||-1,cs:r=>r.cs??-1};
-        const sorted=rows.slice().sort((a,b)=>{
-          if(!S.oddsSort)return a.p.pos-b.p.pos||b.p.price-a.p.price;   // default: GK first, highest price first
-          const va=val[S.oddsSort](a),vb=val[S.oddsSort](b);
-          if(typeof va==="string")return dir*va.localeCompare(vb);
-          return dir*(va-vb);
-        });
-        return sorted.map(r=>{
-        const f0=r.p.gw[g]?.fixtures?.[0];
-        return `<tr class="${r.start?"":"sub"}">
-          <td class="nm"><span style="display:flex;align-items:center;gap:7px">
-            ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,20)}
-            <span><b>${esc(r.p.web_name)}</b>${r.p.id===capId?'<span class="tag c">C</span>':""}
-            <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
-          <td class="mono" style="text-align:right;color:var(--mint)">${r.model.toFixed(1)}</td>
-          <td class="mono" style="text-align:right;color:${r.mkt==null?"var(--mute)":"var(--cyan)"}">${r.mkt==null?"—":r.mkt.toFixed(1)}</td>
-          <td class="mono" style="text-align:right;font-weight:700;color:${r.d==null?"var(--mute)":r.d>0.4?"var(--mint)":r.d<-0.4?"var(--red)":"var(--cream)"}">${r.d==null?"—":(r.d>0?"+":"")+r.d.toFixed(1)}</td>
-          <td class="mono" style="text-align:right">${r.rec&&r.rec.goal?pct(r.rec.goal):"—"}</td>
-          <td class="mono" style="text-align:right">${r.rec&&r.rec.assist?pct(r.rec.assist):"—"}</td>
-          <td class="mono" style="text-align:right">${r.cs!=null?pct(r.cs):"—"}</td>
-          <td style="text-align:center;white-space:nowrap">${f0?fdrPill(f0.opp,f0.home,posDiff(r.p,f0),{short:true}):"—"}</td></tr>`;}).join("");
-      })()}
-    </tbody></table></div></div>`;
-
-  /* ---- attack ---- */
-  const teamAtt=[];
-  fixtures.forEach(f=>{
-    if(!f.goals)return;                          // this match's xG didn't parse — nothing to rank
-    if(f.ht)teamAtt.push({t:f.ht,xg:f.goals.xgHome,opp:f.at,home:true,f});
-    if(f.at)teamAtt.push({t:f.at,xg:f.goals.xgAway,opp:f.ht,home:false,f});});
-  teamAtt.sort((a,b)=>b.xg-a.xg);
-  const plist=Object.values(players).filter(r=>r.ret||r.goal||r.assist)
-    .sort((a,b)=>(b.ret||b.goal||0)-(a.ret||a.goal||0));
-  const attCol=`<div class="panel"><div class="phead"><h2 style="color:var(--amber)">Attack</h2>
-      <span class="note">${teamAtt.length} teams · ${plist.length} players priced</span></div>
-    <div class="dashrow" onclick="act('dash','oxg')"><span class="dkey">Team goals</span>
-      <span class="dval">${teamAtt.length?esc(teamAtt[0].t.short)+" "+teamAtt[0].xg.toFixed(2):"—"}</span>
-      <span class="dchev">${S.dash.oxg?"▲":"▼"}</span></div>
-    ${S.dash.oxg?`<div class="dashbody">${teamAtt.map(x=>`<div class="dline">
-      <span>${shirtSVG(x.t.short.toUpperCase(),false,18)} <b>${esc(x.t.short)}</b>
-        <span class="note">${x.home?"v":"at"} ${esc(x.opp?x.opp.short:"?")}</span></span>
-      <span class="mono" style="color:var(--amber);font-weight:700">${x.xg.toFixed(2)}</span></div>`).join("")}</div>`:""}
-    <div class="dashrow" onclick="act('dash','oret')"><span class="dkey">Score or assist</span>
-      <span class="dval">${plist.length?esc(plist[0].p.web_name)+" "+pct(plist[0].ret||plist[0].goal):"—"}</span>
-      <span class="dchev">${S.dash.oret?"▲":"▼"}</span></div>
-    ${S.dash.oret!==false?`<div class="dashbody">
-      <table class="sqtable"><thead><tr><th style="text-align:left">Player</th>
-        <th style="text-align:right">Ret</th><th style="text-align:right">Goal</th>
-        <th style="text-align:right">Asst</th><th style="text-align:right">SoT</th></tr></thead><tbody>
-      ${plist.slice(0,40).map(r=>`<tr class="${owned(r.p.id)?"":""}" style="${owned(r.p.id)?"background:rgba(45,220,135,.08)":""}">
-        <td class="nm"><span style="display:flex;align-items:center;gap:6px">
-          ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,18)}
-          <span><b>${esc(r.p.web_name)}</b>${owned(r.p.id)?' <span class="tag c">✓</span>':""}
-          <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
-        <td class="mono" style="text-align:right;color:var(--amber);font-weight:700">${r.ret?pct(r.ret):"—"}</td>
-        <td class="mono" style="text-align:right">${r.goal?pct(r.goal):"—"}</td>
-        <td class="mono" style="text-align:right">${r.assist?pct(r.assist):"—"}</td>
-        <td class="mono" style="text-align:right;color:var(--mute)">${r.sot?pct(r.sot):"—"}</td></tr>`).join("")}
-      </tbody></table></div>`:""}</div>`;
-
-  /* ---- defence ---- */
-  const cs=[];
-  fixtures.forEach(f=>{
-    if(!f.goals)return;                           // this match's xG didn't parse — nothing to rank
-    if(f.ht)cs.push({t:f.ht,p:f.goals.csHome,conc:f.goals.xgAway,opp:f.at,home:true});
-    if(f.at)cs.push({t:f.at,p:f.goals.csAway,conc:f.goals.xgHome,opp:f.ht,home:false});});
-  cs.sort((a,b)=>b.p-a.p);
-  const keepers=cs.map(x=>{
-    const gk=(S.model.players||[]).filter(p=>p.pos===1&&p.team===x.t.id&&p.xMins>50)[0];
-    return gk?{...x,gk}:null;}).filter(Boolean);
-  const cards=Object.values(players).filter(r=>r.card).sort((a,b)=>b.card-a.card);
-  const defCol=`<div class="panel"><div class="phead"><h2 style="color:var(--sky)">Defence</h2>
-      <span class="note">${cs.length} teams priced</span></div>
-    <div class="dashrow" onclick="act('dash','ocs')"><span class="dkey">Clean sheet</span>
-      <span class="dval">${cs.length?esc(cs[0].t.short)+" "+pct(cs[0].p):"—"}</span>
-      <span class="dchev">${S.dash.ocs!==false?"▲":"▼"}</span></div>
-    ${S.dash.ocs!==false?`<div class="dashbody">${cs.map(x=>`<div class="dline">
-      <span>${shirtSVG(x.t.short.toUpperCase(),false,18)} <b>${esc(x.t.short)}</b>
-        <span class="note">${x.home?"v":"at"} ${esc(x.opp?x.opp.short:"?")} · concede ${x.conc.toFixed(2)}</span></span>
-      <span class="mono" style="color:var(--sky);font-weight:700">${pct(x.p)}</span></div>`).join("")}</div>`:""}
-    <div class="dashrow" onclick="act('dash','ogk')"><span class="dkey">Goalkeepers</span>
-      <span class="dval">${keepers.length?esc(keepers[0].gk.web_name)+" "+pct(keepers[0].p):"—"}</span>
-      <span class="dchev">${S.dash.ogk?"▲":"▼"}</span></div>
-    ${S.dash.ogk?`<div class="dashbody">${keepers.map(x=>`<div class="dline">
-      <span><b>${esc(x.gk.web_name)}</b>${owned(x.gk.id)?' <span class="tag c">✓</span>':""}
-        <span class="note">${esc(x.t.short)} · £${x.gk.price.toFixed(1)} · faces ${x.conc.toFixed(2)} xG</span></span>
-      <span class="mono" style="color:var(--sky);font-weight:700">${pct(x.p)}</span></div>`).join("")}</div>`:""}
-    <div class="dashrow" onclick="act('dash','ocard')"><span class="dkey">Booking risk</span>
-      <span class="dval">${cards.length?esc(cards[0].p.web_name)+" "+pct(cards[0].card):"none priced"}</span>
-      <span class="dchev">${S.dash.ocard?"▲":"▼"}</span></div>
-    ${S.dash.ocard?`<div class="dashbody">${cards.slice(0,20).map(r=>`<div class="dline">
-      <span><b>${esc(r.p.web_name)}</b>${owned(r.p.id)?' <span class="tag c">✓</span>':""}
-        <span class="note">${esc(r.p.teamName)} · ${POS[r.p.pos]}</span></span>
-      <span class="mono" style="color:var(--red)">${pct(r.card)}</span></div>`).join("")
-        ||`<p class="note" style="margin:0">Not priced by your bookmakers.</p>`}</div>`:""}</div>`;
-
-  const cat=S.oddsMarkets&&Object.keys(S.oddsMarkets).length
-    ? `<div class="panel"><div class="phead" style="cursor:pointer" onclick="act('dash','omk')">
-        <h2>Markets returned</h2><span class="note">${Object.keys(S.oddsMarkets).length} ${S.dash.omk?"▲":"▼"}</span></div>
-      ${S.dash.omk?`<div class="pbody">
-        ${S.oddsPlSample?`<p class="note mono" style="margin:0 0 8px;font-size:10px;word-break:break-all">Raw sample — ${esc(S.oddsPlSample)}</p>`:""}
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${Object.entries(S.oddsMarkets).sort().map(([n,bks])=>{
-          const pl=/scorer|to score|assist|player|shots|card|anytime/i.test(n);
-          return `<span class="chipbtn" style="${pl?"border-color:var(--mint);color:var(--mint)":""}"
-            title="${esc(bks.join(", "))}">${esc(n)}</span>`;}).join("")}</div></div>`:""}</div>` : "";
-
-  return head+squadPanel
-    +`<div class="sqgrid">
-        <div class="${S.oddsView==="def"?"hideSm":""}">${attCol}</div>
-        <div class="${S.oddsView==="att"||!S.oddsView?"hideSm":""}">${defCol}</div>
-      </div>
-      <div class="sqtoggle">
-        <button class="${(S.oddsView||"att")==="att"?"on":""}" onclick="act('oddsview','att')">Attack</button>
-        <button class="${S.oddsView==="def"?"on":""}" onclick="act('oddsview','def')">Defence</button>
-      </div>`+cat;
+  return head+oddsPlayersHTML()+minutesWatchHTML()+oddsFixturesHTML();
+}
+/* ---- Odds page panels (19 Oct 2026, built from the approved mock) ----
+   Prices are shown for reference; they do not change the predictions (the
+   GW1-6 backtest found no gain; re-test after GW11). Score and assist chances
+   are "if he plays" (the bets are void if he does not); the model's figure
+   beside each is worked out the same way: 1 - e^-(rate x normal minutes/90 x
+   this fixture against his team's average). */
+const oddsPct=v=>v==null?'<span class="mu">—</span>':Math.round(v*100)+"%";
+function modelChance(p,rate){
+  const g=S.model.next.id,q=p.gw[g]||{},f=(q.fixtures||[])[0];
+  const team=S.model.teams.find(t=>t.id===p.team)||{};
+  const fr=f&&f.xgf>0&&team.att>0?f.xgf/team.att:1;
+  return 1-Math.exp(-rate*Math.min(1,(p.roleMins||0)/90)*fr);
+}
+function oddsPair(mk,md){
+  if(mk==null)return '<span class="mu">—</span>';
+  const cls=md!=null&&mk-md>=0.08?"up":md!=null&&md-mk>=0.08?"dn":"";
+  return `<b class="${cls}">${oddsPct(mk)}</b> <span class="mu">${oddsPct(md)}</span>`;
+}
+function oddsPlayersHTML(){
+  const g=S.model.next.id,view=S.oddsPv||"squad";
+  const op=oddsPlayers();
+  const inWeek=p=>{const q=p.gw[g];return q&&!q.blank;};
+  let list;
+  if(view==="squad")list=squadPlayers().slice().sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0));
+  else{
+    const pool=Object.values(op).map(r=>r.p).filter(p=>inWeek(p)&&op[p.id].goal!=null);
+    const f=view==="att"?(p=>p.pos>=3):view==="def"?(p=>p.pos<=2):(()=>true);
+    list=pool.filter(f).sort((x,y)=>(op[y.id].goal||0)-(op[x.id].goal||0)).slice(0,25);
+  }
+  const all=Object.values(op).filter(r=>inWeek(r.p));
+  const cover=k=>all.filter(r=>r[k]!=null).length;
+  const seg=[["squad","Your Squad"],["all","Most Likely to Score"],["att","Attackers"],["def","Defenders"]]
+    .map(([k,n])=>`<button class="${view===k?"on":""}" onclick="act('oddspv','${k}')">${n}</button>`).join("");
+  return `<div class="panel"><div class="phead"><h2>Players</h2><span class="pseg">${seg}</span></div>
+    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt oddsp"><thead><tr>
+      <th>Player</th><th class="hide-ph">Predicted</th><th>Score <span class="mu">mkt · model</span></th><th class="hide-ph">Assist <span class="mu">mkt · model</span></th>
+      <th>Goal or Assist</th><th class="hide-ph">Shot on Target</th><th>Card</th></tr></thead><tbody>
+    ${list.map(p=>{const r=op[p.id]||{},q=p.gw[g]||{},f=(q.fixtures||[])[0];
+      return `<tr onclick="act('card',${p.id})" style="cursor:pointer"><td>${esc(p.web_name)}<span class="sub">${esc(p.teamName)}${f?" · "+esc(f.opp)+(f.home?" (H)":" (A)"):""} · ${p.xMins}′</span></td>
+        <td class="hide-ph"><b>${(q.pts||0).toFixed(1)}</b></td>
+        <td>${oddsPair(r.goal,r.goal!=null?modelChance(p,p.xg90):null)}</td>
+        <td class="hide-ph">${oddsPair(r.assist,r.assist!=null?modelChance(p,p.xa90):null)}</td>
+        <td>${oddsPct(r.ret)}</td><td class="hide-ph">${oddsPct(r.sot)}</td>
+        <td>${r.card!=null&&r.card>=0.2?`<span class="dn">${oddsPct(r.card)}</span>`:oddsPct(r.card)}</td></tr>`;}).join("")}
+    </tbody></table></div>
+    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
+      <p style="margin:0 0 6px">Market figures are the bookmakers' prices with their margin removed. Score and assist chances are "if he plays" (the bets are void if he does not), and the model's figure beside each is worked out the same way, from his rate, his normal minutes and this fixture. The market figure is green where it rates him 8+ points higher than the model, red where lower. On a phone, tap a player for the full card.</p>
+      <p style="margin:0">Coverage for GW${g}: ${cover("goal")} players priced to score, ${cover("assist")} to assist, ${cover("sot")} for shots on target, ${cover("card")} for a card (${esc((S.oddsBooks||[]).join(" and ")||"the selected bookmakers")}; assists, shots and cards are added closer to kick-off). These prices are shown for reference and do not change the predictions (tested 19 Oct 2026, re-tested after GW11).</p></div></details>
+    </div></div>`;
+}
+/* players the market prices like starters but the model gives under 45 minutes */
+function minutesWatchHTML(){
+  const g=S.model.next.id,op=oddsPlayers(),mine=new Set(S.squad||[]);
+  const list=Object.values(op).filter(r=>r.p.pos>=3&&r.goal!=null&&r.goal>=0.25&&r.p.xMins<45&&r.p.gw[g]&&!r.p.gw[g].blank)
+    .sort((x,y)=>y.goal-x.goal).slice(0,10);
+  if(!list.length)return "";
+  return `<div class="panel"><div class="phead"><h2>Minutes Watch</h2><span class="note">the market expects a bigger role</span></div>
+    <div class="pbody" style="padding-top:6px"><table class="mkt"><thead><tr><th>Player</th><th>Score if he plays</th><th>Model minutes</th><th class="hide-ph">Owned</th></tr></thead><tbody>
+    ${list.map(r=>{const p=r.p,f=(p.gw[g].fixtures||[])[0];
+      return `<tr${mine.has(p.id)?' class="me"':""} onclick="act('card',${p.id})" style="cursor:pointer"><td>${esc(p.web_name)}<span class="sub">${esc(p.teamName)}${f?" · "+esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
+        <td><b>${oddsPct(r.goal)}</b></td><td>${p.xMins}′</td><td class="hide-ph">${p.owned}%</td></tr>`;}).join("")}
+    </tbody></table>
+    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Why this matters</summary><div class="infobox">
+      <p style="margin:0">Bookmakers only offer a short price on a player they expect to play a real part, so a forward or midfielder priced to score 25%+ whom the model gives under 45 minutes is a sign the model's minutes may be out of date (a return from injury, a new starter), or occasionally a bookmaker error. Worth a look before the deadline; the model does not change on this.</p></div></details>
+    </div></div>`;
+}
+/* the next gameweek's matches: result, goals (market and model), clean sheets */
+function oddsFixturesHTML(){
+  const g=S.model.next.id;
+  const two=(m,a,b)=>{const o=m&&m.outcomes.find(x=>a.test(x.name)),u=m&&m.outcomes.find(x=>b.test(x.name));return o&&u?devig([o.price,u.price])[0]:null;};
+  const rows=oddsFixtures().filter(f=>f.goals&&f.ht&&f.at).map(f=>{
+    const mf=(S.model.byEv[g]||[]).find(x=>x.ht&&x.at&&x.ht.id===f.ht.id&&x.at.id===f.at.id);
+    if(!mf)return null;
+    const ml=(f.mk["h2h"]||[])[0];let hda=null;
+    if(ml){const h=ml.outcomes.find(x=>x.name==="home"),d=ml.outcomes.find(x=>x.name==="draw"),a=ml.outcomes.find(x=>x.name==="away");if(h&&d&&a)hda=devig([h.price,d.price,a.price]);}
+    return{f,hda,o25:two((f.mk["totals"]||[]).find(m=>m.hdp===2.5),/over/i,/under/i),btts:two((f.mk["btts"]||[])[0],/yes/i,/no/i),
+      mH:fdrCalc(f.ht,f.at,true,"xgf"),mA:fdrCalc(f.at,f.ht,false,"xgf")};
+  }).filter(Boolean).sort((x,y)=>String(x.f.date).localeCompare(String(y.f.date)));
+  if(!rows.length)return "";
+  const when=d=>d?ukFmt(new Date(d),{weekday:"short",hour:"2-digit",minute:"2-digit"}):"";
+  return `<div class="panel"><div class="phead"><h2>Fixtures</h2><span class="note">GW${g} · market, with the model's goals beside</span></div>
+    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr>
+      <th>Match</th><th>Result <span class="mu">H · D · A</span></th><th>Goals <span class="mu">mkt · model</span></th><th>Clean Sheet <span class="mu">H · A</span></th><th class="hide-ph">Over 2.5</th><th class="hide-ph">Both Score</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>${esc(r.f.ht.short)} v ${esc(r.f.at.short)}<span class="sub">${esc(when(r.f.date))}</span></td>
+      <td>${r.hda?r.hda.map(oddsPct).join(" · "):"—"}</td>
+      <td><b>${r.f.goals.xgHome.toFixed(1)}–${r.f.goals.xgAway.toFixed(1)}</b><span class="sub">model ${r.mH.toFixed(1)}–${r.mA.toFixed(1)}</span></td>
+      <td>${oddsPct(r.f.goals.csHome)} · ${oddsPct(r.f.goals.csAway)}</td><td class="hide-ph">${oddsPct(r.o25)}</td><td class="hide-ph">${oddsPct(r.btts)}</td></tr>`).join("")}
+    </tbody></table></div></div></div>`;
 }
 
 function rivalsHTML(){
