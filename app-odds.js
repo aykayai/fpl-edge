@@ -210,15 +210,15 @@ function captaincyHTML(){
     nRiv++;if(c)caps[c.id]=(caps[c.id]||0)+1;});
   const {captain}=effectiveCaptainVice(g);
   return `<div class="panel"><div class="phead"><h2>Captaincy</h2><span class="note">GW${g} · your XI</span></div>
-    <div class="pbody" style="padding-top:6px"><table class="mkt"><thead><tr><th>Option</th><th>Predicted</th><th>Gap</th><th>Plays</th>
+    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr><th>Option</th><th>Predicted</th><th>Gap</th><th>Plays</th>
       <th class="hide-ph">xGI/90</th><th class="hide-ph">Owned</th>${nRiv?"<th>League C</th>":""}<th></th></tr></thead><tbody>
     ${opts.map(p=>{const q=p.gw[g]||{},f=(q.fixtures||[])[0],gap=v(p)-top,isC=p.id===captain;
-      return `<tr${isC?' class="me"':""}><td>${esc(p.web_name)} <span class="mu">${f?esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
+      return `<tr${isC?' class="me"':""}><td>${esc(p.web_name)}<span class="mu" style="display:block;font-size:11.5px">${f?esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
         <td><b>${v(p).toFixed(1)}</b></td><td>${Math.abs(gap)<0.05?'<span class="up">best</span>':`<span class="dn">${sgn1(gap*2)}</span>`}</td>
         <td>${Math.round((q.pPlay??1)*100)}%</td><td class="hide-ph">${(p.xg90+p.xa90).toFixed(2)}</td><td class="hide-ph">${p.owned}%</td>
         ${nRiv?`<td>${caps[p.id]||0}/${nRiv}</td>`:""}
         <td>${isC?'<span class="tagy">C</span>':`<button class="mini" onclick="act('cap',${p.id})" aria-label="Make ${esc(p.web_name)} captain">C</button>`}</td></tr>`;}).join("")}
-    </tbody></table>
+    </tbody></table></div>
     <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
       <p style="margin:0">Gap is what each option costs against the best one with the armband on (the difference doubled). Plays is the chance he appears at all. ${nRiv?"League C is how many of your league captained him last week: a popular pick protects your place, an unpopular one is the differential. ":""}Tap C to make him captain for this week.</p></div></details>
     </div></div>`;
