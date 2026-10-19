@@ -38,7 +38,8 @@ function loadJSDOM() {
 }
 const { JSDOM } = loadJSDOM();
 const FILES = ["app-core.js", "app-squad.js", "app-render.js", "app-odds.js", "app-tracker.js", "app-main.js"];
-const TABS = ["squad", "transfers", "chips", "rivals", "tracker", "table", "odds", "fixtures", "news", "xfpl", "signals"];
+/* wave 8: Transfers and Odds are retired (their links redirect) */
+const TABS = ["squad", "chips", "rivals", "tracker", "table", "fixtures", "news", "xfpl", "signals"];
 
 let pass = 0, fail = 0;
 const check = (ok, name, detail) => {
@@ -117,7 +118,7 @@ try {
   check(!threw, "F7 a throwing page does not escape render()", threw && String(threw));
   const alert = doc.querySelector('[role="alert"]');
   check(!!alert && /could not be drawn/.test(alert.textContent) && /test throw/.test(alert.textContent), "F7 the page says what went wrong");
-  check(!!doc.querySelector(".sigchip") && !!doc.querySelector("nav"), "F7 the header and menu survive");
+  check(!!doc.querySelector(".tb") && !!doc.querySelector("nav"), "F7 the header and menu survive");
   w.signalsHTML = real; vm.runInContext("signalsHTML=window.signalsHTML", ctx);
   show("fixtures");
   check(!!doc.querySelector("main") && !doc.querySelector('[role="alert"]'), "F7 other pages still draw afterwards");
@@ -141,6 +142,13 @@ try {
   check(offenders.length === 0, "F10 every clickable element is keyboard reachable", offenders.slice(0, 5).join(", ") + (offenders.length > 5 ? ` (+${offenders.length - 5})` : ""));
   check(unnamed.length === 0, "F11 every input and icon button is named", unnamed.slice(0, 5).join(", "));
   check(titles.size === TABS.length && [...titles].every(t => /FPL Signals$/.test(t)), "F89 each page has its own title", [...titles].join(" | "));
+
+  /* redesign wave 8: the retired pages' links land on their new homes */
+  show("odds");
+  check(S.tab === "fixtures" && S.fixMode === "odds" && /Odds/.test(doc.querySelector("main").textContent), "W8 the Odds route opens Teams > Odds", `${S.tab} ${S.fixMode}`);
+  show("transfers");
+  check(S.tab === "squad" && S.pop === "move" && /Plan your transfers/.test(doc.querySelector(".modal") ? doc.querySelector(".modal").textContent : ""), "W8 the Transfers route opens the Top Move pop-up with the transfer tools", `${S.tab} ${S.pop}`);
+  S.pop = null; S.fixMode = "clubs";
 
   /* F10 behaviour: Enter presses a role=button element; Escape closes a card */
   show("signals");

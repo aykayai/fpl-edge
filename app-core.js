@@ -105,6 +105,7 @@ async function loadPredictions(){
 function trueAccuracy(){
   const A=S.playerActuals;if(!A)return null;
   const weeks=[],rows=[];
+  const posOf=new Map(((S.model&&S.model.players)||[]).map(p=>[String(p.id),p.pos]));
   for(let g=1;g<=38;g++){
     if(!weekFinal(g))continue;
     const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g], back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
@@ -113,14 +114,26 @@ function trueAccuracy(){
     let n=0,ae=0,b=0;
     Object.entries(snap.players).forEach(([id,pred])=>{
       const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
-      const pl=S.model&&S.model.players.find(p=>p.id==id);
-      n++;ae+=Math.abs(pred-pts);b+=pred-pts;rows.push({pos:pl?pl.pos:0,e:pred-pts});});
+      n++;ae+=Math.abs(pred-pts);b+=pred-pts;rows.push({pos:posOf.get(String(id))||0,e:pred-pts});});
     if(n)weeks.push({g,src,n,mae:ae/n,bias:b/n});
   }
   if(!rows.length)return null;
   const sum=r=>({n:r.length,mae:r.reduce((s,x)=>s+Math.abs(x.e),0)/r.length,bias:r.reduce((s,x)=>s+x.e,0)/r.length});
   const byPos={};[1,2,3,4].forEach(k=>{const r=rows.filter(x=>x.pos===k);if(r.length)byPos[k]=sum(r);});
   return {all:sum(rows),weeks,byPos,live:weeks.filter(w=>w.src==="live").length,back:weeks.filter(w=>w.src==="backtest").length};
+}
+/* Redesign wave 1: FPL's own price predictor and live set-piece orders,
+   which the dataset mirror does not carry (server /api/fpl-players). */
+/* wave 3: ownership among the 50 managers ranked around you (server job) */
+async function loadNeighbours(){
+  if(BACKUP){S.neighbours=null;return;}
+  try{const d=JSON.parse(await dataText("/data/feeds/neighbours.json"));if(d&&d.own)S.neighbours=d;}
+  catch(e){if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("rank neighbours");}
+}
+async function loadFplLive(){
+  if(BACKUP){S.fplLive=null;return;}
+  try{const d=JSON.parse(await dataText("/api/fpl-players"));if(d&&d.players)S.fplLive=d;}
+  catch(e){loadWarn("FPL price predictor and set-piece orders");}
 }
 /* F53 (13 Oct 2026): every part of the load that fails is named here and
    listed under the footer, instead of the page quietly using a weaker model */
@@ -194,22 +207,29 @@ const TEAM_ID="301830", STATE_VERSION=4;
    builder take the id from FPL_TEAM_ID / FPL_ENTRY_ID) */
 const IDENTITY={team:"Armitage Shanks",manager:"Andrew Kenny",id:TEAM_ID};
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
-const NAV=[
-  {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["chips","Chips"],["rivals","Rivals"],["tracker","Tracker"]]},
-  {group:"Tools",items:[["signals","Signals"],["table","Player Data"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]},
-  {group:"Models",items:[["xfpl","xFPL Model"]]}
-];
-const TABPATH={squad:"team-planner",transfers:"transfers",rivals:"rivals",chips:"chips",tracker:"tracker",
-  table:"player-data",xfpl:"xfpl-model",odds:"odds",fixtures:"fixtures",news:"news",signals:"signals"};
-const FROM_ROUTE=Object.fromEntries(Object.entries(TABPATH).map(([k,v])=>[v,k]));
-function routeFor(tab){return "#/"+(TABPATH[tab]||"team-planner");}
+/* Redesign wave 1 (19 Oct 2026): eight pages in one bar, in Andy's order.
+   League is Tracker (default) and Rivals as tabs; Status is the xFPL model
+   page plus the data freshness list. Odds and Transfers stay reachable by
+   link (Signals, Players) until wave 8 gives their features new homes. */
+const NAV=[["squad","Planner"],["signals","Signals"],["table","Players"],["fixtures","Teams"],
+  ["tracker","League"],["chips","Chips"],["news","News"],["xfpl","Status"]];
+/* hidden pages light the bar item they belong to */
+const NAV_HOME={rivals:"tracker",transfers:"squad",odds:"fixtures"};
+const TAB_LABEL={squad:"Planner",signals:"Signals",table:"Players",fixtures:"Teams",tracker:"League",rivals:"Rivals",
+  chips:"Chips",news:"News",xfpl:"Status",transfers:"Transfers",odds:"Odds"};
+const TABPATH={squad:"planner",transfers:"transfers",rivals:"league/rivals",chips:"chips",tracker:"league",
+  table:"players",xfpl:"status",odds:"odds",fixtures:"teams",news:"news",signals:"signals"};
+/* old bookmarks keep working */
+const FROM_ROUTE={...Object.fromEntries(Object.entries(TABPATH).map(([k,v])=>[v,k])),
+  "team-planner":"squad","player-data":"table","fixtures":"fixtures","tracker":"tracker","rivals":"rivals","xfpl-model":"xfpl"};
+function routeFor(tab){return "#/"+(TABPATH[tab]||"planner");}
 function applyHash(){
   const h=(location.hash||"").replace(/^#\/?/,"").replace(/\/$/,"");
   const t=FROM_ROUTE[h];
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.22.1";
+const APP_VERSION="12.29.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -428,9 +448,9 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
  status:null,statusAt:0,statusErr:null,datasetCommit:null,newsFetchedAt:null,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:5,lGwFrom:0,lGwTo:0,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
- lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
+ lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"clubs",
  outList:[],selected:null,menuOpen:false,compare:null,replacedBy:{},dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};
 const LS={get(k){try{return JSON.parse(localStorage.getItem("fpl3:"+k));}catch(e){return null;}},
  set(k,v){try{localStorage.setItem("fpl3:"+k,JSON.stringify(v));}catch(e){}}};
@@ -483,7 +503,7 @@ async function loadAll(force,opts){
     /* nothing new on the server (or the server is unreachable): keep the
        built model, refresh the light feeds, and re-render once */
     S.capture={};
-    await Promise.all([loadActuals(),loadRivals(),loadPredictions()]);
+    await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours()]);
     if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();
       if(st){_snap.status=st;_snap.statusAt=S.statusAt;}IDB.set("snap",_snap);}
     S.capture=null;
@@ -788,7 +808,7 @@ async function loadAll(force,opts){
     /* The commit is kept so "Check now" can skip an unchanged dataset. The
        copy itself goes to IndexedDB below (localStorage had no room for it). */
     S.datasetCommit=commit;
-    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions()]);
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours()]);
     /* Bring the planner onto the latest official squad when a newer one has
        been published (this also upgrades a seed made before the feeds landed). */
     syncOfficialSquad();
@@ -2038,3 +2058,46 @@ function sellPrice(p){
 const hPts=(p,from,w)=>{let s=0;for(let e=from;e<from+w;e++)s+=p.gw[e]?.pts||0;return s;};
 const avgFP=(p,g,h)=>(p.form+hPts(p,g,h))/2;
 
+
+/* ---------- line icons (redesign wave 1, 19 Oct 2026) ---------- */
+/* Line icons from Lucide 1.52.0 (https://lucide.dev), ISC licence: see
+   LICENSE-lucide.txt. Only the shapes are copied; every icon is drawn at
+   stroke 2 in currentColor so a tile's tone colours it. */
+const LUCIDE={"circle-arrow-up":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 12-4-4-4 4\"/><path d=\"M12 16V8\"/>",
+ "circle-arrow-down":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 8v8\"/><path d=\"m8 12 4 4 4-4\"/>",
+ "trending-up":"<path d=\"M16 7h6v6\"/><path d=\"m22 7-8.5 8.5-5-5L2 17\"/>",
+ "trending-down":"<path d=\"M16 17h6v-6\"/><path d=\"m22 17-8.5-8.5-5 5L2 7\"/>",
+ "clock-alert":"<path d=\"M12 6v6l4 2\"/><path d=\"M20 12v5\"/><path d=\"M20 21h.01\"/><path d=\"M21.25 8.2A10 10 0 1 0 16 21.16\"/>",
+ "flame":"<path d=\"M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4\"/>",
+ "snowflake":"<path d=\"m10 20-1.25-2.5L6 18\"/><path d=\"M10 4 8.75 6.5 6 6\"/><path d=\"m14 20 1.25-2.5L18 18\"/><path d=\"m14 4 1.25 2.5L18 6\"/><path d=\"m17 21-3-6h-4\"/><path d=\"m17 3-3 6 1.5 3\"/><path d=\"M2 12h6.5L10 9\"/><path d=\"m20 10-1.5 2 1.5 2\"/><path d=\"M22 12h-6.5L14 15\"/><path d=\"m4 10 1.5 2L4 14\"/><path d=\"m7 21 3-6-1.5-3\"/><path d=\"m7 3 3 6h4\"/>",
+ "swords":"<path d=\"m13 19 6-6\"/><path d=\"M14.5 17.5 3.586 6.586A2 2 0 013 5.172V3h2.172a2 2 0 011.414.586L17.5 14.5\"/><path d=\"m14.828 6.172 2.586-2.586A2 2 0 0118.828 3H21v2.172a2 2 0 01-.586 1.414l-2.586 2.586\"/><path d=\"m16 16 4 4\"/><path d=\"m19 21 2-2\"/><path d=\"m5 14 4 4\"/><path d=\"m5 21-2-2\"/><path d=\"M7.5 16.5 4 20\"/>",
+ "gem":"<path d=\"M10.5 3 8 9l4 13 4-13-2.5-6\"/><path d=\"M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z\"/><path d=\"M2 9h20\"/>",
+ "circle-dot":"<circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"12\" cy=\"12\" r=\"10\"/>",
+ "flag-triangle-right":"<path d=\"M6 22V2.8a.8.8 0 0 1 1.17-.71l11.38 5.69a.8.8 0 0 1 0 1.44L6 15.5\"/>",
+ "crown":"<path d=\"M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z\"/><path d=\"M5 21h14\"/>",
+ "chevron-right":"<path d=\"m9 18 6-6-6-6\"/>",
+ "chevron-left":"<path d=\"m15 18-6-6 6-6\"/>",
+ "chevron-down":"<path d=\"m6 9 6 6 6-6\"/>",
+ "arrow-right-left":"<path d=\"m16 3 4 4-4 4\"/><path d=\"M20 7H4\"/><path d=\"m8 21-4-4 4-4\"/><path d=\"M4 17h16\"/>",
+ "triangle-alert":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/>",
+ "info":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/>",
+ "x":"<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>",
+ "lock":"<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>",
+ "lock-open":"<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 9.9-1\"/>",
+ "ban":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M4.929 4.929 19.07 19.071\"/>",
+ "activity":"<path d=\"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2\"/>",
+ "refresh-cw":"<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\"/><path d=\"M21 3v5h-5\"/><path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\"/><path d=\"M8 16H3v5\"/>",
+ "save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"/><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"/><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"/>",
+ "check":"<path d=\"M20 6 9 17l-5-5\"/>",
+ "users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><path d=\"M16 3.128a4 4 0 0 1 0 7.744\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/>",
+ "shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/>",
+ "target":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/>",
+ "calendar":"<path d=\"M8 2v3\"/><path d=\"M16 2v3\"/><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M3 9h18\"/>",
+ "search":"<path d=\"m21 21-4.34-4.34\"/><circle cx=\"11\" cy=\"11\" r=\"8\"/>",
+ "arrow-right":"<path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/>",
+ "star":"<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\"/>",
+ "sparkles":"<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\"/><path d=\"M20 2v4\"/><path d=\"M22 4h-4\"/><circle cx=\"4\" cy=\"20\" r=\"2\"/>",
+ "wallet":"<path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\"/><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\"/>",
+ "trophy":"<path d=\"M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2\"/><path d=\"M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2\"/><path d=\"M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3\"/><path d=\"M4 22h16\"/><path d=\"M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z\"/><path d=\"M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3\"/>",
+ "gauge":"<path d=\"m12 14 4-4\"/><path d=\"M3.34 19a10 10 0 1 1 17.32 0\"/>"};
+function lic(n,sz,sw){return `<svg width="${sz||16}" height="${sz||16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw||2}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LUCIDE[n]||""}</svg>`;}

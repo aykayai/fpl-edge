@@ -801,30 +801,13 @@ function newsHTML(){
 
   return ctrl+myPanel+newsPanel+redPanel+creatorPanel;
 }
+/* the page links (the full bar is topbarHTML, drawn with the page) */
+function navLinksHTML(){
+  const home=NAV_HOME[S.tab]||S.tab;
+  return `<nav class="tn" aria-label="Pages">${NAV.map(([k,n])=>`<a class="navlink ${home===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')">${n}</a>`).join("")}</nav>`;
+}
 function navHTML(){
-  const cur=NAV.flatMap(g=>g.items).find(([k])=>k===S.tab);
-  const label=cur?cur[1]:"Menu";
-  return `
-  <nav class="nav">
-    <div class="navbar navwrap">
-      ${NAV.map(gp=>`<div class="navgroup" style="border:none;background:none;padding:0">
-        <span class="navlabel">${gp.group}</span>
-        <span class="navitems">${gp.items.map(([k,n])=>
-          `<a class="navlink ${S.tab===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')">${n}</a>`
-        ).join("")}</span></div>`).join("")}
-    </div>
-    <div class="navmob">
-      <span style="display:flex;gap:8px;align-items:center">
-        <button class="navtoggle" onclick="act('menu')" style="flex:1">
-          <span>${esc(label)}</span><span style="color:var(--mute)">${S.menuOpen?"▲":"▼"}</span></button>
-</span>
-      ${S.menuOpen?`<div class="navsheet">
-        ${NAV.map(gp=>`<div class="navlabel" style="padding:8px 12px 4px">${gp.group}</div>
-          ${gp.items.map(([k,n])=>`<a class="navlink ${S.tab===k?"on":""}" href="${routeFor(k)}"
-             onclick="return go(event,'${k}')">${n}</a>`).join("")}`).join("")}
-      </div>`:""}
-    </div>
-  </nav>`;
+  return `<header class="tb"><div class="tbin"><a class="brand" href="${routeFor("squad")}" onclick="return go(event,'squad')"><span class="bl">${LOGO}</span><span class="bw">FPL Signals</span></a>${navLinksHTML()}</div></header>`;
 }
 /* left-click routes in place; ctrl/cmd-click and long-press use the real href */
 function go(ev,tab){
@@ -845,11 +828,10 @@ function go(ev,tab){
 function backupNote(what){
   return `<div class="panel"><div class="pbody"><p class="note" style="margin:0">${what} runs on the FPL Signals server only. This is the backup copy on GitHub Pages: the model, planner, chips, fixtures and signals work here from the public dataset.</p></div></div>`;
 }
-function statusChipHTML(){
+function statusState(){
   const st=S.status;
   let cls="",txt;
-  if(BACKUP)return `<span class="sigchip"><span class="sigdot wait"></span><span>Backup copy on GitHub Pages · <b>loaded ${ukHHMM(S.stamp||Date.now())}</b></span>
-    <button onclick="act('load')">${S.loading?esc(S.progress||"…"):"Check now"}</button></span>`;
+  if(BACKUP)return{cls:"wait",txt:`Backup copy on GitHub Pages · <b>loaded ${ukHHMM(S.stamp||Date.now())}</b>`,plain:"Backup copy on GitHub Pages"};
   if(S.statusPending&&!S.statusErr)txt=`Checking for updates · <b>last copy ${ukHHMM(S.statusAt||Date.now())}</b>`;
   else if(!st||S.statusErr){cls="wait";txt=`Server unreachable · <b>showing last copy</b>`;}
   else{
@@ -861,6 +843,12 @@ function statusChipHTML(){
     else if(liveAge!=null&&liveAge<=10){cls="live";txt=`Live · <b>updated ${agoText(fpl.liveFetchedAt)}</b>`;}
     else txt=`Up to date · <b>checked ${S.statusAt?agoText(S.statusAt):"just now"}</b>`;
   }
+  /* a part of the load that failed turns the dot amber too */
+  if(!cls&&((S.loadWarnings||[]).length||(S.fixFail||[]).length))cls="wait",txt+=" · some data did not load";
+  return{cls,txt,plain:txt.replace(/<[^>]+>/g,"")};
+}
+function statusChipHTML(){
+  const{cls,txt}=statusState();
   return `<span class="sigchip"><span class="sigdot ${cls}"></span><span>${txt}</span>
     <button onclick="act('load')">${S.loading?esc(S.progress||"…"):"Check now"}</button></span>`;
 }
@@ -870,17 +858,22 @@ function statusChipHTML(){
 function refreshStatusUI(){
   const c=document.querySelector(".sigchip");if(c)c.outerHTML=statusChipHTML();
   const p=document.querySelector(".prov");if(p)p.outerHTML=provHTML();
+  const l=document.querySelector(".tb .live");
+  if(l){const ss=statusState();l.className="live "+ss.cls;l.title=ss.plain+". Opens Status.";}
+  const d=document.querySelector(".tb .dl"),dl=deadlineInfo();
+  if(d&&dl){const k=d.querySelectorAll(".dlk");if(k[1]){k[1].textContent=dl.left;k[1].classList.toggle("soon",dl.soon);}}
 }
 /* Real per-source ages from /api/status. If the last status check failed the
    last known values keep showing (S.status is only replaced on success). */
 function provHTML(){
   const st=S.status||{};
   const ds=st.dataset||{},fpl=st.fpl||{},news=st.news||{},odds=st.odds||{},feeds=st.feeds||{};
-  return `<div class="prov"><span>FPL Signals v${APP_VERSION}</span>
+  return `<div class="prov"><span>FPL Signals <b>v${APP_VERSION}</b></span>
     <span>Stats: <b>FPL Core Insights, ${esc(ukWhen(ds.committedAt))}</b>${ds.committedAt?` (${esc(agoText(ds.committedAt))})`:""}</span>
     <span>Prices, flags and deadlines: <b>FPL, ${esc(agoText(fpl.fetchedAt))}</b></span>
     <span>News: <b>${esc(agoText(news.fetchedAt))}</b></span>
     <span>Odds: <b>${esc(ukWhen(odds.fetchedAt))}</b></span>
+    <span>FPL price predictor and set pieces: <b>${S.fplLive&&Object.keys(S.fplLive.players||{}).length?(S.fplLive.fetchedAt?esc(agoText(S.fplLive.fetchedAt)):"loaded"):"not loaded"}</b></span>
     <span>Your team and rivals: <b style="${feeds.error?"color:var(--red)":""}">${feeds.error?"last build failed, showing "+esc(agoText(feeds.lastOk))+" copy":esc(agoText(feeds.lastOk))}</b></span>
     ${(S.loadWarnings||[]).length||(S.fixFail||[]).length?`<span style="color:var(--amber);flex-basis:100%">Did not load: ${esc([...(S.loadWarnings||[]),...((S.fixFail||[]).length?["fixtures for GW"+S.fixFail.join(", GW")+" (those weeks show no projection)"]:[])].join("; "))}. Figures that use them are less reliable; Check now retries.</span>`:""}</div>`;
 }
@@ -893,7 +886,7 @@ function render(){
     try{console.error("render failed",e);}catch(_){}
     const app=document.getElementById("app");
     let nav="";try{nav=navHTML();}catch(_){}
-    app.innerHTML=`<div class="stick">${nav}</div><div class="panel"><div class="pbody"><div class="warn" role="alert">
+    app.innerHTML=`${nav}<div class="panel"><div class="pbody"><div class="warn" role="alert">
       <b>This page hit a problem and could not be drawn.</b> Try another page or Check now. <span class="mono" style="font-size:11px">${esc(String(e&&e.message||e))}</span></div></div></div>`;
   }
   try{a11yPass();}catch(_){}
@@ -915,8 +908,7 @@ function a11yPass(){
   app.querySelectorAll("button:not([aria-label])").forEach(b=>{
     if(!b.textContent.trim()){const t=b.getAttribute("title");b.setAttribute("aria-label",t||"Button");}});
   const t=document.getElementById("toast");if(t&&!t.hasAttribute("role")){t.setAttribute("role","status");t.setAttribute("aria-live","polite");}
-  const cur=NAV.flatMap(g=>g.items).find(([k])=>k===S.tab);
-  document.title=(cur?cur[1]+" · ":"")+"FPL Signals";
+  document.title=(TAB_LABEL[S.tab]?TAB_LABEL[S.tab]+" · ":"")+"FPL Signals";
 }
 function renderPage(){
   const app=document.getElementById("app");
@@ -937,6 +929,10 @@ function renderPage(){
       <p class="note" style="margin-top:14px">Data: <a href="https://github.com/olbauday/FPL-Core-Insights" target="_blank" style="color:var(--cyan)">FPL Core Insights</a>, mirrored locally about three times a day.</p></div>`;
     return;
   }
+  /* wave 8: the Odds and Transfers pages are retired; their old links land
+     on the new homes (Teams > Odds, the Planner's Top Move pop-up) */
+  if(S.tab==="transfers"){S.tab="squad";S.pop="move";try{history.replaceState({},"",routeFor("squad"));}catch(e){}}
+  if(S.tab==="odds"){S.tab="fixtures";S.fixMode="odds";try{history.replaceState({},"",routeFor("fixtures"));}catch(e){}}
   const g=VG();
   /* a flagged player counts as sold: value drops, bank rises by his selling price */
   const flaggedP=squadPlayers().filter(p=>S.flagged.includes(p.id));
@@ -944,7 +940,6 @@ function renderPage(){
   const sv=squadPlayers().filter(p=>!S.flagged.includes(p.id)).reduce((a,p)=>a+p.price,0);
   const bank=+(planBank()+raised).toFixed(1);
   const rating=teamRating();
-  const tabs=NAV.flatMap(gp=>gp.items);
   let main="";
   /* F7: a throw in one page builder used to freeze the whole app. It is caught
      here, so the header, the menu and every other page keep working, and the
@@ -1015,12 +1010,11 @@ function renderPage(){
               <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
               <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
             <span class="pseg">
-              <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button>
+              <button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button>
               <button onclick="act('opt')">Optimise</button></span></span>
           ${S.sqView==="list"?`<div style="padding-top:34px">${squadListHTML()}</div>`:pitchHTML()}
         </div>
         </div>
-      ${S.compare?compareHTML():""}
       <div class="panel chippanel">
         <div class="chiprow">
           <span class="chipinline">
@@ -1029,52 +1023,22 @@ function renderPage(){
               .map(([k,n])=>{const on=k==="none"?!chipForWeek(VG()):chipForWeek(VG())===k;
                 return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
           </span></div></div>
-      <div class="panel">${legendHTML()}</div>
-      ${captaincyHTML()}
       <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
         <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
       <div class="poolcol">
         <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
-        <button onclick="act('tab','table')">Full Player Data →</button></div>
+        <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">All Players →</a></div>
         ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
           <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>`;
   }
-  else if(S.tab==="table")main=`<div class="panel"><div class="phead"><h2>Player Data</h2>
-      <span class="note">${filtered("list").length} players · tap any column to sort</span></div>
-    ${filtersHTML(false,'list')}
-    <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
-      <span style="font-size:10px;color:var(--mute);font-weight:700;flex:none">Show only</span>
-      ${SIGDEF.map(([l,c,t],ix)=>`<button class="fbtn fbtn-icon ${S.iconF.includes(ix)?"on":""}"
-        onclick="act('iconf',${ix})" title="${t==="Stats caution"?"Hide players whose stats may be unreliable":esc(t)}" style="--fc:${c}">
-        <span class="sig">${l}</span></button>`).join("")}
-      ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
-        return `<button class="fbtn fbtn-icon ${S.spF===k?"on":""}" onclick="act('spf','${k}')" title="${esc(t)}" style="--fc:${b}">
-          <span class="sig">${badge(G(k,11),b,c)}</span></button>`;}).join("")}
-      <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
-        <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button>
-    </div>
-    <p class="note" style="margin:0;padding:2px 14px 0;font-size:10px">Hover an icon for what it filters.</p>
-    <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
-      <span style="flex:1;min-width:200px">
-        <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)">
-          <span>Budget</span></span>
-        <span style="margin:4px 0;display:block">${stepperInput("lmax",S.lMax,{min:3.5,max:16,step:0.1,big:1,dp:1,w:56})}</span>
-      </span>
-      <span style="flex:1;min-width:230px">
-        <span style="font-size:10.5px;color:var(--mute)">Past stats — window</span>
-        <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
-          ${[1,3,5,10,38].map(n=>`<button class="chipbtn ${(S.lWin||38)===n?"on":""}" onclick="act('lwin',${n})">${n===38?"Season":"Last "+n}</button>`).join("")}
-        </span></span></div>
-    ${tableHTML()}</div>`;
-  else if(S.tab==="tracker")main=trackerHTML();
-  else if(S.tab==="xfpl")main=xfplHTML();
+  else if(S.tab==="table")main=playersHubHTML();
+  else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();
+  else if(S.tab==="xfpl")main=statusPageHTML();
   else if(S.tab==="chips")main=chipsHTML();
-  else if(S.tab==="transfers")main=transfersHTML();
   else if(S.tab==="fixtures")main=fixturesHTML();
-  else if(S.tab==="odds")main=oddsHTML();
-  else if(S.tab==="rivals")main=rivalsHTML();
+  else if(S.tab==="rivals")main=leagueTabsHTML()+rivalsHTML();
   else if(S.tab==="news")main=newsHTML();
   else if(S.tab==="signals")main=signalsHTML();
   }catch(e){
@@ -1083,75 +1047,115 @@ function renderPage(){
       Every other page still works. <span class="mono" style="font-size:11px;opacity:.85">${esc(String(e&&e.message||e))}</span></div></div></div>`;
   }
 
-  /* F83/F82 (bundle 8, 13 Oct 2026): the header figures are cards (title
-     with (i), figure, change line; what used to be the caption lives in the
-     (i)), and the sticky bar is one line: gameweek, Predicted and Bank, with
-     Rating, Transfers and Rank added on a laptop. */
+  /* Redesign wave 1 (19 Oct 2026, mock 2): one sticky bar (logo, the eight
+     pages, gameweek switcher, deadline, live dot that opens Status; Predicted,
+     Bank and FT join it on scroll), and on the Planner a hero of the team name
+     and four figure cards with sparklines. The six-card header, the
+     duplicate sticky strip and the grouped menu are gone; data freshness
+     moved to the Status page. */
   const gv=VG(), freeSq=["freehit","wildcard"].includes(chipForWeek(gv));
-  const fRows=((S.tracker&&S.tracker.gw)||[]).slice().sort((x,y)=>x.event-y.event);
-  const lastRow=fRows[fRows.length-1], prevRow=fRows[fRows.length-2];
-  const chg=(d,f,goodUp)=>(d==null||!isFinite(d)||Math.abs(d)<1e-9)?"":
-    `<span class="${(d>0)===goodUp?"up":"dn"}">${d>0?"▲":"▼"} ${f(Math.abs(d))}</span> `;
-  const pred=weekPts(), hits=hitsOver(gv,S.horizon), lastAct=S.actuals?S.actuals[gv-1]:null;
-  const fv=valueFromFeed();
-  const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
-  const card=(title,tip,v,change,tone,vstyle)=>`<div class="fc${tone?" "+tone:""}">
-      <div class="fct">${title}<button class="fci" aria-label="About ${title}" data-tip="${esc(tip)}">i</button></div>
-      <div class="fcv"${vstyle?` style="${vstyle}"`:""}>${v}</div>
-      <div class="fcc">${change||"&nbsp;"}</div></div>`;
-  const cards=[
-    card(S.horizon===1?`Predicted GW${gv}`:`Predicted GW${gv}–${Math.min(38,gv+S.horizon-1)}`,
-      "Your XI and captain, plus cover from the vice-captain and bench"+(chipForWeek(gv)?", with "+CHIP_NAME[chipKind(chipForWeek(gv))]:"")
-        +(S.oddsTeams?". Bookmaker odds included, fetched "+ukWhen(S.oddsFetchedAt):"")+(hits?". Less a "+hits+"-point hit":"")+".",
-      pred.toFixed(1),
-      (S.horizon===1&&lastAct!=null?chg(pred-lastAct,x=>x.toFixed(1),true)+`vs GW${gv-1}'s ${lastAct}`:"")
-        +(hits?` · <span class="dn">−${hits} hit</span>`:""),"mint"),
-    card("Team Rating",`Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.`,
-      rating?rating.pct:"—",rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100","",`color:${rateCol}`),
-    card("Free Transfers","Free transfers into this week, maximum 5. Official means taken from FPL's own history.",
-      freeSq?"Unlimited":freeTransfers(),
-      chipForWeek(gv)==="freehit"?"Free Hit this week":chipForWeek(gv)==="wildcard"?"Wildcard this week":
-        ({feed:"official",local:"tracked locally",default:"untracked"}[ftSource()]),"",freeSq?"color:var(--amber)":""),
-    card("Overall Rank","Your overall rank after the last finished gameweek, from FPL.",
-      S.entryRank?S.entryRank.toLocaleString():"—",
-      S.entryRank?(prevRow&&lastRow&&prevRow.orRank&&lastRow.orRank?chg(prevRow.orRank-lastRow.orRank,x=>Math.round(x).toLocaleString(),true):"")+"after GW"+S.entryRankGw:"waiting"),
-    card("Squad Value",`Today's buy prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan, before any bank.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included, taken at its own time and prices.`:""}`,
-      "£"+sv.toFixed(1),
-      fv?(prevRow&&lastRow&&prevRow.value!=null?chg(lastRow.value-prevRow.value,x=>x.toFixed(1),true):"")+`FPL £${fv.value.toFixed(1)}`:"buy prices"),
-    card("In the Bank","Money to spend in this week's plan, after planned transfers and any sales.",
-      "£"+bank.toFixed(1),
-      raised>0?`incl. £${raised.toFixed(1)} from sales`:(prevRow&&lastRow&&prevRow.bank!=null?chg(lastRow.bank-prevRow.bank,x=>x.toFixed(1),true)+"since GW"+prevRow.event:"to spend"),
-      "",bank<0?"color:var(--red)":"")
-  ].join("");
-  const capWarn=capWarnHTML().replace(/^ · /,"");
-  app.innerHTML=`
-   <div class="panel">
-    <div class="phead bare">
-      <div style="display:flex;gap:11px;align-items:center">
-        ${LOGO}
-        <div><div style="font-size:12px;color:var(--mint);font-weight:600">FPL Signals · Gameweek ${g}</div>
-        <h1 style="font-size:24px">${esc(IDENTITY.team)}</h1>
-        <div style="font-size:12px;color:var(--mute)">${esc(IDENTITY.manager)} · team ${IDENTITY.id}</div></div></div>
-      ${statusChipHTML()}</div>
-    <div class="fcgrid">${cards}</div>
-    ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}
-   </div>
+  const pred=weekPts();
+  const ftTxt=freeSq?"Unlimited":String(freeTransfers());
+  const topbar=topbarHTML({gv,pred,bank,ftTxt});
+  let hero="";
+  if(S.tab==="squad"){
+    const fRows=((S.tracker&&S.tracker.gw)||[]).slice().sort((x,y)=>x.event-y.event);
+    const lastRow=fRows[fRows.length-1], prevRow=fRows[fRows.length-2];
+    const chg=(d,f,goodUp)=>(d==null||!isFinite(d)||Math.abs(d)<1e-9)?"":
+      `<span class="${(d>0)===goodUp?"up":"dn"}">${d>0?"▲":"▼"} ${f(Math.abs(d))}</span> `;
+    const hits=hitsOver(gv,S.horizon), lastAct=S.actuals?S.actuals[gv-1]:null;
+    const fv=valueFromFeed();
+    const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
+    const done=fRows.filter(r=>r.points!=null).slice(-7);
+    const cards=[
+      figCard(S.horizon===1?`Predicted GW${gv}`:`Predicted GW${gv}–${Math.min(38,gv+S.horizon-1)}`,
+        "Your XI and captain, plus cover from the vice-captain and bench"+(chipForWeek(gv)?", with "+CHIP_NAME[chipKind(chipForWeek(gv))]:"")
+          +(S.oddsTeams?". Bookmaker odds included, fetched "+ukWhen(S.oddsFetchedAt):"")+(hits?". Less a "+hits+"-point hit":"")
+          +". The line shows your last "+done.length+" scores, then this prediction.",
+        pred.toFixed(1),
+        (S.horizon===1&&lastAct!=null?chg(pred-lastAct,x=>x.toFixed(1),true)+`vs GW${gv-1}'s ${lastAct}`:"")
+          +(hits?` · <span class="dn">−${hits} hit</span>`:""),
+        S.horizon===1?[...done.map(r=>+r.points),pred]:null,"#3DDC97","mint"),
+      figCard("Overall Rank","Your overall rank after the last finished gameweek, from FPL. The line rises as your rank improves.",
+        S.entryRank?S.entryRank.toLocaleString():"—",
+        S.entryRank?(prevRow&&lastRow&&prevRow.orRank&&lastRow.orRank?chg(prevRow.orRank-lastRow.orRank,x=>Math.round(x).toLocaleString(),true):"")+"after GW"+S.entryRankGw:"waiting",
+        fRows.filter(r=>r.orRank).slice(-8).map(r=>-r.orRank),"#3DDC97"),
+      figCard("Team Rating",`Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.`,
+        rating?rating.pct:"—",rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100",
+        null,"#8A8A8A","",`color:${rateCol}`),
+      figCard("Budget",`Bank to spend in this week's plan, after planned transfers and any sales, and free transfers into this week (maximum 5${ftSource()==="feed"?", official from FPL":""}). Squad is today's buy prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included; the line is that value by gameweek.`:""}`,
+        `<span${bank<0?' style="color:var(--red)"':""}>£${bank.toFixed(1)}</span><span class="fsub"> · ${ftTxt} FT</span>`,
+        (chipForWeek(gv)==="freehit"?"Free Hit this week · ":chipForWeek(gv)==="wildcard"?"Wildcard this week · ":"")
+          +`Squad £${sv.toFixed(1)}`+(raised>0?` · £${raised.toFixed(1)} from sales`:(prevRow&&lastRow&&prevRow.value!=null?" "+chg(lastRow.value-prevRow.value,x=>x.toFixed(1),true):"")),
+        fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value),"#8A8A8A")
+    ].join("");
+    const capWarn=capWarnHTML().replace(/^ · /,"");
+    hero=`<section class="hero"><div class="hid"><div class="hk">Gameweek ${g} · your team</div>
+        <h1>${esc(IDENTITY.team)}</h1><div class="hm">${esc(IDENTITY.manager)} · team ${IDENTITY.id}</div></div>
+      <div class="fcgrid">${cards}</div></section>
+      ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}
+      ${weekStripHTML()}`;
+  }
+  app.innerHTML=`${topbar}
+   ${hero}
+   ${S.pop?popHTML():""}${S.cmp?compareModalHTML():""}${S.pCmp?playerCompareHTML():""}
    ${S.cardId?playerCardHTML():""}
-   <div class="stick">
-     <div class="ministats">
-       <span class="slogo">${LOGO}</span>
-       <span class="sgw">
-         <button onclick="act('startgw',${Math.max(1,gv-1)})" aria-label="Previous gameweek">‹</button>
-         <b>GW${gv}</b>
-         <button onclick="act('startgw',${Math.min(38,gv+1)})" aria-label="Next gameweek">›</button></span>
-       <span class="sfig"><span class="sk">Predicted</span><span class="sv mint">${pred.toFixed(1)}</span></span>
-       <span class="sfig"><span class="sk">Bank</span><span class="sv"${bank<0?' style="color:var(--red)"':""}>£${bank.toFixed(1)}</span></span>
-       <span class="sfig hide-ph"><span class="sk">Rating</span><span class="sv" style="color:${rateCol}">${rating?rating.pct:"—"}</span></span>
-       <span class="sfig hide-ph"><span class="sk">Transfers</span><span class="sv">${freeSq?"∞":freeTransfers()}</span></span>
-       <span class="sfig hide-ph"><span class="sk">Rank</span><span class="sv">${S.entryRank?S.entryRank.toLocaleString():"—"}</span></span>
-     </div>
-     ${navHTML()}</div>
    <main id="main" style="display:block;max-width:100%">${main}</main>
-   ${provHTML()}`;
+   <div class="foot">FPL Signals v${APP_VERSION}</div>`;
+}
+/* Figure card (Fintel style): title with (i), figure, change line and a
+   sparkline. No commentary: explanations live in the (i). */
+function figCard(title,tip,v,change,series,tone,cls,vstyle){
+  return `<div class="fc${cls?" "+cls:""}">
+    <div class="fct">${title}<button class="fci" aria-label="About ${title}" data-tip="${esc(tip)}">i</button></div>
+    <div class="fcv"${vstyle?` style="${vstyle}"`:""}>${v}</div>
+    <div class="fcb"><span class="fcc">${change||"&nbsp;"}</span>${series&&series.length>1?spark(series,tone):""}</div></div>`;
+}
+function spark(vals,tone,W,H){
+  W=W||96;H=H||28;const mx=Math.max(...vals),mn=Math.min(...vals);
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*W).toFixed(1)},${(H-3-(v-mn)/((mx-mn)||1)*(H-6)).toFixed(1)}`).join(" ");
+  return `<svg class="spk" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${tone||"#8A8A8A"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+/* the sticky bar */
+function deadlineInfo(){
+  const st=S.status&&S.status.fpl;let d=st&&st.nextDeadline;
+  if(!d&&S.model){const ev=(S.events||[]).find(e=>e.id===S.model.next.id);d=ev&&ev.deadline_time;}
+  if(!d)return null;
+  const t=Date.parse(d);if(!isFinite(t))return null;
+  const ms=t-Date.now();
+  const left=ms<=0?"passed":ms>=86400000?`${Math.floor(ms/86400000)}d ${Math.floor(ms%86400000/3600000)}h`
+    :`${Math.floor(ms/3600000)}h ${Math.floor(ms%3600000/60000)}m`;
+  return{when:ukFmt(t,{weekday:"short",hour:"2-digit",minute:"2-digit"}),left,soon:ms>0&&ms<86400000,full:ukDeadline(t)};
+}
+function topbarHTML(o){
+  const dl=deadlineInfo(), ss=statusState();
+  return `<header class="tb"><div class="tbin">
+    <a class="brand" href="${routeFor("squad")}" onclick="return go(event,'squad')"><span class="bl">${LOGO}</span><span class="bw">FPL Signals</span></a>
+    ${navLinksHTML()}
+    <div class="tr">
+      <span class="tbfig"><span>Predicted <b class="mint">${o.pred.toFixed(1)}</b></span><span>Bank <b${o.bank<0?' style="color:var(--red)"':""}>£${o.bank.toFixed(1)}</b></span><span>FT <b>${o.ftTxt}</b></span></span>
+      <span class="gwsw"><button onclick="act('startgw',${Math.max(1,o.gv-1)})" aria-label="Previous gameweek">‹</button><b>GW${o.gv}</b><button onclick="act('startgw',${Math.min(38,o.gv+1)})" aria-label="Next gameweek">›</button></span>
+      ${dl?`<span class="dl" title="Deadline ${esc(dl.full)}"><span class="dlk">Deadline</span><b>${esc(dl.when)}</b><span class="dlk${dl.soon?" soon":""}">${dl.left}</span></span>`:""}
+      <a class="live ${ss.cls}" href="${routeFor("xfpl")}" onclick="return go(event,'xfpl')" title="${esc(ss.plain)}. Opens Status." aria-label="Data status: ${esc(ss.plain)}"><i></i></a>
+    </div></div></header>`;
 }
 
+
+/* League (wave 1): Tracker is the default tab, Rivals the second */
+function leagueTabsHTML(){
+  return `<div class="pagetabs"><h1>League</h1><span class="pseg">${[["tracker","Tracker"],["rivals","Rivals"]].map(([k,n])=>
+    `<a class="${S.tab===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')">${n}</a>`).join("")}</span></div>`;
+}
+/* Status (wave 1): data freshness (moved from the footer), the signal key,
+   then the xFPL model page. Wave 7 adds model vs FPL, fixture accuracy,
+   odds status and options. */
+function statusPageHTML(){
+  return `<div class="pagetabs"><h1>Status</h1>${statusChipHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Data Freshness</h2></div>${provHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Model vs FPL</h2><span class="note">each finished gameweek, prediction against points scored</span></div>${modelVsFplHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Fixture Ratings</h2><span class="note">projected goals against this season's results</span></div>${fixtureAccuracyHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Odds</h2><a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Bookmaker markets →</a></div>${oddsStatusHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Options</h2></div>${optionsHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Signal Key</h2><span class="note">hover a tile for its rule</span></div>${legendHTML()}</div>
+    ${xfplHTML()}`;
+}

@@ -35,7 +35,8 @@ function loadJSDOM() {
 }
 const { JSDOM } = loadJSDOM();
 const FILES = ["app-core.js", "app-squad.js", "app-render.js", "app-odds.js", "app-tracker.js", "app-main.js"];
-const TABS = ["squad", "transfers", "chips", "rivals", "tracker", "table", "odds", "fixtures", "news", "xfpl", "signals"];
+/* wave 8: Transfers and Odds are retired (their links redirect) */
+const TABS = ["squad", "chips", "rivals", "tracker", "table", "fixtures", "news", "xfpl", "signals"];
 
 let pass = 0, fail = 0;
 const check = (ok, name, detail) => {

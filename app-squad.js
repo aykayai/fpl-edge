@@ -9,71 +9,6 @@
 /* 26/27 duties: first penalty taker, first two on free kicks and corners.
    Players marked with an asterisk in the source (injury or transfer doubt) are
    skipped in favour of the next name. */
-/* One badge shape throughout — an 18px disc with a coloured ring — so the set
-   reads as a family; only the glyph and hue differ. */
-/* Shields rather than discs, with a gloss highlight so they read as objects
-   rather than flat labels. One silhouette throughout keeps the set coherent. */
-let _bid=0;
-/* keyed on the design itself: badges built during a render (e.g. a number
-   that changes) reuse their symbol instead of adding a new one each time */
-const _bKey=new Map();
-function badge(glyph,fill,ring){
-  const key=glyph+"|"+fill+"|"+ring;
-  if(_bKey.has(key)&&_spriteDone.has("b"+_bKey.get(key)))
-    return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${_bKey.get(key)}"/></svg>`;
-  const id=++_bid;_bKey.set(key,id);
-  const full=badgeFull(id,glyph,fill,ring);
-  /* Bundle 9: drawn once in the sprite, referenced everywhere after */
-  const m=/<defs>([\s\S]*?)<\/defs>([\s\S]*)<\/svg>/.exec(full);
-  spriteAdd("b"+id,m[1],`<symbol id="b${id}" viewBox="0 0 26 28">${m[2]}</symbol>`);
-  return _spriteDone.has("b"+id)?`<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${id}"/></svg>`:full;
-}
-function badgeFull(id,glyph,fill,ring){
-  return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true">
-    <defs>
-      <linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="${ring}"/><stop offset="0.55" stop-color="${fill}"/>
-        <stop offset="1" stop-color="${fill}"/></linearGradient>
-      <linearGradient id="gl${id}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
-        <stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-    </defs>
-    <path d="M13 1.4 24.2 5v10.4c0 6.4-4.6 9.9-11.2 11.9C6.4 25.3 1.8 21.8 1.8 15.4V5Z"
-      fill="url(#sg${id})" stroke="${ring}" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M13 2.9 22.7 6v4.4c-3 1.9-6.4 2.8-9.7 2.8s-6.7-.9-9.7-2.8V6Z" fill="url(#gl${id})"/>
-    ${glyph}</svg>`;
-}
-const G=(t,size)=>`<text x="13" y="${size>=11?18.6:18.1}" font-family="Inter,Segoe UI,Arial,sans-serif"
-  font-size="${size}" font-weight="900" fill="#0A0D12" text-anchor="middle" letter-spacing="-0.4"
-  paint-order="stroke" stroke="rgba(255,255,255,.35)" stroke-width="0.6">${t}</text>`;
-/* Differential — a diamond, the odd one out */
-const ICON_DIFF=badge(`<path d="M13 8.4 18.2 14.6 13 20.8 7.8 14.6Z" fill="#06222B" opacity=".9"/>
-  <path d="M13 11.2 15.8 14.6 13 18 10.2 14.6Z" fill="#9FF2FF"/>`,"#22C3E6","#8FEAFB");
-/* Hot streak — flame */
-const ICON_HOT=badge(`<path d="M13 6.6c2.7 3 4.6 5.2 4.6 8.1a4.6 4.6 0 0 1-9.2 0c0-1.6.8-2.9 1.8-4.1.5 1 1.1 1.7 2 2-.1-2.1.3-4.1.8-6Z"
-  fill="#3A1400"/><path d="M13 12.6c1.1 1.3 1.8 2.3 1.8 3.4a1.8 1.8 0 0 1-3.6 0c0-.8.4-1.5 1-2.1.3.4.5.6.8.7Z" fill="#FFE0C2"/>`,"#FF7A2F","#FFC08A");
-/* Attack — a football */
-const ICON_ATT=badge(`<circle cx="13" cy="15" r="6.1" fill="#FFFDF6" stroke="#8A5A12" stroke-width="1"/>
-  <path d="M13 11.1 15.9 13.2 14.8 16.6H11.2L10.1 13.2Z" fill="#20160A"/>
-  <path d="M13 8.9v2.2M9.3 13.4 7.2 12.6M16.7 13.4l2.1-.8M11.2 16.6l-1.3 2M14.8 16.6l1.3 2"
-    stroke="#20160A" stroke-width="1.15" stroke-linecap="round"/>`,"#FFB020","#FFDFA6");
-/* Defence — shield with a tick, inside the shield silhouette */
-const ICON_DEF=badge(`<path d="M13 8.6 18 10.3v3.9c0 2.7-1.9 4.4-5 5.4-3.1-1-5-2.7-5-5.4v-3.9Z" fill="#06222B"/>
-  <path d="M10.8 14.4l1.6 1.7 3-3.3" stroke="#9FF2FF" stroke-width="1.7" fill="none"
-    stroke-linecap="round" stroke-linejoin="round"/>`,"#22C3E6","#8FEAFB");
-/* DefCon — a stop sign */
-const ICON_DC=badge(`<path d="M10.9 8.9h4.2l3 3v4.2l-3 3h-4.2l-3-3v-4.2Z" fill="#7A0F1E" stroke="#FFD9DF" stroke-width="1"/>
-  <text x="13" y="16.9" font-family="Inter,Arial,sans-serif" font-size="5.6" font-weight="900"
-    fill="#FFF" text-anchor="middle" letter-spacing="-0.2">STOP</text>`,"#E14156","#FFB3BF");
-/* Nailed — stopwatch */
-const ICON_MIN=badge(`<path d="M10.9 7.1h4.2" stroke="#0A0D12" stroke-width="2.1" stroke-linecap="round"/>
-  <circle cx="13" cy="15.4" r="5.4" fill="#121B25" stroke="#E6EFFA" stroke-width="1.3"/>
-  <path d="M13 12.1v3.5l2.4 1.5" stroke="#E6EFFA" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,"#93A8C2","#DCE8F5");
-/* Stats caution — exclamation */
-const ICON_STALE=badge(`<path d="M13 8.4 19 19.4H7Z" fill="#3A2000"/>
-  <path d="M13 12v3.2" stroke="#FFEFC9" stroke-width="1.8" stroke-linecap="round"/>
-  <circle cx="13" cy="17.3" r="1" fill="#FFEFC9"/>`,"#F2B33D","#FFE2A0");
-const SPCOL={P:["#FF4D6D","#FFD1DA"],F:["#34D399","#C6F7E4"],C:["#C084FC","#E9D8FF"]};
 const SETPIECE={
  ARS:{P:["Saka"],            F:["Saka","Rice"],            C:["Rice","Saka"]},
  AVL:{P:["Buendía"],         F:["Buendía","McGinn"],       C:["Cash","McGinn"]},
@@ -96,80 +31,143 @@ const SETPIECE={
  SUN:{P:["Le Fée"],          F:["Xhaka","Le Fée"],         C:["Xhaka","Le Fée"]},
  TOT:{P:["Richarlison"],     F:["Porro","Tonali"],         C:["Porro","Tonali"]}
 };
-function setPieceHTML(p){
-  const duty=SETPIECE[(p.teamName||"").toUpperCase()];
-  if(!duty)return "";
-  const me=norm(p.web_name), out=[];
-  const hit=list=>(list||[]).some(nm=>{const t=norm(nm);
-    return t&&(me===t||me.includes(t)||t.includes(me));});
-  [["P","Penalties"],["F","Free kicks"],["C","Corners"]].forEach(([k,label])=>{
-    if(!hit(duty[k]))return;
-    const[b,c]=SPCOL[k];
-    out.push(`<span class="sig" title="${label}">${badge(G(k,11),b,c)}</span>`);
-  });
-  return out.length?`<span class="sigs">${out.join("")}</span>`:"";
+/* SETPIECE above still feeds the model's penalty and set-piece points
+   (app-core.js); changing it moves projections, so it waits for Andy. The
+   icons below read FPL's live orders instead. */
+/* ---------- signal icons (redesign wave 1, 19 Oct 2026) ----------
+   Andy's set, in this order, as Lucide line icons in round tinted tiles
+   (Fintel's .tile: background = tone at 22% over #171717). One rule each;
+   the rule is the tile's hover text. Hot streak, Attack, Defence, DefCon,
+   Nailed and Stats caution were dropped; Luck was tested and replaced by
+   Heating Up / Cooling Off (research/predictors/momentum.py). */
+const SIGNAL={
+  buy:["circle-arrow-up","#3DDC97","Buy"],
+  sell:["circle-arrow-down","#FF5A6E","Sell"],
+  rise:["trending-up","#4ADE80","Price Rise"],
+  fall:["trending-down","#FF5A6E","Price Fall"],
+  mins:["clock-alert","#FFB020","Minutes Risk"],
+  heat:["flame","#4ADE80","Heating Up"],
+  cool:["snowflake","#FF5A6E","Cooling Off"],
+  rival:["swords","#B388FF","Rival Threat"],
+  diff:["gem","#BAE6FD","Differential"],
+  pen:["circle-dot","NAVY","Penalty"],
+  set:["flag-triangle-right","#22D3EE","Set Piece"]};
+const SIG_ORDER=Object.keys(SIGNAL);
+const SIG_RULE={
+  buy:h=>"In the top picks for his position over "+(h>1?"the next "+h+" gameweeks":"this gameweek")+", with 60+ expected minutes",
+  sell:h=>"One of yours whose best replacement gains 2+ pts over "+(h>1?"the next "+h+" gameweeks":"this gameweek"),
+  rise:()=>"FPL's predictor: 100%+ progress to a rise tonight",
+  fall:()=>"FPL's predictor: 100%+ progress to a fall tonight",
+  mins:()=>"Doubt, out, or under 60 expected minutes",
+  heat:()=>"Chances rising: last-4 xGI/90 at least 1.5x his season rate (and +0.15)",
+  cool:()=>"Chances falling: last-4 xGI/90 at most 0.6x his season rate (and -0.15)",
+  rival:()=>"Owned by managers around you, not by you",
+  diff:()=>"Under 8% owned and predicted 3.5+ pts",
+  pen:()=>"First-choice penalty taker",
+  set:()=>"First choice on corners or free kicks"};
+function sigTile(k,tip){
+  const[ic,tone,label]=SIGNAL[k];
+  return `<span class="tile${tone==="NAVY"?" navy":""}"${tone==="NAVY"?"":` style="--tc:${tone}"`} title="${esc(tip||label)}" data-sig="${k}">${lic(ic)}</span>`;
 }
-
-const SIGDEF=[[ICON_DIFF,"#3ED8F0","Differential"],
- [ICON_HOT,"#FF8A3D","Hot streak"],
- [ICON_ATT,"#FFB020","Attack"],
- [ICON_DEF,"var(--sky)","Defence"],
- [ICON_DC,"#7C4DFF","DefCon"],
- [ICON_MIN,"#8FA3BC","Nailed 85+"],
- [ICON_STALE,"#F2C14E","Stats caution"]];
-function legendHTML(){
-  return `<div class="legend">
-    ${SIGDEF.map(([l,c,t])=>`<span class="lgi">${sigIcon(l,c,t)}<span>${esc(t)}</span></span>`).join("")}
-    ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
-      return `<span class="lgi"><span class="sig">${badge(G(k,11),b,c)}</span><span>${t}</span></span>`;}).join("")}</div>`;
+/* FPL's own live fields (server /api/fpl-players): price predictor and
+   set-piece orders. Missing on the Pages backup, where the dataset's
+   penalty order stands in and set pieces are not shown. */
+function fplLive(p){return (S.fplLive&&S.fplLive.players&&S.fplLive.players[p.id])||null;}
+/* Penalties: FPL's order, except where this season's kicks and a published
+   source agree on someone else (research/setpieces.md, 19 Oct 2026). */
+const PEN_OVERRIDE={COV:"Torp",NEW:"Wissa",SUN:"Le Fée"};
+function setPieces(p){
+  const L=fplLive(p),club=(p.teamName||"").toUpperCase();
+  let pen;
+  if(PEN_OVERRIDE[club]){const t=norm(PEN_OVERRIDE[club]),me=norm(p.web_name);pen=!!t&&(me===t||me.includes(t)||t.includes(me));}
+  else pen=L?L.pen===1:p.penOrder===1;
+  return{pen,cor:L?L.cor:null,dfk:L?L.dfk:null};
 }
-function signals(p,g){
-  const out=[];
-  if(p.owned>0&&p.owned<8&&(p.gw[g]?.pts||0)>3.4)out.push(SIGDEF[0]);
-  /* Only meaningful when both sides of the comparison come from actual
-     matches. A synthetic form estimate minus a two-game sample is noise, and
-     a player projected not to play cannot be in form at all. */
-  const realForm=p.formSrc==="this season"||/25\/26|2025/.test(p.formSrc||"");
-  if(realForm&&p.ppg>=1.5&&p.xMins>=45&&p.form-p.ppg>0.7)out.push(SIGDEF[1]);
-  /* the two target flags come from the club shortlists, so a player's badge and
-     the Fixtures page always agree */
-  /* Each target badge only goes to the players it can actually help: the star
-     to midfielders and forwards, who score from attacking returns, and the
-     shield to keepers and defenders, who score from clean sheets. */
-  const T=targetClubs();
-  if(p.pos>=3&&T.att.has(p.team))out.push(SIGDEF[2]);
-  if(p.pos<=2&&T.def.has(p.team))out.push(SIGDEF[3]);
-  /* DefCon is only a route to points for defenders and midfielders, and only
-     worth flagging where he clears the threshold in a decent share of matches */
-  if((p.pos===2||p.pos===3)&&p.dcHitRate!=null
-     &&p.dcHitRate>=(p.pos===2?0.45:0.22))out.push(SIGDEF[4]);
-  if(p.xMins>=85)out.push(SIGDEF[5]);
-  if(p.staleRole)out.push(SIGDEF[6]);
+const ORD=n=>n===1?"1st":n===2?"2nd":n===3?"3rd":n+"th";
+/* Buy: the top of each position over the horizon, regular starters only */
+const BUY_N={1:3,2:6,3:6,4:4};
+let _buyCache=null;
+function buySet(g,h){
+  const k=g+"|"+h;
+  if(_buyCache&&_buyCache.k===k&&_buyCache.m===S.model)return _buyCache.set;
+  const set=new Set();
+  [1,2,3,4].forEach(pos=>S.model.players
+    .filter(p=>p.pos===pos&&p.avail>0&&(p.xMins||0)>=60)
+    .sort((a,b)=>hPts(b,g,h)-hPts(a,g,h)).slice(0,BUY_N[pos]).forEach(p=>set.add(p.id)));
+  _buyCache={k,m:S.model,set};return set;
+}
+/* Sell: first version reads Head Scout (bestSwaps); wave 4 brings one engine */
+let _sellBusy=false;
+function sellMap(h){
+  if(_sellBusy)return new Map();
+  _sellBusy=true;
+  try{const m=new Map();bestSwaps(60,h).forEach(x=>{if(x.gain>=2&&!m.has(x.out.id))m.set(x.out.id,x);});return m;}
+  finally{_sellBusy=false;}
+}
+/* Momentum: this season's matches only, raw per-90s, as in the study */
+const _momCache=new Map();
+function momentum(p){
+  if(p.pos<3)return null;
+  if(_momCache.has(p.code)&&_momCache.get(p.code).h===S.hist)return _momCache.get(p.code).v;
+  const rows=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now"&&r.mins>0);
+  const per=rs=>{const m=rs.reduce((a,r)=>a+r.mins,0);return m>0?rs.reduce((a,r)=>a+(r.xg||0)+(r.xa||0),0)*90/m:null;};
+  let v=null;
+  const l4=rows.slice(-4);
+  if(rows.length>=6&&rows.reduce((a,r)=>a+r.mins,0)>=450&&l4.reduce((a,r)=>a+r.mins,0)>=180){
+    const sea=per(rows),last=per(l4);
+    v={sea,last,heat:last>=1.5*sea&&last-sea>=0.15,cool:last<=0.6*sea&&sea-last>=0.15};}
+  _momCache.set(p.code,{h:S.hist,v});return v;
+}
+/* Rival Threat: how many of the mini-league rivals own each player */
+let _rivCache=null;
+function rivalOwn(){
+  const f=S.rivalsFeed;if(!f||!f.entries)return null;
+  if(_rivCache&&_rivCache.f===f)return _rivCache;
+  const own={};let n=0;
+  Object.keys(f.entries).filter(k=>String(k)!==String(TEAM_ID)).forEach(k=>{
+    const a=(f.entries[k]&&f.entries[k].gw)||[],r=a[a.length-1];if(!r||!r.picks)return;n++;
+    r.picks.forEach(pk=>{const id=pk.id??pk;own[id]=(own[id]||0)+1;});});
+  return _rivCache={f,own,n};
+}
+/* signals(p,g) -> [[key, hover text]] in Andy's order. noSell skips Sell
+   (Head Scout's own tie-break calls this while Sell is being worked out). */
+function signals(p,g,noSell,hh){
+  const out=[],h=hh||S.horizon||1,mine=(S.squad||[]).includes(p.id);
+  if(!S.model)return out;
+  if(buySet(g,h).has(p.id)&&!mine)out.push(["buy",SIG_RULE.buy(h)+`: ${hPts(p,g,h).toFixed(1)} pts`]);
+  if(mine&&!noSell){const m=sellMap(h).get(p.id);
+    if(m)out.push(["sell",SIG_RULE.sell(h)+`: ${m.inn.web_name} +${m.gain.toFixed(1)}`]);}
+  const L=fplLive(p);
+  if(L&&L.pcp!=null&&!(L.pcLock&&Date.parse(L.pcLock)>Date.now())){
+    if(L.pcp>=100)out.push(["rise",`FPL's predictor: ${Math.round(L.pcp)}% progress to a rise tonight`]);
+    else if(L.pcp<=-100)out.push(["fall",`FPL's predictor: ${Math.round(-L.pcp)}% progress to a fall tonight`]);}
+  if(p.status!=="u"&&((p.avail<1&&(mine||(p.roleMins||0)>=60))||((p.roleMins||0)>=60&&(p.xMins||0)<60)))
+    out.push(["mins",p.avail<1?`${p.avail>0?Math.round(p.avail*100)+"% chance":"Out"}${p.news?" · "+p.news:""}`:`${Math.round(p.xMins||0)} expected minutes`]);
+  const mo=momentum(p);
+  if(mo&&mo.heat)out.push(["heat",`Heating Up: last-4 xGI/90 ${mo.last.toFixed(2)} vs season ${mo.sea.toFixed(2)}`]);
+  if(mo&&mo.cool)out.push(["cool",`Cooling Off: last-4 xGI/90 ${mo.last.toFixed(2)} vs season ${mo.sea.toFixed(2)}`]);
+  const R=rivalOwn();
+  if(R&&R.n&&!mine){const k=R.own[p.id]||0;
+    if(k>=Math.max(2,Math.ceil(R.n*0.3)))out.push(["rival",`Owned by ${k} of ${R.n} rivals, not you`]);}
+  if(p.owned>0&&p.owned<8&&(p.gw[g]?.pts||0)>3.4)out.push(["diff",`${p.owned}% owned, predicted ${(p.gw[g]?.pts||0).toFixed(1)} pts`]);
+  const sp=setPieces(p);
+  if(sp.pen)out.push(["pen","First-choice penalty taker"]);
+  if(sp.cor===1||sp.dfk===1)out.push(["set","Set pieces: "+[sp.cor&&sp.cor<=2?"Corners "+ORD(sp.cor):"",sp.dfk&&sp.dfk<=2?"Free kicks "+ORD(sp.dfk):""].filter(Boolean).join(" · ")]);
   return out;
 }
-/* Clubs whose next five contain at least four kind fixtures on that lens.
-   Cached per gameweek — signals() runs for every player on every render. */
-let _tcCache=null;
-function targetClubs(){
-  const g=VG();
-  if(_tcCache&&_tcCache.g===g&&_tcCache.n===(S.model?S.model.teams.length:0))return _tcCache;
-  const att=new Set(),def=new Set();
-  (S.model?S.model.teams:[]).forEach(t=>{
-    let ga=0,gd=0,n=0;
-    for(let e=g;e<g+5&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{
-      const home=f.ht===t,o=home?f.at:f.ht;
-      if(fdrOf(o,home,t,"att")<=2)ga++;
-      if(fdrOf(o,home,t,"def")<=2)gd++;
-      n++;});
-    if(n>=4&&ga>=4&&(t.att||0)>=1.30)att.add(t.id);
-    if(n>=4&&gd>=4&&(2.6-(t.def||1.4))>=1.12)def.add(t.id);
-  });
-  return _tcCache={g,n:(S.model?S.model.teams.length:0),att,def};
+function legendHTML(){
+  const h=S.horizon||1;
+  return `<div class="legend">${SIG_ORDER.map(k=>`<span class="lgi">${sigTile(k,SIG_RULE[k](h))}<span>${SIGNAL[k][2]}</span></span>`).join("")}</div>`;
 }
-const sigIcon=(l,c,t)=>`<span class="sig" title="${t}">${l}</span>`;
-const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
-  `<span class="sigs">${s.map(([l,c,t])=>sigIcon(l,c,t)).join("")}</span>`:"");};
-
+const sigHTML=(p,g)=>{const s=signals(p,g);return s.length?`<span class="sigs">${s.map(([k,t])=>sigTile(k,t)).join("")}</span>`:"";};
+/* the set-piece line on the player card */
+function setPieceText(p){
+  const sp=setPieces(p),bits=[];
+  if(sp.pen)bits.push("Penalties 1st");
+  if(sp.cor&&sp.cor<=3)bits.push("Corners "+ORD(sp.cor));
+  if(sp.dfk&&sp.dfk<=3)bits.push("Free kicks "+ORD(sp.dfk));
+  return bits.join(" · ");
+}
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
   vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,ftLastGw:S.ftLastGw,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
@@ -504,36 +502,50 @@ function xiGain(ids,outId,inId,g,h,byId,base){
     s+=Math.pow(DECAY,k)*(xiTotal(ns,g+k,byId)-(base?base[k]:xiTotal(ids,g+k,byId)));
   return s;
 }
-const _bsCache={};
-function bestSwaps(limit){
-  if(!S.model||!S.squad)return[];
-  const g=VG(),h=S.horizon||1,bank=planBank();
-  const key=[g,h,bank,S.squad.join("."),(S.ignored||[]).join("."),S.model.players.length].join("|");
-  if(_bsCache.key===key&&_bsCache.model===S.model)return _bsCache.res.slice(0,limit||10);
-  const byId=new Map(S.model.players.map(p=>[p.id,p]));
-  const base=[];for(let k=0;k<h&&g+k<=38;k++)base.push(xiTotal(S.squad,g+k,byId));
+/* ONE TRANSFER ENGINE (redesign wave 4, 20 Oct 2026). Every move the app
+   suggests comes from here: Top Move and Sell, the five-week plan, the
+   flagged-player replacements, the multi-player combo and the Signals
+   page's replacements. A move is worth what it adds to the best legal XI
+   plus captain, week by week over the horizon (later weeks x DECAY^k).
+   Candidates: same position, not already owned, available, affordable from
+   the bank plus the selling price, within the club limit, not ignored;
+   twelve per outgoing player are short-listed by player-against-player gain,
+   then each is scored on the XI.
+   o: {squad, bank, g, h, outs (ids, default all), exclude (ids), per (12)} */
+function engineMoves(o){
+  if(!S.model||!o.squad||!o.squad.length)return[];
+  const byId=o.byId||new Map(S.model.players.map(p=>[p.id,p]));
+  const g=o.g,h=o.h||1,squad=o.squad,ex=new Set([...(o.exclude||[]),...(S.ignored||[])]);
+  const base=[];for(let k=0;k<h&&g+k<=38;k++)base.push(xiTotal(squad,g+k,byId));
   const out=[];
-  S.squad.forEach(oid=>{
-    const o=byId.get(oid);if(!o)return;
-    const cc={};S.squad.filter(i=>i!==oid).forEach(i=>{
-      const p=byId.get(i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
-    /* shortlist by player gain, then score the shortlist on the XI */
+  (o.outs||squad).forEach(oid=>{
+    const ou=byId.get(oid);if(!ou)return;
+    const cc={};squad.filter(i=>i!==oid).forEach(i=>{const p=byId.get(i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
     const cands=[];
     S.model.players.forEach(p=>{
-      if(p.pos!==o.pos||S.squad.includes(p.id)||p.avail<=0)return;
-      if((S.ignored||[]).includes(p.id))return;
-      if(p.price>bank+sellPrice(o)+.001)return;
+      if(p.pos!==ou.pos||squad.includes(p.id)||p.avail<=0||ex.has(p.id))return;
+      if(p.price>o.bank+sellPrice(ou)+.001)return;
       if((cc[p.team]||0)>=RULES.clubMax)return;
-      cands.push({p,pg:dGain(p,o,g,h)});});
-    cands.sort((a,b)=>b.pg-a.pg).slice(0,12).forEach(({p})=>{
-      const gain=xiGain(S.squad,oid,p.id,g,h,byId,base);
-      /* where gains are level, prefer the player carrying signals */
-      const sig=signals(p,g).length;
-      if(gain>0.05)out.push({out:o,inn:p,gain,sig});});});
-  out.sort((a,b)=>(b.gain-a.gain)||(b.sig-a.sig));
+      cands.push({p,pg:dGain(p,ou,g,h)});});
+    cands.sort((a,b)=>b.pg-a.pg).slice(0,o.per||12).forEach(({p,pg})=>{
+      out.push({out:ou,inn:p,gain:xiGain(squad,oid,p.id,g,h,byId,base),pg,sell:sellPrice(ou)});});
+  });
+  out.sort((a,b)=>(b.gain-a.gain)||(b.pg-a.pg));
+  return out;
+}
+let _bsCache={};
+function bestSwaps(limit,hh){
+  if(!S.model||!S.squad)return[];
+  const g=VG(),h=hh||S.horizon||1,bank=planBank();
+  const key=[g,h,bank,S.squad.join("."),(S.ignored||[]).join("."),S.model.players.length].join("|");
+  const hit=_bsCache[key];
+  if(hit&&hit.model===S.model)return hit.res.slice(0,limit||10);
+  /* wave 4: the one engine; a move must add something to the XI */
   const seen=new Set(),uniq=[];
-  out.forEach(m=>{const k=m.out.id+"-"+m.inn.id;if(seen.has(k))return;seen.add(k);uniq.push(m);});
-  Object.assign(_bsCache,{key,model:S.model,res:uniq});
+  engineMoves({squad:S.squad,bank,g,h}).forEach(m=>{const k=m.out.id+"-"+m.inn.id;
+    if(m.gain>0.05&&!seen.has(k)){seen.add(k);uniq.push(m);}});
+  if(Object.keys(_bsCache).length>24)_bsCache={};
+  _bsCache[key]={model:S.model,res:uniq};
   return uniq.slice(0,limit||10);
 }
 /* S3 (Stage 1, 19 Oct 2026): a five-week plan. Week by week, the best single
@@ -552,18 +564,8 @@ function planWeeks(H){
   const weeks=[];
   for(let k=0;k<H&&g0+k<=38;k++){
     const w=g0+k,rem=Math.min(H-k,39-w);
-    const base=[];for(let j=0;j<rem;j++)base.push(xiTotal(squad,w+j,byId));
-    let best=null;
-    squad.forEach(oid=>{
-      const o=byId.get(oid);if(!o)return;
-      const club={};squad.filter(i=>i!==oid).forEach(i=>{const q=byId.get(i);if(q)club[q.team]=(club[q.team]||0)+1;});
-      const sell=sellPrice(o);
-      S.model.players.filter(p=>p.pos===o.pos&&!squad.includes(p.id)&&p.avail>0&&!(S.ignored||[]).includes(p.id)
-          &&p.price<=bank+sell+1e-9&&(club[p.team]||0)<RULES.clubMax)
-        .map(p=>({p,pg:dGain(p,o,w,rem)})).sort((a,b)=>b.pg-a.pg).slice(0,12)
-        .forEach(({p})=>{const gain=xiGain(squad,oid,p.id,w,rem,byId,base);
-          if(!best||gain>best.gain)best={o,p,gain,sell};});
-    });
+    const top=engineMoves({squad,bank,g:w,h:rem,byId})[0];
+    const best=top?{o:top.out,p:top.inn,gain:top.gain,sell:top.sell}:null;
     const bar=ft>0?FT_VALUE:FT_VALUE+HIT;
     if(best&&best.gain>bar){
       const hit=ft>0?0:HIT;
@@ -581,37 +583,29 @@ function planWeeks(H){
   Object.assign(_planCache,{key,model:S.model,res});
   return res;
 }
+/* wave 4: several outs at once, filled one by one through the engine (the
+   dearest slot first, keeping enough back for the cheapest replacement of
+   each slot still to fill), each scored on the XI over the horizon. */
 function bestCombo(outIds){
   if(!S.model||!outIds.length)return null;
-  const g=S.model.next.id;
-  const outs=outIds.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  let budget=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
-  const keep=(S.squad||[]).filter(i=>!outIds.includes(i));
-  const club={};keep.forEach(i=>{const p=S.model.players.find(x=>x.id===i);
-    if(p)club[p.team]=(club[p.team]||0)+1;});
-  const taken=new Set(keep);
-  /* fill the most expensive slot first so the budget isn't eaten by cheap upgrades */
-  const order=[...outs].sort((a,b)=>b.price-a.price);
+  const g=S.model.next.id,h=S.horizon||1;
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));
+  const outs=outIds.map(i=>byId.get(i)).filter(Boolean);
+  const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
+  let squad=(S.squad||[]).slice(),bank=planBank();
   const picks=[];
-  order.forEach(o=>{
+  const order=[...outs].sort((a,b)=>b.price-a.price);
+  order.forEach((o,ix)=>{
     const minFor=pos=>{let m=99;S.model.players.forEach(q=>{
-      if(q.pos===pos&&!taken.has(q.id)&&q.avail>0&&q.price<m)m=q.price;});return m===99?3.9:m;};
-    const cheapestRest=order.filter(x=>x!==o&&!picks.find(pk=>pk.out===x))
-      .reduce((a,x)=>a+minFor(x.pos),0);
-    let best=null;
-    S.model.players.forEach(p=>{
-      /* F60: the players being sold are not candidates for their own slots */
-      if(p.pos!==o.pos||taken.has(p.id)||outIds.includes(p.id)||p.avail<=0)return;
-      if(p.price>budget-cheapestRest+.001)return;
-      if((club[p.team]||0)>=3)return;
-      const gain=dGain(p,o,g,S.horizon);
-      if(!best||gain>best.gain)best={out:o,inn:p,gain};});
+      if(q.pos===pos&&!squad.includes(q.id)&&!outIds.includes(q.id)&&q.avail>0&&q.price<m)m=q.price;});return m===99?3.9:m;};
+    const rest=order.slice(ix+1);
+    const reserve=rest.reduce((a,x)=>a+minFor(x.pos)-sellPrice(x),0);
+    /* F60: the players being sold are not candidates for their own slots */
+    const best=engineMoves({squad,bank:bank-Math.max(0,reserve),g,h,outs:[o.id],exclude:outIds,byId})[0];
     /* F60: a move that gains nothing is not a move; that player stays */
-    if(best&&best.gain>0.05){picks.push(best);taken.add(best.inn.id);
-      club[best.inn.team]=(club[best.inn.team]||0)+1;budget-=best.inn.price;budget+=0;}
+    if(best&&best.gain>0.05){picks.push(best);squad=squad.map(i=>i===o.id?best.inn.id:i);bank=+(bank+best.sell-best.inn.price).toFixed(1);}
   });
   const spent=picks.reduce((a,m)=>a+m.inn.price,0);
-  const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
   return{picks,gain:picks.reduce((a,m)=>a+m.gain,0),left:+(freed-spent).toFixed(1),freed:+freed.toFixed(1)};
 }
 /* Persist an edit to the viewed gameweek's plan. Snapshots the currently-effective
@@ -1192,90 +1186,6 @@ function orderBench(list){
 /* ---------- squad dashboard ----------
    Six forward-looking readings. Everything here answers "what should I do
    next" — nothing retrospective, since the official app covers that better. */
-/* ---------- comparison ----------
-   A scratch clone of the squad. Same transfer and substitution behaviour, but
-   only the original can be saved; the clone offers to apply its changes across. */
-function compXI(){
-  const C=S.compare;
-  if(C&&C.forceXI&&C.forceXI.length===11){
-    const xi=C.forceXI.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-    if(xi.length===11)return xi;
-  }
-  const sq=(S.compare&&S.compare.squad)||[];
-  const sp=sq.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  if(!sp.length)return[];
-  const g=VG(),by={};
-  sp.forEach(p=>(by[p.pos]=by[p.pos]||[]).push(p));
-  Object.values(by).forEach(a=>a.sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0)));
-  const xi=[];if(by[1]?.[0])xi.push(by[1][0]);
-  (by[2]||[]).slice(0,3).forEach(p=>xi.push(p));(by[4]||[]).slice(0,1).forEach(p=>xi.push(p));
-  [...(by[2]||[]).slice(3),...(by[3]||[]),...(by[4]||[]).slice(1)]
-    .sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0)).slice(0,11-xi.length).forEach(p=>xi.push(p));
-  return xi;
-}
-function compPts(weeks){
-  const C=S.compare;if(!C)return 0;
-  const g=VG(),xi=compXI();if(!xi.length)return 0;
-  let s2=xi.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  const cap=S.model.players.find(p=>p.id===C.captain);
-  if(cap&&xi.includes(cap))s2+=hPts(cap,g,weeks);
-  const chip=chipForWeek(g);
-  const bench=(C.squad||[]).map(i=>S.model.players.find(p=>p.id===i))
-    .filter(p=>p&&!xi.includes(p));
-  if(chip==="bboost")s2+=bench.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  if(chip==="3xc"&&cap)s2+=hPts(cap,g,weeks);
-  return s2;
-}
-function compareHTML(){
-  const C=S.compare;if(!C)return "";
-  const g=VG();
-  const deltas=[1,3,5].map(w=>({w,mine:weekPts_w(w),theirs:compPts(w)}));
-  const xi=compXI();
-  const sq=(C.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  const bench=sq.filter(p=>!xi.includes(p));
-  /* Renders through the planner's own cardHTML with a comparison context, so
-     the two teams look and behave identically by construction rather than by
-     two copies of markup being kept in sync by hand. */
-  const bOrder=bench.slice();
-  const card=(p)=>{
-    const i=bOrder.findIndex(b=>b.id===p.id);
-    return cardHTML(p,i>=0?{slot:i+1,cycle:p.pos!==1}:undefined,C);
-  };
-  const win=deltas[0].theirs>deltas[0].mine;
-  return `<div class="panel" style="border-color:${win?"var(--mint)":"var(--ink3)"}">
-    <div class="phead"><h2 style="${win?"color:var(--mint)":""}">Compare</h2>
-      <span style="display:flex;gap:6px;align-items:center">
-        <span class="note">£${(C.bank||0).toFixed(1)} bank</span>
-        <button onclick="act('capply')">Apply to my team</button>
-        <button onclick="act('cclose')">Close</button></span></div>
-    <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:14px;flex-wrap:wrap">
-      ${deltas.map(d=>{const diff=d.theirs-d.mine;
-        return `<span style="flex:1;min-width:96px;text-align:center">
-          <span style="display:block;font-size:10px;color:var(--mute);font-weight:800">${d.w===1?"This GW":d.w+" GW"}</span>
-          <span style="display:block;font-family:'Geist';font-weight:800;font-size:22px;line-height:1.1;
-            color:${diff>0.05?"var(--mint)":diff<-0.05?"var(--red)":"var(--cream)"}">${diff>0?"+":""}${diff.toFixed(1)}</span>
-          <span style="display:block;font-size:10px;color:var(--mute)" class="mono">${d.theirs.toFixed(1)} v ${d.mine.toFixed(1)}</span></span>`;}).join("")}
-    </div>
-    <div class="pitch">${[1,2,3,4].map(pos=>{const r=xi.filter(p=>p.pos===pos);
-      return r.length?`<div class="row">${r.map(card).join("")}</div>`:"";}).join("")}</div>
-    <div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map(card).join("")}</div></div>
-    ${(C.flagged||[]).length?`<div class="repl">
-      <div style="padding:9px 12px;font-size:10px;color:var(--cyan);font-weight:700">
-        Replace ${(C.flagged||[]).map(id=>esc(S.model.players.find(p=>p.id===id)?.web_name||"")).join(", ")} — pick from the player pool</div></div>`:""}
-  </div>`;
-}
-function weekPts_w(weeks){
-  const xi=startingXI();if(!xi.length)return 0;
-  const g=VG();
-  let s2=xi.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  const cap=S.model.players.find(p=>p.id===S.captain);
-  if(cap&&xi.includes(cap))s2+=hPts(cap,g,weeks);
-  const chip=chipForWeek(g);
-  const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
-  if(chip==="bboost")s2+=bench.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  if(chip==="3xc"&&cap)s2+=hPts(cap,g,weeks);
-  return s2;
-}
 function dashData(){
   if(!S.model||!squadPlayers().length)return null;
   const g=VG(), sp=squadPlayers(), xi=startingXI();

@@ -49,9 +49,12 @@ function loadJSDOM() {
 const { JSDOM } = loadJSDOM();
 
 const FILES = ["app-core.js", "app-squad.js", "app-render.js", "app-odds.js", "app-tracker.js", "app-main.js"];
-const TABS = ["squad", "transfers", "chips", "rivals", "tracker", "table", "odds", "fixtures", "news", "xfpl"];
+/* wave 8: Transfers and Odds are retired (their links redirect) */
+const TABS = ["squad", "chips", "rivals", "tracker", "table", "fixtures", "news", "xfpl"];
 /* pages that must match once the planned differences are stripped */
-const STRICT = TABS.filter(t => t !== "news" && t !== "odds");
+/* the Players page (table) was rebuilt in redesign wave 3 */
+/* Teams (fixtures) gained the Clubs tab in wave 5 */
+const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table" && t !== "fixtures");
 
 /* ---------- old code out of git ---------- */
 function materialiseOld() {
@@ -159,7 +162,8 @@ async function runApp(dir, statusOverride) {
   for (const tab of TABS) {
     S.tab = tab; let err = null;
     try { g.render(); } catch (e) { err = String(e && e.stack || e).slice(0, 300); }
-    const app = w.document.getElementById("app");
+    /* the page body only: the header, menu and footer were redesigned (wave 1) */
+    const app = w.document.getElementById("main") || w.document.getElementById("app");
     out.pages[tab] = { error: err, text: app.textContent.replace(/\s+/g, " ").trim() };
   }
   return out;
@@ -168,6 +172,9 @@ async function runApp(dir, statusOverride) {
 /* ---------- strip the planned differences ---------- */
 function normalise(text, isNew) {
   let t = text;
+  /* PLANNED (redesign wave 1): the Status page wraps the xFPL page with the
+     data freshness list (which starts with the version) and the signal key */
+  t = t.replace(/^Status.*?Signal Key.*?Set Piece ?/, "");
   /* the FPL Signals era is recognised by its brand, so a baseline from after
      the rebrand is normalised the same way as the new side */
   if (isNew || /FPL Signals/.test(text)) {
@@ -185,6 +192,24 @@ function normalise(text, isNew) {
     t = t.replace(/ FPL (?=Predicted )/, " ");
   }
   t = t.replace(/expire [^▲▼]+/g, "expire ");                          /* chips expiry was hard-coded */
+  /* PLANNED (redesign wave 1): new signal key and labels, League tabs,
+     Status page around the xFPL model, Player Data renamed Players */
+  t = t.replace(/^League ?Tracker ?Rivals ?/, "");
+  t = t.replace(/^Players (?=\d+ players)/, "Player Data ").replace(/ Odds →/, "");
+  t = t.replace(/All Players →/g, "Full Player Data →");
+  /* PLANNED (wave 2): captaincy moved from the Planner into the This Week pop-up */
+  t = t.replace(/Captaincy ?GW\d+ · your XI.*?Tap C to make him captain for this week\. ?/, "");
+  t = t.replace(/ Transfers →/, "");
+  {
+    t = t.replace(/Differential Hot streak Attack Defence (STOP)?DefCon Nailed 85\+ Stats caution P?Penalties F?Free kicks C?Corners ?/, "");
+    t = t.replace(/(£\d+\.\d[▲▼]?)\s*(?:(?:STOP|[PFC])\s*)+(?=(ARS|AVL|BOU|BRE|BHA|CHE|COV|CRY|EVE|FUL|HUL|IPS|LEE|LIV|MCI|MUN|NEW|NFO|SUN|TOT))/g, "$1");
+    t = t.replace(/(Show only) ?[PFC ]*★/, "$1 ★");
+  }
+  /* the old shield badges carried letters (P, F, C, STOP); the new tiles carry
+     none. Lone letters are dropped on both sides (the C/V armband markers too). */
+  t = t.replace(/(^| )(STOP|[PFC])(?= |$)/g, "$1").replace(/(^| )(STOP|[PFC])(?= |$)/g, "$1");
+  /* which players carry a signal changed by design: the empty-cell dot goes */
+  t = t.replace(/(£\d+\.\d[▲▼]?)[\s·]+(?=[A-Z]{3})/g, "$1");
   /* PLANNED: the header free-transfer figure and its source label changed on
      purpose (see the header INFO above), so both are blanked on both sides. */
   t = t.replace(/Free transfers\s+(Unlimited|\d+)\s+(official|tracked locally|untracked) · max 5/g, "Free transfers X");
@@ -291,7 +316,7 @@ try {
     check(!d, `page text unchanged outside planned places: ${tab}`,
       d ? `at ${d.at}\n   old: ...${d.old}...\n   new: ...${d.new_}...` : "");
   }
-  for (const tab of ["news", "odds"]) {
+  for (const tab of ["news", "table", "fixtures"]) {
     const a = OLD.pages[tab].text, b = NEW.pages[tab].text;
     console.log(`INFO  ${tab} page (changed by design): old ${a.length} chars, new ${b.length} chars`);
     const d = firstDiff(a, b);

@@ -67,8 +67,8 @@ function playerCardHTML(){
       </div>
       <div class="pclab">${POS[p.pos]} detail</div>
       <div class="pcgrid">${posStats(p).map(([k,v])=>stat(k,v)).join("")}</div>
-      ${setPieceHTML(p)?`<div class="pclab">Set pieces</div>
-        <div style="padding-top:6px">${setPieceHTML(p)}</div>`:""}
+      ${setPieceText(p)?`<div class="pclab">Set pieces</div>
+        <div style="padding-top:6px;font-size:12.5px">${esc(setPieceText(p))}</div>`:""}
     </div></div>`;
 }
 
@@ -94,9 +94,7 @@ function filtered(scope){
        lock the pool to THAT player's position — otherwise the pool stayed keyed
        to the main squad and there was no way to pick a replacement into the
        comparison team. Falls back to the main-squad flag lock. */
-    const cFlag=S.compare&&(S.compare.flagged||[]).length
-      ? S.model.players.find(p=>p.id===S.compare.flagged[0])?.pos : 0;
-    const lock=cFlag||(S.flagged.length===1?S.model.players.find(p=>p.id===S.flagged[0])?.pos:0);
+    const lock=S.flagged.length===1?S.model.players.find(p=>p.id===S.flagged[0])?.pos:0;
     if(lock&&S.fPos!==lock){S.fPos=lock;pos=lock;}
   }
   let out=S.model.players.filter(p=>(!pos||p.pos===pos)&&(!team||p.team===team)
@@ -106,11 +104,7 @@ function filtered(scope){
     const g=S.model.next.id;
     if(S.starOnly)out=out.filter(p=>S.stars.includes(p.id));
     if(S.iconF.length)out=out.filter(p=>{const ic=signals(p,g).map(x=>x[0]);
-      return S.iconF.every(ix=>{
-        /* the caution flag is an exclusion: selecting it hides those players */
-        if(SIGDEF[ix][2]==="Stats caution")return !ic.includes(SIGDEF[ix][0]);
-        return ic.includes(SIGDEF[ix][0]);});});
-    if(S.spF)out=out.filter(p=>setPieceHTML(p).includes(">"+S.spF+"<"));
+      return S.iconF.every(k=>ic.includes(k));});
   }
   return out;
 }
@@ -164,15 +158,8 @@ function replHTML(){
     const o=S.model.players.find(p=>p.id===id);if(!o)return"";
     /* every affordable, legal option ranked by projection — not just ones that
        happen to beat the outgoing player */
-    const budget=planBank()+sellPrice(o);
-    const clubs={};(S.squad||[]).filter(x=>x!==id).forEach(x=>{const q=P2(x);
-      if(q)clubs[q.team]=(clubs[q.team]||0)+1;});
-    const opts=S.model.players
-      .filter(q=>q.pos===o.pos&&!(S.squad||[]).includes(q.id)&&q.avail>0
-        &&q.price<=budget+0.001&&(clubs[q.team]||0)<3&&!(S.ignored||[]).includes(q.id))
-      .map(q=>({out:o,inn:q,gain:hPts(q,g,S.horizon)-hPts(o,g,S.horizon)}))
-      .filter(m=>m.gain>=0.1)
-      .sort((a,b)=>b.gain-a.gain).slice(0,3);
+    /* wave 4: ranked by what each adds to your XI over the horizon (the engine) */
+    const opts=engineMoves({squad:S.squad||[],bank:planBank(),g,h:S.horizon||1,outs:[id]}).slice(0,3);
     return `<div class="repl"><div style="padding:9px 12px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
       <span style="font-size:10px;font-weight:700;color:var(--cyan)">
         Replace ${esc(o.web_name)} · ${POS[o.pos]}</span>
@@ -182,8 +169,8 @@ function replHTML(){
         <span style="flex:1;min-width:0">
           <span style="display:flex;align-items:center;gap:5px"><span style="font-size:12.5px;font-weight:600">${esc(m.inn.web_name)}</span>${sigHTML(m.inn,g)}</span>
           <span style="display:block;font-size:10px;color:var(--mute)">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${m.inn.xMins}′ xMins</span></span>
-        <span class="mono" style="color:var(--mint);font-weight:700">+${m.gain.toFixed(1)}</span></button>`).join("")
-        :`<div class="pbody"><p class="note">No option improves this pick by +0.1 or more.</p></div>`}</div>`;
+        <span class="mono" style="color:${m.gain>=0?"var(--mint)":"var(--red)"};font-weight:700" title="Change to your XI over ${S.horizon||1} GW">${sgn1(m.gain)}</span></button>`).join("")
+        :`<div class="pbody"><p class="note">No affordable option at this position.</p></div>`}</div>`;
   }).join("");
 }
 const backTag=p=>p.back?`<span class="src" style="background:#4A1220;color:#FFC9D2" title="${esc(p.news)}">${p.back==="unknown"?"no date":esc(p.back)}</span>`:"";
@@ -193,14 +180,12 @@ const PD_PAGE=100;
 function listHTML(){
   const g=VG();
   const a=sortList(filtered("planner"),S.lSort,S.lDir,g);
-  const cmp=S.compare&&(S.compare.flagged||[]).length?S.compare:null;
-  /* budget available: bank plus whatever the flagged players would raise — in the
-     comparison context when a comparison player is flagged, else the main squad */
-  const flags=cmp?cmp.flagged:(S.flagged||[]);
-  const ownIds=cmp?cmp.squad:(S.squad||[]);
+  /* budget available: bank plus whatever the flagged players would raise */
+  const flags=S.flagged||[];
+  const ownIds=S.squad||[];
   const raised=flags.reduce((t,id)=>{
     const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
-  const budget=+((cmp?cmp.bank:S.bank)+raised).toFixed(1);
+  const budget=+(S.bank+raised).toFixed(1);
   const outP=flags.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
@@ -344,9 +329,7 @@ function tableHTML(){
     return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')" title="${TDESC[k]||n}"
       style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("");
   const iconCell=p=>{
-    const s=signals(p,g).map(([l,c,t])=>sigIcon(l,c,t)).join("");
-    const sp=setPieceHTML(p).replace(/^<span class="sigs">/,"").replace(/<\/span>$/,"");
-    const all=s+sp;
+    const all=signals(p,g).map(([k,t])=>sigTile(k,t)).join("");
     return all?`<span class="sigcell">${all}</span>`:`<span style="color:var(--ink3)">·</span>`;};
   const pct=v=>(v*100).toFixed(0)+"%";
   const CELL={
@@ -573,159 +556,10 @@ function swapCardHTML(m,g){
       <button style="flex:1" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button>
       <button onclick="act('ignore',${m.inn.id})" title="Stop suggesting this player">Ignore</button></span></div>`;
 }
-/* ---------- player comparison radar (Transfers page) ---------- */
-function radarHTML(){
-  const g=VG();
-  const ids=S.radarIds||[null,null,null];
-  const search=S.radarSearch||["","",""];
-  /* A position chosen up front (before any player is picked) locks search the
-     same way picking a player used to — either sets it. */
-  const posPick=S.radarPos||null;
-  const active=ids.map(id=>id?S.model.players.find(p=>p.id===id):null);
-  const activePlayers=active.filter(Boolean);
-  const lockedPos=activePlayers.length?activePlayers[0].pos:posPick;
-  const COL=["var(--mint)","var(--amber)","var(--cream)"];
-
-  const HSTEPS=[1,3,5,10,"rest"];
-  const curH=S.radarHorizon||5;
-  const hIdx=Math.max(0,HSTEPS.indexOf(curH));
-  const gwsFor=h=>h==="rest"?Math.max(1,39-g):h;
-  const hLabel=h=>h==="rest"?"Rest of season":`Next ${h} GW${h>1?"s":""}`;
-
-  const W=p=>ws(String(p.code||""),p.pos,S.lWin||38)||{};
-  /* Every stat here is selectable — not just the six shown by default — matching
-     the orange position-relevant stats on Player Data, using the same underlying
-     figures the radar already had access to. Team/opponent-context columns from
-     Player Data (Opp att, Team def, Pen ord…) are left out deliberately: a radar
-     axis describes the player being compared, not their next fixture. */
-  const AXF={
-    "xFPL":p=>hPts(p,g,gwsFor(curH)),"Form":p=>p.form||0,
-    "xGI/90":p=>{const w=W(p);return(w.xg90||0)+(w.xa90||0);},"xMins":p=>p.xMins||0,
-    "npxG/90":p=>W(p).npxg90||0,"xA/90":p=>W(p).xa90||0,"CC/90":p=>W(p).cc90||0,
-    "xG/90":p=>W(p).xg90||0,"Shots/90":p=>W(p).sh90||0,"SoT/90":p=>W(p).sot90||0,
-    "DefCon/90":p=>W(p).dc90||W(p).cbit90||0,"CBIT/90":p=>W(p).cbit90||0,
-    /* F35: CS % and Start % read the player's match record (share of his
-       60-minute games with a clean sheet, share of appearances he started);
-       they read fields model players never carry, so they always plotted 0.
-       BPS/90 plotted the season total. */
-    "CS %":p=>(W(p).csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,
-    "G prevented":p=>W(p).gp||0,"xGoT/90":p=>W(p).xgot90||0,"Start %":p=>(W(p).startPct||0)*100,
-    "Dribbles/90":p=>W(p).drb90||0,"F3 pass/90":p=>W(p).f390||0,"Box/90":p=>W(p).box90||0,
-    "Bonus":p=>p.bonus||0,"BPS/90":p=>bpsPer90(p,W(p))||0,"Owned %":p=>p.owned||0};
-  const DEFAULT_AXSET={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
-    2:["xFPL","Form","DefCon/90","CS %","Aerials/90","xMins"],
-    3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
-    4:["xFPL","Form","npxG/90","xG/90","Shots/90","xGI/90"]};
-  /* Wider pool offered per position when picking stats — a superset of the
-     default six, position-appropriate. */
-  const OPTS={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins","xGoT/90","Start %"],
-    2:["xFPL","Form","DefCon/90","CBIT/90","CS %","Aerials/90","xMins","Start %","Bonus"],
-    3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90","Shots/90","F3 pass/90","Dribbles/90","Bonus"],
-    4:["xFPL","Form","npxG/90","xG/90","Shots/90","SoT/90","xGI/90","Box/90","Bonus"]};
-  const chosen=(S.radarAxes&&S.radarAxes[lockedPos])||null;
-  const axes=(chosen&&chosen.length?chosen:DEFAULT_AXSET[lockedPos||3])||DEFAULT_AXSET[3];
-
-  const takenIds=new Set(ids.filter(Boolean));
-  const pool=i=>S.model.players.filter(p=>(p.id===ids[i]||!takenIds.has(p.id))&&(!lockedPos||p.pos===lockedPos));
-  const results=i=>{const q=(search[i]||"").trim().toLowerCase();if(!q)return[];
-    return pool(i).filter(p=>p.web_name.toLowerCase().includes(q)||p.teamName.toLowerCase().includes(q))
-      .sort((a,b)=>hPts(b,g,S.horizon)-hPts(a,g,S.horizon)).slice(0,8);};
-
-  const slot=i=>{
-    const p=active[i];
-    if(p)return `<div class="rslot" style="--acc:${COL[i]}"><div class="rchip">
-        <span class="rsw" style="background:${COL[i]}"></span>${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}
-        <span class="rchip-nm">${esc(p.web_name)}<span class="rchip-tm">${esc(p.teamName)} · £${p.price.toFixed(1)}</span></span>
-        <button class="rchip-x" onclick="act('radarclear',${i})" title="Remove">✕</button></div></div>`;
-    const rs=results(i);
-    /* Fixed: typing used to trigger a full page re-render on every keystroke,
-       which destroyed and recreated the input, stealing focus after one
-       character. searchInput() debounces and restores focus + caret. */
-    return `<div class="rslot" style="--acc:${COL[i]}">
-      <span class="rsw" style="background:${COL[i]}"></span>
-      <input class="rsearch" id="rsrch${i}" placeholder="${lockedPos?"Search "+POS[lockedPos]+"…":"Search a player…"}"
-        value="${esc(search[i]||"")}" oninput="searchInput('radarsearch',this,${i})">
-      ${(search[i]||"").trim()?`<div class="rsdrop">${rs.length?rs.map(pl=>`<div class="rsopt" onclick="act('radarpick',${i},${pl.id})">
-          ${shirtSVG(pl.teamName.toUpperCase(),pl.pos===1,18)}<span class="rsopt-nm">${esc(pl.web_name)}</span>
-          <span class="note">${esc(pl.teamName)}</span></div>`).join(""):`<div class="rsopt" style="cursor:default"><span class="note">No matches</span></div>`}</div>`:""}
-      </div>`;};
-
-  const posFilter=`<span class="rposf">
-    ${[1,2,3,4].map(p=>`<button class="${lockedPos===p?"on":""}" ${activePlayers.length?"disabled":""}
-      onclick="act('radarpos',${p})" title="${activePlayers.length?"Clear players to change position":""}">${POS[p]}</button>`).join("")}
-    ${lockedPos&&!activePlayers.length?`<button onclick="act('radarpos',null)" title="Clear position">✕</button>`:""}</span>`;
-  const horizonCtl=`<span class="rhorizon2"><span class="note">xFPL over</span>
-    <input type="range" min="0" max="4" step="1" value="${hIdx}" oninput="act('radarhorizon',this.value)">
-    <span class="rhval2">${hLabel(curH)}</span></span>`;
-
-  const statPicker=lockedPos?`<div class="rstatpick">
-      <span class="note" style="display:block;margin-bottom:5px">Compare on (up to 6) — <button class="rlink" onclick="act('radaraxes',${lockedPos},null)">reset to default</button></span>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
-        ${OPTS[lockedPos].map(ax=>`<button class="chipbtn ${axes.includes(ax)?"on":""}" onclick="act('radaraxes',${lockedPos},'${ax}')">${ax}</button>`).join("")}
-      </div></div>`:"";
-
-  let content;
-  if(!activePlayers.length){
-    content=`<p class="note" style="margin:14px 0 0;text-align:center">Search for up to three players in the same position — own squad included — to compare them.</p>`;
-  }else{
-    const maxes=axes.map(ax=>Math.max(1e-6,...activePlayers.map(p=>AXF[ax](p))));
-    const fmt=(ax,v)=>ax==="CS %"||ax==="Start %"||ax==="Owned %"?v.toFixed(0)+"%":(Number.isInteger(v)?v.toFixed(0):v.toFixed(1));
-    /* Win-count per player across every row, to star the strongest overall
-       performer in this specific comparison — separate from the per-row
-       yellow highlight, which marks the best value in that one stat. */
-    const wins=[0,0,0];
-    const rows=axes.map(ax=>{
-      const vals=active.map(p=>p?AXF[ax](p):null);
-      const best=Math.max(...vals.filter(v=>v!=null));
-      const bestJ=activePlayers.length>1?vals.findIndex(v=>v===best):-1;
-      if(bestJ>=0)wins[bestJ]++;
-      return `<tr><td class="rmet">${ax}</td>${active.map((p,j)=>{
-        if(!p)return `<td class="rtd">—</td>`;
-        const isBest=j===bestJ;
-        return `<td class="rtd${isBest?" rbest":""}">${fmt(ax,vals[j])}</td>`;}).join("")}</tr>`;}).join("");
-    const topWins=Math.max(...wins);
-    const thead=`<tr><td></td>${active.map((p,j)=>{
-      if(!p)return "<th></th>";
-      const photoUrl=imgSrc("player",p.code);
-      return `<th style="color:${COL[j]}">
-        <span class="rphotowrap"><img class="rphoto" alt="" src="${photoUrl}"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <span class="rphotofallback" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,32)}</span></span>
-        <span class="rth-nm">${esc(p.web_name)}${wins[j]===topWins&&topWins>0?' <span class="rwinstar" title="Wins the most categories in this comparison">★</span>':""}</span></th>`;}).join("")}</tr>`;
-    const table=`<table class="rtable"><thead>${thead}</thead><tbody>${rows}</tbody></table>`;
-
-    const cx=150,cy=150,R=104,N=axes.length;
-    const ang=i=>(-90+i*360/N)*Math.PI/180;
-    const pt=(i,f)=>[(cx+Math.cos(ang(i))*R*f).toFixed(1),(cy+Math.sin(ang(i))*R*f).toFixed(1)];
-    const rings=[0.25,0.5,0.75,1].map(f=>`<polygon points="${axes.map((_,i)=>pt(i,f).join(",")).join(" ")}" fill="none" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
-    const spokes=axes.map((_,i)=>`<line x1="${cx}" y1="${cy}" x2="${pt(i,1)[0]}" y2="${pt(i,1)[1]}" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
-    const labels=axes.map((ax,i)=>{const[x,y]=pt(i,1.17);
-      return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="var(--mute)">${ax}</text>`;}).join("");
-    const polys=active.map((p,j)=>{if(!p)return"";const pts=axes.map((ax,i)=>pt(i,Math.min(1,AXF[ax](p)/maxes[i])).join(",")).join(" ");
-      return `<polygon points="${pts}" fill="${COL[j]}" fill-opacity=".16" stroke="${COL[j]}" stroke-width="2.5"/>`;}).join("");
-    const svg=`<svg viewBox="0 0 300 300" style="width:100%;max-width:300px;height:auto;display:block;margin:0 auto">${rings}${spokes}${labels}${polys}</svg>`;
-    const legend=activePlayers.map(p=>{const j=active.indexOf(p);
-      return `<span class="tlegend"><span class="tdot" style="background:${COL[j]};height:8px;width:8px;border-radius:50%"></span>${esc(p.web_name)}</span>`;}).join("");
-
-    content=`<div class="rgrid">
-        <div class="rtablewrap">${table}</div>
-        <div class="rradarwrap">
-          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:8px">${legend}</div>
-          ${svg}
-        </div>
-      </div>
-      <p class="note" style="margin:10px 0 0;text-align:center">Yellow = best in that row · ★ = wins the most categories · axes scaled to the strongest player shown · ${esc(POS[lockedPos])} only.</p>`;
-  }
-
-  return `<div class="panel rcompare"><div class="phead"><h2>Compare players</h2>
-      <span class="note">${lockedPos?POS[lockedPos]+" only":"up to 3 · same position"}</span></div>
-    <div class="pbody">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">${posFilter}${horizonCtl}</div>
-      <div class="rslots">${[0,1,2].map(slot).join("")}</div>
-      ${statPicker}
-      ${content}
-    </div></div>`;
-}
+/* wave 8: the Transfers page retired; its tools live in the Planner's Top
+   Move pop-up (several players at once, best moves by position, the
+   players not being suggested). The five-week plan sits beside them, price
+   moves are in Price Watch and the radar became Players > Compare. */
 function transfersHTML(){
   const g=VG();
   const outIds=S.outList.length?S.outList:null;
@@ -737,7 +571,6 @@ function transfersHTML(){
   const budget=outIds
     ? planBank()+outIds.reduce((a,i)=>{const q=S.model.players.find(p=>p.id===i);return a+(q?sellPrice(q):0);},0)
     : planBank();
-  const top=pool[0];
   const posName={1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
   const chosen=S.outList.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
 
@@ -771,22 +604,13 @@ function transfersHTML(){
           <span class="gain" style="font-size:16px">+${combo.gain.toFixed(1)} pts</span></div>
         <button style="margin-top:9px;width:100%" onclick="act('docombo')">Make these transfers</button>
       </div></div>`:"";
-  const headScout=(top&&pool.length&&top.gain>=moveBar(g))?`<div class="panel" style="border-color:var(--amber);background:#33240B">
-      <div class="phead" style="border-color:#5A3F10"><h2 style="color:var(--amber)">Head Scout</h2>
-      <span class="note">GW${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span></div>
-    <div class="pbody">
-      <div style="font-size:10px;color:var(--mint);font-weight:700;margin-bottom:8px">Top target</div>
-      ${top.gain>=moveBar(g)?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers: the best available move is worth only +${top.gain.toFixed(1)} points${freeLeft(g)>0?"":`, not enough to cover a ${HIT}-point hit`}.</p>`}</div></div>`
-    :`<div class="panel"><div class="phead"><h2>Head Scout</h2></div><div class="pbody">
-      <p class="note">No transfer improves your predicted total within budget and the three-per-club limit.</p></div></div>`;
-
   /* F95 (bundle 8): players taken off the suggestions can be put back */
   const ignoredP=(S.ignored||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const ignoredPanel=ignoredP.length?`<div class="panel"><div class="phead"><h2>Not Suggesting</h2>
       <button onclick="act('unignore')">Suggest all again</button></div>
     <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap">${ignoredP.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}</div></div>`:"";
-  const suggestTitle=ignoredPanel+`<div class="panel"><div class="phead"><h2>Head Scout suggestions</h2>
-      <span class="note">best four per position</span></div></div>`;
+  const suggestTitle=ignoredPanel+`<div class="panel"><div class="phead"><h2>Best Moves by Position</h2>
+      <span class="note">up to four per position, each worth a transfer</span></div></div>`;
   const byPos=[1,2,3,4].map(pos=>{
     /* One recommendation per player being sold, not a list of near-identical
        alternatives, and only where the gain is worth a transfer. */
@@ -802,7 +626,7 @@ function transfersHTML(){
         :`<p class="note" style="margin:0">Head Scout recommends no transfers in this position.</p>`}</div></div>`;
   }).join("");
 
-  return planPanelHTML()+radarHTML()+picker+comboPanel+headScout+priceMovesHTML()+suggestTitle+byPos;
+  return picker+comboPanel+suggestTitle+byPos;
 }
 /* S3 (Stage 1, 19 Oct 2026): the five-week plan, one card per week */
 function planPanelHTML(){
@@ -863,7 +687,14 @@ function readPill(t,opp,home,lens){
   const val=r==="cs"?Math.round(Math.exp(-xgc)*100)+"%":xgf.toFixed(1);
   return `<span class="fdrpill readpill" style="background:${b};color:${c};${home?"":"font-style:italic;"}">${esc(String(opp.short).slice(0,3))}<small>${val}</small></span>`;
 }
+/* wave 5: Teams = Clubs + Fixture Grid + By Gameweek */
+const TEAM_TILE=k=>`<span class="tile" style="--tc:${k==="def"?"#22D3EE":"#3DDC97"}" title="${k==="def"?"Kind defensive run":"Kind attacking run"}">${lic(k==="def"?"shield":"target")}</span>`;
 function fixturesHTML(){
+  const m=["clubs","team","gw","odds"].includes(S.fixMode)?S.fixMode:"clubs";
+  const tabs=`<div class="pagetabs"><h1>Teams</h1><span class="pseg">${[["clubs","Clubs"],["team","Fixture Grid"],["gw","By Gameweek"],["odds","Odds"]].map(([k,n])=>`<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')">${n}</button>`).join("")}</span></div>`;
+  return tabs+(m==="clubs"?clubsHTML():m==="odds"?oddsHTML():fixtureGridHTML());
+}
+function fixtureGridHTML(){
   const g=VG(), teams=S.model.teams;
   const mode=S.fixMode||"team";
   const lens=S.fdrLens||null;
@@ -909,9 +740,6 @@ function fixturesHTML(){
   const head=`<div class="panel"><div class="phead"><h2>Fixtures</h2></div>
     <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center">
       <span class="pseg">
-        <button class="${mode==="team"?"on":""}" onclick="act('fixmode','team')">Club</button>
-        <button class="${mode==="gw"?"on":""}" onclick="act('fixmode','gw')">Gameweek</button></span>
-      <span class="pseg">
         ${[["all","Overall"],["att","Attackers"],["def","Defenders"]].map(([k,n])=>
           `<button class="${(lens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}</span>
       ${mode==="team"?`<span class="pseg" aria-label="What each cell shows">
@@ -952,7 +780,7 @@ function fixturesHTML(){
       return `<tr style="${hot?"background:rgba(45,220,135,.07)":""}">
         <td class="nm" style="white-space:nowrap"><span style="display:flex;align-items:center;gap:7px">
           ${badgeOrShirt(t,20)}<b>${esc(t.name||t.short)}</b>
-          ${hot?`<span class="sig" style="border-color:${lens==="def"?"var(--cyan)":"var(--mint)"};color:${lens==="def"?"var(--cyan)":"var(--mint)"}" title="${lens==="def"?"Kind defensive run":"Kind attacking run"}">${lens==="def"?ICON_DEF:ICON_ATT}</span>`:""}</span></td>
+          ${hot?TEAM_TILE(lens==="def"?"def":"att"):""}</span></td>
         <td class="mono" style="text-align:right;color:${col(d1)}">${d1.toFixed(1)}</td>
         <td class="mono" style="text-align:right;color:${col(d3)}">${d3.toFixed(2)}</td>
         <td class="mono" style="text-align:right;font-weight:700;color:${col(d5)}">${d5.toFixed(2)}</td>${cells}</tr>`;});
@@ -983,8 +811,7 @@ function fixturesHTML(){
       const dt=f.kickoff?new Date(f.kickoff):null;
       const d=dt?ukFmt(dt,{weekday:"short",day:"numeric",month:"short"}):"";
       const tm=dt?ukHHMM(dt):"";
-      const strongSide=t=>t.att>=1.30?`<span class="sig" style="border:none">${ICON_ATT}</span>`
-        :(2.6-t.def)>=1.12?`<span class="sig" style="border:none">${ICON_DEF}</span>`:"";
+      const strongSide=t=>t.att>=1.30?TEAM_TILE("att"):(2.6-t.def)>=1.12?TEAM_TILE("def"):"";
       out+=`<div class="fixrow" style="align-items:flex-start;flex-wrap:wrap">
         <span class="fixteam" style="gap:8px">${badgeOrShirt(h,22)}
           <span style="font-weight:600">${esc(h.name||h.short)}</span>${strongSide(h)}
@@ -1050,16 +877,20 @@ const OPT_TIMEOUT={fast:4000,full:15000};
 const BENCH_W={wildcard:{1:0.12,2:0.38,3:0.38,4:0.38},freehit:{1:0,2:0,3:0,4:0}};
 const benchPart=(kind,bench,val)=>bench.reduce((a,p)=>a+BENCH_W[kind][p.pos]*val(p),0);
 const _optPending={};
-function buildOptimal(kind,gw,budget,full,form){
+/* wave 2: opt {weeks, locks, bans} lets the Compare pop-up pick the horizon,
+   keep players in (locks) and rule players out (bans) */
+const optKey=opt=>opt?"|"+(opt.weeks||"")+"|"+(opt.locks||[]).join(".")+"|"+(opt.bans||[]).join("."):"";
+function buildOptimal(kind,gw,budget,full,form,opt){
   if(typeof solver==="undefined"||!solver.Solve)return null;   // library failed to load — fall back
-  const key="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|"+(full?"full":"fast");
+  const key="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|"+(full?"full":"fast")+optKey(opt);
   if(_sqCache[key]!==undefined)return _sqCache[key];
-  const weeks=kind==="wildcard"?5:1;
+  opt=opt||{};const locks=opt.locks||[],bans=opt.bans||[];
+  const weeks=opt.weeks||(kind==="wildcard"?5:1);
   const val=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
   const benchW=BENCH_W[kind];
   /* F37: available players count even at zero points (a blank or cheap
      enabler can still fill a bench) */
-  const pool=S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank);
+  const pool=S.model.players.filter(p=>(p.avail>0||locks.includes(p.id))&&p.gw[gw]&&!p.gw[gw].blank&&!bans.includes(p.id));
   if(pool.length<30)return null;
   const byPos={1:[],2:[],3:[],4:[]};
   pool.forEach(p=>byPos[p.pos]&&byPos[p.pos].push(p));
@@ -1072,7 +903,9 @@ function buildOptimal(kind,gw,budget,full,form){
       const seen=new Set();
       [...byValue,...byCheap].forEach(p=>{if(!seen.has(p.id)){seen.add(p.id);cand.push(p);}});
     });
+    locks.forEach(id=>{const p=pool.find(q=>q.id===id);if(p&&!cand.includes(p))cand.push(p);});
   }
+  if(locks.some(id=>!cand.find(p=>p.id===id))){_sqCache[key]=null;return null;}
   const vars={};
   const constraints={squad_total:{equal:15},squad_gk:{equal:2},squad_def:{equal:5},
     squad_mid:{equal:5},squad_fwd:{equal:3},xi_total:{equal:11},xi_gk:{equal:1},
@@ -1087,6 +920,7 @@ function buildOptimal(kind,gw,budget,full,form){
       ["link_"+p.id]:1,["captainlink_"+p.id]:-1,profit:(1-w)*v};
     vars["c_"+p.id]={captain_total:1,["captainlink_"+p.id]:1,profit:v};
     constraints["link_"+p.id]={max:0};constraints["captainlink_"+p.id]={max:0};
+    if(locks.includes(p.id)){vars["x_"+p.id]["lock_"+p.id]=1;constraints["lock_"+p.id]={equal:1};}
   });
   const timeout=full?OPT_TIMEOUT.full:OPT_TIMEOUT.fast;
   const model={optimize:"profit",opType:"max",constraints,variables:vars,
@@ -1124,14 +958,14 @@ function buildOptimal(kind,gw,budget,full,form){
 }
 /* The answer to show now: the full-pool result when it exists, else the fast
    one, with the full solve queued in the background. */
-function optimalSquad(kind,gw,budget,form){
-  const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full";
+function optimalSquad(kind,gw,budget,form,opt){
+  const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full"+optKey(opt);
   if(_sqCache[fullKey])return _sqCache[fullKey];
-  const fast=buildOptimal(kind,gw,budget,false,form);
+  const fast=buildOptimal(kind,gw,budget,false,form,opt);
   if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
     _optPending[fullKey]=1;
-    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form);}finally{delete _optPending[fullKey];}
-      if(S.tab==="chips")render();},60);
+    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form,opt);}finally{delete _optPending[fullKey];}
+      if(S.tab==="chips"||S.cmp)render();},60);
   }
   return fast?Object.assign({},fast,{checking:!!_optPending[fullKey]}):null;
 }
@@ -1573,24 +1407,26 @@ function signalsHTML(){
     posAvg[pos]=xs.reduce((a,b)=>a+b,0)/Math.max(1,xs.length);});
   const keep=mine.filter(p=>p.form>=SIG.formHot&&sgAvail(p)).sort((a,b)=>b.form-a.form).slice(0,5)
     .map((p,i)=>row(p,i+1,sgF1(p.form),"form")).join("")||empty(`No one in your squad is on ${sgF1(SIG.formHot)} form or better.`);
-  const weak=mine.map(p=>{
-    const why=[],nx=hPts(p,G,H);
+  /* wave 4: Sell comes from the one engine (the same rule as the Sell icon):
+     your players whose best affordable replacement adds 2+ to the XI over the
+     next H. The chips say why he may be struggling. */
+  const firstMove=new Map();
+  engineMoves({squad:S.squad||[],bank:planBank(),g:G,h:H}).forEach(m=>{if(!firstMove.has(m.out.id))firstMove.set(m.out.id,m);});
+  const weak=[...firstMove.values()].filter(m=>m.gain>=2).sort((a,b)=>b.gain-a.gain).slice(0,5).map(m=>{
+    const p=m.out,why=[],nx=hPts(p,G,H);
     if(p.form<SIG.replaceForm)why.push(`Form ${sgF1(p.form)}`);
     if(nx<posAvg[p.pos]*SIG.replaceShare)why.push(`Next ${H} ${sgF1(nx)}`);
     if(p.status!=="a")why.push(p.status==="d"?`${Math.round((p.avail??0.75)*100)}% fit${p.availAssumed?" (assumed)":""}`:"Unavailable");
     if((p.xMins||0)<SIG.replaceMins)why.push(`${p.xMins||0}′ expected`);
-    return {p,why,score:why.length*10-nx};
-  }).filter(x=>x.why.length>=2).sort((a,b)=>b.score-a.score).slice(0,4);
-  const replace=weak.map(({p,why})=>{
-    const budget=p.price+bank;
-    const sub=M.players.filter(q=>q.pos===p.pos&&!squad.has(q.id)&&sgAvail(q)&&q.price<=budget+1e-9)
-      .sort((a,b)=>hPts(b,G,SIG.swapHorizon)-hPts(a,G,SIG.swapHorizon))[0];
-    const gain=sub?hPts(sub,G,SIG.swapHorizon)-hPts(p,G,SIG.swapHorizon):0;
+    return {p,why,m};});
+  const replace=weak.map(({p,why,m})=>{
+    const sub=m.inn,gain=m.gain;
     return `<div class="sgrep">
       <div class="sgreph" onclick="act('card',${p.id})"><b>${esc(p.web_name)}</b><em>${esc(p.teamName)} · ${posTag(p)} · £${sgF1(p.price)}</em>${pills(p,SIG.runWeeks,p.pos<=2?"def":"att")}</div>
-      <div class="sgwhy">${why.map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>
-      ${sub&&gain>0?`<div class="sgswap" onclick="act('card',${sub.id})">${sgIcon("arrow-left-right")}<span>Swap to <b>${esc(sub.web_name)}</b> <em>${esc(sub.teamName)} · £${sgF1(sub.price)}</em></span><span class="sggain">+${sgF1(gain)}<em>next ${SIG.swapHorizon}</em></span></div>`:""}
-    </div>`;}).join("")||empty("Nothing in your squad flags on two counts at once.");
+      ${why.length?`<div class="sgwhy">${why.map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>`:""}
+      <div class="sgswap" onclick="act('card',${sub.id})">${sgIcon("arrow-left-right")}<span>Swap to <b>${esc(sub.web_name)}</b> <em>${esc(sub.teamName)} · £${sgF1(sub.price)}</em></span><span class="sggain">${sgn1(gain)}<em>to your XI, next ${H}</em></span></div>
+      <button class="mini" style="margin-top:6px" onclick="act('doswap',${p.id},${sub.id})">Make this transfer</button>
+    </div>`;}).join("")||empty(`No player of yours has a replacement worth 2+ points to your XI over the next ${H}.`);
   const flags=mine.filter(p=>p.status!=="a").map(p=>`<div class="sgrow" onclick="act('card',${p.id})">
     <span class="sgrank">${sgIcon("triangle-alert",p.status==="d"?"warn":"bad")}</span>
     <span class="sgwho"><b>${esc(p.web_name)}</b><em>${esc(p.news||(p.status==="d"?"Doubtful":"Unavailable"))}</em></span>
@@ -1636,11 +1472,12 @@ function signalsHTML(){
   const ds=S.status&&S.status.dataset;
   return `<div class="sgpage">
     <div class="sghead"><div><h2>Signals</h2><p>Gameweek ${G} · players and teams worth a look, ranked from the model and this season's data${ds&&ds.committedAt?` · stats ${esc(ukWhen(ds.committedAt))}`:""}</p></div>
-      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}</div></div>
+      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}<button class="btnlink" onclick="act('tab','squad');act('pop','move')">Plan transfers →</button></div></div>
+    ${signalBoardHTML(G,H,posF)}
     <h4 class="sgsec">Your Squad</h4>
     <div class="sggrid g3">
       ${card("sqform","flame","good","In Form",`Your players on ${sgF1(SIG.formHot)} form or better (average points per game over the last 30 days). Bars: points in each of the last six gameweeks.`,keep)}
-      ${card("sqrep","trending-down","warn","Consider Replacing",`Your players flagged on at least two of: form under ${SIG.replaceForm}, the next ${H} gameweeks under ${Math.round(SIG.replaceShare*100)}% of your squad's average for the position, a fitness doubt, under ${SIG.replaceMins} expected minutes. The swap is the best player at the position you can afford with your bank, over the next ${SIG.swapHorizon}.`,replace)}
+      ${card("sqrep","trending-down","warn","Sell",`Your players whose best affordable replacement adds 2 or more points to your best XI plus captain over the next ${H} (the same rule as the Sell icon). The chips show form, fixtures, fitness or minutes concerns where they apply.`,replace)}
       ${card("sqflag","triangle-alert","bad","Availability","Your players with an injury, suspension or doubt flag from FPL.",flags)}
     </div>
     <h4 class="sgsec">Players</h4>
@@ -1663,5 +1500,520 @@ function signalsHTML(){
       ${card("easy","calendar-range","good","Easiest Fixture Runs",`Average attacking difficulty over the next ${SIG.runWeeks} gameweeks from the model's own ratings, 1 easiest to 5 hardest.`,easy)}
       ${card("hard","calendar-range","bad","Toughest Fixture Runs",`The hardest next ${SIG.runWeeks} gameweeks for attackers.`,hard)}
     </div>
+  </div>`;
+}
+
+/* ============================================================
+   REDESIGN WAVE 2 (20 Oct 2026, mock 2-3): the Planner's This Week strip
+   (Top Move, Captain, Price Watch, Warnings, Rival Threat, each opening a
+   pop-up) and the Compare pop-up (Your Edits / Wildcard / Free Hit).
+   ============================================================ */
+const WEEK_H=[1,3,5];
+function wkSpan(g,h){return h>1?`GW${g}–${Math.min(38,g+h-1)}`:`GW${g}`;}
+function modalHTML(title,body,opts){
+  opts=opts||{};
+  return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="if(event.target===this)act('${opts.close||"popclose"}')">
+    <div class="mbox${opts.wide?" wide":""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
+      <button class="mx" onclick="act('${opts.close||"popclose"}')" aria-label="Close">${lic("x",18)}</button></div>
+    <div class="mbody">${body}</div></div></div>`;
+}
+function hzHTML(cur,action,list){
+  return `<span class="hz">${(list||WEEK_H).map(h=>`<button class="${cur===h?"on":""}" onclick="act('${action}',${h})">${h} GW</button>`).join("")}</span>`;
+}
+/* the five readings behind the strip and its pop-ups */
+function weekData(){
+  const g=VG(),h=S.weekH||1,mine=new Set(effectiveSquadIds(g).ids);
+  const sp=squadPlayers();
+  const moves=bestSwaps(8,h);
+  const xi=startingXI();
+  const caps=xi.slice().sort((a,b)=>hPts(b,g,h)-hPts(a,g,h));
+  const L=p=>fplLive(p)||{};
+  const priced=sp.filter(p=>L(p).pcp!=null);
+  const rising=priced.filter(p=>L(p).pcp>=70).sort((a,b)=>L(b).pcp-L(a).pcp);
+  const falling=priced.filter(p=>L(p).pcp<=-70).sort((a,b)=>L(a).pcp-L(b).pcp);
+  const warn=sp.filter(p=>p.avail<1||((p.roleMins||0)>=60&&(p.xMins||0)<60)||(p.status&&p.status!=="a"&&p.status!=="u"&&p.avail<1))
+    .map(p=>({p,inXI:xi.includes(p)})).sort((a,b)=>(b.inXI-a.inXI)||(a.p.avail-b.p.avail));
+  const R=rivalOwn();
+  const threats=R&&R.n?Object.keys(R.own).map(id=>({p:S.model.players.find(q=>q.id===+id),k:R.own[id]}))
+    .filter(x=>x.p&&!mine.has(x.p.id)).sort((a,b)=>(b.k-a.k)||(hPts(b.p,g,h)-hPts(a.p,g,h))):[];
+  return{g,h,mine,moves,caps,rising,falling,priced,warn,R,threats};
+}
+function weekStripHTML(){
+  if(!S.model||VG()<S.model.next.id)return "";
+  const D=weekData(),{g,h}=D;
+  const card=(k,icon,tone,title,fig,line,foot)=>`<button class="wk" onclick="act('pop','${k}')" aria-haspopup="dialog">
+    <span class="wkh"><span class="tile" style="--tc:${tone}">${lic(icon)}</span><span class="wkt">${title}</span><span class="chev">${lic("chevron-right",16)}</span></span>
+    <span class="wkf">${fig}</span><span class="wkl">${line}</span>${foot?`<span class="wkft">${foot}</span>`:""}</button>`;
+  const m=D.moves[0],m2=D.moves[1];
+  const c=D.caps[0],v=D.caps[1];
+  const opp=p=>{const f=((p.gw[g]||{}).fixtures||[])[0];return f?`${esc(f.opp)} (${f.home?"H":"A"})`:"no game";};
+  const L=p=>fplLive(p)||{};
+  const pct=p=>`<b class="${L(p).pcp>0?"up":"dn"}">${Math.round(L(p).pcp)}%</b>`;
+  const w=D.warn[0],t=D.threats[0],t2=D.threats[1];
+  const cards=[
+    m?card("move","circle-arrow-up","#3DDC97","Top Move",`${esc(m.out.web_name)} <span class="arr">→</span> ${esc(m.inn.web_name)}`,
+        `<b class="up">${sgn1(m.gain)} pts</b> ${wkSpan(g,h)} · £${m.inn.price.toFixed(1)} · ${esc(m.inn.teamName)}`,
+        m2?`Next: ${esc(m2.out.web_name)} → ${esc(m2.inn.web_name)} ${sgn1(m2.gain)}`:"")
+     :card("move","circle-arrow-up","#3DDC97","Top Move","Hold",`No single move improves your XI over ${wkSpan(g,h)}`,"Roll the free transfer"),
+    c?card("cap","crown","#FFB020","Captain",`${esc(c.web_name)} <span class="cx">${(hPts(c,g,h)*2).toFixed(1)}</span>`,
+        `${hPts(c,g,h).toFixed(1)} × 2 · ${h>1?wkSpan(g,h):opp(c)}`,v?`Vice: ${esc(v.web_name)} ${hPts(v,g,h).toFixed(1)}`:"")
+     :card("cap","crown","#FFB020","Captain","—","No XI yet",""),
+    D.rising.length||D.falling.length
+     ?card("price",D.falling.length&&!D.rising.length?"trending-down":"trending-up",D.falling.length&&!D.rising.length?"#FF5A6E":"#4ADE80","Price Watch",
+        D.rising.length?`${D.rising.length} of yours rising`:`${D.falling.length} of yours falling`,
+        [...D.rising,...D.falling].slice(0,2).map(p=>`${esc(p.web_name)} ${pct(p)}`).join(" · ")+" progress",
+        D.rising.length&&D.falling.length?`${D.falling.length} falling too`:D.rising.length?"Selling keeps half of each rise":"Sell before it drops to keep the value")
+     :card("price","trending-up","#4ADE80","Price Watch",D.priced.length?"No changes due":"No predictor data",D.priced.length?"None of yours is near a rise or fall":"FPL's predictor did not load",""),
+    w?card("warn","clock-alert","#FFB020","Warnings",`${D.warn.length} ${D.warn.length===1?"doubt":"doubts"}`,
+        `${esc(w.p.web_name)} · ${w.p.avail<1?(w.p.avail>0?Math.round(w.p.avail*100)+"%":"out"):Math.round(w.p.xMins||0)+" mins"}${w.p.news?" · "+esc(String(w.p.news).split(/[-–(]/)[0].trim().slice(0,22)):""}`,
+        w.inXI?"In your XI: consider a change":"On your bench: no change needed")
+     :card("warn","clock-alert","#FFB020","Warnings","All clear","Every player fit and expected to start",""),
+    t?card("rival","swords","#B388FF","Rival Threat",esc(t.p.web_name),`Owned by ${t.k} of ${D.R.n} rivals, not you`,t2?`Next: ${esc(t2.p.web_name)} ${t2.k}/${D.R.n}`:"")
+     :card("rival","swords","#B388FF","Rival Threat","—",D.R?"No player most rivals own that you don't":"League feed not loaded","")
+  ].join("");
+  return `<section class="week"><div class="weekh"><h2>This Week</h2>${hzHTML(h,"weekh")}</div><div class="wkrow">${cards}</div></section>`;
+}
+/* what each strip card opens */
+function popHTML(){
+  const k=S.pop;if(!k||!S.model)return "";
+  const D=weekData(),{g,h}=D;
+  const L=p=>fplLive(p)||{};
+  const ctl=hzHTML(h,"weekh");
+  if(k==="move")return modalHTML(`Top Moves · ${wkSpan(g,h)}`,
+    (D.moves.length?`<div class="tgrid">${D.moves.map(m=>swapCardHTML(m,g)).join("")}</div>`:`<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p>`)
+    +`<p class="note" style="margin-top:10px">Each move is scored on your best XI plus captain, week by week${h>1?" (later weeks count for a little less)":""}, against your current team.</p>`
+    +planPanelHTML()+transfersHTML(),{wide:true,ctl});
+  if(k==="cap")return modalHTML("Captain",captaincyHTML()||`<p class="note">Captaincy is set for the next deadline.</p>`,{});
+  if(k==="price"){
+    const row=p=>{const l=L(p),pr=(l.pcProj||[]).map(([o,v,lk])=>`<td>${Math.round(v)}%</td>`).join("");
+      return `<tr${D.mine.has(p.id)?' class="me"':""}><td>${esc(p.web_name)} <span class="mu">${esc(p.teamName)}</span></td><td>£${p.price.toFixed(1)}</td>
+        <td><b class="${l.pcp>0?"up":l.pcp<0?"dn":""}">${l.pcp==null?"—":Math.round(l.pcp)+"%"}</b></td>${pr||"<td></td><td></td><td></td>"}<td>${p.owned}%</td></tr>`;};
+    const head=`<thead><tr><th>Player</th><th>Price</th><th>Tonight</th><th>+1 night</th><th>+2</th><th>+3</th><th>Owned</th></tr></thead>`;
+    const all=S.model.players.filter(p=>L(p).pcp!=null);
+    const up=all.filter(p=>L(p).pcp>0).sort((a,b)=>L(b).pcp-L(a).pcp).slice(0,8);
+    const dn=all.filter(p=>L(p).pcp<0).sort((a,b)=>L(a).pcp-L(b).pcp).slice(0,8);
+    const mineRows=squadPlayers().filter(p=>L(p).pcp!=null).sort((a,b)=>Math.abs(L(b).pcp)-Math.abs(L(a).pcp));
+    return modalHTML("Price Watch",`<div class="pmgrid">
+      <div><div class="note">Your Squad</div><table class="mkt">${head}<tbody>${mineRows.map(row).join("")}</tbody></table></div>
+      <div><div class="note">Closest to a Rise</div><table class="mkt">${head}<tbody>${up.map(row).join("")}</tbody></table></div>
+      <div><div class="note">Closest to a Fall</div><table class="mkt">${head}<tbody>${dn.map(row).join("")}</tbody></table></div></div>
+      <p class="note" style="margin-top:10px">FPL's own price predictor: progress towards tonight's change (100% = it changes), and where it projects the next three nights. Refreshed every 15 minutes.</p>
+      ${priceMovesHTML()}`,{wide:true});
+  }
+  if(k==="warn"){
+    const sw=new Map();bestSwaps(60,h).forEach(m=>{if(!sw.has(m.out.id))sw.set(m.out.id,m);});
+    return modalHTML("Warnings",D.warn.length?`<table class="mkt"><thead><tr><th>Player</th><th>Where</th><th>Chance</th><th>xMins</th><th>News</th><th>Best replacement</th></tr></thead><tbody>
+      ${D.warn.map(({p,inXI})=>{const m=sw.get(p.id);return `<tr><td>${esc(p.web_name)} <span class="mu">${esc(p.teamName)}</span></td><td>${inXI?"XI":"Bench"}</td>
+        <td>${p.avail<1?Math.round(p.avail*100)+"%":"fit"}</td><td>${Math.round(p.xMins||0)}</td><td style="text-align:left;white-space:normal;max-width:360px">${esc(p.news||"")}</td>
+        <td>${m?`${esc(m.inn.web_name)} <b class="up">${sgn1(m.gain)}</b> <button class="mini" onclick="act('doswap',${p.id},${m.inn.id})">Make</button>`:"—"}</td></tr>`;}).join("")}</tbody></table>`
+      :`<p class="note">Every player in your squad is fit and expected to start.</p>`,{wide:true});
+  }
+  if(k==="rival"){
+    if(!D.R)return modalHTML("Rival Threat",`<p class="note">The league feed has not loaded.</p>`,{});
+    const top=D.threats.slice(0,12);
+    const myOwn=squadPlayers().map(p=>({p,k:D.R.own[p.id]||0})).sort((a,b)=>a.k-b.k);
+    const t=(rows,head)=>`<table class="mkt"><thead><tr><th>Player</th><th>${head}</th><th>Predicted ${wkSpan(g,h)}</th><th>Price</th><th>Overall</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr><td>${esc(x.p.web_name)} <span class="mu">${esc(x.p.teamName)}</span></td><td>${x.k}/${D.R.n}</td><td>${hPts(x.p,g,h).toFixed(1)}</td><td>£${x.p.price.toFixed(1)}</td><td>${x.p.owned}%</td></tr>`).join("")}</tbody></table>`;
+    return modalHTML("Rival Threat",`<div class="pmgrid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
+      <div><div class="note">Owned by your rivals, not you</div>${t(top,"Rivals")}</div>
+      <div><div class="note">Your players, fewest rivals first (your differentials)</div>${t(myOwn,"Rivals")}</div></div>
+      <p class="note" style="margin-top:10px">From each rival's latest published squad in your mini-league (${D.R.n} rivals).</p>`,{wide:true,ctl});
+  }
+  return "";
+}
+/* ---------- Compare pop-up (mock 3) ----------
+   Left: the current team (Your Edits: the official squad; Wildcard and Free
+   Hit: the plan for this week). Right: the proposal (your plan, or the
+   Chips page optimiser's best Wildcard / Free Hit squad). Players leaving
+   carry OUT, players arriving IN. On the left a tap locks a player into the
+   proposal; on the right a tap rules him out; Re-run solves again. */
+function cmpTeams(){
+  const C=S.cmp,g=VG(),h=C.mode==="fh"?1:C.h;
+  const cur=C.mode==="edits"?((latestOfficialPicks()||{}).picks||[]).map(pk=>pk.id):effectiveSquadIds(g).ids;
+  let prop=null,meta={};
+  if(C.mode==="edits"){prop=effectiveSquadIds(g).ids;meta={bank:planBank(),cap:effectiveCaptainVice(g).captain};}
+  else if(C.mode==="draft"){const d=(LS.get("drafts")||[])[C.draft];if(d){prop=d.ids;meta={bank:d.bank,cap:d.cap,label:d.label};}}
+  else{
+    const kind=C.mode==="wc"?"wildcard":"freehit",budget=squadBudget();
+    const r=optimalSquad(kind,g,budget,null,{weeks:h,locks:C.locks,bans:C.bans});
+    if(r){prop=[...r.xi,...r.bench].map(p=>p.id);meta={bank:+(budget-r.value).toFixed(1),cap:r.cap&&r.cap.id,how:r.heuristic?"best found (quick builder)":r.proven?"proven optimal":r.checking?"best found, still checking":"best found",infeasible:false};}
+    else meta={infeasible:true};
+  }
+  return{g,h,cur:cur.length?cur:effectiveSquadIds(g).ids,prop,meta};
+}
+function teamPtsOver(ids,g,h){
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));const out=[];
+  for(let k=0;k<h&&g+k<=38;k++)out.push(xiTotal(ids,g+k,byId));
+  return out;
+}
+function cmpPitchHTML(ids,other,g,h,side){
+  const C=S.cmp,ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
+  const v=p=>p.gw[g]?.pts||0;
+  const xi=legalBestXI(ps,v),bench=ps.filter(p=>!xi.includes(p)).sort((a,b)=>(a.pos===1?-1:b.pos===1?1:v(b)-v(a)));
+  const cap=xi.slice().sort((a,b)=>v(b)-v(a))[0];
+  const otherSet=new Set(other||[]);
+  const chip=p=>{
+    const moved=!otherSet.has(p.id),tag=moved?(side==="cur"?"OUT":"IN"):"";
+    const locked=(C.locks||[]).includes(p.id),banned=(C.bans||[]).includes(p.id);
+    const pend=side==="cur"?(C.pendLocks||[]).includes(p.id):(C.pendBans||[]).includes(p.id);
+    const canTap=C.mode==="wc"||C.mode==="fh";
+    const act2=canTap?(side==="cur"?`act('cmplock',${p.id})`:`act('cmpban',${p.id})`):`act('card',${p.id})`;
+    return `<div class="cpl${tag?" moved":""}${pend?" pend":""}" onclick="${act2}" title="${canTap?(side==="cur"?"Tap to lock him into the proposal":"Tap to rule him out"):"Open player card"}">
+      ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,34)}
+      <span class="cpn">${esc(p.web_name)}${p===cap?' <span class="tagy">C</span>':""}</span>
+      <span class="cpv">${hPts(p,g,h).toFixed(1)}</span>
+      ${tag?`<span class="ctag ${tag==="OUT"?"out":"in"}">${tag}</span>`:""}${pend||locked||banned?`<span class="cmark">${lic(side==="cur"?"lock":"ban",12)}</span>`:""}</div>`;};
+  return `<div class="cpitch">${[1,2,3,4].map(pos=>{const r=xi.filter(p=>p.pos===pos);return r.length?`<div class="crow">${r.map(chip).join("")}</div>`:"";}).join("")}
+    <div class="cbench"><span class="lb">Bench</span><div class="crow">${bench.map(chip).join("")}</div></div></div>`;
+}
+function compareModalHTML(){
+  const C=S.cmp;if(!C||!S.model)return "";
+  const T=cmpTeams(),{g,h}=T;
+  const modes=[["edits","Your Edits"],["wc","Wildcard"],["fh","Free Hit"]];
+  const drafts=LS.get("drafts")||[];
+  const ctl=`<span class="pseg mseg">${modes.map(([k,n])=>`<button class="${C.mode===k?"on":""}" onclick="act('cmpmode','${k}')">${n}</button>`).join("")}</span>
+    ${C.mode==="fh"?`<span class="hz"><button class="on" disabled>1 GW</button></span>`:hzHTML(C.h,"cmph")}`;
+  if(!T.prop)return modalHTML(`Compare · ${wkSpan(g,h)}`,`<p class="note">${T.meta.infeasible?"No legal squad fits those locks and exclusions within your budget. Clear some and Re-run.":"Nothing to compare yet."}</p>
+    <div class="mfoot"><button onclick="act('cmpclear')">Clear locks</button></div>`,{wide:true,ctl,close:"cmpclose"});
+  const mine=teamPtsOver(T.cur,g,h),theirs=teamPtsOver(T.prop,g,h);
+  const sum=a=>a.reduce((x,y)=>x+y,0),ms=sum(mine),ts=sum(theirs),gain=ts-ms;
+  const outs=T.cur.filter(i=>!T.prop.includes(i)).length;
+  const value=T.prop.reduce((a,i)=>{const p=S.model.players.find(q=>q.id===i);return a+(p?p.price:0);},0);
+  const hit=C.mode==="edits"?hitCost(g):0;
+  const cards=[
+    figCard("Proposed",`Best XI plus captain of the proposal, week by week over ${wkSpan(g,h)}.`,ts.toFixed(1),`<span class="${gain>=0?"up":"dn"}">${sgn1(gain)}</span> vs your team`,h>1?theirs:null,"#3DDC97","mint"),
+    figCard(C.mode==="edits"?"Official Team":"Your Team",`Best XI plus captain of ${C.mode==="edits"?"your official squad":"your plan for GW"+g}, scored the same way.`,ms.toFixed(1),wkSpan(g,h),h>1?mine:null,"#8A8A8A"),
+    figCard("Gain",`Proposed minus yours over ${wkSpan(g,h)}${hit?", before the hit":""}.`,`<span class="${gain>=0?"up":"dn"}">${sgn1(gain)}</span>`,hit?`<span class="dn">−${hit} hit</span> · net ${sgn1(gain-hit)}`:`over ${h} GW`,null,"#8A8A8A"),
+    figCard("Transfers","Players who change between the two teams.",String(outs),C.mode==="wc"?"Wildcard: no hits":C.mode==="fh"?"Free Hit: one week only":(hit?`<span class="dn">−${hit} hit</span>`:"within your free transfers"),null,"#8A8A8A"),
+    figCard("Bank After","Money left once the proposal is bought.",`£${(T.meta.bank??0).toFixed(1)}`,`Squad £${value.toFixed(1)}${T.meta.how?" · "+T.meta.how:""}`,null,"#8A8A8A")
+  ].join("");
+  const pend=(C.pendLocks||[]).length+(C.pendBans||[]).length, applied=(C.locks||[]).length+(C.bans||[]).length;
+  const body=`<div class="fcgrid c5">${cards}</div>
+    <div class="cgrid"><div><div class="chd">${C.mode==="edits"?"Official team":"Current team"}${C.mode==="wc"||C.mode==="fh"?' <span class="mu">tap to lock in</span>':""}</div>${cmpPitchHTML(T.cur,T.prop,g,h,"cur")}</div>
+      <div><div class="chd">${C.mode==="edits"?"Your edits":C.mode==="draft"?esc(T.meta.label||"Draft"):(C.mode==="wc"?"Wildcard":"Free Hit")+" proposal"}${C.mode==="wc"||C.mode==="fh"?' <span class="mu">tap to rule out</span>':""}</div>${cmpPitchHTML(T.prop,T.cur,g,h,"prop")}</div></div>
+    <div class="mfoot">
+      ${C.mode==="wc"||C.mode==="fh"?`<button class="${pend?"pri":""}" onclick="act('cmprerun')">${lic("refresh-cw",14)} Re-run${pend?` (${pend})`:""}</button>${applied||pend?`<button onclick="act('cmpclear')">Clear locks</button>`:""}`:""}
+      ${drafts.length?`<select onchange="act('cmpdraft',+this.value)" aria-label="Open a draft"><option value="-1">Drafts (${drafts.length})</option>${drafts.map((d,i)=>`<option value="${i}">${esc(d.label)}</option>`).join("")}</select>`:""}
+      <span style="flex:1"></span>
+      <button onclick="act('cmpsave')">${lic("save",14)} Save as draft</button>
+      ${C.mode==="edits"?`<button class="pri" onclick="act('save');act('cmpclose')">Save plan</button>`:`<button class="pri" onclick="act('cmpapply')">Apply</button>`}</div>`;
+  return modalHTML(`Compare · ${wkSpan(g,h)}`,body,{wide:true,ctl,close:"cmpclose"});
+}
+
+/* ============================================================
+   REDESIGN WAVE 3 (20 Oct 2026): the Players hub (Player Data renamed).
+   One table of every player: views Buy / My Squad / All, horizon 1/3/5
+   (default 1), position filter; predicted points, minutes, the position's
+   key stat (xGI/90 over the last six for MID/FWD, clean-sheet chance for
+   GK/DEF), fixture pills on one colour scale, price with FPL's change
+   progress, overall ownership and ownership around you (mini-league rivals
+   or the 50 managers ranked around you). Tick up to five to compare them
+   in a pop-up of figure cards (replaces the Transfers radar). The full stat
+   table stays as the Stats view, so no Player Data feature loses its home.
+   ============================================================ */
+const pName=(p,cls)=>`<button class="pn${cls?" "+cls:""}" onclick="act('card',${p.id})" title="Open ${esc(p.web_name)}'s card">${esc(p.web_name)}</button>`;
+function keyStat(p,g){
+  if(p.pos>=3){const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));
+    return w?{v:(w.xg90||0)+(w.xa90||0),txt:((w.xg90||0)+(w.xa90||0)).toFixed(2),unit:"xGI/90",est:!!w.estimated}:null;}
+  const c=csProbNext(p,g);return c!=null?{v:c,txt:Math.round(c*100)+"%",unit:"CS",est:false}:null;
+}
+function aroundOwn(p){
+  if(S.pAround==="rank"){const N=S.neighbours;return N&&N.n?{k:N.own[p.id]||0,n:N.n}:null;}
+  const R=rivalOwn();return R&&R.n?{k:R.own[p.id]||0,n:R.n}:null;
+}
+function fixPills(p,g,n){
+  let h="";
+  for(let e=g;e<g+n&&e<=38;e++){const q=p.gw[e];
+    if(!q||q.blank||!q.fixtures.length){h+=`<span class="fdrpill blankpill">—</span>`;continue;}
+    h+=q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f),{short:true,tiny:true})).join("");}
+  return `<span class="fxrow">${h}</span>`;
+}
+const HUB_SORT={
+  pts:(p,g,h)=>hPts(p,g,h),mins:p=>p.xMins||0,key:(p,g)=>{const k=keyStat(p,g);return k?k.v:-1;},
+  fix:(p,g,h)=>{let s=0,n=0;for(let e=g;e<g+Math.max(h,3)&&e<=38;e++)(p.gw[e]?.fixtures||[]).forEach(f=>{s+=posDiff(p,f);n++;});return n?-s/n:-9;},
+  price:p=>p.price,pcp:p=>{const l=fplLive(p);return l&&l.pcp!=null?l.pcp:-999;},owned:p=>p.owned,
+  around:p=>{const a=aroundOwn(p);return a?a.k/a.n:-1;},name:p=>p.web_name};
+function hubRows(){
+  const g=VG(),h=S.pH||1,view=S.pView||"all",mine=new Set(effectiveSquadIds(g).ids);
+  let a=filtered("list");
+  if(view==="mine")a=S.model.players.filter(p=>mine.has(p.id)&&(!S.lPos||p.pos===S.lPos));
+  if(view==="buy")a=a.filter(p=>!mine.has(p.id)&&p.avail>0&&(p.xMins||0)>=45);
+  const k=HUB_SORT[S.hubSort]?S.hubSort:"pts",dir=S.hubDir||"desc";
+  const f=HUB_SORT[k];
+  a=a.slice().sort((x,y)=>{const A=f(x,g,h),B=f(y,g,h);
+    if(typeof A==="string")return dir==="asc"?A.localeCompare(B):B.localeCompare(A);
+    return dir==="asc"?A-B:B-A;});
+  return{g,h,view,mine,a};
+}
+function playersHubHTML(){
+  if(!S.model)return "";
+  const{g,h,view,mine,a}=hubRows();
+  if(view==="stats")return hubHeadHTML(g,h,view)+statsViewHTML();
+  const ticks=S.pTicks||[];
+  const lim=S.pdLimit||PD_PAGE;
+  const th=(k,n,tip,al)=>`<th class="${S.hubSort===k||(!S.hubSort&&k==="pts")?"act":""}" onclick="act('hubsort','${k}')" title="${esc(tip)}" style="text-align:${al||"right"}">${n}${(S.hubSort||"pts")===k?((S.hubDir||"desc")==="desc"?" ↓":" ↑"):""}</th>`;
+  const aroundLbl=S.pAround==="rank"?"Near Rank":"Rivals";
+  const head=`<tr><th style="width:34px"></th>${th("name","Player","Name, club, position and signals","left")}
+    ${th("pts",`Predicted ${h>1?h+" GW":"GW"+g}`,"Model points over the horizon")}${th("mins","Minutes","Expected minutes next gameweek")}
+    ${th("key",S.lPos===1||S.lPos===2?"CS %":S.lPos>=3?"xGI/90 L6":"Key Stat","MID/FWD: expected goal involvements per 90 over the last six matches. GK/DEF: chance of a clean sheet next match.")}
+    ${th("fix",`Fixtures`,"Next fixtures, coloured by difficulty for his position (green easy, red hard). Italic = away.","left")}
+    ${th("price","Price","Price, with FPL's price predictor progress (100% = changes tonight)")}${th("owned","Owned","Overall ownership")}
+    ${th("around",aroundLbl,S.pAround==="rank"?"How many of the 50 managers ranked around you own him":"How many of your mini-league rivals own him")}<th></th></tr>`;
+  const rows=a.slice(0,lim).map(p=>{
+    const ks=keyStat(p,g),ar=aroundOwn(p),l=fplLive(p),on=ticks.includes(p.id),own=mine.has(p.id);
+    const pc=l&&l.pcp!=null&&Math.abs(l.pcp)>=50?`<span class="pcp ${l.pcp>0?"up":"dn"}">${l.pcp>0?"+":""}${Math.round(l.pcp)}%</span>`:"";
+    return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
+      <td><input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></td>
+      <td class="nm"><span class="pcell">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}<span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${own?'<span class="mu" style="font-size:11px">yours</span>':""}</span>
+        <span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}${sigHTML(p,g)}</span></span></span></td>
+      <td class="fig mint">${hPts(p,g,h).toFixed(1)}</td>
+      <td class="fig">${Math.round(p.xMins||0)}′</td>
+      <td class="fig">${ks?ks.txt+(ks.est?'<span class="srctag">est</span>':""):"—"}</td>
+      <td style="text-align:left">${fixPills(p,g,Math.max(h,3))}</td>
+      <td class="fig">£${p.price.toFixed(1)}${arw(p.priceChange)} ${pc}</td>
+      <td class="fig">${p.owned.toFixed(1)}%</td>
+      <td class="fig">${ar?`${ar.k}/${ar.n}`:"—"}</td>
+      <td style="white-space:nowrap"><button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="Shortlist" aria-pressed="${S.stars.includes(p.id)}">★</button>${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to the Planner" aria-label="Add ${esc(p.web_name)} to the Planner">+</button>`}</td></tr>`;}).join("");
+  const more=a.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${a.length} players</span>
+    <button onclick="act('pdmore')">Show ${Math.min(PD_PAGE,a.length-lim)} more</button><button onclick="act('pdall')">Show all ${a.length}</button></div>`:
+    (lim>PD_PAGE&&a.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
+  return hubHeadHTML(g,h,view)+`<div class="panel"><div class="scroll tallscroll hub"><table><thead>${head}</thead><tbody>${rows||`<tr><td colspan="10" class="note" style="padding:14px">No players match.</td></tr>`}</tbody></table></div>${more}</div>`;
+}
+function hubHeadHTML(g,h,view){
+  const ticks=S.pTicks||[];
+  const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
+  const a=hubRows().a.length;
+  return `<div class="pagetabs"><h1>Players</h1>
+      <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${ticks.length?`<button class="pri" onclick="act('pcmp')">Compare ${ticks.length}</button><button onclick="act('tickclear')">Clear ticks</button>`:`<span class="note">Tick up to 5 players to compare</span>`}
+        <a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Odds →</a></span></div>
+    <div class="hubctl">
+      ${seg(view,[["buy","Buy"],["mine","My Squad"],["all","All"],["stats","Stats"]],"pview")}
+      ${view==="stats"?"":hzHTML(h,"ph")}
+      <span class="hz">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]].map(([v,n])=>`<button class="${(S.lPos||0)===v?"on":""}" onclick="act('lpos',${v})">${n}</button>`).join("")}</span>
+      ${view==="stats"||view==="mine"?"":`<input id="srch-l" placeholder="Search" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" style="width:170px">
+      <select onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
+      <span class="note">Max £</span><input type="number" min="3.5" max="16" step="0.1" value="${(S.lMax||16).toFixed(1)}" onchange="act('lmax',this.value)" style="width:70px" aria-label="Max price">`}
+      ${view==="stats"?"":`<span class="note" style="margin-left:auto">Around you</span>${seg(S.pAround||"league",[["league","Rivals"],["rank","Near rank"]],"paround")}`}
+      ${view==="stats"?"":`<span class="note">${a} players</span>`}
+    </div>`;
+}
+/* the old Player Data table, kept whole as the Stats view */
+function statsViewHTML(){
+  return `<div class="panel"><div class="phead"><h2>All Stats</h2><span class="note">${filtered("list").length} players · tap any column to sort</span></div>
+    ${filtersHTML(false,'list')}
+    <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
+      <span style="font-size:11px;color:var(--mute);flex:none">Show only</span>
+      ${SIG_ORDER.map(k=>`<button class="fbtn fbtn-icon ${S.iconF.includes(k)?"on":""}" onclick="act('iconf','${k}')" title="${esc(SIGNAL[k][2]+": "+SIG_RULE[k](S.horizon||1))}">${sigTile(k,SIGNAL[k][2])}</button>`).join("")}
+      <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
+        <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button></div>
+    <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
+      <span style="flex:1;min-width:200px"><span style="font-size:11px;color:var(--mute)">Budget</span>
+        <span style="margin:4px 0;display:block">${stepperInput("lmax",S.lMax,{min:3.5,max:16,step:0.1,big:1,dp:1,w:56})}</span></span>
+      <span style="flex:1;min-width:230px"><span style="font-size:11px;color:var(--mute)">Past stats window</span>
+        <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+          ${[1,3,5,10,38].map(n=>`<button class="chipbtn ${(S.lWin||38)===n?"on":""}" onclick="act('lwin',${n})">${n===38?"Season":"Last "+n}</button>`).join("")}</span></span></div>
+    ${tableHTML()}</div>`;
+}
+/* tick-to-compare: up to five players side by side as figure cards */
+function playerCompareHTML(){
+  const ids=S.pTicks||[];if(!S.pCmp||!ids.length||!S.model)return "";
+  const g=VG(),ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
+  const A=S.playerActuals||{};
+  const last6=p=>{const a=A[p.id]||A[String(p.id)]||{},out=[];for(let e=Math.max(1,g-6);e<g;e++){const v=a[e]??a[String(e)];out.push(v==null?0:+v);}return out;};
+  const rows=[
+    ["Predicted 1 GW",p=>hPts(p,g,1),v=>v.toFixed(1),"high"],
+    ["Predicted 3 GW",p=>hPts(p,g,3),v=>v.toFixed(1),"high"],
+    ["Predicted 5 GW",p=>hPts(p,g,5),v=>v.toFixed(1),"high"],
+    ["Expected Minutes",p=>p.xMins||0,v=>Math.round(v)+"′","high"],
+    ["xGI/90, Last 6",p=>{const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));return w?(w.xg90||0)+(w.xa90||0):0;},v=>v.toFixed(2),"high"],
+    ["Clean Sheet Chance",p=>p.pos<=2?(csProbNext(p,g)||0):null,v=>Math.round(v*100)+"%","high"],
+    ["Form",p=>p.form,v=>v.toFixed(1),"high"],
+    ["Price",p=>p.price,v=>"£"+v.toFixed(1),"low"],
+    ["Owned",p=>p.owned,v=>v.toFixed(1)+"%",null],
+    ["Points Per Game",p=>p.ppg,v=>v.toFixed(1),"high"]];
+  const cell=(row,p,best)=>{const v=row[1](p);if(v==null)return `<div class="cmc empty">—</div>`;
+    return `<div class="cmc${best?" best":""}"><span class="cmv">${row[2](v)}</span></div>`;};
+  const head=ps.map(p=>`<div class="cmh">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,34)}<div>${pName(p,"big")}<div class="mu">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)}</div>
+      <div style="margin-top:4px">${sigHTML(p,g)}</div></div><button class="mx" onclick="act('tick',${p.id})" aria-label="Remove ${esc(p.web_name)}">${lic("x",14)}</button></div>`).join("");
+  const body=rows.filter(r=>ps.some(p=>r[1](p)!=null)).map(r=>{const vals=ps.map(p=>r[1](p)),ok=vals.filter(v=>v!=null);
+    const best=r[3]&&ok.length>1?(r[3]==="high"?Math.max(...ok):Math.min(...ok)):null;
+    return `<div class="cml">${r[0]}</div>${ps.map((p,i)=>cell(r,p,best!=null&&vals[i]===best)).join("")}`;}).join("")
+    +`<div class="cml">Next 5 Fixtures</div>${ps.map(p=>`<div class="cmc">${fixPills(p,g,5)}</div>`).join("")}`
+    +`<div class="cml">Last 6 Gameweeks</div>${ps.map(p=>{const s=last6(p);return `<div class="cmc"><span class="cmv sm">${s.reduce((a,b)=>a+b,0)} pts</span>${s.length>1?spark(s,"#3DDC97",90,26):""}</div>`;}).join("")}`;
+  return modalHTML(`Compare ${ps.length} Players`,`<div class="cmgrid" style="grid-template-columns:170px repeat(${ps.length},minmax(0,1fr))"><div></div>${head}${body}</div>
+    <p class="note" style="margin-top:12px">Best in each row is outlined. Tick more players in the table to add them (up to five).</p>`,{wide:true,close:"pcmpclose"});
+}
+
+/* Signals board (redesign wave 4): one card per signal, in Andy's order,
+   listing who carries it now (yours first), over the page's horizon. */
+function signalBoardHTML(G,H,posF){
+  const mine=new Set(S.squad||[]);
+  const by={};SIG_ORDER.forEach(k=>by[k]=[]);
+  S.model.players.forEach(p=>{if(posF&&p.pos!==posF)return;
+    signals(p,G,false,H).forEach(([k,t])=>by[k].push({p,t}));});
+  const rank=(a,b)=>(mine.has(b.p.id)-mine.has(a.p.id))||(hPts(b.p,G,H)-hPts(a.p,G,H));
+  const cards=SIG_ORDER.map(k=>{
+    const list=by[k].sort(rank);
+    const rows=list.slice(0,6).map(({p,t})=>`<div class="sbrow" onclick="act('card',${p.id})" title="${esc(t)}">
+      <span class="sbn">${esc(p.web_name)}${mine.has(p.id)?' <span class="sgmine">You</span>':""}</span>
+      <span class="sbm">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)}</span>
+      <span class="sbv">${hPts(p,G,H).toFixed(1)}</span></div>`).join("");
+    return `<section class="sbcard"><header>${sigTile(k,SIG_RULE[k](H))}<h3>${SIGNAL[k][2]}</h3><span class="sbc">${list.length}</span></header>
+      ${rows||'<p class="sgempty">Nobody right now.</p>'}${list.length>6?`<div class="sbmore">+${list.length-6} more · <a href="${routeFor("table")}" onclick="S.iconF=['${k}'];S.pView='stats';return go(event,'table')">see all</a></div>`:""}</section>`;}).join("");
+  return `<h4 class="sgsec">Signal Board <span class="mu" style="font-weight:400;font-size:12px">points over the next ${H}</span></h4><div class="sbgrid">${cards}</div>`;
+}
+
+/* ============================================================
+   REDESIGN WAVE 5 (20 Oct 2026): Teams (Fixtures renamed). Tabs: Clubs
+   (new, default), Fixture Grid (the club-by-gameweek grid) and By Gameweek
+   (the fixture list). Clubs: attack and defence this season and over the
+   last four matches (expected goals from the match data), the next 1/3/5
+   on the view's lens, projected goals and clean-sheet chance from the
+   model's fixture ratings, the bookmakers' figures for the next match when
+   the odds are in, and each club's top assets. Views: Attacks to own,
+   Defences to own, Opponents to target.
+   ============================================================ */
+let _tfCache=null;
+function teamForm(){
+  if(_tfCache&&_tfCache.m===S.teamMatch)return _tfCache.v;
+  const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
+  const rows={};
+  Object.values(S.teamMatch||{}).filter(m=>m.tag==="now").forEach(m=>{
+    const hs=key[m.h]||key["id"+m.h],as=key[m.a]||key["id"+m.a];if(!hs||!as)return;
+    (rows[hs]=rows[hs]||[]).push({gw:m.gw,xg:m.hxg,xga:m.axg});(rows[as]=rows[as]||[]).push({gw:m.gw,xg:m.axg,xga:m.hxg});});
+  const v={};
+  Object.entries(rows).forEach(([k,a])=>{a.sort((x,y)=>x.gw-y.gw);const l4=a.slice(-4);
+    const avg=(r,f)=>r.length?r.reduce((s,x)=>s+(x[f]||0),0)/r.length:null;
+    v[k]={n:a.length,xg:avg(a,"xg"),xga:avg(a,"xga"),xg4:avg(l4,"xg"),xga4:avg(l4,"xga")};});
+  _tfCache={m:S.teamMatch,v};return v;
+}
+function clubsHTML(){
+  const g=VG(),h=S.tH||3,view=S.tView||"att",teams=S.model.teams,TF=teamForm();
+  const fx=(t,e)=>(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).map(f=>({opp:f.ht===t?f.at:f.ht,home:f.ht===t}));
+  const run=t=>{const out=[];for(let e=g;e<g+h&&e<=38;e++)fx(t,e).forEach(x=>out.push({e,...x}));return out;};
+  const rows=teams.map(t=>{
+    const r=run(t);
+    const goals=r.reduce((s,x)=>s+fdrCalc(t,x.opp,x.home,"xgf"),0);
+    const cs=r.length?r.reduce((s,x)=>s+Math.exp(-fdrCalc(t,x.opp,x.home,"xgc")),0)/r.length:0;
+    const conceded=r.reduce((s,x)=>s+fdrCalc(t,x.opp,x.home,"xgc"),0);
+    const nx=fx(t,g)[0],mk=nx&&S.oddsTeams?S.oddsTeams[t.short+"|"+nx.opp.short+"|"+(nx.home?"H":"A")]:null;
+    const f=TF[t.short]||{};
+    /* who plays them next: for the Opponents view, the attackers facing them */
+    const facing=r.map(x=>x.opp.id);
+    const players=S.model.players.filter(p=>p.avail>0&&(view==="opp"?facing.includes(p.team)&&p.pos>=3:p.team===t.id&&(view==="def"?p.pos<=2:p.pos>=3)));
+    const top=players.sort((a,b)=>hPts(b,g,h)-hPts(a,g,h)).slice(0,2);
+    return{t,r,goals,cs,conceded,mk,f,top,facing};});
+  const sorters={att:(a,b)=>b.goals-a.goals,def:(a,b)=>b.cs-a.cs,opp:(a,b)=>((b.f.xga||0)+(b.f.xga4||0))-((a.f.xga||0)+(a.f.xga4||0))};
+  rows.sort(sorters[view]||sorters.att);
+  const lens=view==="def"?"def":"att";
+  const n2=v=>v==null?"—":v.toFixed(2);
+  const trend=(now,season,goodUp)=>now==null||season==null?"":
+    `<span class="${(now>season)===goodUp?"up":"dn"}" title="Last four against the season">${now>season?"▲":"▼"}</span>`;
+  const body=rows.map((x,i)=>`<tr>
+    <td class="mu" style="text-align:right">${i+1}</td>
+    <td class="nm"><span style="display:flex;align-items:center;gap:8px">${badgeOrShirt(x.t,22)}<b>${esc(x.t.name||x.t.short)}</b></span></td>
+    <td class="fig">${n2(x.f.xg)}</td><td class="fig">${n2(x.f.xg4)} ${trend(x.f.xg4,x.f.xg,true)}</td>
+    <td class="fig">${n2(x.f.xga)}</td><td class="fig">${n2(x.f.xga4)} ${trend(x.f.xga4,x.f.xga,false)}</td>
+    <td style="text-align:left"><span class="fxrow">${x.r.map(r=>view==="opp"
+        ?fdrPill(r.opp.short,r.home,fdrOf(x.t,!r.home,r.opp,"att"),{short:true,tiny:true})
+        :fdrPill(r.opp.short,r.home,fdrOf(r.opp,r.home,x.t,lens),{short:true,tiny:true})).join("")||'<span class="mu">blank</span>'}</span></td>
+    <td class="fig ${view==="att"?"mint":""}">${view==="opp"?x.conceded.toFixed(1):x.goals.toFixed(1)}</td>
+    <td class="fig ${view==="def"?"mint":""}">${Math.round(x.cs*100)}%</td>
+    <td class="fig">${x.mk?`${x.mk.xg.toFixed(1)} · ${Math.round(Math.exp(-x.mk.xgc)*100)}%`:"—"}</td>
+    <td style="text-align:left">${x.top.map(p=>`${pName(p)} <span class="mu">${hPts(p,g,h).toFixed(1)}</span>`).join('<span class="mu"> · </span>')}</td></tr>`).join("");
+  const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
+  const note={att:"Ranked by the goals the model expects them to score over the window: attackers to own.",
+    def:"Ranked by the average chance of a clean sheet over the window: defenders and keepers to own.",
+    opp:"Ranked by expected goals conceded this season plus the last four: the defences to attack. Pills show who plays them next, coloured for the attacker."}[view];
+  return `<div class="hubctl">${seg(view,[["att","Attacks to own"],["def","Defences to own"],["opp","Opponents to target"]],"tview")}${hzHTML(h,"th")}
+      <span class="note">${note}</span></div>
+    <div class="panel"><div class="scroll hub"><table><thead><tr><th></th><th style="text-align:left">Club</th>
+      <th title="Expected goals per match this season">xG/g</th><th title="Expected goals per match, last four">Last 4</th>
+      <th title="Expected goals conceded per match this season">xGA/g</th><th title="Expected goals conceded per match, last four">Last 4</th>
+      <th style="text-align:left">${view==="opp"?"Faced next by":"Next "+h}</th><th>${view==="opp"?"Proj. conceded":"Proj. goals"}</th><th>CS %</th>
+      <th title="Bookmakers, next match: expected goals and clean-sheet chance">Market</th><th style="text-align:left">${view==="def"?"Top defenders":view==="opp"?"Attackers facing them":"Top attackers"}</th></tr></thead>
+      <tbody>${body}</tbody></table></div></div>`;
+}
+
+/* ============================================================
+   REDESIGN WAVE 7 (20 Oct 2026): the Status page. Data freshness (wave 1),
+   then model performance against FPL's own prediction, fixture-rating
+   accuracy, odds status, options, the signal key and the xFPL model page.
+   ============================================================ */
+function modelVsFplHTML(){
+  const A=S.playerActuals;
+  const rows=[];let tm=0,tf=0,tn=0,tb=0,top=[];
+  for(let g=1;g<=38;g++){
+    if(!weekFinal(g))continue;
+    const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g],back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
+    const snap=live||back;if(!snap||!snap.players||!A)continue;
+    const ep=snap.fplEp||null;
+    let n=0,em=0,ef=0,b=0;const both=[];
+    Object.entries(snap.players).forEach(([id,pred])=>{
+      const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
+      const f=ep?ep[id]:null;if(ep&&f==null)return;
+      n++;em+=Math.abs(pred-pts);b+=pred-pts;if(ep){ef+=Math.abs(f-pts);both.push({pred,f,pts});}});
+    if(!n)continue;
+    const t10=k=>both.slice().sort((x,y)=>y[k]-x[k]).slice(0,10).reduce((s,x)=>s+x.pts,0)/Math.min(10,both.length||1);
+    rows.push({g,src:live?"live":"backtest",n,mae:em/n,bias:b/n,fpl:ep?ef/n:null,tM:both.length?t10("pred"):null,tF:both.length?t10("f"):null});
+    if(ep){tm+=em;tf+=ef;tn+=n;tb+=b;}
+  }
+  if(!rows.length)return `<p class="note" style="padding:14px;margin:0">No finished gameweek with a saved prediction yet.</p>`;
+  const cmp=rows.filter(r=>r.fpl!=null);
+  const avg=(k)=>cmp.length?cmp.reduce((s,r)=>s+r[k],0)/cmp.length:null;
+  const cards=cmp.length?`<div class="fcgrid c5" style="padding:14px 14px 0">
+    ${figCard("Model Error",`Average miss per player, model against points scored, over ${tn.toLocaleString()} player-weeks where FPL's own figure was saved too.`,(tm/tn).toFixed(2),"points per player",cmp.map(r=>-r.mae),"#3DDC97","mint")}
+    ${figCard("FPL Error","The same players and weeks, FPL's own expected points (ep_next) taken before the deadline.",(tf/tn).toFixed(2),"points per player",cmp.map(r=>-r.fpl),"#8A8A8A")}
+    ${figCard("Model vs FPL","How much closer the model is on average (positive = the model is better).",`<span class="${tf>tm?"up":"dn"}">${sgn1((tf-tm)/tn)}</span>`,`${cmp.filter(r=>r.mae<r.fpl).length} of ${cmp.length} weeks better`,null,"#8A8A8A")}
+    ${figCard("Model Bias","Average of prediction minus points: positive means the model over-predicts.",sgn1(tb/tn),"points per player",null,"#8A8A8A")}
+    ${figCard("Top 10 Picks","What the model's ten highest predictions went on to score, on average, against FPL's ten.",avg("tM").toFixed(1),`FPL's top 10: ${avg("tF").toFixed(1)}`,null,"#8A8A8A")}
+  </div>`:"";
+  return cards+`<div class="scroll" style="padding:0 14px 14px"><table class="mkt"><thead><tr><th>Gameweek</th><th>Source</th><th>Players</th><th>Model error</th><th>FPL error</th><th>Bias</th><th>Model top 10</th><th>FPL top 10</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>GW${r.g}</td><td>${r.src==="live"?"before the deadline":"backtest"}</td><td>${r.n}</td>
+      <td><b class="${r.fpl!=null?(r.mae<=r.fpl?"up":"dn"):""}">${r.mae.toFixed(2)}</b></td><td>${r.fpl!=null?r.fpl.toFixed(2):"not saved"}</td>
+      <td>${sgn1(r.bias)}</td><td>${r.tM!=null?r.tM.toFixed(1):"—"}</td><td>${r.tF!=null?r.tF.toFixed(1):"—"}</td></tr>`).join("")}</tbody></table>
+    <p class="note" style="margin:8px 0 0">Backtest weeks (GW1-6) run today's model on the data as it stood before each deadline; FPL's figure for those weeks comes from the same pre-deadline data. Live weeks are snapshots taken an hour and 15 minutes before the deadline (FPL's figure saved with them from GW8).</p></div>`;
+}
+function fixtureAccuracyHTML(){
+  if(!S.model||!S.ratingsReady)return `<p class="note" style="padding:14px;margin:0">Ratings not ready.</p>`;
+  /* fixtures carry their model teams (ht, at) */
+  const done=(S.fixtures||[]).filter(f=>f.finished&&f.hs!=null&&f.as!=null&&f.ht&&f.at);
+  if(!done.length)return `<p class="note" style="padding:14px;margin:0">No finished matches yet.</p>`;
+  let n=0,e=0,eBase=0,hit=0,games=0,tot=0;
+  done.forEach(f=>{const h=f.ht,a=f.at;if(!h||!a)return;tot+=f.hs+f.as;});
+  const base=tot/(2*done.length);
+  done.forEach(f=>{const h=f.ht,a=f.at;if(!h||!a)return;
+    const ph=fdrCalc(h,a,true,"xgf"),pa=fdrCalc(a,h,false,"xgf");
+    e+=Math.abs(ph-f.hs)+Math.abs(pa-f.as);eBase+=Math.abs(base-f.hs)+Math.abs(base-f.as);n+=2;
+    const pr=ph-pa>0.25?1:pa-ph>0.25?-1:0,ac=f.hs>f.as?1:f.as>f.hs?-1:0;if(pr!==0){games++;if(pr===ac)hit++;}});
+  return `<div class="fcgrid c5" style="padding:14px">
+    ${figCard("Goals Error","Average miss on each side's goals, today's fixture ratings against this season's results.",(e/n).toFixed(2),"goals per side",null,"#3DDC97","mint")}
+    ${figCard("Baseline Error","The same misses if every side were given the season's average goals.",(eBase/n).toFixed(2),`average ${base.toFixed(2)} goals`,null,"#8A8A8A")}
+    ${figCard("Skill",`How much better than the baseline (positive = the ratings help).`,`<span class="${eBase>e?"up":"dn"}">${Math.round((1-e/eBase)*100)}%</span>`,"vs the average",null,"#8A8A8A")}
+    ${figCard("Favourite Won","When the ratings make one side clearly the better (a quarter of a goal or more), how often that side won.",games?Math.round(hit/games*100)+"%":"—",`${hit} of ${games} matches`,null,"#8A8A8A")}
+    ${figCard("Matches","Finished league matches this season used here.",String(done.length),"in-sample: the ratings have seen them",null,"#8A8A8A")}
+  </div>`;
+}
+function oddsStatusHTML(){
+  const st=S.oddsState||"idle",fx=(S.odds||[]).length,teams=S.oddsTeams?Object.keys(S.oddsTeams).length/2:0;
+  const props=S.propMarket?Object.keys(S.propMarket).length:0;
+  const label={ok:"Loaded",live:"Loaded",loading:"Loading",nokey:"No key set on the server",backup:"Not on the backup copy",error:"Failed",idle:"Not loaded"}[st]||st;
+  return `<div class="prov">
+    <span>Status: <b>${esc(label)}</b>${S.oddsErr?` · ${esc(S.oddsErr)}`:""}</span>
+    <span>Fetched: <b>${esc(ukWhen(S.oddsFetchedAt))}</b></span>
+    <span>Fixtures priced: <b>${fx}</b></span>
+    <span>Fixtures used by the model: <b>${teams}</b></span>
+    <span>Players with goal or assist prices: <b>${props}</b></span>
+    <span>Player odds in the model: <b>${typeof PROP_W!=="undefined"&&PROP_W>0?"on, weight "+PROP_W:"off (re-test at GW12)"}</b></span>
+    ${(S.oddsRejected||[]).length?`<span style="flex-basis:100%;color:var(--amber)">Ignored as stale or in-play: ${esc(S.oddsRejected.join(", "))}</span>`:""}
+  </div>`;
+}
+function optionsHTML(){
+  const drafts=LS.get("drafts")||[],ign=(S.ignored||[]).map(id=>S.model&&S.model.players.find(p=>p.id===id)).filter(Boolean);
+  return `<div class="pbody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+    <div><div class="note" style="margin-bottom:6px">Compare drafts</div>${drafts.length?`${drafts.map(d=>`<div class="mu" style="font-size:12.5px">${esc(d.label)}</div>`).join("")}<button style="margin-top:8px" onclick="act('cleardrafts')">Delete all ${drafts.length} drafts</button>`:'<span class="mu">None saved.</span>'}</div>
+    <div><div class="note" style="margin-bottom:6px">Not suggesting</div>${ign.length?`<span style="display:flex;gap:6px;flex-wrap:wrap">${ign.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}<button onclick="act('unignore')">Suggest all again</button></span>`:'<span class="mu">Every player can be suggested.</span>'}</div>
+    <div><div class="note" style="margin-bottom:6px">Shortlist</div>${S.stars.length?`<span class="mu">${S.stars.length} players</span> <button onclick="act('clearstars')">Clear</button>`:'<span class="mu">Empty. Tap ★ on Players to add.</span>'}</div>
   </div>`;
 }
