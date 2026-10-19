@@ -362,6 +362,11 @@ function normaliseBooks(row){
         const priceField=PRICE_FIELDS.find(f=>num(line[f]));
         if(nameField&&priceField){
           outcomes.push({name:String(line[nameField]),price:num(line[priceField])});
+        }else if(nameField&&num(line.over)){
+          /* Player markets (19 Oct 2026): {label:"Dominic Solanke", hdp:0.5,
+             over:"2.20"}. The price sits under "over" (the yes side), so the
+             old reader named every player "over" and none ever matched. */
+          outcomes.push({name:String(line[nameField]),price:num(line.over)});
         }else{
           Object.entries(line).forEach(([k,v])=>{
             if(k==="hdp"||k==="updatedAt"||NAME_FIELDS.includes(k)||PRICE_FIELDS.includes(k))return;

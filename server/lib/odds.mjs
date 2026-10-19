@@ -94,13 +94,24 @@ export async function refreshOdds() {
       state.books = books.length ? books : ["Bet365", "PaddyPower"];
     }
     const ej = await get(`/events?sport=football&league=${encodeURIComponent(state.slug)}&apiKey=${key}`);
-    const events = (Array.isArray(ej) ? ej : (ej.data || ej.events || [])).slice(0, 10);
+    /* 19 Oct 2026: matches not yet kicked off, soonest first, up to 20 (a
+       full gameweek plus any left over from the current one). It used to
+       take the first 10 the API listed, which mixed weeks and left two of
+       GW8's fixtures without prices. /odds/multi takes ten ids a call. */
+    const now = Date.now();
+    const events = (Array.isArray(ej) ? ej : (ej.data || ej.events || []))
+      .filter(e => { const t = Date.parse(e.date || e.commence || e.startTime || ""); return !Number.isFinite(t) || t > now; })
+      .sort((a, b) => Date.parse(a.date || a.commence || 0) - Date.parse(b.date || b.commence || 0))
+      .slice(0, 20);
     const rows = [];
+    const raw = [];
     if (events.length) {
       const ids = events.map(e => e.id || e.eventId).filter(Boolean);
       const bParam = "&bookmakers=" + encodeURIComponent(state.books.join(","));
-      const oj = await get(`/odds/multi?eventIds=${encodeURIComponent(ids.join(","))}${bParam}&apiKey=${key}`);
-      const raw = Array.isArray(oj) ? oj : (oj.data || Object.values(oj || {}));
+      for (let i = 0; i < ids.length; i += 10) {
+        const oj = await get(`/odds/multi?eventIds=${encodeURIComponent(ids.slice(i, i + 10).join(","))}${bParam}&apiKey=${key}`);
+        raw.push(...(Array.isArray(oj) ? oj : (oj.data || Object.values(oj || {}))));
+      }
       raw.forEach(rw => {
         const id = rw.eventId || rw.id;
         const ev = events.find(e => String(e.id || e.eventId) === String(id)) || {};

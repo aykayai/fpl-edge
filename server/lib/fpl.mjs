@@ -51,6 +51,13 @@ export async function fetchBootstrap(reason) {
   }
 }
 
+/* True inside the given hours before the next deadline (odds refresh
+   hourly in the last 48, when bookmakers publish player markets). */
+export function withinHoursOfDeadline(h) {
+  if (!state.nextDeadline) return false;
+  const d = Date.parse(state.nextDeadline) - Date.now();
+  return d > 0 && d < h * 3600000;
+}
 /* True inside the 3 hours before the next deadline. */
 export function nearDeadline() {
   if (!state.nextDeadline) return false;

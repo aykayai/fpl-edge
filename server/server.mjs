@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { CONFIG } from "./lib/config.mjs";
 import { log } from "./lib/util.mjs";
 import { initDataset, pollDataset, datasetStatus, datasetGW, currentDir } from "./lib/dataset.mjs";
-import { fetchBootstrap, fetchLive, nearDeadline, anyFixtureLive, priceFetchDue, fplStatus } from "./lib/fpl.mjs";
+import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus } from "./lib/fpl.mjs";
 import { refreshNews, newsPayload, newsStatus, playerNews } from "./lib/news.mjs";
 import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
 import { buildFeeds, feedsStatus, FEEDS_DIR, SNAP_DIR } from "./lib/feeds.mjs";
@@ -256,7 +256,8 @@ async function tick() {
   const fplEvery = nearDeadline() ? CONFIG.FPL_POLL_NEAR_MS : CONFIG.FPL_POLL_MS;
   if (jobs.fpl.due <= now || priceFetchDue()) runJob("fpl", fplEvery);
   if (jobs.news.due <= now) runJob("news", CONFIG.NEWS_POLL_MS);
-  if (CONFIG.ODDS_API_KEY && jobs.odds.due <= now) runJob("odds", CONFIG.ODDS_POLL_MS);
+  if (CONFIG.ODDS_API_KEY && jobs.odds.due <= now)
+    runJob("odds", withinHoursOfDeadline(48) ? Math.min(CONFIG.ODDS_POLL_MS, 3600000) : CONFIG.ODDS_POLL_MS);
   if (CONFIG.FEEDS_POLL_MS > 0 && jobs.feeds.due <= now) runJob("feeds", CONFIG.FEEDS_POLL_MS);
   if (await anyFixtureLive().catch(() => false)) {
     if (!jobs.live) job("live", fetchLive);
