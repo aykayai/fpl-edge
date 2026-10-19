@@ -122,7 +122,7 @@ function oddsFixtures(){
 }
 /* player prices, keyed to our own player records */
 /* name words, accents and punctuation removed: "Gabriel dos Santos Magalhães" -> [gabriel,dos,santos,magalhaes] */
-const nameWords=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().split(/[^a-z]+/).filter(w=>w.length>1);
+const nameWords=s=>foldName(s).split(/[^a-z]+/).filter(w=>w.length>1);
 function wordMatch(label,p){
   const q=nameWords(label);if(q.length<2)return false;
   const first=nameWords(p.first),last=nameWords(p.last);
