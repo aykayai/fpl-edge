@@ -122,15 +122,19 @@ function oddsFixtures(){
 }
 /* player prices, keyed to our own player records */
 /* name words, accents and punctuation removed: "Gabriel dos Santos Magalhães" -> [gabriel,dos,santos,magalhaes] */
-const nameWords=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().split(/[^a-z]+/).filter(w=>w.length>1);
+const nameWords=s=>foldName(s).split(/[^a-z]+/).filter(w=>w.length>1);
 function wordMatch(label,p){
   const q=nameWords(label);if(q.length<2)return false;
   const first=nameWords(p.first),last=nameWords(p.last);
   if(!last.includes(q[q.length-1]))return false;
   return first.includes(q[0])||last.includes(q[0]);
 }
-function oddsPlayers(){
+function oddsPlayers(gw){
   const out={};
+  /* gw given: that gameweek's fixtures only (the Odds page). Without it each
+     player keeps his soonest priced fixture, so next week's prices never fold
+     into this week's. */
+  const inGw=gw&&S.model&&S.model.byEv?new Set((S.model.byEv[gw]||[]).filter(f=>f.ht&&f.at).map(f=>f.ht.id+"-"+f.at.id)):null;
   const P=S.model?S.model.players:[];
   const byTeam={};P.forEach(p=>{(byTeam[p.team]=byTeam[p.team]||[]).push(p);});
   /* Score every candidate rather than taking the first loose hit: a plain
@@ -160,7 +164,8 @@ function oddsPlayers(){
   const MK={"player to score or assist":"ret","anytime goalscorer":"goal",
     "player to assist":"assist","player shots on target":"sot",
     "player shots":"shots","player to be booked":"card"};
-  oddsFixtures().forEach(fx=>{
+  oddsFixtures().slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(fx=>{
+    if(inGw&&!(fx.ht&&fx.at&&inGw.has(fx.ht.id+"-"+fx.at.id)))return;
     const ids=[fx.ht&&fx.ht.id,fx.at&&fx.at.id].filter(Boolean);
     Object.entries(MK).forEach(([raw,key])=>{
       (fx.mk[raw]||[]).forEach(m=>{
@@ -170,12 +175,22 @@ function oddsPlayers(){
         (m.outcomes||[]).forEach(o=>{
           if(!o.price)return;
           if(/\((first|last)\)/i.test(o.name))return;     // first / last scorer, not anytime
-          const pl=match(o.name,ids);if(!pl)return;
+          /* Bet365 lists three lines per player in this market:
+             "Name (Score) (2)", "Name (Assist) (2)", "Name (Score or Assist) (2)" */
+          let k=key;
+          const sub=raw==="player to score or assist"&&/\((score or assist|score|assist)\)/i.exec(o.name);
+          if(sub)k={"score or assist":"ret",score:"goal",assist:"assist"}[sub[1].toLowerCase()];
+          const pl=match(o.name.replace(/\s*\([^)]*\)/g,"").trim(),ids);if(!pl)return;
+          if(out[pl.id]&&out[pl.id].fx!==fx)return;          // his soonest fixture only
           const rec=out[pl.id]=out[pl.id]||{p:pl,fx};
           const prob=devig1(o.price,margin);
-          if(key==="sot"||key==="shots"){
-            if(!rec[key]||prob>rec[key])rec[key]=prob;
-          }else if(!rec[key]||prob>rec[key])rec[key]=prob;
+          /* shots: several thresholds (1+, 2+), the likeliest is 1+. Otherwise
+             two lines for the same thing agree within 2 points for 818 of 839
+             players; where they do not (Bet365's Man City academy prices,
+             19 Oct 2026) the lower is kept. */
+          if(k==="sot"||k==="shots"){
+            if(!rec[k]||prob>rec[k])rec[k]=prob;
+          }else rec[k]=rec[k]==null?prob:Math.min(rec[k],prob);
         });
       });
     });
@@ -433,44 +448,79 @@ function modelChance(p,rate){
 function oddsPair(mk,md){
   if(mk==null)return '<span class="mu">—</span>';
   const cls=md!=null&&mk-md>=0.08?"up":md!=null&&md-mk>=0.08?"dn":"";
-  return `<b class="${cls}">${oddsPct(mk)}</b> <span class="mu">${oddsPct(md)}</span>`;
+  return `<span class="pair"><b class="${cls}">${oddsPct(mk)}</b><span class="mu">${oddsPct(md)}</span></span>`;
 }
+/* the model's own clean-sheet chance, from the stats alone (the predictions
+   also fold in the team odds, which would make this agree with the market by
+   construction): fixture goals against, scaled by his on-pitch record */
+function modelCS(p){
+  const g=S.model.next.id,f=((p.gw[g]||{}).fixtures||[])[0];if(!f||f.xgc==null)return null;
+  const team=S.model.teams.find(t=>t.id===p.team)||{},teamGA=((team.defH||0)+(team.defA||0))/2;
+  const xGC=teamGA>0&&p.gc90>0?clamp(f.xgc*clamp(p.gc90/teamGA,0.75,1.33),.25,3.2):f.xgc;
+  let cs=Math.exp(-xGC);
+  if(p.pos===1&&p.gpRate)cs=clamp(cs*(1+clamp(p.gpRate,-0.25,0.25)),0.02,0.75);
+  return cs;
+}
+/* the market's clean-sheet chance for each team in gameweek g */
+function marketCS(g){
+  const inGw=new Set((S.model.byEv[g]||[]).filter(f=>f.ht&&f.at).map(f=>f.ht.id+"-"+f.at.id)),m={};
+  oddsFixtures().forEach(f=>{if(!f.goals||!f.ht||!f.at||!inGw.has(f.ht.id+"-"+f.at.id))return;
+    m[f.ht.id]=f.goals.csHome;m[f.at.id]=f.goals.csAway;});
+  return m;
+}
+/* A player with no league minutes this season whom the model also gives
+   none is left out of the lists: Bet365 prices some academy players like
+   starters (Floyd Samba 48% to score, 19 Oct 2026). */
+const oddsListable=p=>(p.minutes||0)>0||(p.roleMins||0)>0;
 function oddsPlayersHTML(){
   const g=S.model.next.id,view=S.oddsPv||"squad";
-  const op=oddsPlayers();
+  const op=oddsPlayers(g),cs=marketCS(g);
   const inWeek=p=>{const q=p.gw[g];return q&&!q.blank;};
-  let list;
-  if(view==="squad")list=squadPlayers().slice().sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0));
-  else{
-    const pool=Object.values(op).map(r=>r.p).filter(p=>inWeek(p)&&op[p.id].goal!=null);
-    const f=view==="att"?(p=>p.pos>=3):view==="def"?(p=>p.pos<=2):(()=>true);
-    list=pool.filter(f).sort((x,y)=>(op[y.id].goal||0)-(op[x.id].goal||0)).slice(0,25);
+  const sub=p=>{const f=((p.gw[g]||{}).fixtures||[])[0];
+    return `<span class="sub">${esc(p.teamName)}${f?" · "+esc(f.opp)+(f.home?" (H)":" (A)"):""} · ${p.xMins}′</span>`;};
+  const pts=p=>`<td class="hide-ph"><b>${((p.gw[g]||{}).pts||0).toFixed(1)}</b></td>`;
+  const card=r=>r.card!=null&&r.card>=0.2?`<span class="dn">${oddsPct(r.card)}</span>`:oddsPct(r.card);
+  const row=(p,cells)=>`<tr onclick="act('card',${p.id})" style="cursor:pointer"><td>${esc(p.web_name)}${sub(p)}</td>${pts(p)}${cells}</tr>`;
+  const H=(t,h,cls)=>`<th${cls?` class="${cls}"`:""}>${t}${h?`<span class="mu">${h}</span>`:""}</th>`;
+  const attTable=list=>`<table class="mkt oddsp"><thead><tr>${H("Player")}${H("Predicted","pts","hide-ph")}${H("Score","mkt · model")}${H("Assist","mkt · model","hide-ph")}${H("Goal or Assist","mkt")}${H("Shot on Target","mkt","hide-ph")}${H("Card","mkt")}</tr></thead><tbody>
+    ${list.map(p=>{const r=op[p.id]||{};return row(p,`<td>${oddsPair(r.goal,r.goal!=null?modelChance(p,p.xg90):null)}</td>
+      <td class="hide-ph">${oddsPair(r.assist,r.assist!=null?modelChance(p,p.xa90):null)}</td>
+      <td>${oddsPct(r.ret)}</td><td class="hide-ph">${oddsPct(r.sot)}</td><td>${card(r)}</td>`);}).join("")}</tbody></table>`;
+  const defTable=list=>`<table class="mkt oddsp"><thead><tr>${H("Player")}${H("Predicted","pts","hide-ph")}${H("Clean Sheet","mkt · model")}${H("Goal or Assist","mkt")}${H("Card","mkt")}</tr></thead><tbody>
+    ${list.map(p=>{const r=op[p.id]||{};return row(p,`<td>${oddsPair(cs[p.team]!=null?cs[p.team]:null,modelCS(p))}</td>
+      <td>${oddsPct(r.ret)}</td><td>${card(r)}</td>`);}).join("")}</tbody></table>`;
+  const byPts=(x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0);
+  let body;
+  if(view==="squad"){
+    const mine=squadPlayers().slice().sort(byPts);
+    body=`<p class="oddsgrp">Attack</p><div class="scroll">${attTable(mine.filter(p=>p.pos>=3))}</div>
+      <p class="oddsgrp">Defence</p><div class="scroll">${defTable(mine.filter(p=>p.pos<=2))}</div>`;
+  }else if(view==="def"){
+    const list=S.model.players.filter(p=>p.pos<=2&&inWeek(p)&&oddsListable(p)&&p.xMins>=45&&cs[p.team]!=null)
+      .sort((x,y)=>(cs[y.team]-cs[x.team])||byPts(x,y)).slice(0,25);
+    body=`<div class="scroll">${defTable(list)}</div>`;
+  }else{
+    const f=view==="att"?(p=>p.pos>=3):(()=>true);
+    const list=Object.values(op).map(r=>r.p).filter(p=>inWeek(p)&&oddsListable(p)&&op[p.id].goal!=null&&f(p))
+      .sort((x,y)=>(op[y.id].goal||0)-(op[x.id].goal||0)).slice(0,25);
+    body=`<div class="scroll">${attTable(list)}</div>`;
   }
   const all=Object.values(op).filter(r=>inWeek(r.p));
   const cover=k=>all.filter(r=>r[k]!=null).length;
   const seg=[["squad","Your Squad"],["all","Most Likely to Score"],["att","Attackers"],["def","Defenders"]]
     .map(([k,n])=>`<button class="${view===k?"on":""}" onclick="act('oddspv','${k}')">${n}</button>`).join("");
   return `<div class="panel"><div class="phead"><h2>Players</h2><span class="pseg">${seg}</span></div>
-    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt oddsp"><thead><tr>
-      <th>Player</th><th class="hide-ph">Predicted</th><th>Score <span class="mu">mkt · model</span></th><th class="hide-ph">Assist <span class="mu">mkt · model</span></th>
-      <th>Goal or Assist</th><th class="hide-ph">Shot on Target</th><th>Card</th></tr></thead><tbody>
-    ${list.map(p=>{const r=op[p.id]||{},q=p.gw[g]||{},f=(q.fixtures||[])[0];
-      return `<tr onclick="act('card',${p.id})" style="cursor:pointer"><td>${esc(p.web_name)}<span class="sub">${esc(p.teamName)}${f?" · "+esc(f.opp)+(f.home?" (H)":" (A)"):""} · ${p.xMins}′</span></td>
-        <td class="hide-ph"><b>${(q.pts||0).toFixed(1)}</b></td>
-        <td>${oddsPair(r.goal,r.goal!=null?modelChance(p,p.xg90):null)}</td>
-        <td class="hide-ph">${oddsPair(r.assist,r.assist!=null?modelChance(p,p.xa90):null)}</td>
-        <td>${oddsPct(r.ret)}</td><td class="hide-ph">${oddsPct(r.sot)}</td>
-        <td>${r.card!=null&&r.card>=0.2?`<span class="dn">${oddsPct(r.card)}</span>`:oddsPct(r.card)}</td></tr>`;}).join("")}
-    </tbody></table></div>
+    <div class="pbody" style="padding-top:6px">${body}
     <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
-      <p style="margin:0 0 6px">Market figures are the bookmakers' prices with their margin removed. Score and assist chances are "if he plays" (the bets are void if he does not), and the model's figure beside each is worked out the same way, from his rate, his normal minutes and this fixture. The market figure is green where it rates him 8+ points higher than the model, red where lower. On a phone, tap a player for the full card.</p>
-      <p style="margin:0">Coverage for GW${g}: ${cover("goal")} players priced to score, ${cover("assist")} to assist, ${cover("sot")} for shots on target, ${cover("card")} for a card (${esc((S.oddsBooks||[]).join(" and ")||"the selected bookmakers")}; assists, shots and cards are added closer to kick-off). These prices are shown for reference and do not change the predictions (tested 19 Oct 2026, re-tested after GW11).</p></div></details>
+      <p style="margin:0 0 6px">Market figures are the bookmakers' prices with their margin removed. Score and assist chances are "if he plays" (the bets are void if he does not), and the model's figure beside each is worked out the same way, from his rate, his normal minutes and this fixture. Defenders and keepers are shown on the team's clean-sheet chance instead (FPL pays it only after 60 minutes); the model's figure there is from the stats alone. The market figure is green where it rates him 8+ points higher than the model, red where lower. On a phone, tap a player for the full card.</p>
+      <p style="margin:0 0 6px">Players with no league minutes this season whom the model also gives none are left out of the lists: Bet365 prices some academy players like starters.</p>
+      <p style="margin:0">Coverage for GW${g}: ${cover("goal")} players priced to score, ${cover("assist")} to assist, ${cover("ret")} to score or assist, ${cover("sot")} for shots on target, ${cover("card")} for a card (${esc((S.oddsBooks||[]).join(" and ")||"the selected bookmakers")}; shots and cards are added closer to kick-off). These prices are shown for reference and do not change the predictions (tested 19 Oct 2026, re-tested after GW11).</p></div></details>
     </div></div>`;
 }
 /* players the market prices like starters but the model gives under 45 minutes */
 function minutesWatchHTML(){
-  const g=S.model.next.id,op=oddsPlayers(),mine=new Set(S.squad||[]);
-  const list=Object.values(op).filter(r=>r.p.pos>=3&&r.goal!=null&&r.goal>=0.25&&r.p.xMins<45&&r.p.gw[g]&&!r.p.gw[g].blank)
+  const g=S.model.next.id,op=oddsPlayers(g),mine=new Set(S.squad||[]);
+  const list=Object.values(op).filter(r=>oddsListable(r.p)&&r.p.pos>=3&&r.goal!=null&&r.goal>=0.25&&r.p.xMins<45&&r.p.gw[g]&&!r.p.gw[g].blank)
     .sort((x,y)=>y.goal-x.goal).slice(0,10);
   if(!list.length)return "";
   return `<div class="panel"><div class="phead"><h2>Minutes Watch</h2><span class="note">the market expects a bigger role</span></div>
@@ -499,7 +549,7 @@ function oddsFixturesHTML(){
   const when=d=>d?ukFmt(new Date(d),{weekday:"short",hour:"2-digit",minute:"2-digit"}):"";
   return `<div class="panel"><div class="phead"><h2>Fixtures</h2><span class="note">GW${g} · market, with the model's goals beside</span></div>
     <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr>
-      <th>Match</th><th>Result <span class="mu">H · D · A</span></th><th>Goals <span class="mu">mkt · model</span></th><th>Clean Sheet <span class="mu">H · A</span></th><th class="hide-ph">Over 2.5</th><th class="hide-ph">Both Score</th></tr></thead><tbody>
+      <th>Match</th><th>Result<span class="mu">H · D · A</span></th><th>Goals<span class="mu">mkt · model</span></th><th>Clean Sheet<span class="mu">H · A</span></th><th class="hide-ph">Over 2.5</th><th class="hide-ph">Both Score</th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${esc(r.f.ht.short)} v ${esc(r.f.at.short)}<span class="sub">${esc(when(r.f.date))}</span></td>
       <td>${r.hda?r.hda.map(oddsPct).join(SEP):"—"}</td>
       <td><b>${r.f.goals.xgHome.toFixed(1)}–${r.f.goals.xgAway.toFixed(1)}</b><span class="sub">model ${r.mH.toFixed(1)}–${r.mA.toFixed(1)}</span></td>

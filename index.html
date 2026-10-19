@@ -633,6 +633,17 @@ details[open]>summary::after{content:" ▴"}
 .mkt td .sub{display:block;font-size:11.5px;color:var(--mute)}
 .mkt .sep{padding:0 4px;color:var(--mute)}
 @media(max-width:520px){.mkt .sep{padding:0 1px}.mkt th{white-space:normal}}
+/* 19 Oct 2026: text in Geist, figures in Geist Mono, figure columns centred */
+.mkt th,.mkt td{text-align:center;font-variant-numeric:tabular-nums}
+.mkt th:first-child,.mkt td:first-child{text-align:left}
+.mkt th{vertical-align:bottom;line-height:1.25}
+.mkt th .mu{display:block;font-size:10.5px;font-weight:400;opacity:.85}
+.mkt td:first-child,.mkt td:first-child *{font-family:'Geist',system-ui,sans-serif}
+.mkt td:first-child{font-weight:500}.mkt td:first-child .sub,.mkt td:first-child .mu{font-weight:400}
+.mkt .pair{display:inline-flex;gap:8px;justify-content:center}
+.mkt .pair>*{min-width:3.2ch;text-align:right}
+.oddsgrp{margin:8px 0 2px;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.oddsgrp:first-child{margin-top:0}
 </style>
 </head>
 <body>
@@ -645,12 +656,12 @@ details[open]>summary::after{content:" ▴"}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.21.1"></script>
-<script src="./app-squad.js?v=12.21.1"></script>
-<script src="./app-render.js?v=12.21.1"></script>
-<script src="./app-odds.js?v=12.21.1"></script>
-<script src="./app-tracker.js?v=12.21.1"></script>
-<script src="./app-main.js?v=12.21.1"></script>
+<script src="./app-core.js?v=12.22.1"></script>
+<script src="./app-squad.js?v=12.22.1"></script>
+<script src="./app-render.js?v=12.22.1"></script>
+<script src="./app-odds.js?v=12.22.1"></script>
+<script src="./app-tracker.js?v=12.22.1"></script>
+<script src="./app-main.js?v=12.22.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

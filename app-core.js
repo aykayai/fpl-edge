@@ -209,7 +209,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.21.1";
+const APP_VERSION="12.22.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -259,7 +259,10 @@ const SEED=[["Raya","ARS",1,6.0],["Dubravka","TOT",1,4.0],
  ["B.Fernandes","MUN",3,12.0],["Mbeumo","MUN",3,8.0],["Szoboszlai","LIV",3,7.0],
  ["Tzolis","ARS",3,6.5],["Slater","HUL",3,4.5],
  ["Haaland","MCI",4,15.5],["João Pedro","CHE",4,7.5],["Calvert-Lewin","LEE",4,6.0]];
-const norm=s=>(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");
+/* letters accent-stripping leaves alone ("Gro\u00df" matched no bookmaker's "Gross") */
+const FOLD={"\u00df":"ss","\u00f8":"o","\u00e6":"ae","\u0153":"oe","\u0142":"l","\u0111":"d","\u00f0":"d","\u0131":"i","\u00fe":"th"};
+const foldName=s=>String(s||"").toLowerCase().replace(/[\u00df\u00f8\u00e6\u0153\u0142\u0111\u00f0\u0131\u00fe]/g,c=>FOLD[c]).normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+const norm=s=>foldName(s).replace(/[^a-z]/g,"");
 
 /* Community chip consensus, gathered Aug 2026 */
 
