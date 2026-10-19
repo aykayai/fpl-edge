@@ -90,6 +90,8 @@ async function main() {
     appVersion: get("APP_VERSION"),
     gwPlayed: get("S.model.gwPlayed"),
     oddsUsed: !!get("S.oddsTeams"),
+    propPlayers: get(`Object.keys(S.propMarket||{}).filter(id=>S.propMarket[id][${g}]).length`),
+    propWeight: get("typeof PROP_W!=='undefined'?PROP_W:0"),
     learning: get("typeof LEARN_APPLY!=='undefined'&&LEARN_APPLY"),
     players
   };
@@ -97,6 +99,14 @@ async function main() {
   await mkdir(dirname(OUT), { recursive: true });
   await writeFile(OUT + ".tmp", JSON.stringify(payload) + "\n");
   await rename(OUT + ".tmp", OUT);
+  /* the exact prices the snapshot used, for the GW12 re-test of player and
+     team odds on deadline prices (closing prices know the line-ups) */
+  try {
+    const odds = await (await fetch(new URL("/api/odds", BASE))).text();
+    const dir = join(dirname(OUT), "odds-at-deadline");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `GW${g}.json`), odds);
+  } catch (e) { console.error("odds archive: " + e.message); }
   console.log(`snapshot GW${g}: ${n} players, odds ${payload.gw[g].oddsUsed ? "on" : "off"}, v${payload.gw[g].appVersion}`);
 }
 main().then(() => process.exit(0)).catch(e => { console.error(e.message || e); process.exit(1); });

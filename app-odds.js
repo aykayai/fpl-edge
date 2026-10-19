@@ -234,6 +234,24 @@ function capWarnHTML(){
     return ` · <span style="color:var(--amber);font-weight:700">captain ${cap.avail<1?Math.round(cap.avail*100)+"%":"may not start"}</span>`;
   return "";
 }
+/* Player odds per gameweek, for the PROP_W hook: {playerId:{gw:{g,a}}},
+   g and a the expected goals and assists implied by P(score) and P(assist)
+   (-ln(1-p)). A fixture is placed in its gameweek by matching both clubs. */
+function buildPropMarket(){
+  S.propMarket=null;
+  if(!S.model||!S.model.byEv)return;
+  const gwOf=fx=>{if(!fx.ht||!fx.at)return null;
+    for(const [e,list] of Object.entries(S.model.byEv)){
+      if(list.some(f=>f.ht&&f.at&&f.ht.id===fx.ht.id&&f.at.id===fx.at.id))return +e;}
+    return null;};
+  const out={};
+  Object.values(oddsPlayers()).forEach(r=>{
+    const e=gwOf(r.fx);if(!e||(r.goal==null&&r.assist==null))return;
+    const lam=p=>p>0&&p<0.99?-Math.log(1-p):null;
+    (out[r.p.id]=out[r.p.id]||{})[e]={g:lam(r.goal),a:lam(r.assist)};
+  });
+  S.propMarket=out;
+}
 /* Turn match prices into expected goals per side, margin removed. D10
    (13 Oct 2026): the same conversion the Odds page shows (Correct Score when
    priced, else match result + totals), so the page and the model agree. */
@@ -304,7 +322,7 @@ async function loadOdds(){
         .map(([k,v])=>[k,[...v]]));
       S.oddsPlSample=S._plSample||null;
       S.odds=out;S.oddsState="ok";
-      buildOddsTeams();buildModel();render();return;
+      buildOddsTeams();buildPropMarket();buildModel();render();return;
     }
     if(state==="fail"){
       if(!S.oddsErr)S.oddsErr="The server's last odds fetch failed.";

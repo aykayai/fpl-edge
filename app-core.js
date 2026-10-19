@@ -209,7 +209,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.19.1";
+const APP_VERSION="12.20.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1421,6 +1421,12 @@ const NOW_FULL=250, RATE_SHRINK=450;
    expected goals against, scaled by the player's on-pitch xGC against his
    team's, rather than from his xGC/90 divided by a powered difficulty. */
 const CS_FROM_FIXTURE=true;
+/* Weight on player odds in a player's goals and assists (0 = off).
+   0.75, Andy 19 Oct 2026, after a GW1-6 backtest on closing prices: average
+   miss 2.375 -> 2.345 for priced players, 1.258 -> 1.243 overall, out-of-sample
+   pick 0.75-1. Closing prices know the line-ups, so this flatters them; it is
+   re-tested at GW12 on the prices archived at each deadline. */
+let PROP_W=0.75;
 /* D5 (13 Oct 2026, Andy: apply half now, re-fit at GW10). Per-position level
    on the final projection. Full out-of-sample scales over GW1-5 were GK 1.334,
    DEF 1.095, MID 0.896, FWD 1.098 (leans -0.33/-0.17/+0.22/-0.17 a week);
@@ -1879,9 +1885,17 @@ function buildModel(){
            defence loses more to goals than he gains in saves. Validated against
            the published projections, where the best-rated keepers sit behind the
            best defences rather than making the most saves. */
+        /* Player odds (19 Oct 2026, OFF until Andy approves a weight after the
+           backtest): where bookmakers price him to score / assist in this
+           match, his expected goals and assists for it move toward the
+           market's by PROP_W. Market figures are per match if he plays
+           (anytime bets are void if he does not), as is this term. */
+        let gL=p.xg90*share*atk, aL=p.xa90*share*atk;
+        const pm=PROP_W>0&&fx.length===1&&S.propMarket&&S.propMarket[p.id]&&S.propMarket[p.id][e];
+        if(pm){if(pm.g!=null)gL=(1-PROP_W)*gL+PROP_W*pm.g;if(pm.a!=null)aL=(1-PROP_W)*aL+PROP_W*pm.a;}
         const attack=p.pos===1
           ? (p.sv90*(xGC/1.35))/3*share*0.55
-          : (p.xg90*(GOAL_PTS[p.pos]||4)+p.xa90*3)*share*atk;
+          : gL*(GOAL_PTS[p.pos]||4)+aL*3;
         /* Poisson clean-sheet probability. For keepers this is the dominant
            term, so it carries a shot-quality adjustment: a defence that concedes
            few high-quality chances keeps more clean sheets than raw xGC implies. */
