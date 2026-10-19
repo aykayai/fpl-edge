@@ -36,6 +36,9 @@ function act(k,a,b){
     /* wave 5: Teams > Clubs */
     case"tview":S.tView=["att","def","opp"].includes(a)?a:"att";break;
     case"th":S.tH=[1,3,5].includes(+a)?+a:3;break;
+    /* wave 7: Status options */
+    case"cleardrafts":LS.set("drafts",[]);toast("Drafts deleted");break;
+    case"clearstars":S.stars=[];LS.set("stars",[]);break;
     case"pview":S.pView=a;S.pdLimit=PD_PAGE;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
     case"ph":S.pH=[1,3,5].includes(+a)?+a:1;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
     case"paround":S.pAround=a==="rank"?"rank":"league";LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;

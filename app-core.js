@@ -214,7 +214,7 @@ const IDENTITY={team:"Armitage Shanks",manager:"Andrew Kenny",id:TEAM_ID};
 const NAV=[["squad","Planner"],["signals","Signals"],["table","Players"],["fixtures","Teams"],
   ["tracker","League"],["chips","Chips"],["news","News"],["xfpl","Status"]];
 /* hidden pages light the bar item they belong to */
-const NAV_HOME={rivals:"tracker",transfers:"signals",odds:"table"};
+const NAV_HOME={rivals:"tracker",transfers:"squad",odds:"fixtures"};
 const TAB_LABEL={squad:"Planner",signals:"Signals",table:"Players",fixtures:"Teams",tracker:"League",rivals:"Rivals",
   chips:"Chips",news:"News",xfpl:"Status",transfers:"Transfers",odds:"Odds"};
 const TABPATH={squad:"planner",transfers:"transfers",rivals:"league/rivals",chips:"chips",tracker:"league",
@@ -229,7 +229,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.27.0";
+const APP_VERSION="12.28.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

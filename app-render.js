@@ -713,6 +713,10 @@ function radarHTML(){
       ${content}
     </div></div>`;
 }
+/* wave 8: the Transfers page retired; its tools live in the Planner's Top
+   Move pop-up (several players at once, best moves by position, the
+   players not being suggested). The five-week plan sits beside them, price
+   moves are in Price Watch and the radar became Players > Compare. */
 function transfersHTML(){
   const g=VG();
   const outIds=S.outList.length?S.outList:null;
@@ -772,8 +776,8 @@ function transfersHTML(){
   const ignoredPanel=ignoredP.length?`<div class="panel"><div class="phead"><h2>Not Suggesting</h2>
       <button onclick="act('unignore')">Suggest all again</button></div>
     <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap">${ignoredP.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}</div></div>`:"";
-  const suggestTitle=ignoredPanel+`<div class="panel"><div class="phead"><h2>Head Scout suggestions</h2>
-      <span class="note">best four per position</span></div></div>`;
+  const suggestTitle=ignoredPanel+`<div class="panel"><div class="phead"><h2>Best Moves by Position</h2>
+      <span class="note">up to four per position, each worth a transfer</span></div></div>`;
   const byPos=[1,2,3,4].map(pos=>{
     /* One recommendation per player being sold, not a list of near-identical
        alternatives, and only where the gain is worth a transfer. */
@@ -789,7 +793,7 @@ function transfersHTML(){
         :`<p class="note" style="margin:0">Head Scout recommends no transfers in this position.</p>`}</div></div>`;
   }).join("");
 
-  return planPanelHTML()+radarHTML()+picker+comboPanel+headScout+priceMovesHTML()+suggestTitle+byPos;
+  return picker+comboPanel+suggestTitle+byPos;
 }
 /* S3 (Stage 1, 19 Oct 2026): the five-week plan, one card per week */
 function planPanelHTML(){
@@ -853,9 +857,9 @@ function readPill(t,opp,home,lens){
 /* wave 5: Teams = Clubs + Fixture Grid + By Gameweek */
 const TEAM_TILE=k=>`<span class="tile" style="--tc:${k==="def"?"#22D3EE":"#3DDC97"}" title="${k==="def"?"Kind defensive run":"Kind attacking run"}">${lic(k==="def"?"shield":"target")}</span>`;
 function fixturesHTML(){
-  const m=["clubs","team","gw"].includes(S.fixMode)?S.fixMode:"clubs";
-  const tabs=`<div class="pagetabs"><h1>Teams</h1><span class="pseg">${[["clubs","Clubs"],["team","Fixture Grid"],["gw","By Gameweek"]].map(([k,n])=>`<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')">${n}</button>`).join("")}</span></div>`;
-  return tabs+(m==="clubs"?clubsHTML():fixtureGridHTML());
+  const m=["clubs","team","gw","odds"].includes(S.fixMode)?S.fixMode:"clubs";
+  const tabs=`<div class="pagetabs"><h1>Teams</h1><span class="pseg">${[["clubs","Clubs"],["team","Fixture Grid"],["gw","By Gameweek"],["odds","Odds"]].map(([k,n])=>`<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')">${n}</button>`).join("")}</span></div>`;
+  return tabs+(m==="clubs"?clubsHTML():m==="odds"?oddsHTML():fixtureGridHTML());
 }
 function fixtureGridHTML(){
   const g=VG(), teams=S.model.teams;
@@ -1635,7 +1639,7 @@ function signalsHTML(){
   const ds=S.status&&S.status.dataset;
   return `<div class="sgpage">
     <div class="sghead"><div><h2>Signals</h2><p>Gameweek ${G} · players and teams worth a look, ranked from the model and this season's data${ds&&ds.committedAt?` · stats ${esc(ukWhen(ds.committedAt))}`:""}</p></div>
-      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}<a class="btnlink" href="${routeFor("transfers")}" onclick="return go(event,'transfers')">Transfers →</a></div></div>
+      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}<button class="btnlink" onclick="act('tab','squad');act('pop','move')">Plan transfers →</button></div></div>
     ${signalBoardHTML(G,H,posF)}
     <h4 class="sgsec">Your Squad</h4>
     <div class="sggrid g3">
@@ -1745,7 +1749,7 @@ function popHTML(){
   if(k==="move")return modalHTML(`Top Moves · ${wkSpan(g,h)}`,
     (D.moves.length?`<div class="tgrid">${D.moves.map(m=>swapCardHTML(m,g)).join("")}</div>`:`<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p>`)
     +`<p class="note" style="margin-top:10px">Each move is scored on your best XI plus captain, week by week${h>1?" (later weeks count for a little less)":""}, against your current team.</p>`
-    +planPanelHTML(),{wide:true,ctl});
+    +planPanelHTML()+transfersHTML(),{wide:true,ctl});
   if(k==="cap")return modalHTML("Captain",captaincyHTML()||`<p class="note">Captaincy is set for the next deadline.</p>`,{});
   if(k==="price"){
     const row=p=>{const l=L(p),pr=(l.pcProj||[]).map(([o,v,lk])=>`<td>${Math.round(v)}%</td>`).join("");
@@ -2097,4 +2101,86 @@ function clubsHTML(){
       <th style="text-align:left">${view==="opp"?"Faced next by":"Next "+h}</th><th>${view==="opp"?"Proj. conceded":"Proj. goals"}</th><th>CS %</th>
       <th title="Bookmakers, next match: expected goals and clean-sheet chance">Market</th><th style="text-align:left">${view==="def"?"Top defenders":view==="opp"?"Attackers facing them":"Top attackers"}</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
+}
+
+/* ============================================================
+   REDESIGN WAVE 7 (20 Oct 2026): the Status page. Data freshness (wave 1),
+   then model performance against FPL's own prediction, fixture-rating
+   accuracy, odds status, options, the signal key and the xFPL model page.
+   ============================================================ */
+function modelVsFplHTML(){
+  const A=S.playerActuals;
+  const rows=[];let tm=0,tf=0,tn=0,tb=0,top=[];
+  for(let g=1;g<=38;g++){
+    if(!weekFinal(g))continue;
+    const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g],back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
+    const snap=live||back;if(!snap||!snap.players||!A)continue;
+    const ep=snap.fplEp||null;
+    let n=0,em=0,ef=0,b=0;const both=[];
+    Object.entries(snap.players).forEach(([id,pred])=>{
+      const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
+      const f=ep?ep[id]:null;if(ep&&f==null)return;
+      n++;em+=Math.abs(pred-pts);b+=pred-pts;if(ep){ef+=Math.abs(f-pts);both.push({pred,f,pts});}});
+    if(!n)continue;
+    const t10=k=>both.slice().sort((x,y)=>y[k]-x[k]).slice(0,10).reduce((s,x)=>s+x.pts,0)/Math.min(10,both.length||1);
+    rows.push({g,src:live?"live":"backtest",n,mae:em/n,bias:b/n,fpl:ep?ef/n:null,tM:both.length?t10("pred"):null,tF:both.length?t10("f"):null});
+    if(ep){tm+=em;tf+=ef;tn+=n;tb+=b;}
+  }
+  if(!rows.length)return `<p class="note" style="padding:14px;margin:0">No finished gameweek with a saved prediction yet.</p>`;
+  const cmp=rows.filter(r=>r.fpl!=null);
+  const avg=(k)=>cmp.length?cmp.reduce((s,r)=>s+r[k],0)/cmp.length:null;
+  const cards=cmp.length?`<div class="fcgrid c5" style="padding:14px 14px 0">
+    ${figCard("Model Error",`Average miss per player, model against points scored, over ${tn.toLocaleString()} player-weeks where FPL's own figure was saved too.`,(tm/tn).toFixed(2),"points per player",cmp.map(r=>-r.mae),"#3DDC97","mint")}
+    ${figCard("FPL Error","The same players and weeks, FPL's own expected points (ep_next) taken before the deadline.",(tf/tn).toFixed(2),"points per player",cmp.map(r=>-r.fpl),"#8A8A8A")}
+    ${figCard("Model vs FPL","How much closer the model is on average (positive = the model is better).",`<span class="${tf>tm?"up":"dn"}">${sgn1((tf-tm)/tn)}</span>`,`${cmp.filter(r=>r.mae<r.fpl).length} of ${cmp.length} weeks better`,null,"#8A8A8A")}
+    ${figCard("Model Bias","Average of prediction minus points: positive means the model over-predicts.",sgn1(tb/tn),"points per player",null,"#8A8A8A")}
+    ${figCard("Top 10 Picks","What the model's ten highest predictions went on to score, on average, against FPL's ten.",avg("tM").toFixed(1),`FPL's top 10: ${avg("tF").toFixed(1)}`,null,"#8A8A8A")}
+  </div>`:"";
+  return cards+`<div class="scroll" style="padding:0 14px 14px"><table class="mkt"><thead><tr><th>Gameweek</th><th>Source</th><th>Players</th><th>Model error</th><th>FPL error</th><th>Bias</th><th>Model top 10</th><th>FPL top 10</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>GW${r.g}</td><td>${r.src==="live"?"before the deadline":"backtest"}</td><td>${r.n}</td>
+      <td><b class="${r.fpl!=null?(r.mae<=r.fpl?"up":"dn"):""}">${r.mae.toFixed(2)}</b></td><td>${r.fpl!=null?r.fpl.toFixed(2):"not saved"}</td>
+      <td>${sgn1(r.bias)}</td><td>${r.tM!=null?r.tM.toFixed(1):"—"}</td><td>${r.tF!=null?r.tF.toFixed(1):"—"}</td></tr>`).join("")}</tbody></table>
+    <p class="note" style="margin:8px 0 0">Backtest weeks (GW1-6) run today's model on the data as it stood before each deadline; FPL's figure for those weeks comes from the same pre-deadline data. Live weeks are snapshots taken an hour and 15 minutes before the deadline (FPL's figure saved with them from GW8).</p></div>`;
+}
+function fixtureAccuracyHTML(){
+  if(!S.model||!S.ratingsReady)return `<p class="note" style="padding:14px;margin:0">Ratings not ready.</p>`;
+  /* fixtures carry their model teams (ht, at) */
+  const done=(S.fixtures||[]).filter(f=>f.finished&&f.hs!=null&&f.as!=null&&f.ht&&f.at);
+  if(!done.length)return `<p class="note" style="padding:14px;margin:0">No finished matches yet.</p>`;
+  let n=0,e=0,eBase=0,hit=0,games=0,tot=0;
+  done.forEach(f=>{const h=f.ht,a=f.at;if(!h||!a)return;tot+=f.hs+f.as;});
+  const base=tot/(2*done.length);
+  done.forEach(f=>{const h=f.ht,a=f.at;if(!h||!a)return;
+    const ph=fdrCalc(h,a,true,"xgf"),pa=fdrCalc(a,h,false,"xgf");
+    e+=Math.abs(ph-f.hs)+Math.abs(pa-f.as);eBase+=Math.abs(base-f.hs)+Math.abs(base-f.as);n+=2;
+    const pr=ph-pa>0.25?1:pa-ph>0.25?-1:0,ac=f.hs>f.as?1:f.as>f.hs?-1:0;if(pr!==0){games++;if(pr===ac)hit++;}});
+  return `<div class="fcgrid c5" style="padding:14px">
+    ${figCard("Goals Error","Average miss on each side's goals, today's fixture ratings against this season's results.",(e/n).toFixed(2),"goals per side",null,"#3DDC97","mint")}
+    ${figCard("Baseline Error","The same misses if every side were given the season's average goals.",(eBase/n).toFixed(2),`average ${base.toFixed(2)} goals`,null,"#8A8A8A")}
+    ${figCard("Skill",`How much better than the baseline (positive = the ratings help).`,`<span class="${eBase>e?"up":"dn"}">${Math.round((1-e/eBase)*100)}%</span>`,"vs the average",null,"#8A8A8A")}
+    ${figCard("Favourite Won","When the ratings make one side clearly the better (a quarter of a goal or more), how often that side won.",games?Math.round(hit/games*100)+"%":"—",`${hit} of ${games} matches`,null,"#8A8A8A")}
+    ${figCard("Matches","Finished league matches this season used here.",String(done.length),"in-sample: the ratings have seen them",null,"#8A8A8A")}
+  </div>`;
+}
+function oddsStatusHTML(){
+  const st=S.oddsState||"idle",fx=(S.odds||[]).length,teams=S.oddsTeams?Object.keys(S.oddsTeams).length/2:0;
+  const props=S.propMarket?Object.keys(S.propMarket).length:0;
+  const label={ok:"Loaded",live:"Loaded",loading:"Loading",nokey:"No key set on the server",backup:"Not on the backup copy",error:"Failed",idle:"Not loaded"}[st]||st;
+  return `<div class="prov">
+    <span>Status: <b>${esc(label)}</b>${S.oddsErr?` · ${esc(S.oddsErr)}`:""}</span>
+    <span>Fetched: <b>${esc(ukWhen(S.oddsFetchedAt))}</b></span>
+    <span>Fixtures priced: <b>${fx}</b></span>
+    <span>Fixtures used by the model: <b>${teams}</b></span>
+    <span>Players with goal or assist prices: <b>${props}</b></span>
+    <span>Player odds in the model: <b>${typeof PROP_W!=="undefined"&&PROP_W>0?"on, weight "+PROP_W:"off (re-test at GW12)"}</b></span>
+    ${(S.oddsRejected||[]).length?`<span style="flex-basis:100%;color:var(--amber)">Ignored as stale or in-play: ${esc(S.oddsRejected.join(", "))}</span>`:""}
+  </div>`;
+}
+function optionsHTML(){
+  const drafts=LS.get("drafts")||[],ign=(S.ignored||[]).map(id=>S.model&&S.model.players.find(p=>p.id===id)).filter(Boolean);
+  return `<div class="pbody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+    <div><div class="note" style="margin-bottom:6px">Compare drafts</div>${drafts.length?`${drafts.map(d=>`<div class="mu" style="font-size:12.5px">${esc(d.label)}</div>`).join("")}<button style="margin-top:8px" onclick="act('cleardrafts')">Delete all ${drafts.length} drafts</button>`:'<span class="mu">None saved.</span>'}</div>
+    <div><div class="note" style="margin-bottom:6px">Not suggesting</div>${ign.length?`<span style="display:flex;gap:6px;flex-wrap:wrap">${ign.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}<button onclick="act('unignore')">Suggest all again</button></span>`:'<span class="mu">Every player can be suggested.</span>'}</div>
+    <div><div class="note" style="margin-bottom:6px">Shortlist</div>${S.stars.length?`<span class="mu">${S.stars.length} players</span> <button onclick="act('clearstars')">Clear</button>`:'<span class="mu">Empty. Tap ★ on Players to add.</span>'}</div>
+  </div>`;
 }

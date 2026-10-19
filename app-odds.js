@@ -929,6 +929,10 @@ function renderPage(){
       <p class="note" style="margin-top:14px">Data: <a href="https://github.com/olbauday/FPL-Core-Insights" target="_blank" style="color:var(--cyan)">FPL Core Insights</a>, mirrored locally about three times a day.</p></div>`;
     return;
   }
+  /* wave 8: the Odds and Transfers pages are retired; their old links land
+     on the new homes (Teams > Odds, the Planner's Top Move pop-up) */
+  if(S.tab==="transfers"){S.tab="squad";S.pop="move";try{history.replaceState({},"",routeFor("squad"));}catch(e){}}
+  if(S.tab==="odds"){S.tab="fixtures";S.fixMode="odds";try{history.replaceState({},"",routeFor("fixtures"));}catch(e){}}
   const g=VG();
   /* a flagged player counts as sold: value drops, bank rises by his selling price */
   const flaggedP=squadPlayers().filter(p=>S.flagged.includes(p.id));
@@ -1033,9 +1037,7 @@ function renderPage(){
   else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();
   else if(S.tab==="xfpl")main=statusPageHTML();
   else if(S.tab==="chips")main=chipsHTML();
-  else if(S.tab==="transfers")main=transfersHTML();
   else if(S.tab==="fixtures")main=fixturesHTML();
-  else if(S.tab==="odds")main=oddsHTML();
   else if(S.tab==="rivals")main=leagueTabsHTML()+rivalsHTML();
   else if(S.tab==="news")main=newsHTML();
   else if(S.tab==="signals")main=signalsHTML();
@@ -1150,6 +1152,10 @@ function leagueTabsHTML(){
 function statusPageHTML(){
   return `<div class="pagetabs"><h1>Status</h1>${statusChipHTML()}</div>
     <div class="panel"><div class="phead"><h2>Data Freshness</h2></div>${provHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Model vs FPL</h2><span class="note">each finished gameweek, prediction against points scored</span></div>${modelVsFplHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Fixture Ratings</h2><span class="note">projected goals against this season's results</span></div>${fixtureAccuracyHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Odds</h2><a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Bookmaker markets →</a></div>${oddsStatusHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Options</h2></div>${optionsHTML()}</div>
     <div class="panel"><div class="phead"><h2>Signal Key</h2><span class="note">hover a tile for its rule</span></div>${legendHTML()}</div>
     ${xfplHTML()}`;
 }

@@ -80,6 +80,16 @@ async function main() {
   const n = Object.keys(players).length;
   if (n < 300) throw new Error(`only ${n} projections`);
 
+  /* redesign wave 7: FPL's own expected points at the same moment, so the
+     Status page can set the model against FPL on identical players */
+  let fplEp = null;
+  try {
+    const fp = await (await fetch(new URL("/api/fpl-players", BASE))).json();
+    fplEp = {};
+    Object.entries(fp.players || {}).forEach(([id, x]) => { if (x && x.ep != null) fplEp[id] = x.ep; });
+    if (!Object.keys(fplEp).length) fplEp = null;
+  } catch (e) { console.error("fpl ep: " + e.message); }
+
   let payload = null;
   try { payload = JSON.parse(await readFile(OUT, "utf8")); } catch { /* first run */ }
   if (!payload || payload.season !== SEASON) payload = { season: SEASON, updated: null, gw: {} };
@@ -93,7 +103,8 @@ async function main() {
     propPlayers: get(`Object.keys(S.propMarket||{}).filter(id=>S.propMarket[id][${g}]).length`),
     propWeight: get("typeof PROP_W!=='undefined'?PROP_W:0"),
     learning: get("typeof LEARN_APPLY!=='undefined'&&LEARN_APPLY"),
-    players
+    players,
+    fplEp
   };
   payload.updated = new Date().toISOString();
   await mkdir(dirname(OUT), { recursive: true });
