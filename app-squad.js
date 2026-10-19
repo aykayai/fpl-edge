@@ -489,26 +489,97 @@ function weekPtsFor(g,h){
 }
 function weekPts(){return weekPtsFor(VG(),S.horizon);}
 /* ---------- transfer engine ---------- */
+/* Stage 1 (19 Oct 2026, Andy): a move is worth what it adds to the best
+   legal XI plus captain, week by week over the horizon (later weeks x DECAY),
+   not player against player. Player against player, Head Scout suggested
+   swapping a bench keeper who never plays for "+4.0". */
+function xiTotal(ids,e,byId){
+  const ps=ids.map(i=>byId.get(i)).filter(Boolean),v=p=>p.gw[e]?.pts||0;
+  const xi=legalBestXI(ps,v);
+  return xi.reduce((a,p)=>a+v(p),0)+(xi.length?Math.max(...xi.map(v)):0);
+}
+function xiGain(ids,outId,inId,g,h,byId,base){
+  const ns=ids.map(i=>i===outId?inId:i);let s=0;
+  for(let k=0;k<(h||1)&&g+k<=38;k++)
+    s+=Math.pow(DECAY,k)*(xiTotal(ns,g+k,byId)-(base?base[k]:xiTotal(ids,g+k,byId)));
+  return s;
+}
+const _bsCache={};
 function bestSwaps(limit){
   if(!S.model||!S.squad)return[];
-  const g=VG(),out=[];
+  const g=VG(),h=S.horizon||1,bank=planBank();
+  const key=[g,h,bank,S.squad.join("."),(S.ignored||[]).join("."),S.model.players.length].join("|");
+  if(_bsCache.key===key&&_bsCache.model===S.model)return _bsCache.res.slice(0,limit||10);
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));
+  const base=[];for(let k=0;k<h&&g+k<=38;k++)base.push(xiTotal(S.squad,g+k,byId));
+  const out=[];
   S.squad.forEach(oid=>{
-    const o=S.model.players.find(p=>p.id===oid);if(!o)return;
+    const o=byId.get(oid);if(!o)return;
     const cc={};S.squad.filter(i=>i!==oid).forEach(i=>{
-      const p=S.model.players.find(x=>x.id===i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
+      const p=byId.get(i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
+    /* shortlist by player gain, then score the shortlist on the XI */
+    const cands=[];
     S.model.players.forEach(p=>{
       if(p.pos!==o.pos||S.squad.includes(p.id)||p.avail<=0)return;
       if((S.ignored||[]).includes(p.id))return;
-      if(p.price>planBank()+sellPrice(o)+.001)return;
-      if((cc[p.team]||0)>=3)return;
-      const gain=dGain(p,o,g,S.horizon);
+      if(p.price>bank+sellPrice(o)+.001)return;
+      if((cc[p.team]||0)>=RULES.clubMax)return;
+      cands.push({p,pg:dGain(p,o,g,h)});});
+    cands.sort((a,b)=>b.pg-a.pg).slice(0,12).forEach(({p})=>{
+      const gain=xiGain(S.squad,oid,p.id,g,h,byId,base);
       /* where gains are level, prefer the player carrying signals */
       const sig=signals(p,g).length;
       if(gain>0.05)out.push({out:o,inn:p,gain,sig});});});
   out.sort((a,b)=>(b.gain-a.gain)||(b.sig-a.sig));
   const seen=new Set(),uniq=[];
   out.forEach(m=>{const k=m.out.id+"-"+m.inn.id;if(seen.has(k))return;seen.add(k);uniq.push(m);});
+  Object.assign(_bsCache,{key,model:S.model,res:uniq});
   return uniq.slice(0,limit||10);
+}
+/* S3 (Stage 1, 19 Oct 2026): a five-week plan. Week by week, the best single
+   move scored on the XI over the weeks left in the plan; made only if it
+   beats the bar (a saved transfer's worth, plus a hit when no free transfer
+   is left), otherwise the transfer is rolled. */
+const _planCache={};
+function planWeeks(H){
+  if(!S.model||!S.squad)return null;
+  H=H||5;
+  const g0=S.model.next.id;
+  const key=[g0,H,planBank(),freeTransfers(),S.squad.join("."),(S.ignored||[]).join(".")].join("|");
+  if(_planCache.key===key&&_planCache.model===S.model)return _planCache.res;
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));
+  let squad=S.squad.slice(),bank=planBank(),ft=freeTransfers(),total=0;
+  const weeks=[];
+  for(let k=0;k<H&&g0+k<=38;k++){
+    const w=g0+k,rem=Math.min(H-k,39-w);
+    const base=[];for(let j=0;j<rem;j++)base.push(xiTotal(squad,w+j,byId));
+    let best=null;
+    squad.forEach(oid=>{
+      const o=byId.get(oid);if(!o)return;
+      const club={};squad.filter(i=>i!==oid).forEach(i=>{const q=byId.get(i);if(q)club[q.team]=(club[q.team]||0)+1;});
+      const sell=sellPrice(o);
+      S.model.players.filter(p=>p.pos===o.pos&&!squad.includes(p.id)&&p.avail>0&&!(S.ignored||[]).includes(p.id)
+          &&p.price<=bank+sell+1e-9&&(club[p.team]||0)<RULES.clubMax)
+        .map(p=>({p,pg:dGain(p,o,w,rem)})).sort((a,b)=>b.pg-a.pg).slice(0,12)
+        .forEach(({p})=>{const gain=xiGain(squad,oid,p.id,w,rem,byId,base);
+          if(!best||gain>best.gain)best={o,p,gain,sell};});
+    });
+    const bar=ft>0?FT_VALUE:FT_VALUE+HIT;
+    if(best&&best.gain>bar){
+      const hit=ft>0?0:HIT;
+      bank=+(bank+best.sell-best.p.price).toFixed(1);
+      weeks.push({w,ft,out:best.o,inn:best.p,gain:best.gain,hit,bank});
+      total+=best.gain-hit;
+      squad=squad.map(i=>i===best.o.id?best.p.id:i);
+      ft=Math.min(FT_MAX,Math.max(0,ft-1)+1);
+    }else{
+      weeks.push({w,ft,roll:true,best:best?{out:best.o,inn:best.p,gain:best.gain}:null,bar});
+      ft=Math.min(FT_MAX,ft+1);
+    }
+  }
+  const res={weeks,total,H};
+  Object.assign(_planCache,{key,model:S.model,res});
+  return res;
 }
 function bestCombo(outIds){
   if(!S.model||!outIds.length)return null;

@@ -39,6 +39,7 @@ function act(k,a,b){
     case"card":S.cardId=a||null;break;
     case"pdmore":S.pdLimit=(S.pdLimit||PD_PAGE)+PD_PAGE;break;
     case"pdall":S.pdLimit=1000;break;
+    case"fixread":S.fixRead=a;break;
     case"poolmore":S.poolLimit=Math.min(150,(S.poolLimit||50)+50);break;
     case"pdless":S.pdLimit=PD_PAGE;break;
     case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[]});break;

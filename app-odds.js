@@ -195,6 +195,34 @@ function marketPoints(p,rec,fx){
   }
   return pts*clamp(p.avail,0,1)*(0.55+0.45*mins);
 }
+/* S10 (Stage 1, 19 Oct 2026): captain options from the XI. Gap is the cost
+   against the best option (the armband doubles it); Plays is the chance he
+   appears; League C is how many of the league captained him last week. */
+function captaincyHTML(){
+  const g=VG();if(!S.model||g<S.model.next.id)return "";
+  const xi=startingXI();if(!xi.length)return "";
+  const v=p=>p.gw[g]?.pts||0;
+  const opts=xi.slice().sort((a,b)=>v(b)-v(a)).slice(0,6);
+  const top=v(opts[0]);
+  const rf=S.rivalsFeed||{},caps={};let nRiv=0;
+  Object.entries(rf.entries||{}).forEach(([id,e])=>{if(id===TEAM_ID)return;
+    const last=(e.gw||[])[(e.gw||[]).length-1];const c=last&&(last.picks||[]).find(x=>x.isC);
+    nRiv++;if(c)caps[c.id]=(caps[c.id]||0)+1;});
+  const {captain}=effectiveCaptainVice(g);
+  return `<div class="panel"><div class="phead"><h2>Captaincy</h2><span class="note">GW${g} · your XI</span></div>
+    <div class="pbody" style="padding-top:6px"><table class="mkt"><thead><tr><th>Option</th><th>Predicted</th><th>Gap</th><th>Plays</th>
+      <th class="hide-ph">xGI/90</th><th class="hide-ph">Owned</th>${nRiv?"<th>League C</th>":""}<th></th></tr></thead><tbody>
+    ${opts.map(p=>{const q=p.gw[g]||{},f=(q.fixtures||[])[0],gap=v(p)-top,isC=p.id===captain;
+      return `<tr${isC?' class="me"':""}><td>${esc(p.web_name)} <span class="mu">${f?esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
+        <td><b>${v(p).toFixed(1)}</b></td><td>${Math.abs(gap)<0.05?'<span class="up">best</span>':`<span class="dn">${sgn1(gap*2)}</span>`}</td>
+        <td>${Math.round((q.pPlay??1)*100)}%</td><td class="hide-ph">${(p.xg90+p.xa90).toFixed(2)}</td><td class="hide-ph">${p.owned}%</td>
+        ${nRiv?`<td>${caps[p.id]||0}/${nRiv}</td>`:""}
+        <td>${isC?'<span class="tagy">C</span>':`<button class="mini" onclick="act('cap',${p.id})" aria-label="Make ${esc(p.web_name)} captain">C</button>`}</td></tr>`;}).join("")}
+    </tbody></table>
+    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
+      <p style="margin:0">Gap is what each option costs against the best one with the armband on (the difference doubled). Plays is the chance he appears at all. ${nRiv?"League C is how many of your league captained him last week: a popular pick protects your place, an unpopular one is the differential. ":""}Tap C to make him captain for this week.</p></div></details>
+    </div></div>`;
+}
 /* D17: say so when the captain will not score as the armband suggests */
 function capWarnHTML(){
   const g=VG();if(!S.model||g<S.model.next.id)return "";
@@ -569,10 +597,15 @@ function rivalsHTML(){
     const d=r.lastRank-r.rank;
     if(!d)return `<span style="color:var(--mute)">–</span>`;
     return `<span style="color:${d>0?"var(--mint)":"var(--red)"}">${d>0?"▲":"▼"}${Math.abs(d)}</span>`;};
+  /* S9 (Stage 1, 19 Oct 2026): LiveFPL-style rows. Captain, chip, transfers
+     and hits, bench points and how many of their XI you also own, all from
+     the latest week in the rivals feed. */
+  const lastOf=id=>{const e=(feed.entries||{})[id];const a=(e&&e.gw)||[];return a.length?a[a.length-1]:null;};
+  const chipOf=(id,ev)=>{const e=(feed.entries||{})[id];const c=((e&&e.chips)||[]).find(x=>x.event===ev);return c?(c.label||c.name):null;};
   const table=`<div class="panel"><div class="phead"><h2>${esc(feed.leagueName||"League")}</h2>
       <span class="note">${esc(feed.leagueId||S.leagueId||"391690")} · GW${feed.lastEvent||gLast}</span></div>
     <div class="scroll"><table class="trktable"><thead><tr>
-      <th>#</th><th></th><th>Team</th><th>GW</th><th>Total</th></tr></thead><tbody>
+      <th>#</th><th></th><th>Team</th><th>GW</th><th>Total</th><th>Captain</th><th class="hide-ph">Chip</th><th class="hide-ph">Transfers</th><th class="hide-ph">Bench</th><th>Shared</th></tr></thead><tbody>
       ${rows.map(r=>{const isMe=String(r.entryId)===String(TEAM_ID);
         const isSel=String(r.entryId)===selId;
         return `<tr class="rvrow${isSel?" on":""}" ${isMe?"":`onclick="act('rivalpick','${r.entryId}')"`}
@@ -582,9 +615,17 @@ function rivalsHTML(){
           <td style="text-align:left">
             <span style="font-weight:700;color:${isMe?"var(--mint)":isSel?"var(--amber)":"var(--cream)"}">${esc(r.entryName||"—")}</span>
             <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.manager||"")}${isMe?" · you":""}</span></td>
-          <td>${r.gwPoints??"—"}</td><td>${r.totalPoints??"—"}</td></tr>`;}).join("")}
+          <td>${r.gwPoints??"—"}</td><td><b>${r.totalPoints??"—"}</b></td>
+          ${(()=>{const L=lastOf(r.entryId)||{},pk=L.picks||[],c=pk.find(x=>x.isC),cp=c&&pOf(c.id);
+            const chip=chipOf(r.entryId,L.event);
+            const shared=pk.filter(x=>x.multiplier>0&&myIds.has(x.id)).length;
+            return `<td>${cp?esc(cp.web_name):"—"}</td>
+              <td class="hide-ph">${chip?`<span class="tagy">${esc(chip)}</span>`:'<span class="mu">—</span>'}</td>
+              <td class="hide-ph">${L.transfers??"—"}${L.transferCost?` <span class="dn">−${L.transferCost}</span>`:""}</td>
+              <td class="hide-ph">${L.bench??"—"}</td>
+              <td>${isMe?"—":(pk.length?shared+"/11":"—")}</td>`;})()}</tr>`;}).join("")}
     </tbody></table></div>
-    <div class="pbody"><p class="note" style="margin:0">Tap a rival for their squad, chips, transfers and differentials.</p></div></div>`;
+    <div class="pbody"><p class="note" style="margin:0">Tap a rival for their squad, chips, transfers and differentials. Shared is how many of their starting XI you also own.</p></div></div>`;
 
   /* ---------- league-wide summary ---------- */
   const entries=feed.entries||{};
@@ -996,6 +1037,7 @@ function renderPage(){
                 return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
           </span></div></div>
       <div class="panel">${legendHTML()}</div>
+      ${captaincyHTML()}
       <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
         <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
       <div class="poolcol">

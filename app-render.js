@@ -802,7 +802,66 @@ function transfersHTML(){
         :`<p class="note" style="margin:0">Head Scout recommends no transfers in this position.</p>`}</div></div>`;
   }).join("");
 
-  return radarHTML()+picker+comboPanel+headScout+suggestTitle+byPos;
+  return planPanelHTML()+radarHTML()+picker+comboPanel+headScout+priceMovesHTML()+suggestTitle+byPos;
+}
+/* S3 (Stage 1, 19 Oct 2026): the five-week plan, one card per week */
+function planPanelHTML(){
+  if(!S.model||VG()!==S.model.next.id)return "";        // the plan starts from the live week
+  const P=planWeeks(5);if(!P)return "";
+  const card=x=>x.roll
+    ?`<div class="wkc roll"><div class="wkh"><span>GW${x.w}</span><span>${x.ft} FT</span></div>
+        <div class="wkm"><b>Roll the transfer</b><br><span class="mu">${x.best?`Best move ${esc(x.best.out.web_name)} → ${esc(x.best.inn.web_name)} ${sgn1(x.best.gain)}, under the ${x.bar.toFixed(2)} bar`:"No move improves the XI"}</span></div></div>`
+    :`<div class="wkc"><div class="wkh"><span>GW${x.w}</span><span>${x.ft} FT${x.hit?` · <span class="dn">−${x.hit}</span>`:""}</span></div>
+        <div class="wkm"><span class="dn">${esc(x.out.web_name)}</span> <span class="mu">${esc(x.out.teamName)} £${sellPrice(x.out).toFixed(1)}</span><br>
+        → <span class="up">${esc(x.inn.web_name)}</span> <span class="mu">${esc(x.inn.teamName)} £${x.inn.price.toFixed(1)}</span><br>
+        <b class="up">${sgn1(x.gain)}</b> <span class="mu">to the XI · bank £${x.bank.toFixed(1)}</span></div>
+        ${x.w===S.model.next.id?`<button style="margin-top:8px;width:100%" onclick="act('doswap',${x.out.id},${x.inn.id})">Make this move</button>`:""}</div>`;
+  const first=P.weeks[0].w,last=P.weeks[P.weeks.length-1].w;
+  return `<div class="panel"><div class="phead"><h2>Five-Week Plan</h2>
+      <span class="note">GW${first}–${last} · ${sgn1(P.total)} net</span></div>
+    <div class="pbody"><div class="wkgrid">${P.weeks.map(card).join("")}</div>
+      <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>How the plan is made</summary><div class="infobox">
+        <p style="margin:0">Week by week, the best single move is scored by what it adds to your best XI and captain in each week left in the plan, later weeks counting 0.85 of the week before. A move is made only if it beats ${FT_VALUE} (what saving the transfer is worth), plus the ${HIT}-point hit when no free transfer is left; otherwise the transfer is rolled. A swap on a bench player who would not play adds nothing. Only this week's move can be made from here; later weeks show what the plan expects.</p></div></details>
+    </div></div>`;
+}
+/* S6 (Stage 1, 19 Oct 2026): price pressure from FPL's own transfer counts */
+function priceMovesHTML(){
+  if(!S.model||!S.players)return "";
+  const stats=new Map(S.players.map(p=>[p.id,p.stats||{}]));
+  const mine=new Set(S.squad||[]);
+  const rows=S.model.players.map(p=>{const s=stats.get(p.id)||{};
+    return{p,net:num(s.transfers_in_event)-num(s.transfers_out_event),chg:num(s.cost_change_event)/10,mine:mine.has(p.id)};});
+  const k=n=>(n>=0?"+":"−")+Math.abs(Math.round(n/1000))+"k";
+  const t=(list,cell,head)=>`<table class="mkt"><thead><tr><th>Player</th><th>Price</th><th>${head}</th><th class="hide-ph">Owned</th></tr></thead><tbody>
+    ${list.map(r=>`<tr${r.mine?' class="me"':""}><td>${esc(r.p.web_name)} <span class="mu">${esc(r.p.teamName)}</span></td><td>£${r.p.price.toFixed(1)}</td><td>${cell(r)}</td><td class="hide-ph">${r.p.owned}%</td></tr>`).join("")}</tbody></table>`;
+  const net=r=>`<span class="${r.net>=0?"up":"dn"}">${k(r.net)}</span>`;
+  const byNet=rows.slice().sort((a,b)=>b.net-a.net);
+  const changed=rows.filter(r=>r.chg).sort((a,b)=>b.chg-a.chg);
+  const sect=(title,body)=>`<div><div class="note" style="margin-bottom:4px">${title}</div>${body}</div>`;
+  return `<div class="panel"><div class="phead"><h2>Price Moves</h2><span class="note">GW${S.model.next.id} so far</span></div>
+    <div class="pbody"><div class="pmgrid">
+      ${sect("Most Bought",t(byNet.slice(0,6),net,"Net"))}
+      ${sect("Most Sold",t(byNet.slice(-6).reverse(),net,"Net"))}
+      ${sect("Your Squad, Most Sold",t(rows.filter(r=>r.mine).sort((a,b)=>a.net-b.net).slice(0,4),net,"Net"))}
+      ${changed.length?sect("Changed This Week",t([...changed.slice(0,3),...changed.slice(-3).filter(r=>r.chg<0)],r=>`<span class="${r.chg>0?"up":"dn"}">${r.chg>0?"▲":"▼"} ${Math.abs(r.chg).toFixed(1)}</span>`,"Change")):""}
+    </div>
+    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>What this shows</summary><div class="infobox">
+      <p style="margin:0">Net transfers this gameweek (in minus out) from FPL's own counts, refreshed with the player data. FPL does not publish the thresholds at which prices move, so this shows the pressure rather than a guessed rise or fall time. Your players are highlighted.</p></div></details>
+    </div></div>`;
+}
+/* S8 (Stage 1, 19 Oct 2026): what a Fixtures cell shows. Difficulty is the
+   1-5 band; Clean Sheet % is the chance of keeping one, from the fixture's
+   expected goals against; Projected Goals is what the side should score.
+   The same five-step colours, best green to worst dark red. */
+function readPill(t,opp,home,lens){
+  const r=S.fixRead||"fdr";
+  if(r==="fdr"||!opp)return fdrPill(opp?.short||"?",home,fdrOf(opp,home,t,lens),{short:true});
+  const xgc=fdrCalc(t,opp,home,"xgc"),xgf=fdrCalc(t,opp,home,"xgf");
+  const band=r==="cs"?(v=>v>=45?1:v>=35?2:v>=25?3:v>=15?4:5)(Math.exp(-xgc)*100)
+                     :(v=>v>=2?1:v>=1.6?2:v>=1.2?3:v>=0.9?4:5)(xgf);
+  const [b,c]=fdrCol(band);
+  const val=r==="cs"?Math.round(Math.exp(-xgc)*100)+"%":xgf.toFixed(1);
+  return `<span class="fdrpill readpill" style="background:${b};color:${c};${home?"":"font-style:italic;"}">${esc(String(opp.short).slice(0,3))}<small>${val}</small></span>`;
 }
 function fixturesHTML(){
   const g=VG(), teams=S.model.teams;
@@ -855,6 +914,9 @@ function fixturesHTML(){
       <span class="pseg">
         ${[["all","Overall"],["att","Attackers"],["def","Defenders"]].map(([k,n])=>
           `<button class="${(lens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}</span>
+      ${mode==="team"?`<span class="pseg" aria-label="What each cell shows">
+        ${[["fdr","Difficulty"],["cs","Clean Sheet %"],["gf","Projected Goals"]].map(([k,n])=>
+          `<button class="${(S.fixRead||"fdr")===k?"on":""}" onclick="act('fixread','${k}')">${n}</button>`).join("")}</span>`:""}
     </div>
     <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
       <span class="note" style="flex:1;min-width:220px">A defender's rating reads the opponent's attack; an attacker's reads their defence.</span>
@@ -884,7 +946,7 @@ function fixturesHTML(){
         if(!fx.length){cells+=`<td style="text-align:center"><span class="fdrpill" style="background:var(--ink3);color:var(--mute)">—</span></td>`;continue;}
         cells+=`<td style="text-align:center;white-space:nowrap"><span class="pillrow" style="justify-content:center">${fx.map(f=>{
           const home=f.ht===t, opp=home?f.at:f.ht;
-          return fdrPill(opp?.short||"?",home,fdrOf(opp,home,t,lens),{short:true});}).join("")}</span></td>`;}
+          return readPill(t,opp,home,lens);}).join("")}</span></td>`;}
       const hot=best3.includes(t);
       const col=v=>v<=2.2?"var(--mint)":v>=3.6?"var(--red)":"var(--cream)";
       return `<tr style="${hot?"background:rgba(45,220,135,.07)":""}">
