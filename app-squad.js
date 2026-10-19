@@ -568,12 +568,13 @@ function xiGain(ids,outId,inId,g,h,byId,base){
     s+=Math.pow(DECAY,k)*(xiTotal(ns,g+k,byId)-(base?base[k]:xiTotal(ids,g+k,byId)));
   return s;
 }
-const _bsCache={};
-function bestSwaps(limit){
+let _bsCache={};
+function bestSwaps(limit,hh){
   if(!S.model||!S.squad)return[];
-  const g=VG(),h=S.horizon||1,bank=planBank();
+  const g=VG(),h=hh||S.horizon||1,bank=planBank();
   const key=[g,h,bank,S.squad.join("."),(S.ignored||[]).join("."),S.model.players.length].join("|");
-  if(_bsCache.key===key&&_bsCache.model===S.model)return _bsCache.res.slice(0,limit||10);
+  const hit=_bsCache[key];
+  if(hit&&hit.model===S.model)return hit.res.slice(0,limit||10);
   const byId=new Map(S.model.players.map(p=>[p.id,p]));
   const base=[];for(let k=0;k<h&&g+k<=38;k++)base.push(xiTotal(S.squad,g+k,byId));
   const out=[];
@@ -597,7 +598,8 @@ function bestSwaps(limit){
   out.sort((a,b)=>(b.gain-a.gain)||(b.sig-a.sig));
   const seen=new Set(),uniq=[];
   out.forEach(m=>{const k=m.out.id+"-"+m.inn.id;if(seen.has(k))return;seen.add(k);uniq.push(m);});
-  Object.assign(_bsCache,{key,model:S.model,res:uniq});
+  if(Object.keys(_bsCache).length>24)_bsCache={};
+  _bsCache[key]={model:S.model,res:uniq};
   return uniq.slice(0,limit||10);
 }
 /* S3 (Stage 1, 19 Oct 2026): a five-week plan. Week by week, the best single

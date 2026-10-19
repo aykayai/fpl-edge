@@ -75,6 +75,55 @@ body.scrolled .tbfig{display:flex}
 .pagetabs .pseg a.on{background:#EDEDED;color:#0A0A0A}
 .btnlink{display:inline-flex;align-items:center;padding:6px 12px;border-radius:8px;background:var(--ink2);box-shadow:inset 0 0 0 1px var(--line);color:var(--cream);font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap}
 .btnlink:hover{background:var(--ink3)}
+/* wave 2: This Week strip, pop-ups, Compare */
+.week{margin-bottom:22px}.weekh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.weekh h2{font:600 18px 'Geist',sans-serif;letter-spacing:0}
+.hz{display:inline-flex;background:#171717;border-radius:999px;padding:3px;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+.hz button{background:none;border:0;color:#9A9A9A;font:500 12.5px 'Geist',sans-serif;padding:5px 12px;border-radius:999px;min-height:0}
+.hz button.on{background:#EDEDED;color:#0A0A0A}
+.wkrow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.wk{display:flex;flex-direction:column;align-items:stretch;text-align:left;background:#141414;border:0;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ring);padding:14px 16px;cursor:pointer;color:var(--cream);font:inherit;min-width:0}
+.wk:hover{box-shadow:inset 0 0 0 1px var(--line)}
+.wkh{display:flex;align-items:center;gap:10px}.wkh .tile{width:30px;height:30px}
+.wkt{font-size:13px;color:#9A9A9A;font-weight:500}.chev{margin-left:auto;color:#5A5A5A;display:flex}
+.wkf{font:600 19px 'Geist',sans-serif;margin:10px 0 3px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wkf .arr{color:#5A5A5A;font-weight:400}.wkf .cx{font-family:'Geist Mono',monospace;color:#FFB020;font-size:17px;margin-left:4px}
+.wkl{font-size:13px;color:#BDBDBD;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wkl b{font-weight:600}
+.wkft{font-size:12px;color:#7A7A7A;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wkl+.wkft{margin-top:8px}
+@media(max-width:1100px){.wkrow{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){.wkrow{grid-template-columns:1fr 1fr}}
+.up{color:var(--mint)}.dn{color:var(--red)}
+.modal{position:fixed;inset:0;z-index:150;background:rgba(4,6,9,.72);display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto}
+.mbox{background:#121212;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line),0 24px 80px rgba(0,0,0,.7);width:100%;max-width:760px}
+.mbox.wide{max-width:min(1480px,100%)}
+.mhead{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--ink3);position:sticky;top:-24px;background:#121212;z-index:2;border-radius:14px 14px 0 0;flex-wrap:wrap}
+.mhead h2{font:600 18px 'Geist',sans-serif;letter-spacing:0;margin-right:auto}
+.mx{background:none;border:0;color:var(--mute);padding:6px;display:flex;min-height:0}.mx:hover{color:var(--cream)}
+.mbody{padding:16px 18px 18px}
+.mbody .panel{margin-top:14px}
+.mfoot{display:flex;align-items:center;gap:8px;margin-top:16px;flex-wrap:wrap}
+.mfoot button{display:inline-flex;align-items:center;gap:6px}
+.pseg.mseg{border-color:var(--ink3)}.pseg.mseg button{padding:6px 14px;font-size:12.5px}
+.pseg.mseg button.on{background:#EDEDED;color:#0A0A0A}
+.fcgrid.c5{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:1100px){.fcgrid.c5{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:900px){.cgrid{grid-template-columns:1fr}}
+.chd{font-size:13px;font-weight:600;margin-bottom:8px}.chd .mu{font-weight:400;font-size:12px}
+.cpitch{background:linear-gradient(180deg,#14361f,#0f2a18);border-radius:12px;padding:14px 8px 0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.crow{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.cpl{position:relative;display:flex;flex-direction:column;align-items:center;width:96px;cursor:pointer;padding:4px 2px;border-radius:8px}
+.cpl:hover{background:rgba(255,255,255,.06)}
+.cpl.pend{box-shadow:inset 0 0 0 1px var(--amber)}
+.cpn{font-size:12px;font-weight:600;margin-top:3px;max-width:94px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.cpv{font:600 12px 'Geist Mono',monospace;color:var(--mint)}
+.ctag{position:absolute;top:0;right:6px;font:700 9.5px 'Geist',sans-serif;padding:1px 5px;border-radius:4px}
+.ctag.out{background:rgba(255,90,110,.2);color:#FF8FA3}.ctag.in{background:rgba(61,220,151,.2);color:#3DDC97}
+.cpl.moved .cpn{color:#fff}
+.cmark{position:absolute;top:2px;left:8px;color:var(--amber);display:flex}
+.cbench{background:rgba(0,0,0,.35);margin:0 -8px;padding:10px 8px 0;border-radius:0 0 12px 12px}
+.cbench .lb{display:block;text-align:center;font-size:11px;color:var(--mute);margin-bottom:6px}
 .foot{text-align:center;padding:18px 0 4px;font-size:11px;color:#5A5A5A}
 .prov{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 18px;padding:14px;font-size:12.5px;color:var(--mute)}
 .prov b{color:var(--cream);font-weight:600}
@@ -683,12 +732,12 @@ details[open]>summary::after{content:" ▴"}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.23.0"></script>
-<script src="./app-squad.js?v=12.23.0"></script>
-<script src="./app-render.js?v=12.23.0"></script>
-<script src="./app-odds.js?v=12.23.0"></script>
-<script src="./app-tracker.js?v=12.23.0"></script>
-<script src="./app-main.js?v=12.23.0"></script>
+<script src="./app-core.js?v=12.24.0"></script>
+<script src="./app-squad.js?v=12.24.0"></script>
+<script src="./app-render.js?v=12.24.0"></script>
+<script src="./app-odds.js?v=12.24.0"></script>
+<script src="./app-tracker.js?v=12.24.0"></script>
+<script src="./app-main.js?v=12.24.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

@@ -1044,16 +1044,20 @@ const OPT_TIMEOUT={fast:4000,full:15000};
 const BENCH_W={wildcard:{1:0.12,2:0.38,3:0.38,4:0.38},freehit:{1:0,2:0,3:0,4:0}};
 const benchPart=(kind,bench,val)=>bench.reduce((a,p)=>a+BENCH_W[kind][p.pos]*val(p),0);
 const _optPending={};
-function buildOptimal(kind,gw,budget,full,form){
+/* wave 2: opt {weeks, locks, bans} lets the Compare pop-up pick the horizon,
+   keep players in (locks) and rule players out (bans) */
+const optKey=opt=>opt?"|"+(opt.weeks||"")+"|"+(opt.locks||[]).join(".")+"|"+(opt.bans||[]).join("."):"";
+function buildOptimal(kind,gw,budget,full,form,opt){
   if(typeof solver==="undefined"||!solver.Solve)return null;   // library failed to load — fall back
-  const key="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|"+(full?"full":"fast");
+  const key="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|"+(full?"full":"fast")+optKey(opt);
   if(_sqCache[key]!==undefined)return _sqCache[key];
-  const weeks=kind==="wildcard"?5:1;
+  opt=opt||{};const locks=opt.locks||[],bans=opt.bans||[];
+  const weeks=opt.weeks||(kind==="wildcard"?5:1);
   const val=p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
   const benchW=BENCH_W[kind];
   /* F37: available players count even at zero points (a blank or cheap
      enabler can still fill a bench) */
-  const pool=S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank);
+  const pool=S.model.players.filter(p=>(p.avail>0||locks.includes(p.id))&&p.gw[gw]&&!p.gw[gw].blank&&!bans.includes(p.id));
   if(pool.length<30)return null;
   const byPos={1:[],2:[],3:[],4:[]};
   pool.forEach(p=>byPos[p.pos]&&byPos[p.pos].push(p));
@@ -1066,7 +1070,9 @@ function buildOptimal(kind,gw,budget,full,form){
       const seen=new Set();
       [...byValue,...byCheap].forEach(p=>{if(!seen.has(p.id)){seen.add(p.id);cand.push(p);}});
     });
+    locks.forEach(id=>{const p=pool.find(q=>q.id===id);if(p&&!cand.includes(p))cand.push(p);});
   }
+  if(locks.some(id=>!cand.find(p=>p.id===id))){_sqCache[key]=null;return null;}
   const vars={};
   const constraints={squad_total:{equal:15},squad_gk:{equal:2},squad_def:{equal:5},
     squad_mid:{equal:5},squad_fwd:{equal:3},xi_total:{equal:11},xi_gk:{equal:1},
@@ -1081,6 +1087,7 @@ function buildOptimal(kind,gw,budget,full,form){
       ["link_"+p.id]:1,["captainlink_"+p.id]:-1,profit:(1-w)*v};
     vars["c_"+p.id]={captain_total:1,["captainlink_"+p.id]:1,profit:v};
     constraints["link_"+p.id]={max:0};constraints["captainlink_"+p.id]={max:0};
+    if(locks.includes(p.id)){vars["x_"+p.id]["lock_"+p.id]=1;constraints["lock_"+p.id]={equal:1};}
   });
   const timeout=full?OPT_TIMEOUT.full:OPT_TIMEOUT.fast;
   const model={optimize:"profit",opType:"max",constraints,variables:vars,
@@ -1118,14 +1125,14 @@ function buildOptimal(kind,gw,budget,full,form){
 }
 /* The answer to show now: the full-pool result when it exists, else the fast
    one, with the full solve queued in the background. */
-function optimalSquad(kind,gw,budget,form){
-  const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full";
+function optimalSquad(kind,gw,budget,form,opt){
+  const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full"+optKey(opt);
   if(_sqCache[fullKey])return _sqCache[fullKey];
-  const fast=buildOptimal(kind,gw,budget,false,form);
+  const fast=buildOptimal(kind,gw,budget,false,form,opt);
   if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
     _optPending[fullKey]=1;
-    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form);}finally{delete _optPending[fullKey];}
-      if(S.tab==="chips")render();},60);
+    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form,opt);}finally{delete _optPending[fullKey];}
+      if(S.tab==="chips"||S.cmp)render();},60);
   }
   return fast?Object.assign({},fast,{checking:!!_optPending[fullKey]}):null;
 }
@@ -1658,4 +1665,201 @@ function signalsHTML(){
       ${card("hard","calendar-range","bad","Toughest Fixture Runs",`The hardest next ${SIG.runWeeks} gameweeks for attackers.`,hard)}
     </div>
   </div>`;
+}
+
+/* ============================================================
+   REDESIGN WAVE 2 (20 Oct 2026, mock 2-3): the Planner's This Week strip
+   (Top Move, Captain, Price Watch, Warnings, Rival Threat, each opening a
+   pop-up) and the Compare pop-up (Your Edits / Wildcard / Free Hit).
+   ============================================================ */
+const WEEK_H=[1,3,5];
+function wkSpan(g,h){return h>1?`GW${g}–${Math.min(38,g+h-1)}`:`GW${g}`;}
+function modalHTML(title,body,opts){
+  opts=opts||{};
+  return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="if(event.target===this)act('${opts.close||"popclose"}')">
+    <div class="mbox${opts.wide?" wide":""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
+      <button class="mx" onclick="act('${opts.close||"popclose"}')" aria-label="Close">${lic("x",18)}</button></div>
+    <div class="mbody">${body}</div></div></div>`;
+}
+function hzHTML(cur,action,list){
+  return `<span class="hz">${(list||WEEK_H).map(h=>`<button class="${cur===h?"on":""}" onclick="act('${action}',${h})">${h} GW</button>`).join("")}</span>`;
+}
+/* the five readings behind the strip and its pop-ups */
+function weekData(){
+  const g=VG(),h=S.weekH||1,mine=new Set(effectiveSquadIds(g).ids);
+  const sp=squadPlayers();
+  const moves=bestSwaps(8,h);
+  const xi=startingXI();
+  const caps=xi.slice().sort((a,b)=>hPts(b,g,h)-hPts(a,g,h));
+  const L=p=>fplLive(p)||{};
+  const priced=sp.filter(p=>L(p).pcp!=null);
+  const rising=priced.filter(p=>L(p).pcp>=70).sort((a,b)=>L(b).pcp-L(a).pcp);
+  const falling=priced.filter(p=>L(p).pcp<=-70).sort((a,b)=>L(a).pcp-L(b).pcp);
+  const warn=sp.filter(p=>p.avail<1||((p.roleMins||0)>=60&&(p.xMins||0)<60)||(p.status&&p.status!=="a"&&p.status!=="u"&&p.avail<1))
+    .map(p=>({p,inXI:xi.includes(p)})).sort((a,b)=>(b.inXI-a.inXI)||(a.p.avail-b.p.avail));
+  const R=rivalOwn();
+  const threats=R&&R.n?Object.keys(R.own).map(id=>({p:S.model.players.find(q=>q.id===+id),k:R.own[id]}))
+    .filter(x=>x.p&&!mine.has(x.p.id)).sort((a,b)=>(b.k-a.k)||(hPts(b.p,g,h)-hPts(a.p,g,h))):[];
+  return{g,h,mine,moves,caps,rising,falling,priced,warn,R,threats};
+}
+function weekStripHTML(){
+  if(!S.model||VG()<S.model.next.id)return "";
+  const D=weekData(),{g,h}=D;
+  const card=(k,icon,tone,title,fig,line,foot)=>`<button class="wk" onclick="act('pop','${k}')" aria-haspopup="dialog">
+    <span class="wkh"><span class="tile" style="--tc:${tone}">${lic(icon)}</span><span class="wkt">${title}</span><span class="chev">${lic("chevron-right",16)}</span></span>
+    <span class="wkf">${fig}</span><span class="wkl">${line}</span>${foot?`<span class="wkft">${foot}</span>`:""}</button>`;
+  const m=D.moves[0],m2=D.moves[1];
+  const c=D.caps[0],v=D.caps[1];
+  const opp=p=>{const f=((p.gw[g]||{}).fixtures||[])[0];return f?`${esc(f.opp)} (${f.home?"H":"A"})`:"no game";};
+  const L=p=>fplLive(p)||{};
+  const pct=p=>`<b class="${L(p).pcp>0?"up":"dn"}">${Math.round(L(p).pcp)}%</b>`;
+  const w=D.warn[0],t=D.threats[0],t2=D.threats[1];
+  const cards=[
+    m?card("move","circle-arrow-up","#3DDC97","Top Move",`${esc(m.out.web_name)} <span class="arr">→</span> ${esc(m.inn.web_name)}`,
+        `<b class="up">${sgn1(m.gain)} pts</b> ${wkSpan(g,h)} · £${m.inn.price.toFixed(1)} · ${esc(m.inn.teamName)}`,
+        m2?`Next: ${esc(m2.out.web_name)} → ${esc(m2.inn.web_name)} ${sgn1(m2.gain)}`:"")
+     :card("move","circle-arrow-up","#3DDC97","Top Move","Hold",`No single move improves your XI over ${wkSpan(g,h)}`,"Roll the free transfer"),
+    c?card("cap","crown","#FFB020","Captain",`${esc(c.web_name)} <span class="cx">${(hPts(c,g,h)*2).toFixed(1)}</span>`,
+        `${hPts(c,g,h).toFixed(1)} × 2 · ${h>1?wkSpan(g,h):opp(c)}`,v?`Vice: ${esc(v.web_name)} ${hPts(v,g,h).toFixed(1)}`:"")
+     :card("cap","crown","#FFB020","Captain","—","No XI yet",""),
+    D.rising.length||D.falling.length
+     ?card("price",D.falling.length&&!D.rising.length?"trending-down":"trending-up",D.falling.length&&!D.rising.length?"#FF5A6E":"#4ADE80","Price Watch",
+        D.rising.length?`${D.rising.length} of yours rising`:`${D.falling.length} of yours falling`,
+        [...D.rising,...D.falling].slice(0,2).map(p=>`${esc(p.web_name)} ${pct(p)}`).join(" · ")+" progress",
+        D.rising.length&&D.falling.length?`${D.falling.length} falling too`:D.rising.length?"Selling keeps half of each rise":"Sell before it drops to keep the value")
+     :card("price","trending-up","#4ADE80","Price Watch",D.priced.length?"No changes due":"No predictor data",D.priced.length?"None of yours is near a rise or fall":"FPL's predictor did not load",""),
+    w?card("warn","clock-alert","#FFB020","Warnings",`${D.warn.length} ${D.warn.length===1?"doubt":"doubts"}`,
+        `${esc(w.p.web_name)} · ${w.p.avail<1?(w.p.avail>0?Math.round(w.p.avail*100)+"%":"out"):Math.round(w.p.xMins||0)+" mins"}${w.p.news?" · "+esc(String(w.p.news).split(/[-–(]/)[0].trim().slice(0,22)):""}`,
+        w.inXI?"In your XI: consider a change":"On your bench: no change needed")
+     :card("warn","clock-alert","#FFB020","Warnings","All clear","Every player fit and expected to start",""),
+    t?card("rival","swords","#B388FF","Rival Threat",esc(t.p.web_name),`Owned by ${t.k} of ${D.R.n} rivals, not you`,t2?`Next: ${esc(t2.p.web_name)} ${t2.k}/${D.R.n}`:"")
+     :card("rival","swords","#B388FF","Rival Threat","—",D.R?"No player most rivals own that you don't":"League feed not loaded","")
+  ].join("");
+  return `<section class="week"><div class="weekh"><h2>This Week</h2>${hzHTML(h,"weekh")}</div><div class="wkrow">${cards}</div></section>`;
+}
+/* what each strip card opens */
+function popHTML(){
+  const k=S.pop;if(!k||!S.model)return "";
+  const D=weekData(),{g,h}=D;
+  const L=p=>fplLive(p)||{};
+  const ctl=hzHTML(h,"weekh");
+  if(k==="move")return modalHTML(`Top Moves · ${wkSpan(g,h)}`,
+    (D.moves.length?`<div class="tgrid">${D.moves.map(m=>swapCardHTML(m,g)).join("")}</div>`:`<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p>`)
+    +`<p class="note" style="margin-top:10px">Each move is scored on your best XI plus captain, week by week${h>1?" (later weeks count for a little less)":""}, against your current team.</p>`
+    +planPanelHTML(),{wide:true,ctl});
+  if(k==="cap")return modalHTML("Captain",captaincyHTML()||`<p class="note">Captaincy is set for the next deadline.</p>`,{});
+  if(k==="price"){
+    const row=p=>{const l=L(p),pr=(l.pcProj||[]).map(([o,v,lk])=>`<td>${Math.round(v)}%</td>`).join("");
+      return `<tr${D.mine.has(p.id)?' class="me"':""}><td>${esc(p.web_name)} <span class="mu">${esc(p.teamName)}</span></td><td>£${p.price.toFixed(1)}</td>
+        <td><b class="${l.pcp>0?"up":l.pcp<0?"dn":""}">${l.pcp==null?"—":Math.round(l.pcp)+"%"}</b></td>${pr||"<td></td><td></td><td></td>"}<td>${p.owned}%</td></tr>`;};
+    const head=`<thead><tr><th>Player</th><th>Price</th><th>Tonight</th><th>+1 night</th><th>+2</th><th>+3</th><th>Owned</th></tr></thead>`;
+    const all=S.model.players.filter(p=>L(p).pcp!=null);
+    const up=all.filter(p=>L(p).pcp>0).sort((a,b)=>L(b).pcp-L(a).pcp).slice(0,8);
+    const dn=all.filter(p=>L(p).pcp<0).sort((a,b)=>L(a).pcp-L(b).pcp).slice(0,8);
+    const mineRows=squadPlayers().filter(p=>L(p).pcp!=null).sort((a,b)=>Math.abs(L(b).pcp)-Math.abs(L(a).pcp));
+    return modalHTML("Price Watch",`<div class="pmgrid">
+      <div><div class="note">Your Squad</div><table class="mkt">${head}<tbody>${mineRows.map(row).join("")}</tbody></table></div>
+      <div><div class="note">Closest to a Rise</div><table class="mkt">${head}<tbody>${up.map(row).join("")}</tbody></table></div>
+      <div><div class="note">Closest to a Fall</div><table class="mkt">${head}<tbody>${dn.map(row).join("")}</tbody></table></div></div>
+      <p class="note" style="margin-top:10px">FPL's own price predictor: progress towards tonight's change (100% = it changes), and where it projects the next three nights. Refreshed every 15 minutes.</p>
+      ${priceMovesHTML()}`,{wide:true});
+  }
+  if(k==="warn"){
+    const sw=new Map();bestSwaps(60,h).forEach(m=>{if(!sw.has(m.out.id))sw.set(m.out.id,m);});
+    return modalHTML("Warnings",D.warn.length?`<table class="mkt"><thead><tr><th>Player</th><th>Where</th><th>Chance</th><th>xMins</th><th>News</th><th>Best replacement</th></tr></thead><tbody>
+      ${D.warn.map(({p,inXI})=>{const m=sw.get(p.id);return `<tr><td>${esc(p.web_name)} <span class="mu">${esc(p.teamName)}</span></td><td>${inXI?"XI":"Bench"}</td>
+        <td>${p.avail<1?Math.round(p.avail*100)+"%":"fit"}</td><td>${Math.round(p.xMins||0)}</td><td style="text-align:left;white-space:normal;max-width:360px">${esc(p.news||"")}</td>
+        <td>${m?`${esc(m.inn.web_name)} <b class="up">${sgn1(m.gain)}</b> <button class="mini" onclick="act('doswap',${p.id},${m.inn.id})">Make</button>`:"—"}</td></tr>`;}).join("")}</tbody></table>`
+      :`<p class="note">Every player in your squad is fit and expected to start.</p>`,{wide:true});
+  }
+  if(k==="rival"){
+    if(!D.R)return modalHTML("Rival Threat",`<p class="note">The league feed has not loaded.</p>`,{});
+    const top=D.threats.slice(0,12);
+    const myOwn=squadPlayers().map(p=>({p,k:D.R.own[p.id]||0})).sort((a,b)=>a.k-b.k);
+    const t=(rows,head)=>`<table class="mkt"><thead><tr><th>Player</th><th>${head}</th><th>Predicted ${wkSpan(g,h)}</th><th>Price</th><th>Overall</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr><td>${esc(x.p.web_name)} <span class="mu">${esc(x.p.teamName)}</span></td><td>${x.k}/${D.R.n}</td><td>${hPts(x.p,g,h).toFixed(1)}</td><td>£${x.p.price.toFixed(1)}</td><td>${x.p.owned}%</td></tr>`).join("")}</tbody></table>`;
+    return modalHTML("Rival Threat",`<div class="pmgrid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
+      <div><div class="note">Owned by your rivals, not you</div>${t(top,"Rivals")}</div>
+      <div><div class="note">Your players, fewest rivals first (your differentials)</div>${t(myOwn,"Rivals")}</div></div>
+      <p class="note" style="margin-top:10px">From each rival's latest published squad in your mini-league (${D.R.n} rivals).</p>`,{wide:true,ctl});
+  }
+  return "";
+}
+/* ---------- Compare pop-up (mock 3) ----------
+   Left: the current team (Your Edits: the official squad; Wildcard and Free
+   Hit: the plan for this week). Right: the proposal (your plan, or the
+   Chips page optimiser's best Wildcard / Free Hit squad). Players leaving
+   carry OUT, players arriving IN. On the left a tap locks a player into the
+   proposal; on the right a tap rules him out; Re-run solves again. */
+function cmpTeams(){
+  const C=S.cmp,g=VG(),h=C.mode==="fh"?1:C.h;
+  const cur=C.mode==="edits"?((latestOfficialPicks()||{}).picks||[]).map(pk=>pk.id):effectiveSquadIds(g).ids;
+  let prop=null,meta={};
+  if(C.mode==="edits"){prop=effectiveSquadIds(g).ids;meta={bank:planBank(),cap:effectiveCaptainVice(g).captain};}
+  else if(C.mode==="draft"){const d=(LS.get("drafts")||[])[C.draft];if(d){prop=d.ids;meta={bank:d.bank,cap:d.cap,label:d.label};}}
+  else{
+    const kind=C.mode==="wc"?"wildcard":"freehit",budget=squadBudget();
+    const r=optimalSquad(kind,g,budget,null,{weeks:h,locks:C.locks,bans:C.bans});
+    if(r){prop=[...r.xi,...r.bench].map(p=>p.id);meta={bank:+(budget-r.value).toFixed(1),cap:r.cap&&r.cap.id,how:r.heuristic?"best found (quick builder)":r.proven?"proven optimal":r.checking?"best found, still checking":"best found",infeasible:false};}
+    else meta={infeasible:true};
+  }
+  return{g,h,cur:cur.length?cur:effectiveSquadIds(g).ids,prop,meta};
+}
+function teamPtsOver(ids,g,h){
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));const out=[];
+  for(let k=0;k<h&&g+k<=38;k++)out.push(xiTotal(ids,g+k,byId));
+  return out;
+}
+function cmpPitchHTML(ids,other,g,h,side){
+  const C=S.cmp,ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
+  const v=p=>p.gw[g]?.pts||0;
+  const xi=legalBestXI(ps,v),bench=ps.filter(p=>!xi.includes(p)).sort((a,b)=>(a.pos===1?-1:b.pos===1?1:v(b)-v(a)));
+  const cap=xi.slice().sort((a,b)=>v(b)-v(a))[0];
+  const otherSet=new Set(other||[]);
+  const chip=p=>{
+    const moved=!otherSet.has(p.id),tag=moved?(side==="cur"?"OUT":"IN"):"";
+    const locked=(C.locks||[]).includes(p.id),banned=(C.bans||[]).includes(p.id);
+    const pend=side==="cur"?(C.pendLocks||[]).includes(p.id):(C.pendBans||[]).includes(p.id);
+    const canTap=C.mode==="wc"||C.mode==="fh";
+    const act2=canTap?(side==="cur"?`act('cmplock',${p.id})`:`act('cmpban',${p.id})`):`act('card',${p.id})`;
+    return `<div class="cpl${tag?" moved":""}${pend?" pend":""}" onclick="${act2}" title="${canTap?(side==="cur"?"Tap to lock him into the proposal":"Tap to rule him out"):"Open player card"}">
+      ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,34)}
+      <span class="cpn">${esc(p.web_name)}${p===cap?' <span class="tagy">C</span>':""}</span>
+      <span class="cpv">${hPts(p,g,h).toFixed(1)}</span>
+      ${tag?`<span class="ctag ${tag==="OUT"?"out":"in"}">${tag}</span>`:""}${pend||locked||banned?`<span class="cmark">${lic(side==="cur"?"lock":"ban",12)}</span>`:""}</div>`;};
+  return `<div class="cpitch">${[1,2,3,4].map(pos=>{const r=xi.filter(p=>p.pos===pos);return r.length?`<div class="crow">${r.map(chip).join("")}</div>`:"";}).join("")}
+    <div class="cbench"><span class="lb">Bench</span><div class="crow">${bench.map(chip).join("")}</div></div></div>`;
+}
+function compareModalHTML(){
+  const C=S.cmp;if(!C||!S.model)return "";
+  const T=cmpTeams(),{g,h}=T;
+  const modes=[["edits","Your Edits"],["wc","Wildcard"],["fh","Free Hit"]];
+  const drafts=LS.get("drafts")||[];
+  const ctl=`<span class="pseg mseg">${modes.map(([k,n])=>`<button class="${C.mode===k?"on":""}" onclick="act('cmpmode','${k}')">${n}</button>`).join("")}</span>
+    ${C.mode==="fh"?`<span class="hz"><button class="on" disabled>1 GW</button></span>`:hzHTML(C.h,"cmph")}`;
+  if(!T.prop)return modalHTML(`Compare · ${wkSpan(g,h)}`,`<p class="note">${T.meta.infeasible?"No legal squad fits those locks and exclusions within your budget. Clear some and Re-run.":"Nothing to compare yet."}</p>
+    <div class="mfoot"><button onclick="act('cmpclear')">Clear locks</button></div>`,{wide:true,ctl,close:"cmpclose"});
+  const mine=teamPtsOver(T.cur,g,h),theirs=teamPtsOver(T.prop,g,h);
+  const sum=a=>a.reduce((x,y)=>x+y,0),ms=sum(mine),ts=sum(theirs),gain=ts-ms;
+  const outs=T.cur.filter(i=>!T.prop.includes(i)).length;
+  const value=T.prop.reduce((a,i)=>{const p=S.model.players.find(q=>q.id===i);return a+(p?p.price:0);},0);
+  const hit=C.mode==="edits"?hitCost(g):0;
+  const cards=[
+    figCard("Proposed",`Best XI plus captain of the proposal, week by week over ${wkSpan(g,h)}.`,ts.toFixed(1),`<span class="${gain>=0?"up":"dn"}">${sgn1(gain)}</span> vs your team`,h>1?theirs:null,"#3DDC97","mint"),
+    figCard(C.mode==="edits"?"Official Team":"Your Team",`Best XI plus captain of ${C.mode==="edits"?"your official squad":"your plan for GW"+g}, scored the same way.`,ms.toFixed(1),wkSpan(g,h),h>1?mine:null,"#8A8A8A"),
+    figCard("Gain",`Proposed minus yours over ${wkSpan(g,h)}${hit?", before the hit":""}.`,`<span class="${gain>=0?"up":"dn"}">${sgn1(gain)}</span>`,hit?`<span class="dn">−${hit} hit</span> · net ${sgn1(gain-hit)}`:`over ${h} GW`,null,"#8A8A8A"),
+    figCard("Transfers","Players who change between the two teams.",String(outs),C.mode==="wc"?"Wildcard: no hits":C.mode==="fh"?"Free Hit: one week only":(hit?`<span class="dn">−${hit} hit</span>`:"within your free transfers"),null,"#8A8A8A"),
+    figCard("Bank After","Money left once the proposal is bought.",`£${(T.meta.bank??0).toFixed(1)}`,`Squad £${value.toFixed(1)}${T.meta.how?" · "+T.meta.how:""}`,null,"#8A8A8A")
+  ].join("");
+  const pend=(C.pendLocks||[]).length+(C.pendBans||[]).length, applied=(C.locks||[]).length+(C.bans||[]).length;
+  const body=`<div class="fcgrid c5">${cards}</div>
+    <div class="cgrid"><div><div class="chd">${C.mode==="edits"?"Official team":"Current team"}${C.mode==="wc"||C.mode==="fh"?' <span class="mu">tap to lock in</span>':""}</div>${cmpPitchHTML(T.cur,T.prop,g,h,"cur")}</div>
+      <div><div class="chd">${C.mode==="edits"?"Your edits":C.mode==="draft"?esc(T.meta.label||"Draft"):(C.mode==="wc"?"Wildcard":"Free Hit")+" proposal"}${C.mode==="wc"||C.mode==="fh"?' <span class="mu">tap to rule out</span>':""}</div>${cmpPitchHTML(T.prop,T.cur,g,h,"prop")}</div></div>
+    <div class="mfoot">
+      ${C.mode==="wc"||C.mode==="fh"?`<button class="${pend?"pri":""}" onclick="act('cmprerun')">${lic("refresh-cw",14)} Re-run${pend?` (${pend})`:""}</button>${applied||pend?`<button onclick="act('cmpclear')">Clear locks</button>`:""}`:""}
+      ${drafts.length?`<select onchange="act('cmpdraft',+this.value)" aria-label="Open a draft"><option value="-1">Drafts (${drafts.length})</option>${drafts.map((d,i)=>`<option value="${i}">${esc(d.label)}</option>`).join("")}</select>`:""}
+      <span style="flex:1"></span>
+      <button onclick="act('cmpsave')">${lic("save",14)} Save as draft</button>
+      ${C.mode==="edits"?`<button class="pri" onclick="act('save');act('cmpclose')">Save plan</button>`:`<button class="pri" onclick="act('cmpapply')">Apply</button>`}</div>`;
+  return modalHTML(`Compare · ${wkSpan(g,h)}`,body,{wide:true,ctl,close:"cmpclose"});
 }

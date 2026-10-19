@@ -28,8 +28,41 @@ function act(k,a,b){
     case"chiphalf":S.chipHalf=a;break;
     case"fhForm":S.fhForm=a||null;break;
     case"wcForm":S.wcForm=a||null;break;
-    case"compare":S.compare=S.compare?null:{squad:[...(S.squad||[])],captain:S.captain,
-      vice:S.vice,bank:S.bank,flagged:[],forceXI:null,subFrom:null};break;
+    /* wave 2: This Week strip and the Compare pop-up */
+    case"weekh":S.weekH=[1,3,5].includes(+a)?+a:1;LS.set("weekh",S.weekH);break;
+    case"pop":S.pop=a||null;break;
+    case"popclose":S.pop=null;break;
+    case"compare":S.cmp=S.cmp?null:{mode:"edits",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
+    case"cmpclose":S.cmp=null;break;
+    case"cmpmode":{const C=S.cmp;if(!C)break;Object.assign(C,{mode:a,locks:[],bans:[],pendLocks:[],pendBans:[]});
+      if(a==="wc"&&C.h===1)C.h=5;break;}
+    case"cmph":if(S.cmp)S.cmp.h=[1,3,5].includes(+a)?+a:1;break;
+    case"cmplock":{const C=S.cmp;if(!C)break;C.pendLocks=C.pendLocks.includes(a)?C.pendLocks.filter(x=>x!==a):[...C.pendLocks,a];break;}
+    case"cmpban":{const C=S.cmp;if(!C)break;C.pendBans=C.pendBans.includes(a)?C.pendBans.filter(x=>x!==a):[...C.pendBans,a];break;}
+    case"cmprerun":{const C=S.cmp;if(!C)break;C.locks=C.pendLocks.slice();C.bans=C.pendBans.filter(x=>!C.locks.includes(x));break;}
+    case"cmpclear":{const C=S.cmp;if(!C)break;Object.assign(C,{locks:[],bans:[],pendLocks:[],pendBans:[]});break;}
+    case"cmpdraft":{const C=S.cmp;if(!C||!(+a>=0))break;C.mode="draft";C.draft=+a;break;}
+    case"cmpsave":{const C=S.cmp;if(!C)break;const T=cmpTeams();if(!T.prop)break;
+      const name={edits:"Your edits",wc:"Wildcard",fh:"Free Hit",draft:"Draft"}[C.mode];
+      const ds=[{label:name+" GW"+T.g+" · "+ukFmt(Date.now(),{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}),
+        ids:T.prop.slice(),cap:T.meta.cap,bank:T.meta.bank,gw:T.g,mode:C.mode},...(LS.get("drafts")||[])].slice(0,10);
+      LS.set("drafts",ds);toast("Saved as a draft");break;}
+    case"cmpapply":{const C=S.cmp;if(!C)break;const T=cmpTeams();if(!T.prop)break;
+      const gw=editableGw();if(gw==null)break;
+      if(C.mode==="wc"||C.mode==="fh"){const kind=C.mode==="wc"?"wildcard":"freehit";
+        if(chipForWeek(gw)!==kind){const half=gw>=20?"2":"1",next={...S.chips};
+          ["bboost","3xc","freehit","wildcard"].forEach(k=>{if(next[k+half]===gw)delete next[k+half];});
+          const keep=S.chips;S.chips=next;const why=chipRuleBreak(kind+half,gw);S.chips=keep;
+          if(why){toast(why,{warn:true});break;}
+          next[kind+half]=gw;S.chips=next;}}
+      const cur=effectiveSquadIds(gw).ids,byId=id=>S.model.players.find(p=>p.id===id);
+      const bank=+(planBank()+cur.filter(i=>!T.prop.includes(i)).reduce((s,i)=>s+sellPrice(byId(i)),0)
+        -T.prop.filter(i=>!cur.includes(i)).reduce((s,i)=>s+byId(i).price,0)).toFixed(1);
+      if(bank<-0.001){toast("Over budget by £"+(-bank).toFixed(1),{warn:true});break;}
+      const v=p=>p.gw[gw]?.pts||0,xi=legalBestXI(T.prop.map(byId),v).sort((x,y)=>v(y)-v(x));
+      writePlan(gw,T.prop,{bank,captain:xi[0]?xi[0].id:T.meta.cap,vice:xi[1]?xi[1].id:null});
+      S.flagged=[];S.forceXI=null;S.benchOrder=null;saveState();S.cmp=null;
+      toast((C.mode==="wc"?"Wildcard":C.mode==="fh"?"Free Hit":"Draft")+" team applied to GW"+gw+". Save when you are happy.");break;}
     case"cclose":S.compare=null;break;
     case"ccap":{const C=S.compare;if(!C)break;C.captain=a;if(C.vice===a)C.vice=null;break;}
     case"cvice":{const C=S.compare;if(!C)break;C.vice=a;if(C.captain===a)C.captain=null;break;}
@@ -322,7 +355,8 @@ document.addEventListener("keydown",e=>{
   const el=e.target;
   if((e.key==="Enter"||e.key===" ")&&el&&el.getAttribute&&el.getAttribute("role")==="button"
      &&!/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)){e.preventDefault();el.click();return;}
-  if(e.key==="Escape"&&S.cardId){S.cardId=null;render();}
+  if(e.key==="Escape"&&S.cardId){S.cardId=null;render();return;}
+  if(e.key==="Escape"&&(S.pop||S.cmp)){S.pop=null;S.cmp=null;render();}
 });
 window.addEventListener("popstate",()=>{if(applyHash())render();});
 /* wave 1: Predicted, Bank and FT join the sticky bar once the hero is gone */
@@ -339,6 +373,7 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   S.stars=LS.get("stars")||[];
   S.rivals=LS.get("rivals")||[];
   S.leagueId=LS.get("leagueId")||"391690";
+  S.weekH=LS.get("weekh")||1;
   {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];}
   /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
      quota on some browsers; the server is close now) and everything odds,

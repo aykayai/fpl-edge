@@ -171,7 +171,7 @@ function normalise(text, isNew) {
   let t = text;
   /* PLANNED (redesign wave 1): the Status page wraps the xFPL page with the
      data freshness list (which starts with the version) and the signal key */
-  if (isNew) t = t.replace(/^Status.*?Signal Key.*?Set Piece ?/, "");
+  t = t.replace(/^Status.*?Signal Key.*?Set Piece ?/, "");
   /* the FPL Signals era is recognised by its brand, so a baseline from after
      the rebrand is normalised the same way as the new side */
   if (isNew || /FPL Signals/.test(text)) {
@@ -191,11 +191,13 @@ function normalise(text, isNew) {
   t = t.replace(/expire [^▲▼]+/g, "expire ");                          /* chips expiry was hard-coded */
   /* PLANNED (redesign wave 1): new signal key and labels, League tabs,
      Status page around the xFPL model, Player Data renamed Players */
-  if (isNew) {
-    t = t.replace(/^League ?Tracker ?Rivals ?/, "");
-    t = t.replace(/^Players (?=\d+ players)/, "Player Data ").replace(/ Odds →/, "");
-    t = t.replace(/All Players →/g, "Full Player Data →");
-  } else {
+  t = t.replace(/^League ?Tracker ?Rivals ?/, "");
+  t = t.replace(/^Players (?=\d+ players)/, "Player Data ").replace(/ Odds →/, "");
+  t = t.replace(/All Players →/g, "Full Player Data →");
+  /* PLANNED (wave 2): captaincy moved from the Planner into the This Week pop-up */
+  t = t.replace(/Captaincy ?GW\d+ · your XI.*?Tap C to make him captain for this week\. ?/, "");
+  t = t.replace(/ Transfers →/, "");
+  {
     t = t.replace(/Differential Hot streak Attack Defence (STOP)?DefCon Nailed 85\+ Stats caution P?Penalties F?Free kicks C?Corners ?/, "");
     t = t.replace(/(£\d+\.\d[▲▼]?)\s*(?:(?:STOP|[PFC])\s*)+(?=(ARS|AVL|BOU|BRE|BHA|CHE|COV|CRY|EVE|FUL|HUL|IPS|LEE|LIV|MCI|MUN|NEW|NFO|SUN|TOT))/g, "$1");
     t = t.replace(/(Show only) ?[PFC ]*★/, "$1 ★");

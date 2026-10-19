@@ -1006,12 +1006,11 @@ function renderPage(){
               <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
               <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
             <span class="pseg">
-              <button class="${S.compare?"on":""}" onclick="act('compare')">Compare</button>
+              <button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button>
               <button onclick="act('opt')">Optimise</button></span></span>
           ${S.sqView==="list"?`<div style="padding-top:34px">${squadListHTML()}</div>`:pitchHTML()}
         </div>
         </div>
-      ${S.compare?compareHTML():""}
       <div class="panel chippanel">
         <div class="chiprow">
           <span class="chipinline">
@@ -1020,7 +1019,6 @@ function renderPage(){
               .map(([k,n])=>{const on=k==="none"?!chipForWeek(VG()):chipForWeek(VG())===k;
                 return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
           </span></div></div>
-      ${captaincyHTML()}
       <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
         <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
       <div class="poolcol">
@@ -1116,10 +1114,12 @@ function renderPage(){
     hero=`<section class="hero"><div class="hid"><div class="hk">Gameweek ${g} · your team</div>
         <h1>${esc(IDENTITY.team)}</h1><div class="hm">${esc(IDENTITY.manager)} · team ${IDENTITY.id}</div></div>
       <div class="fcgrid">${cards}</div></section>
-      ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}`;
+      ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}
+      ${weekStripHTML()}`;
   }
   app.innerHTML=`${topbar}
    ${hero}
+   ${S.pop?popHTML():""}${S.cmp?compareModalHTML():""}
    ${S.cardId?playerCardHTML():""}
    <main id="main" style="display:block;max-width:100%">${main}</main>
    <div class="foot">FPL Signals v${APP_VERSION}</div>`;
