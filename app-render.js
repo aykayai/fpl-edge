@@ -2016,7 +2016,11 @@ function fundingHTML(){
     const single=(bestSwaps(1,h)[0]||{gain:0}).gain,sq=S.squad,res=[];
     for(let i=0;i<sq.length;i++)for(let j=i+1;j<sq.length;j++){
       const c=bestCombo([sq[i],sq[j]],h,6);
-      if(c&&c.picks.length===2&&c.gain>=single+0.5)res.push(c);}
+      if(!c||c.picks.length!==2||c.gain<single+0.5)continue;
+      /* a funding move: one sale frees money for an upgrade the bank alone
+         could not pay for */
+      const cost=m=>m.inn.price-m.sell,bank=planBank();
+      if(c.picks.some(m=>cost(m)<-0.05)&&c.picks.some(m=>cost(m)>bank+0.05))res.push(c);}
     res.sort((a,b)=>b.gain-a.gain);
     _fundCache={key,model:S.model,res:res.slice(0,6),single};
   }
@@ -2024,14 +2028,14 @@ function fundingHTML(){
   const leg=m=>{const d=m.inn.price-m.sell;
     return `<div class="fleg"><span class="dn">${esc(m.out.web_name)}</span> → <span class="up">${esc(m.inn.web_name)}</span>
       <span class="mu">${d<0?"saves £"+(-d).toFixed(1):"costs £"+d.toFixed(1)}</span> <b class="${m.gain>=0?"up":"dn"}">${sgn1(m.gain)}</b>
-      ${Math.abs(d)>=0.1?`<span class="mu">(${sgn1(m.gain/Math.abs(d))} per £1m)</span>`:""}</div>`;};
+      ${Math.abs(d)>=0.5?`<span class="mu">(${sgn1(m.gain/Math.abs(d))} per £1m)</span>`:""}</div>`;};
   return `<div class="panel"><div class="phead"><h2>Funding</h2><span class="note">two moves together, over ${h} GW · best single move ${sgn1(F.single)}</span></div>
     <div class="pbody">${F.res.length?`<div class="tgrid">${F.res.map(c=>`<div class="tcard">${c.picks.map(leg).join("")}
       <div class="fsum"><b class="up">${sgn1(c.gain)}</b> to your XI · £${c.left.toFixed(1)} left
       ${freeLeft(VG())<2?`<span class="dn"> · 2 transfers with ${freeLeft(VG())} free: a ${HIT}-point hit</span>`:""}</div>
       <button class="mini" style="margin-top:6px" onclick="act('dofund',${c.picks[0].out.id},${c.picks[1].out.id})">Make both</button></div>`).join("")}</div>`
-      :`<p class="note" style="margin:0">No pair of moves beats the best single move by half a point over ${h} GW.</p>`}
-    <p class="note" style="margin:8px 0 0">Each pair sells two of your players and buys the best replacements the pooled money allows, scored on your best XI plus captain over the next ${h}. Points per £1m shows what a downgrade gives up for the money it frees, and what an upgrade buys with it.</p></div></div>`;
+      :`<p class="note" style="margin:0">No downgrade that pays for an upgrade beats the best single move by half a point over ${h} GW.</p>`}
+    <p class="note" style="margin:8px 0 0">Each pair is a downgrade that pays for an upgrade your bank (£${planBank().toFixed(1)}) could not cover alone: two of your players sold, the best replacements the pooled money allows, scored on your best XI plus captain over the next ${h}. Points per £1m shows what a downgrade gives up for the money it frees, and what an upgrade buys with it.</p></div></div>`;
 }
 
 /* ============================================================
