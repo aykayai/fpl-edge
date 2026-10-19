@@ -108,7 +108,8 @@ try {
   const page = doc.querySelector(".sgpage");
   check(!!page, "Signals page renders");
   const cards = [...doc.querySelectorAll(".sgcard")];
-  check(cards.length === 15, "all 15 cards present", `found ${cards.length}`);
+  /* 20 Oct 2026: the six team cards moved to Teams > Clubs (sortable columns) */
+  check(cards.length === 9, "all 9 cards present", `found ${cards.length}`);
   const text = page ? page.textContent : "";
   check(!/NaN|undefined/.test(text), "no NaN or undefined anywhere on the page");
   const blank = cards.filter(c => !c.querySelector(".sgrow,.sgrep,.sgempty"));
@@ -154,8 +155,10 @@ try {
       ga[h] = (ga[h] || 0) + +r.away_score; ga[a] = (ga[a] || 0) + +r.home_score;
     });
   }
-  const leak = cardBy(doc, "Leakiest Defences");
-  const lrows = leak ? [...leak.querySelectorAll(".sgrow")].map(r => ({ name: r.querySelector(".sgwho b").textContent.trim(), ga: +r.querySelector(".sgfig b").textContent })) : [];
+  /* the leakiest defences now come from Teams > Clubs sorted by Conceded */
+  S.tab = "fixtures"; S.fixMode = "clubs"; S.tView = "att"; S.tSort = "ga"; S.tDir = "desc"; g.render();
+  const lrows = [...doc.querySelectorAll(".hub tbody tr")].slice(0, 5).map(r => ({ name: r.querySelector(".nm b").textContent.trim(), ga: +r.querySelector('[data-k="ga"]').textContent }));
+  S.tab = "signals"; S.tSort = null; g.render();
   const wantGa = Object.values(ga).sort((a, b) => b - a).slice(0, 5);
   check(JSON.stringify(lrows.map(r => r.ga)) === JSON.stringify(wantGa), "leakiest defences: goals conceded match the raw fixtures", `page ${lrows.map(r => r.ga)} vs raw ${wantGa}`);
   const lbad = lrows.filter(r => ga[r.name] !== r.ga);

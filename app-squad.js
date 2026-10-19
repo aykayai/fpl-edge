@@ -583,9 +583,9 @@ function planWeeks(H){
 /* wave 4: several outs at once, filled one by one through the engine (the
    dearest slot first, keeping enough back for the cheapest replacement of
    each slot still to fill), each scored on the XI over the horizon. */
-function bestCombo(outIds){
+function bestCombo(outIds,hh,per){
   if(!S.model||!outIds.length)return null;
-  const g=S.model.next.id,h=S.horizon||1;
+  const g=S.model.next.id,h=hh||S.horizon||1;
   const byId=new Map(S.model.players.map(p=>[p.id,p]));
   const outs=outIds.map(i=>byId.get(i)).filter(Boolean);
   const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
@@ -598,7 +598,7 @@ function bestCombo(outIds){
     const rest=order.slice(ix+1);
     const reserve=rest.reduce((a,x)=>a+minFor(x.pos)-sellPrice(x),0);
     /* F60: the players being sold are not candidates for their own slots */
-    const best=engineMoves({squad,bank:bank-Math.max(0,reserve),g,h,outs:[o.id],exclude:outIds,byId})[0];
+    const best=engineMoves({squad,bank:bank-Math.max(0,reserve),g,h,outs:[o.id],exclude:outIds,byId,per})[0];
     /* F60: a move that gains nothing is not a move; that player stays */
     if(best&&best.gain>0.05){picks.push(best);squad=squad.map(i=>i===o.id?best.inn.id:i);bank=+(bank+best.sell-best.inn.price).toFixed(1);}
   });

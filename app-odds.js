@@ -211,18 +211,22 @@ function captaincyHTML(){
     const last=(e.gw||[])[(e.gw||[]).length-1];const c=last&&(last.picks||[]).find(x=>x.isC);
     nRiv++;if(c)caps[c.id]=(caps[c.id]||0)+1;});
   const {captain}=effectiveCaptainVice(g);
+  /* research list (20 Oct 2026): scoring odds and haul chance beside each option */
+  const mk={};try{Object.values(oddsPlayers(g)||{}).forEach(r=>{if(r&&r.p)mk[r.p.id]=r;});}catch(e){}
   return `<div class="panel"><div class="phead"><h2>Captaincy</h2><span class="note">GW${g} · your XI</span></div>
-    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr><th>Option</th><th>Predicted</th><th>Gap</th><th>Plays</th>
+    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr><th>Option</th><th>Predicted</th><th>Gap</th><th>Plays</th><th>Scores</th><th>Haul</th>
       <th class="hide-ph">xGI/90</th><th class="hide-ph">Owned</th>${nRiv?"<th>League C</th>":""}<th></th></tr></thead><tbody>
     ${opts.map(p=>{const q=p.gw[g]||{},f=(q.fixtures||[])[0],gap=v(p)-top,isC=p.id===captain;
       return `<tr${isC?' class="me"':""}><td>${esc(p.web_name)}<span class="mu" style="display:block;font-size:11.5px">${f?esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
         <td><b>${v(p).toFixed(1)}</b></td><td>${Math.abs(gap)<0.05?'<span class="up">best</span>':`<span class="dn">${sgn1(gap*2)}</span>`}</td>
-        <td>${Math.round((q.pPlay??1)*100)}%</td><td class="hide-ph">${(p.xg90+p.xa90).toFixed(2)}</td><td class="hide-ph">${p.owned}%</td>
+        <td>${Math.round((q.pPlay??1)*100)}%</td>
+        <td>${(()=>{const m=mk[p.id],md=modelChance(p,p.xg90||0);return m&&m.goal!=null?`<span title="Bookmakers (model ${Math.round(md*100)}%)">${Math.round(m.goal*100)}%</span>`:`<span class="mu" title="Model: no price yet">${Math.round(md*100)}%</span>`;})()}</td>
+        <td>${Math.round(haulChance(p)*100)}%</td><td class="hide-ph">${(p.xg90+p.xa90).toFixed(2)}</td><td class="hide-ph">${p.owned}%</td>
         ${nRiv?`<td>${caps[p.id]||0}/${nRiv}</td>`:""}
         <td>${isC?'<span class="tagy">C</span>':`<button class="mini" onclick="act('cap',${p.id})" aria-label="Make ${esc(p.web_name)} captain">C</button>`}</td></tr>`;}).join("")}
     </tbody></table></div>
     <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
-      <p style="margin:0">Gap is what each option costs against the best one with the armband on (the difference doubled). Plays is the chance he appears at all. ${nRiv?"League C is how many of your league captained him last week: a popular pick protects your place, an unpopular one is the differential. ":""}Tap C to make him captain for this week.</p></div></details>
+      <p style="margin:0">Gap is what each option costs against the best one with the armband on (the difference doubled). Plays is the chance he appears at all. Scores is the bookmakers' anytime-scorer chance where priced (grey: the model's own figure), if he plays. Haul is the model's chance of a 10-point week if he plays: two or more goals or assists for a midfielder or forward, a clean sheet plus a goal or assist for a defender or keeper. ${nRiv?"League C is how many of your league captained him last week: a popular pick protects your place, an unpopular one is the differential. ":""}Tap C to make him captain for this week.</p></div></details>
     </div></div>`;
 }
 /* D17: say so when the captain will not score as the armband suggests */
@@ -449,6 +453,17 @@ function oddsPair(mk,md){
   if(mk==null)return '<span class="mu">—</span>';
   const cls=md!=null&&mk-md>=0.08?"up":md!=null&&md-mk>=0.08?"dn":"";
   return `<span class="pair"><b class="${cls}">${oddsPct(mk)}</b><span class="mu">${oddsPct(md)}</span></span>`;
+}
+/* research list (20 Oct 2026): the chance of a haul (10+ points) if he plays.
+   Goal involvements are Poisson with the same rate as modelChance; a
+   midfielder or forward needs two, a defender or keeper a clean sheet plus
+   one (or two on their own). */
+function haulChance(p){
+  const lam=-Math.log(Math.max(1e-9,1-modelChance(p,(p.xg90||0)+(p.xa90||0))));
+  const p0=Math.exp(-lam),p1=lam*p0,two=1-p0-p1,one=1-p0;
+  if(p.pos>=3)return two;
+  const cs=modelCS(p)??0;
+  return cs*one+(1-cs)*two;
 }
 /* the model's own clean-sheet chance, from the stats alone (the predictions
    also fold in the team odds, which would make this agree with the market by
@@ -1153,6 +1168,7 @@ function statusPageHTML(){
   return `<div class="pagetabs"><h1>Status</h1>${statusChipHTML()}</div>
     <div class="panel"><div class="phead"><h2>Data Freshness</h2></div>${provHTML()}</div>
     <div class="panel"><div class="phead"><h2>Model vs FPL</h2><span class="note">each finished gameweek, prediction against points scored</span></div>${modelVsFplHTML()}</div>
+    <div class="panel"><div class="phead"><h2>Signal Hit Rates</h2><span class="note">did the flagged players beat their prediction?</span></div>${signalHitsHTML()}</div>
     <div class="panel"><div class="phead"><h2>Fixture Ratings</h2><span class="note">projected goals against this season's results</span></div>${fixtureAccuracyHTML()}</div>
     <div class="panel"><div class="phead"><h2>Odds</h2><a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Bookmaker markets →</a></div>${oddsStatusHTML()}</div>
     <div class="panel"><div class="phead"><h2>Options</h2></div>${optionsHTML()}</div>

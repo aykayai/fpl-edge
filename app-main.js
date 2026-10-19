@@ -34,11 +34,17 @@ function act(k,a,b){
     case"popclose":S.pop=null;break;
     /* wave 3: Players hub */
     /* wave 5: Teams > Clubs */
-    case"tview":S.tView=["att","def","opp"].includes(a)?a:"att";break;
+    case"tview":S.tView=["att","def","opp"].includes(a)?a:"att";S.tSort=null;break;
+    case"tsort":if(S.tSort===a)S.tDir=S.tDir==="asc"?"desc":"asc";else{S.tSort=a;S.tDir="desc";}break;
     case"th":S.tH=[1,3,5].includes(+a)?+a:3;break;
     /* wave 7: Status options */
     case"cleardrafts":LS.set("drafts",[]);toast("Drafts deleted");break;
     case"clearstars":S.stars=[];LS.set("stars",[]);break;
+    /* research list: funding pairs */
+    case"fundon":S.fundOn=true;break;
+    case"dofund":{const c=bestCombo([a,b],Math.max(3,S.weekH||1),6);if(!c||c.picks.length<2)break;
+      let ok=true;c.picks.forEach(m=>{if(ok&&!applySwap(m.out.id,m.inn.id))ok=false;});
+      if(ok)toast("Both transfers made");break;}
     case"pview":S.pView=a;S.pdLimit=PD_PAGE;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
     case"ph":S.pH=[1,3,5].includes(+a)?+a:1;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
     case"paround":S.pAround=a==="rank"?"rank":"league";LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
