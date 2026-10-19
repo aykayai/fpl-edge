@@ -263,6 +263,7 @@ function buildOddsTeams(){
 async function loadOdds(){
   S.oddsState="loading";S.oddsErr="";S.oddsLog=[];render();
   try{
+    if(BACKUP){S.oddsState="backup";render();return;}
     const r=await fetch("/api/odds");
     if(!r.ok)throw new Error("HTTP "+r.status);
     const d=await r.json();
@@ -387,6 +388,7 @@ function oddsHTML(){
      <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button></span></div>
     <div class="pbody">
       <p class="note" style="margin:0">Uses <a href="https://odds-api.io" target="_blank" style="color:var(--cyan)">odds-api.io</a> through the FPL Signals server. The key is held on the server, so there is nothing to paste here. Prices are cached for four hours and shown with the bookmaker's margin removed. Both available books are recreational, so treat these as a second opinion rather than truth.${S.oddsFetchedAt?` <span style="color:var(--cream)">Last fetched ${esc(ukWhen(S.oddsFetchedAt))}.</span>`:""}</p></div></div>`;
+  if(S.oddsState==="backup")return head+backupNote("Odds");
   if(S.oddsState==="nokey")
     return head+`<div class="panel"><div class="pbody"><p class="note">No key is set on the server (ODDS_API_KEY). Everything else in the app works without one.</p></div></div>`;
   if(S.oddsState==="loading")
@@ -580,6 +582,7 @@ function rivalsHTML(){
   const actOf=(id,gw)=>{const f=S.playerActuals&&(S.playerActuals[id]||S.playerActuals[String(id)]);
     const v=f?(f[gw]??f[String(gw)]):null;return v==null?null:+v;};
 
+  if(BACKUP)return backupNote("Leagues and rivals");
   if(!feed||!feed.standings||!feed.standings.length){
     return `<div class="panel"><div class="phead"><h2>Leagues &amp; rivals</h2>
         <span class="note">league ${esc(S.leagueId||"391690")}</span></div>
@@ -772,6 +775,7 @@ function newsHTML(){
      <span style="display:flex;gap:6px;align-items:center">
       ${[24,72,168].map(w=>`<button class="${S.newsWindow===w?"on":""}" onclick="act('nwin',${w})">${w===24?"24h":w===72?"3d":"7d"}</button>`).join("")}
       <button onclick="act('news')">${S.newsState==="loading"?"…":"↻"}</button></span></div>
+     ${S.newsState==="backup"?backupNote("The news feed"):""}
      ${S.newsState==="idle"?`<div class="pbody"><button class="pri" onclick="act('news')">Load the feed</button></div>`:""}
      ${S.newsState==="loading"?`<div class="pbody"><p class="note">Reading the feeds…</p></div>`:""}
      ${S.newsState==="fail"?`<div class="pbody"><div class="warn">
@@ -854,9 +858,15 @@ function go(ev,tab){
    loadAll the old button did. Green: everything fresh. Green pulsing: a
    fixture is in play and live points are flowing. Amber: a source is late or
    the server itself cannot be reached, with the last good copy's time. */
+/* Cutover: what a server-only page says on the Pages backup */
+function backupNote(what){
+  return `<div class="panel"><div class="pbody"><p class="note" style="margin:0">${what} runs on the FPL Signals server only. This is the backup copy on GitHub Pages: the model, planner, chips, fixtures and signals work here from the public dataset.</p></div></div>`;
+}
 function statusChipHTML(){
   const st=S.status;
   let cls="",txt;
+  if(BACKUP)return `<span class="sigchip"><span class="sigdot wait"></span><span>Backup copy on GitHub Pages · <b>loaded ${ukHHMM(S.stamp||Date.now())}</b></span>
+    <button onclick="act('load')">${S.loading?esc(S.progress||"…"):"Check now"}</button></span>`;
   if(S.statusPending&&!S.statusErr)txt=`Checking for updates · <b>last copy ${ukHHMM(S.statusAt||Date.now())}</b>`;
   else if(!st||S.statusErr){cls="wait";txt=`Server unreachable · <b>showing last copy</b>`;}
   else{

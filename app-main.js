@@ -377,6 +377,6 @@ window.addEventListener("popstate",()=>{if(applyHash())render();});
      only the chip and the footer. During a live gameweek this is also what
      moves the chip to Live. A full load still only happens on open, on
      Check now, or when the server reports a new dataset commit. */
-  setInterval(()=>{if(S.loading)return;
+  if(!BACKUP)setInterval(()=>{if(S.loading)return;
     loadStatus().then(s=>{if(s)refreshStatusUI();});},60000);
 })();

@@ -4,7 +4,7 @@
    new version deployed to the server is picked up on the next load rather than
    being pinned to a stale cache. The API and /data are never cached here: the
    server is the source of truth and the app handles its own waiting states. */
-const CACHE = "fpl-signals-v12.18.2";
+const CACHE = "fpl-signals-v12.19.0";
 const IMG_CACHE = "fpl-signals-img";
 const SHELL = [
   "./",
@@ -77,7 +77,7 @@ self.addEventListener("fetch", e => {
       fetch(req).then(res=>{
         if(res.ok){const copy=res.clone();caches.open(CACHE).then(c=>c.put(req,copy));}
         return res;
-      }).catch(()=>caches.match(req))
+      }).catch(()=>caches.match(req,{ignoreSearch:true}))
     );
     return;
   }

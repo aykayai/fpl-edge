@@ -982,6 +982,7 @@ function teamRating(){
    error in perSource, which fills srcLog. Nothing here blocks the squad data. */
 async function loadNews(){
   if(!S.model)return;
+  if(BACKUP){S.newsState="backup";render();return;}
   S.newsState="loading";S.news=[];S.reddit=[];S.squadNews=[];S.srcLog={};render();
   const log={};
   try{

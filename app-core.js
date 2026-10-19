@@ -11,7 +11,15 @@
    app's own server (server/server.mjs) and served same-origin under
    /data/insights with the same relative paths the public repo uses.
    ============================================================ */
-const REPO="/data/insights";
+/* Cutover (19 Oct 2026, Andy: backup mode on Pages). The same code runs on
+   the FPL Signals server and, as a backup, on GitHub Pages. On Pages there is
+   no server: the dataset comes straight from FPL Core Insights, the team
+   history from the repo's data/actuals.json (the actuals Action keeps that
+   one file fresh), and Rivals, News, Odds and the snapshots say they are on
+   the server only. ?backup=1 forces it, for testing. */
+const BACKUP=typeof location!=="undefined"&&(/\.github\.io$/.test(String(location.hostname||""))
+  ||/[?&]backup=1\b/.test(String(location.search||"")));
+const REPO=BACKUP?"https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/main/data":"/data/insights";
 const SEASON="2026-2027", LAST="2025-2026";
 /* Live "actuals" feed: team GW history, per-player actual points, chips. Built
    locally by the server (scripts/build-actuals.mjs run every 15 minutes) and
@@ -32,8 +40,13 @@ const SEASON="2026-2027", LAST="2025-2026";
    state, so this fails silently rather than blocking the main load. */
 /* the season label the feed builder writes (FPL_SEASON) */
 const FEED_SEASON="2027";
-const ACTUALS_URL="/data/feeds/actuals.json";
-const RIVALS_URL="/data/feeds/rivals.json";
+const ACTUALS_URL=BACKUP?"data/actuals.json":"/data/feeds/actuals.json";
+const RIVALS_URL=BACKUP?null:"/data/feeds/rivals.json";
+/* badges and photos: our server's cache, or the Premier League directly on Pages */
+const imgSrc=(kind,code)=>BACKUP
+  ?(kind==="badge"?`https://resources.premierleague.com/premierleague/badges/50/t${esc(String(code||""))}.png`
+    :`https://resources.premierleague.com/premierleague/photos/players/110x140/p${esc(String(code||""))}.png`)
+  :`/img/${kind}/${esc(String(code||""))}.png`;
 /* ---------- instant start ----------
    The last good copy of every data file (dataset CSVs and both feeds) is kept
    in IndexedDB, which has room for it where localStorage did not. On open the
@@ -82,6 +95,7 @@ async function dataText(url){
    each deadline, and is always labelled as a backtest. */
 async function loadPredictions(){
   const one=async u=>{try{const d=JSON.parse(await dataText(u));return d&&d.gw?d:null;}catch(e){return null;}};
+  if(BACKUP){S.predLive=null;S.predBack=null;return;}
   const [live,back]=await Promise.all([one("/data/feeds/predictions.json"),one("/data/feeds/backtest.json")]);
   S.predLive=live;S.predBack=back;
 }
@@ -112,6 +126,7 @@ function trueAccuracy(){
    listed under the footer, instead of the page quietly using a weaker model */
 function loadWarn(what){(S.loadWarnings=S.loadWarnings||[]).includes(what)||S.loadWarnings.push(what);}
 async function loadRivals(){
+  if(!RIVALS_URL)return;
   try{
     const d=JSON.parse(await dataText(RIVALS_URL));
     if(d&&d.season&&String(d.season)!==FEED_SEASON){loadWarn("rivals feed (season "+d.season+")");return;}
@@ -194,7 +209,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.18.2";
+const APP_VERSION="12.19.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -314,7 +329,7 @@ function ftSource(){return ftFromFeed()!=null?"feed":(S.ftLastGw?"local":"defaul
 function badgeOrShirt(t,size){
   const sz=size||20;
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;flex:none">
-    <img src="/img/badge/${esc(String(t.code||""))}.png"
+    <img src="${imgSrc("badge",t.code)}"
       alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;display:block"
       onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
     <span style="display:none">${shirtSVG((t.short||"").toUpperCase(),false,sz)}</span></span>`;
@@ -428,6 +443,7 @@ async function getCSV(path){
    footer never blanks; the chip reports the server as unreachable instead. */
 async function loadStatus(){
   try{
+    if(BACKUP)throw new Error("backup copy: no server");
     const r=await fetch("/api/status");
     if(!r.ok)throw new Error("HTTP "+r.status);
     S.status=await r.json();S.statusAt=Date.now();S.statusErr=null;
@@ -460,7 +476,7 @@ async function loadAll(force,opts){
   if(!fromSnap)S.statusPending=false;
   const commit=fromSnap?_snap.commit:(st&&st.dataset?st.dataset.commit:null);
   const sameData=!!S.model&&commit!=null&&S.datasetCommit===commit;
-  if(!fromSnap&&((sameData&&!force)||(!st&&S.model))){
+  if(!fromSnap&&((sameData&&!force)||(!st&&S.model&&!BACKUP))){
     /* nothing new on the server (or the server is unreachable): keep the
        built model, refresh the light feeds, and re-render once */
     S.capture={};

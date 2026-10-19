@@ -42,7 +42,7 @@ function playerCardHTML(){
       <button class="pcx" onclick="act('card',0)">✕</button>
       <div class="pchead">
         <span class="pcimgwrap">
-          <img class="pcimg" alt="" src="/img/player/${esc(String(p.code||""))}.png"
+          <img class="pcimg" alt="" src="${imgSrc("player",p.code)}"
             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
           <span style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,72)}</span></span>
         <div class="pcname">${esc(p.web_name)}</div>
@@ -686,7 +686,7 @@ function radarHTML(){
     const topWins=Math.max(...wins);
     const thead=`<tr><td></td>${active.map((p,j)=>{
       if(!p)return "<th></th>";
-      const photoUrl=`/img/player/${esc(String(p.code||""))}.png`;
+      const photoUrl=imgSrc("player",p.code);
       return `<th style="color:${COL[j]}">
         <span class="rphotowrap"><img class="rphoto" alt="" src="${photoUrl}"
           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
