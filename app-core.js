@@ -105,6 +105,7 @@ async function loadPredictions(){
 function trueAccuracy(){
   const A=S.playerActuals;if(!A)return null;
   const weeks=[],rows=[];
+  const posOf=new Map(((S.model&&S.model.players)||[]).map(p=>[String(p.id),p.pos]));
   for(let g=1;g<=38;g++){
     if(!weekFinal(g))continue;
     const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g], back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
@@ -113,8 +114,7 @@ function trueAccuracy(){
     let n=0,ae=0,b=0;
     Object.entries(snap.players).forEach(([id,pred])=>{
       const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
-      const pl=S.model&&S.model.players.find(p=>p.id==id);
-      n++;ae+=Math.abs(pred-pts);b+=pred-pts;rows.push({pos:pl?pl.pos:0,e:pred-pts});});
+      n++;ae+=Math.abs(pred-pts);b+=pred-pts;rows.push({pos:posOf.get(String(id))||0,e:pred-pts});});
     if(n)weeks.push({g,src,n,mae:ae/n,bias:b/n});
   }
   if(!rows.length)return null;
@@ -229,7 +229,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.28.0";
+const APP_VERSION="12.29.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -448,7 +448,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
  status:null,statusAt:0,statusErr:null,datasetCommit:null,newsFetchedAt:null,
- news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
+ news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:5,lGwFrom:0,lGwTo:0,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"clubs",
  outList:[],selected:null,menuOpen:false,compare:null,replacedBy:{},dash:{},sqView:'pitch',sqSort:'pos',sqDir:'asc',cardId:null,chipView:'fh',chipHalf:null,fhForm:null,wcForm:null};

@@ -9,53 +9,6 @@
 /* 26/27 duties: first penalty taker, first two on free kicks and corners.
    Players marked with an asterisk in the source (injury or transfer doubt) are
    skipped in favour of the next name. */
-/* One badge shape throughout — an 18px disc with a coloured ring — so the set
-   reads as a family; only the glyph and hue differ. */
-/* Shields rather than discs, with a gloss highlight so they read as objects
-   rather than flat labels. One silhouette throughout keeps the set coherent. */
-let _bid=0;
-/* keyed on the design itself: badges built during a render (e.g. a number
-   that changes) reuse their symbol instead of adding a new one each time */
-const _bKey=new Map();
-function badge(glyph,fill,ring){
-  const key=glyph+"|"+fill+"|"+ring;
-  if(_bKey.has(key)&&_spriteDone.has("b"+_bKey.get(key)))
-    return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${_bKey.get(key)}"/></svg>`;
-  const id=++_bid;_bKey.set(key,id);
-  const full=badgeFull(id,glyph,fill,ring);
-  /* Bundle 9: drawn once in the sprite, referenced everywhere after */
-  const m=/<defs>([\s\S]*?)<\/defs>([\s\S]*)<\/svg>/.exec(full);
-  spriteAdd("b"+id,m[1],`<symbol id="b${id}" viewBox="0 0 26 28">${m[2]}</symbol>`);
-  return _spriteDone.has("b"+id)?`<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${id}"/></svg>`:full;
-}
-function badgeFull(id,glyph,fill,ring){
-  return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true">
-    <defs>
-      <linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="${ring}"/><stop offset="0.55" stop-color="${fill}"/>
-        <stop offset="1" stop-color="${fill}"/></linearGradient>
-      <linearGradient id="gl${id}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#fff" stop-opacity=".55"/>
-        <stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-    </defs>
-    <path d="M13 1.4 24.2 5v10.4c0 6.4-4.6 9.9-11.2 11.9C6.4 25.3 1.8 21.8 1.8 15.4V5Z"
-      fill="url(#sg${id})" stroke="${ring}" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M13 2.9 22.7 6v4.4c-3 1.9-6.4 2.8-9.7 2.8s-6.7-.9-9.7-2.8V6Z" fill="url(#gl${id})"/>
-    ${glyph}</svg>`;
-}
-const G=(t,size)=>`<text x="13" y="${size>=11?18.6:18.1}" font-family="Inter,Segoe UI,Arial,sans-serif"
-  font-size="${size}" font-weight="900" fill="#0A0D12" text-anchor="middle" letter-spacing="-0.4"
-  paint-order="stroke" stroke="rgba(255,255,255,.35)" stroke-width="0.6">${t}</text>`;
-/* Attack — a football */
-const ICON_ATT=badge(`<circle cx="13" cy="15" r="6.1" fill="#FFFDF6" stroke="#8A5A12" stroke-width="1"/>
-  <path d="M13 11.1 15.9 13.2 14.8 16.6H11.2L10.1 13.2Z" fill="#20160A"/>
-  <path d="M13 8.9v2.2M9.3 13.4 7.2 12.6M16.7 13.4l2.1-.8M11.2 16.6l-1.3 2M14.8 16.6l1.3 2"
-    stroke="#20160A" stroke-width="1.15" stroke-linecap="round"/>`,"#FFB020","#FFDFA6");
-/* Defence — shield with a tick, inside the shield silhouette */
-const ICON_DEF=badge(`<path d="M13 8.6 18 10.3v3.9c0 2.7-1.9 4.4-5 5.4-3.1-1-5-2.7-5-5.4v-3.9Z" fill="#06222B"/>
-  <path d="M10.8 14.4l1.6 1.7 3-3.3" stroke="#9FF2FF" stroke-width="1.7" fill="none"
-    stroke-linecap="round" stroke-linejoin="round"/>`,"#22C3E6","#8FEAFB");
-const SPCOL={P:["#FF4D6D","#FFD1DA"],F:["#34D399","#C6F7E4"],C:["#C084FC","#E9D8FF"]};
 const SETPIECE={
  ARS:{P:["Saka"],            F:["Saka","Rice"],            C:["Rice","Saka"]},
  AVL:{P:["Buendía"],         F:["Buendía","McGinn"],       C:["Cash","McGinn"]},
@@ -214,25 +167,6 @@ function setPieceText(p){
   if(sp.cor&&sp.cor<=3)bits.push("Corners "+ORD(sp.cor));
   if(sp.dfk&&sp.dfk<=3)bits.push("Free kicks "+ORD(sp.dfk));
   return bits.join(" · ");
-}
-/* Clubs whose next five contain at least four kind fixtures on that lens.
-   Cached per gameweek — signals() runs for every player on every render. */
-let _tcCache=null;
-function targetClubs(){
-  const g=VG();
-  if(_tcCache&&_tcCache.g===g&&_tcCache.n===(S.model?S.model.teams.length:0))return _tcCache;
-  const att=new Set(),def=new Set();
-  (S.model?S.model.teams:[]).forEach(t=>{
-    let ga=0,gd=0,n=0;
-    for(let e=g;e<g+5&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{
-      const home=f.ht===t,o=home?f.at:f.ht;
-      if(fdrOf(o,home,t,"att")<=2)ga++;
-      if(fdrOf(o,home,t,"def")<=2)gd++;
-      n++;});
-    if(n>=4&&ga>=4&&(t.att||0)>=1.30)att.add(t.id);
-    if(n>=4&&gd>=4&&(2.6-(t.def||1.4))>=1.12)def.add(t.id);
-  });
-  return _tcCache={g,n:(S.model?S.model.teams.length:0),att,def};
 }
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
@@ -1252,90 +1186,6 @@ function orderBench(list){
 /* ---------- squad dashboard ----------
    Six forward-looking readings. Everything here answers "what should I do
    next" — nothing retrospective, since the official app covers that better. */
-/* ---------- comparison ----------
-   A scratch clone of the squad. Same transfer and substitution behaviour, but
-   only the original can be saved; the clone offers to apply its changes across. */
-function compXI(){
-  const C=S.compare;
-  if(C&&C.forceXI&&C.forceXI.length===11){
-    const xi=C.forceXI.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-    if(xi.length===11)return xi;
-  }
-  const sq=(S.compare&&S.compare.squad)||[];
-  const sp=sq.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  if(!sp.length)return[];
-  const g=VG(),by={};
-  sp.forEach(p=>(by[p.pos]=by[p.pos]||[]).push(p));
-  Object.values(by).forEach(a=>a.sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0)));
-  const xi=[];if(by[1]?.[0])xi.push(by[1][0]);
-  (by[2]||[]).slice(0,3).forEach(p=>xi.push(p));(by[4]||[]).slice(0,1).forEach(p=>xi.push(p));
-  [...(by[2]||[]).slice(3),...(by[3]||[]),...(by[4]||[]).slice(1)]
-    .sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0)).slice(0,11-xi.length).forEach(p=>xi.push(p));
-  return xi;
-}
-function compPts(weeks){
-  const C=S.compare;if(!C)return 0;
-  const g=VG(),xi=compXI();if(!xi.length)return 0;
-  let s2=xi.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  const cap=S.model.players.find(p=>p.id===C.captain);
-  if(cap&&xi.includes(cap))s2+=hPts(cap,g,weeks);
-  const chip=chipForWeek(g);
-  const bench=(C.squad||[]).map(i=>S.model.players.find(p=>p.id===i))
-    .filter(p=>p&&!xi.includes(p));
-  if(chip==="bboost")s2+=bench.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  if(chip==="3xc"&&cap)s2+=hPts(cap,g,weeks);
-  return s2;
-}
-function compareHTML(){
-  const C=S.compare;if(!C)return "";
-  const g=VG();
-  const deltas=[1,3,5].map(w=>({w,mine:weekPts_w(w),theirs:compPts(w)}));
-  const xi=compXI();
-  const sq=(C.squad||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  const bench=sq.filter(p=>!xi.includes(p));
-  /* Renders through the planner's own cardHTML with a comparison context, so
-     the two teams look and behave identically by construction rather than by
-     two copies of markup being kept in sync by hand. */
-  const bOrder=bench.slice();
-  const card=(p)=>{
-    const i=bOrder.findIndex(b=>b.id===p.id);
-    return cardHTML(p,i>=0?{slot:i+1,cycle:p.pos!==1}:undefined,C);
-  };
-  const win=deltas[0].theirs>deltas[0].mine;
-  return `<div class="panel" style="border-color:${win?"var(--mint)":"var(--ink3)"}">
-    <div class="phead"><h2 style="${win?"color:var(--mint)":""}">Compare</h2>
-      <span style="display:flex;gap:6px;align-items:center">
-        <span class="note">£${(C.bank||0).toFixed(1)} bank</span>
-        <button onclick="act('capply')">Apply to my team</button>
-        <button onclick="act('cclose')">Close</button></span></div>
-    <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:14px;flex-wrap:wrap">
-      ${deltas.map(d=>{const diff=d.theirs-d.mine;
-        return `<span style="flex:1;min-width:96px;text-align:center">
-          <span style="display:block;font-size:10px;color:var(--mute);font-weight:800">${d.w===1?"This GW":d.w+" GW"}</span>
-          <span style="display:block;font-family:'Geist';font-weight:800;font-size:22px;line-height:1.1;
-            color:${diff>0.05?"var(--mint)":diff<-0.05?"var(--red)":"var(--cream)"}">${diff>0?"+":""}${diff.toFixed(1)}</span>
-          <span style="display:block;font-size:10px;color:var(--mute)" class="mono">${d.theirs.toFixed(1)} v ${d.mine.toFixed(1)}</span></span>`;}).join("")}
-    </div>
-    <div class="pitch">${[1,2,3,4].map(pos=>{const r=xi.filter(p=>p.pos===pos);
-      return r.length?`<div class="row">${r.map(card).join("")}</div>`:"";}).join("")}</div>
-    <div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map(card).join("")}</div></div>
-    ${(C.flagged||[]).length?`<div class="repl">
-      <div style="padding:9px 12px;font-size:10px;color:var(--cyan);font-weight:700">
-        Replace ${(C.flagged||[]).map(id=>esc(S.model.players.find(p=>p.id===id)?.web_name||"")).join(", ")} — pick from the player pool</div></div>`:""}
-  </div>`;
-}
-function weekPts_w(weeks){
-  const xi=startingXI();if(!xi.length)return 0;
-  const g=VG();
-  let s2=xi.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  const cap=S.model.players.find(p=>p.id===S.captain);
-  if(cap&&xi.includes(cap))s2+=hPts(cap,g,weeks);
-  const chip=chipForWeek(g);
-  const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
-  if(chip==="bboost")s2+=bench.reduce((a,p)=>a+hPts(p,g,weeks),0);
-  if(chip==="3xc"&&cap)s2+=hPts(cap,g,weeks);
-  return s2;
-}
 function dashData(){
   if(!S.model||!squadPlayers().length)return null;
   const g=VG(), sp=squadPlayers(), xi=startingXI();

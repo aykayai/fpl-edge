@@ -79,9 +79,6 @@ function act(k,a,b){
       writePlan(gw,T.prop,{bank,captain:xi[0]?xi[0].id:T.meta.cap,vice:xi[1]?xi[1].id:null});
       S.flagged=[];S.forceXI=null;S.benchOrder=null;saveState();S.cmp=null;
       toast((C.mode==="wc"?"Wildcard":C.mode==="fh"?"Free Hit":"Draft")+" team applied to GW"+gw+". Save when you are happy.");break;}
-    case"cclose":S.compare=null;break;
-    case"ccap":{const C=S.compare;if(!C)break;C.captain=a;if(C.vice===a)C.vice=null;break;}
-    case"cvice":{const C=S.compare;if(!C)break;C.vice=a;if(C.captain===a)C.captain=null;break;}
     case"sqview":S.sqView=a;break;
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
@@ -95,32 +92,6 @@ function act(k,a,b){
     case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[]});break;
     case"sigfold":{const f=new Set(S.sigFold||[]);f.has(a)?f.delete(a):f.add(a);S.sigFold=[...f];
       LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold});break;}
-    case"radarpick":{S.radarIds=S.radarIds||[null,null,null];S.radarSearch=S.radarSearch||["","",""];
-      const id=b?+b:null;
-      if(id){
-        const pl=S.model.players.find(x=>x.id===id);
-        const locked=S.radarIds.map(x=>x?S.model.players.find(y=>y.id===x):null).find(x=>x);
-        const lockPos=locked?locked.pos:S.radarPos;
-        if(pl&&lockPos&&pl.pos!==lockPos)break;    // one position only — ignore a stray mismatch
-        if(pl&&!S.radarPos)S.radarPos=pl.pos;
-      }
-      S.radarIds[a]=id;S.radarSearch[a]="";break;}
-    case"radarpos":{const anyPicked=(S.radarIds||[]).some(x=>x);
-      if(!anyPicked)S.radarPos=a;break;}
-    case"radaraxes":{const pos=a,ax=b;
-      S.radarAxes=S.radarAxes||{};
-      if(ax===null||ax===undefined){delete S.radarAxes[pos];break;}
-      const DEF={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
-        2:["xFPL","Form","DefCon/90","CS %","Aerials/90","xMins"],
-        3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
-        4:["xFPL","Form","npxG/90","xG/90","Shots/90","xGI/90"]};
-      const cur=(S.radarAxes[pos]||DEF[pos]).slice();
-      const at=cur.indexOf(ax);
-      if(at>=0)cur.splice(at,1);else if(cur.length<6)cur.push(ax);
-      S.radarAxes[pos]=cur;break;}
-    case"radarsearch":{S.radarSearch=S.radarSearch||["","",""];S.radarSearch[a]=b;break;}
-    case"radarclear":{S.radarIds=S.radarIds||[null,null,null];S.radarIds[a]=null;break;}
-    case"radarhorizon":{const H=[1,3,5,10,"rest"];S.radarHorizon=H[clamp(Math.round(+a),0,4)]||5;break;}
     case"xfplgw":{const cur=clamp(S.xfplGW||(S.model.gwPlayed>=1?S.model.gwPlayed:S.model.next.id),1,38);
       S.xfplGW=clamp(cur+(a==="next"?1:-1),1,38);break;}
     case"trkstat":S.trkStat=a;break;
@@ -147,23 +118,6 @@ function act(k,a,b){
       if(i0<0||j0<0||j0>=ids.length)break;
       [ids[i0],ids[j0]]=[ids[j0],ids[i0]];
       S.benchOrder=ids;saveState();break;}
-    case"csub":{const C=S.compare;if(!C)break;
-      if(C.subFrom===a){C.subFrom=null;break;}
-      if(C.subFrom==null){C.subFrom=a;toast("Now tap who to swap with");break;}
-      const xi=compXI().map(p=>p.id);
-      const aIn=xi.includes(C.subFrom), bIn=xi.includes(a);
-      if(aIn===bIn){toast("Pick one from the pitch and one from the bench");C.subFrom=null;break;}
-      const next=xi.map(i=>i===(aIn?C.subFrom:a)?(aIn?a:C.subFrom):i);
-      const ps=next.map(i=>P(i)).filter(Boolean);
-      const cnt=n=>ps.filter(x=>x.pos===n).length;
-      if(ps.length!==11||cnt(1)!==1||cnt(2)<3||cnt(4)<1){toast("That would break the formation");C.subFrom=null;break;}
-      C.forceXI=next;C.subFrom=null;toast("Substitution made");break;}
-    case"cflag":{const C=S.compare;if(!C)break;
-      C.flagged=C.flagged.includes(a)?C.flagged.filter(x=>x!==a):[...C.flagged,a];break;}
-    case"capply":{const C=S.compare;if(!C)break;
-      S.squad=[...C.squad];S.captain=C.captain;S.vice=C.vice;S.bank=C.bank;
-      S.compare=null;S.flagged=[];S.forceXI=null;saveState();
-      toast("Comparison applied — remember to Save");break;}
     case"horizon":S.horizon=clamp(+a||1,1,8);break;
     case"vgw":
     case"startgw":S.startGW=clamp(Math.round(+a)||S.model.next.id,1,38);break;
@@ -235,18 +189,6 @@ function act(k,a,b){
       if(S.subFrom==null){S.subFrom=a;toast("Now tap who to swap with");break;}
       trySub(S.subFrom,a);break;
     case"listpick":{const p=P(a);
-      /* when the comparison is open and has a player marked, the pick goes there */
-      if(S.compare&&(S.compare.flagged||[]).length){
-        const C=S.compare;
-        const t=C.flagged.map(x=>P(x)).find(o=>o&&o.pos===p.pos);
-        if(t){
-          if(C.squad.includes(p.id)){toast("Already in the comparison squad");break;}
-          C.squad=C.squad.map(i=>i===t.id?p.id:i);
-          C.bank=+(C.bank+sellPrice(t)-p.price).toFixed(1);
-          C.flagged=C.flagged.filter(x=>x!==t.id);
-          if(C.captain===t.id)C.captain=p.id;
-          toast("Comparison: "+t.web_name+" → "+p.web_name);break;}
-      }
       /* A flagged (✕) player is the one being sold, so a list tap is a swap,
          not an addition — that is what was tripping the position and budget checks */
       /* with several players flagged, sell the one that matches the position

@@ -94,9 +94,7 @@ function filtered(scope){
        lock the pool to THAT player's position — otherwise the pool stayed keyed
        to the main squad and there was no way to pick a replacement into the
        comparison team. Falls back to the main-squad flag lock. */
-    const cFlag=S.compare&&(S.compare.flagged||[]).length
-      ? S.model.players.find(p=>p.id===S.compare.flagged[0])?.pos : 0;
-    const lock=cFlag||(S.flagged.length===1?S.model.players.find(p=>p.id===S.flagged[0])?.pos:0);
+    const lock=S.flagged.length===1?S.model.players.find(p=>p.id===S.flagged[0])?.pos:0;
     if(lock&&S.fPos!==lock){S.fPos=lock;pos=lock;}
   }
   let out=S.model.players.filter(p=>(!pos||p.pos===pos)&&(!team||p.team===team)
@@ -182,14 +180,12 @@ const PD_PAGE=100;
 function listHTML(){
   const g=VG();
   const a=sortList(filtered("planner"),S.lSort,S.lDir,g);
-  const cmp=S.compare&&(S.compare.flagged||[]).length?S.compare:null;
-  /* budget available: bank plus whatever the flagged players would raise — in the
-     comparison context when a comparison player is flagged, else the main squad */
-  const flags=cmp?cmp.flagged:(S.flagged||[]);
-  const ownIds=cmp?cmp.squad:(S.squad||[]);
+  /* budget available: bank plus whatever the flagged players would raise */
+  const flags=S.flagged||[];
+  const ownIds=S.squad||[];
   const raised=flags.reduce((t,id)=>{
     const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
-  const budget=+((cmp?cmp.bank:S.bank)+raised).toFixed(1);
+  const budget=+(S.bank+raised).toFixed(1);
   const outP=flags.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
@@ -560,159 +556,6 @@ function swapCardHTML(m,g){
       <button style="flex:1" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button>
       <button onclick="act('ignore',${m.inn.id})" title="Stop suggesting this player">Ignore</button></span></div>`;
 }
-/* ---------- player comparison radar (Transfers page) ---------- */
-function radarHTML(){
-  const g=VG();
-  const ids=S.radarIds||[null,null,null];
-  const search=S.radarSearch||["","",""];
-  /* A position chosen up front (before any player is picked) locks search the
-     same way picking a player used to — either sets it. */
-  const posPick=S.radarPos||null;
-  const active=ids.map(id=>id?S.model.players.find(p=>p.id===id):null);
-  const activePlayers=active.filter(Boolean);
-  const lockedPos=activePlayers.length?activePlayers[0].pos:posPick;
-  const COL=["var(--mint)","var(--amber)","var(--cream)"];
-
-  const HSTEPS=[1,3,5,10,"rest"];
-  const curH=S.radarHorizon||5;
-  const hIdx=Math.max(0,HSTEPS.indexOf(curH));
-  const gwsFor=h=>h==="rest"?Math.max(1,39-g):h;
-  const hLabel=h=>h==="rest"?"Rest of season":`Next ${h} GW${h>1?"s":""}`;
-
-  const W=p=>ws(String(p.code||""),p.pos,S.lWin||38)||{};
-  /* Every stat here is selectable — not just the six shown by default — matching
-     the orange position-relevant stats on Player Data, using the same underlying
-     figures the radar already had access to. Team/opponent-context columns from
-     Player Data (Opp att, Team def, Pen ord…) are left out deliberately: a radar
-     axis describes the player being compared, not their next fixture. */
-  const AXF={
-    "xFPL":p=>hPts(p,g,gwsFor(curH)),"Form":p=>p.form||0,
-    "xGI/90":p=>{const w=W(p);return(w.xg90||0)+(w.xa90||0);},"xMins":p=>p.xMins||0,
-    "npxG/90":p=>W(p).npxg90||0,"xA/90":p=>W(p).xa90||0,"CC/90":p=>W(p).cc90||0,
-    "xG/90":p=>W(p).xg90||0,"Shots/90":p=>W(p).sh90||0,"SoT/90":p=>W(p).sot90||0,
-    "DefCon/90":p=>W(p).dc90||W(p).cbit90||0,"CBIT/90":p=>W(p).cbit90||0,
-    /* F35: CS % and Start % read the player's match record (share of his
-       60-minute games with a clean sheet, share of appearances he started);
-       they read fields model players never carry, so they always plotted 0.
-       BPS/90 plotted the season total. */
-    "CS %":p=>(W(p).csRate||0)*100,"Aerials/90":p=>W(p).aer90||0,"Saves/90":p=>W(p).sv90||0,
-    "G prevented":p=>W(p).gp||0,"xGoT/90":p=>W(p).xgot90||0,"Start %":p=>(W(p).startPct||0)*100,
-    "Dribbles/90":p=>W(p).drb90||0,"F3 pass/90":p=>W(p).f390||0,"Box/90":p=>W(p).box90||0,
-    "Bonus":p=>p.bonus||0,"BPS/90":p=>bpsPer90(p,W(p))||0,"Owned %":p=>p.owned||0};
-  const DEFAULT_AXSET={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins"],
-    2:["xFPL","Form","DefCon/90","CS %","Aerials/90","xMins"],
-    3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90"],
-    4:["xFPL","Form","npxG/90","xG/90","Shots/90","xGI/90"]};
-  /* Wider pool offered per position when picking stats — a superset of the
-     default six, position-appropriate. */
-  const OPTS={1:["xFPL","Form","Saves/90","CS %","G prevented","xMins","xGoT/90","Start %"],
-    2:["xFPL","Form","DefCon/90","CBIT/90","CS %","Aerials/90","xMins","Start %","Bonus"],
-    3:["xFPL","Form","xGI/90","npxG/90","xA/90","CC/90","Shots/90","F3 pass/90","Dribbles/90","Bonus"],
-    4:["xFPL","Form","npxG/90","xG/90","Shots/90","SoT/90","xGI/90","Box/90","Bonus"]};
-  const chosen=(S.radarAxes&&S.radarAxes[lockedPos])||null;
-  const axes=(chosen&&chosen.length?chosen:DEFAULT_AXSET[lockedPos||3])||DEFAULT_AXSET[3];
-
-  const takenIds=new Set(ids.filter(Boolean));
-  const pool=i=>S.model.players.filter(p=>(p.id===ids[i]||!takenIds.has(p.id))&&(!lockedPos||p.pos===lockedPos));
-  const results=i=>{const q=(search[i]||"").trim().toLowerCase();if(!q)return[];
-    return pool(i).filter(p=>p.web_name.toLowerCase().includes(q)||p.teamName.toLowerCase().includes(q))
-      .sort((a,b)=>hPts(b,g,S.horizon)-hPts(a,g,S.horizon)).slice(0,8);};
-
-  const slot=i=>{
-    const p=active[i];
-    if(p)return `<div class="rslot" style="--acc:${COL[i]}"><div class="rchip">
-        <span class="rsw" style="background:${COL[i]}"></span>${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}
-        <span class="rchip-nm">${esc(p.web_name)}<span class="rchip-tm">${esc(p.teamName)} · £${p.price.toFixed(1)}</span></span>
-        <button class="rchip-x" onclick="act('radarclear',${i})" title="Remove">✕</button></div></div>`;
-    const rs=results(i);
-    /* Fixed: typing used to trigger a full page re-render on every keystroke,
-       which destroyed and recreated the input, stealing focus after one
-       character. searchInput() debounces and restores focus + caret. */
-    return `<div class="rslot" style="--acc:${COL[i]}">
-      <span class="rsw" style="background:${COL[i]}"></span>
-      <input class="rsearch" id="rsrch${i}" placeholder="${lockedPos?"Search "+POS[lockedPos]+"…":"Search a player…"}"
-        value="${esc(search[i]||"")}" oninput="searchInput('radarsearch',this,${i})">
-      ${(search[i]||"").trim()?`<div class="rsdrop">${rs.length?rs.map(pl=>`<div class="rsopt" onclick="act('radarpick',${i},${pl.id})">
-          ${shirtSVG(pl.teamName.toUpperCase(),pl.pos===1,18)}<span class="rsopt-nm">${esc(pl.web_name)}</span>
-          <span class="note">${esc(pl.teamName)}</span></div>`).join(""):`<div class="rsopt" style="cursor:default"><span class="note">No matches</span></div>`}</div>`:""}
-      </div>`;};
-
-  const posFilter=`<span class="rposf">
-    ${[1,2,3,4].map(p=>`<button class="${lockedPos===p?"on":""}" ${activePlayers.length?"disabled":""}
-      onclick="act('radarpos',${p})" title="${activePlayers.length?"Clear players to change position":""}">${POS[p]}</button>`).join("")}
-    ${lockedPos&&!activePlayers.length?`<button onclick="act('radarpos',null)" title="Clear position">✕</button>`:""}</span>`;
-  const horizonCtl=`<span class="rhorizon2"><span class="note">xFPL over</span>
-    <input type="range" min="0" max="4" step="1" value="${hIdx}" oninput="act('radarhorizon',this.value)">
-    <span class="rhval2">${hLabel(curH)}</span></span>`;
-
-  const statPicker=lockedPos?`<div class="rstatpick">
-      <span class="note" style="display:block;margin-bottom:5px">Compare on (up to 6) — <button class="rlink" onclick="act('radaraxes',${lockedPos},null)">reset to default</button></span>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
-        ${OPTS[lockedPos].map(ax=>`<button class="chipbtn ${axes.includes(ax)?"on":""}" onclick="act('radaraxes',${lockedPos},'${ax}')">${ax}</button>`).join("")}
-      </div></div>`:"";
-
-  let content;
-  if(!activePlayers.length){
-    content=`<p class="note" style="margin:14px 0 0;text-align:center">Search for up to three players in the same position — own squad included — to compare them.</p>`;
-  }else{
-    const maxes=axes.map(ax=>Math.max(1e-6,...activePlayers.map(p=>AXF[ax](p))));
-    const fmt=(ax,v)=>ax==="CS %"||ax==="Start %"||ax==="Owned %"?v.toFixed(0)+"%":(Number.isInteger(v)?v.toFixed(0):v.toFixed(1));
-    /* Win-count per player across every row, to star the strongest overall
-       performer in this specific comparison — separate from the per-row
-       yellow highlight, which marks the best value in that one stat. */
-    const wins=[0,0,0];
-    const rows=axes.map(ax=>{
-      const vals=active.map(p=>p?AXF[ax](p):null);
-      const best=Math.max(...vals.filter(v=>v!=null));
-      const bestJ=activePlayers.length>1?vals.findIndex(v=>v===best):-1;
-      if(bestJ>=0)wins[bestJ]++;
-      return `<tr><td class="rmet">${ax}</td>${active.map((p,j)=>{
-        if(!p)return `<td class="rtd">—</td>`;
-        const isBest=j===bestJ;
-        return `<td class="rtd${isBest?" rbest":""}">${fmt(ax,vals[j])}</td>`;}).join("")}</tr>`;}).join("");
-    const topWins=Math.max(...wins);
-    const thead=`<tr><td></td>${active.map((p,j)=>{
-      if(!p)return "<th></th>";
-      const photoUrl=imgSrc("player",p.code);
-      return `<th style="color:${COL[j]}">
-        <span class="rphotowrap"><img class="rphoto" alt="" src="${photoUrl}"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-          <span class="rphotofallback" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,32)}</span></span>
-        <span class="rth-nm">${esc(p.web_name)}${wins[j]===topWins&&topWins>0?' <span class="rwinstar" title="Wins the most categories in this comparison">★</span>':""}</span></th>`;}).join("")}</tr>`;
-    const table=`<table class="rtable"><thead>${thead}</thead><tbody>${rows}</tbody></table>`;
-
-    const cx=150,cy=150,R=104,N=axes.length;
-    const ang=i=>(-90+i*360/N)*Math.PI/180;
-    const pt=(i,f)=>[(cx+Math.cos(ang(i))*R*f).toFixed(1),(cy+Math.sin(ang(i))*R*f).toFixed(1)];
-    const rings=[0.25,0.5,0.75,1].map(f=>`<polygon points="${axes.map((_,i)=>pt(i,f).join(",")).join(" ")}" fill="none" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
-    const spokes=axes.map((_,i)=>`<line x1="${cx}" y1="${cy}" x2="${pt(i,1)[0]}" y2="${pt(i,1)[1]}" stroke="var(--ink3)" stroke-width="1" opacity=".6"/>`).join("");
-    const labels=axes.map((ax,i)=>{const[x,y]=pt(i,1.17);
-      return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="var(--mute)">${ax}</text>`;}).join("");
-    const polys=active.map((p,j)=>{if(!p)return"";const pts=axes.map((ax,i)=>pt(i,Math.min(1,AXF[ax](p)/maxes[i])).join(",")).join(" ");
-      return `<polygon points="${pts}" fill="${COL[j]}" fill-opacity=".16" stroke="${COL[j]}" stroke-width="2.5"/>`;}).join("");
-    const svg=`<svg viewBox="0 0 300 300" style="width:100%;max-width:300px;height:auto;display:block;margin:0 auto">${rings}${spokes}${labels}${polys}</svg>`;
-    const legend=activePlayers.map(p=>{const j=active.indexOf(p);
-      return `<span class="tlegend"><span class="tdot" style="background:${COL[j]};height:8px;width:8px;border-radius:50%"></span>${esc(p.web_name)}</span>`;}).join("");
-
-    content=`<div class="rgrid">
-        <div class="rtablewrap">${table}</div>
-        <div class="rradarwrap">
-          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:8px">${legend}</div>
-          ${svg}
-        </div>
-      </div>
-      <p class="note" style="margin:10px 0 0;text-align:center">Yellow = best in that row · ★ = wins the most categories · axes scaled to the strongest player shown · ${esc(POS[lockedPos])} only.</p>`;
-  }
-
-  return `<div class="panel rcompare"><div class="phead"><h2>Compare players</h2>
-      <span class="note">${lockedPos?POS[lockedPos]+" only":"up to 3 · same position"}</span></div>
-    <div class="pbody">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">${posFilter}${horizonCtl}</div>
-      <div class="rslots">${[0,1,2].map(slot).join("")}</div>
-      ${statPicker}
-      ${content}
-    </div></div>`;
-}
 /* wave 8: the Transfers page retired; its tools live in the Planner's Top
    Move pop-up (several players at once, best moves by position, the
    players not being suggested). The five-week plan sits beside them, price
@@ -728,7 +571,6 @@ function transfersHTML(){
   const budget=outIds
     ? planBank()+outIds.reduce((a,i)=>{const q=S.model.players.find(p=>p.id===i);return a+(q?sellPrice(q):0);},0)
     : planBank();
-  const top=pool[0];
   const posName={1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
   const chosen=S.outList.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
 
@@ -762,15 +604,6 @@ function transfersHTML(){
           <span class="gain" style="font-size:16px">+${combo.gain.toFixed(1)} pts</span></div>
         <button style="margin-top:9px;width:100%" onclick="act('docombo')">Make these transfers</button>
       </div></div>`:"";
-  const headScout=(top&&pool.length&&top.gain>=moveBar(g))?`<div class="panel" style="border-color:var(--amber);background:#33240B">
-      <div class="phead" style="border-color:#5A3F10"><h2 style="color:var(--amber)">Head Scout</h2>
-      <span class="note">GW${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span></div>
-    <div class="pbody">
-      <div style="font-size:10px;color:var(--mint);font-weight:700;margin-bottom:8px">Top target</div>
-      ${top.gain>=moveBar(g)?swapCardHTML(top,g):`<p class="note" style="margin:0">Head Scout recommends no transfers: the best available move is worth only +${top.gain.toFixed(1)} points${freeLeft(g)>0?"":`, not enough to cover a ${HIT}-point hit`}.</p>`}</div></div>`
-    :`<div class="panel"><div class="phead"><h2>Head Scout</h2></div><div class="pbody">
-      <p class="note">No transfer improves your predicted total within budget and the three-per-club limit.</p></div></div>`;
-
   /* F95 (bundle 8): players taken off the suggestions can be put back */
   const ignoredP=(S.ignored||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const ignoredPanel=ignoredP.length?`<div class="panel"><div class="phead"><h2>Not Suggesting</h2>
