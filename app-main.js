@@ -33,6 +33,9 @@ function act(k,a,b){
     case"pop":S.pop=a||null;break;
     case"popclose":S.pop=null;break;
     /* wave 3: Players hub */
+    /* wave 5: Teams > Clubs */
+    case"tview":S.tView=["att","def","opp"].includes(a)?a:"att";break;
+    case"th":S.tH=[1,3,5].includes(+a)?+a:3;break;
     case"pview":S.pView=a;S.pdLimit=PD_PAGE;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
     case"ph":S.pH=[1,3,5].includes(+a)?+a:1;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
     case"paround":S.pAround=a==="rank"?"rank":"league";LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;

@@ -52,7 +52,8 @@ const FILES = ["app-core.js", "app-squad.js", "app-render.js", "app-odds.js", "a
 const TABS = ["squad", "transfers", "chips", "rivals", "tracker", "table", "odds", "fixtures", "news", "xfpl"];
 /* pages that must match once the planned differences are stripped */
 /* the Players page (table) was rebuilt in redesign wave 3 */
-const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table");
+/* Teams (fixtures) gained the Clubs tab in wave 5 */
+const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table" && t !== "fixtures");
 
 /* ---------- old code out of git ---------- */
 function materialiseOld() {
@@ -314,7 +315,7 @@ try {
     check(!d, `page text unchanged outside planned places: ${tab}`,
       d ? `at ${d.at}\n   old: ...${d.old}...\n   new: ...${d.new_}...` : "");
   }
-  for (const tab of ["news", "odds", "table"]) {
+  for (const tab of ["news", "odds", "table", "fixtures"]) {
     const a = OLD.pages[tab].text, b = NEW.pages[tab].text;
     console.log(`INFO  ${tab} page (changed by design): old ${a.length} chars, new ${b.length} chars`);
     const d = firstDiff(a, b);

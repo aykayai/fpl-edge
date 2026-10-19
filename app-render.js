@@ -850,7 +850,14 @@ function readPill(t,opp,home,lens){
   const val=r==="cs"?Math.round(Math.exp(-xgc)*100)+"%":xgf.toFixed(1);
   return `<span class="fdrpill readpill" style="background:${b};color:${c};${home?"":"font-style:italic;"}">${esc(String(opp.short).slice(0,3))}<small>${val}</small></span>`;
 }
+/* wave 5: Teams = Clubs + Fixture Grid + By Gameweek */
+const TEAM_TILE=k=>`<span class="tile" style="--tc:${k==="def"?"#22D3EE":"#3DDC97"}" title="${k==="def"?"Kind defensive run":"Kind attacking run"}">${lic(k==="def"?"shield":"target")}</span>`;
 function fixturesHTML(){
+  const m=["clubs","team","gw"].includes(S.fixMode)?S.fixMode:"clubs";
+  const tabs=`<div class="pagetabs"><h1>Teams</h1><span class="pseg">${[["clubs","Clubs"],["team","Fixture Grid"],["gw","By Gameweek"]].map(([k,n])=>`<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')">${n}</button>`).join("")}</span></div>`;
+  return tabs+(m==="clubs"?clubsHTML():fixtureGridHTML());
+}
+function fixtureGridHTML(){
   const g=VG(), teams=S.model.teams;
   const mode=S.fixMode||"team";
   const lens=S.fdrLens||null;
@@ -896,9 +903,6 @@ function fixturesHTML(){
   const head=`<div class="panel"><div class="phead"><h2>Fixtures</h2></div>
     <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center">
       <span class="pseg">
-        <button class="${mode==="team"?"on":""}" onclick="act('fixmode','team')">Club</button>
-        <button class="${mode==="gw"?"on":""}" onclick="act('fixmode','gw')">Gameweek</button></span>
-      <span class="pseg">
         ${[["all","Overall"],["att","Attackers"],["def","Defenders"]].map(([k,n])=>
           `<button class="${(lens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}</span>
       ${mode==="team"?`<span class="pseg" aria-label="What each cell shows">
@@ -939,7 +943,7 @@ function fixturesHTML(){
       return `<tr style="${hot?"background:rgba(45,220,135,.07)":""}">
         <td class="nm" style="white-space:nowrap"><span style="display:flex;align-items:center;gap:7px">
           ${badgeOrShirt(t,20)}<b>${esc(t.name||t.short)}</b>
-          ${hot?`<span class="sig" style="border-color:${lens==="def"?"var(--cyan)":"var(--mint)"};color:${lens==="def"?"var(--cyan)":"var(--mint)"}" title="${lens==="def"?"Kind defensive run":"Kind attacking run"}">${lens==="def"?ICON_DEF:ICON_ATT}</span>`:""}</span></td>
+          ${hot?TEAM_TILE(lens==="def"?"def":"att"):""}</span></td>
         <td class="mono" style="text-align:right;color:${col(d1)}">${d1.toFixed(1)}</td>
         <td class="mono" style="text-align:right;color:${col(d3)}">${d3.toFixed(2)}</td>
         <td class="mono" style="text-align:right;font-weight:700;color:${col(d5)}">${d5.toFixed(2)}</td>${cells}</tr>`;});
@@ -970,8 +974,7 @@ function fixturesHTML(){
       const dt=f.kickoff?new Date(f.kickoff):null;
       const d=dt?ukFmt(dt,{weekday:"short",day:"numeric",month:"short"}):"";
       const tm=dt?ukHHMM(dt):"";
-      const strongSide=t=>t.att>=1.30?`<span class="sig" style="border:none">${ICON_ATT}</span>`
-        :(2.6-t.def)>=1.12?`<span class="sig" style="border:none">${ICON_DEF}</span>`:"";
+      const strongSide=t=>t.att>=1.30?TEAM_TILE("att"):(2.6-t.def)>=1.12?TEAM_TILE("def"):"";
       out+=`<div class="fixrow" style="align-items:flex-start;flex-wrap:wrap">
         <span class="fixteam" style="gap:8px">${badgeOrShirt(h,22)}
           <span style="font-weight:600">${esc(h.name||h.short)}</span>${strongSide(h)}
@@ -2022,4 +2025,76 @@ function signalBoardHTML(G,H,posF){
     return `<section class="sbcard"><header>${sigTile(k,SIG_RULE[k](H))}<h3>${SIGNAL[k][2]}</h3><span class="sbc">${list.length}</span></header>
       ${rows||'<p class="sgempty">Nobody right now.</p>'}${list.length>6?`<div class="sbmore">+${list.length-6} more · <a href="${routeFor("table")}" onclick="S.iconF=['${k}'];S.pView='stats';return go(event,'table')">see all</a></div>`:""}</section>`;}).join("");
   return `<h4 class="sgsec">Signal Board <span class="mu" style="font-weight:400;font-size:12px">points over the next ${H}</span></h4><div class="sbgrid">${cards}</div>`;
+}
+
+/* ============================================================
+   REDESIGN WAVE 5 (20 Oct 2026): Teams (Fixtures renamed). Tabs: Clubs
+   (new, default), Fixture Grid (the club-by-gameweek grid) and By Gameweek
+   (the fixture list). Clubs: attack and defence this season and over the
+   last four matches (expected goals from the match data), the next 1/3/5
+   on the view's lens, projected goals and clean-sheet chance from the
+   model's fixture ratings, the bookmakers' figures for the next match when
+   the odds are in, and each club's top assets. Views: Attacks to own,
+   Defences to own, Opponents to target.
+   ============================================================ */
+let _tfCache=null;
+function teamForm(){
+  if(_tfCache&&_tfCache.m===S.teamMatch)return _tfCache.v;
+  const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
+  const rows={};
+  Object.values(S.teamMatch||{}).filter(m=>m.tag==="now").forEach(m=>{
+    const hs=key[m.h]||key["id"+m.h],as=key[m.a]||key["id"+m.a];if(!hs||!as)return;
+    (rows[hs]=rows[hs]||[]).push({gw:m.gw,xg:m.hxg,xga:m.axg});(rows[as]=rows[as]||[]).push({gw:m.gw,xg:m.axg,xga:m.hxg});});
+  const v={};
+  Object.entries(rows).forEach(([k,a])=>{a.sort((x,y)=>x.gw-y.gw);const l4=a.slice(-4);
+    const avg=(r,f)=>r.length?r.reduce((s,x)=>s+(x[f]||0),0)/r.length:null;
+    v[k]={n:a.length,xg:avg(a,"xg"),xga:avg(a,"xga"),xg4:avg(l4,"xg"),xga4:avg(l4,"xga")};});
+  _tfCache={m:S.teamMatch,v};return v;
+}
+function clubsHTML(){
+  const g=VG(),h=S.tH||3,view=S.tView||"att",teams=S.model.teams,TF=teamForm();
+  const fx=(t,e)=>(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).map(f=>({opp:f.ht===t?f.at:f.ht,home:f.ht===t}));
+  const run=t=>{const out=[];for(let e=g;e<g+h&&e<=38;e++)fx(t,e).forEach(x=>out.push({e,...x}));return out;};
+  const rows=teams.map(t=>{
+    const r=run(t);
+    const goals=r.reduce((s,x)=>s+fdrCalc(t,x.opp,x.home,"xgf"),0);
+    const cs=r.length?r.reduce((s,x)=>s+Math.exp(-fdrCalc(t,x.opp,x.home,"xgc")),0)/r.length:0;
+    const conceded=r.reduce((s,x)=>s+fdrCalc(t,x.opp,x.home,"xgc"),0);
+    const nx=fx(t,g)[0],mk=nx&&S.oddsTeams?S.oddsTeams[t.short+"|"+nx.opp.short+"|"+(nx.home?"H":"A")]:null;
+    const f=TF[t.short]||{};
+    /* who plays them next: for the Opponents view, the attackers facing them */
+    const facing=r.map(x=>x.opp.id);
+    const players=S.model.players.filter(p=>p.avail>0&&(view==="opp"?facing.includes(p.team)&&p.pos>=3:p.team===t.id&&(view==="def"?p.pos<=2:p.pos>=3)));
+    const top=players.sort((a,b)=>hPts(b,g,h)-hPts(a,g,h)).slice(0,2);
+    return{t,r,goals,cs,conceded,mk,f,top,facing};});
+  const sorters={att:(a,b)=>b.goals-a.goals,def:(a,b)=>b.cs-a.cs,opp:(a,b)=>((b.f.xga||0)+(b.f.xga4||0))-((a.f.xga||0)+(a.f.xga4||0))};
+  rows.sort(sorters[view]||sorters.att);
+  const lens=view==="def"?"def":"att";
+  const n2=v=>v==null?"—":v.toFixed(2);
+  const trend=(now,season,goodUp)=>now==null||season==null?"":
+    `<span class="${(now>season)===goodUp?"up":"dn"}" title="Last four against the season">${now>season?"▲":"▼"}</span>`;
+  const body=rows.map((x,i)=>`<tr>
+    <td class="mu" style="text-align:right">${i+1}</td>
+    <td class="nm"><span style="display:flex;align-items:center;gap:8px">${badgeOrShirt(x.t,22)}<b>${esc(x.t.name||x.t.short)}</b></span></td>
+    <td class="fig">${n2(x.f.xg)}</td><td class="fig">${n2(x.f.xg4)} ${trend(x.f.xg4,x.f.xg,true)}</td>
+    <td class="fig">${n2(x.f.xga)}</td><td class="fig">${n2(x.f.xga4)} ${trend(x.f.xga4,x.f.xga,false)}</td>
+    <td style="text-align:left"><span class="fxrow">${x.r.map(r=>view==="opp"
+        ?fdrPill(r.opp.short,r.home,fdrOf(x.t,!r.home,r.opp,"att"),{short:true,tiny:true})
+        :fdrPill(r.opp.short,r.home,fdrOf(r.opp,r.home,x.t,lens),{short:true,tiny:true})).join("")||'<span class="mu">blank</span>'}</span></td>
+    <td class="fig ${view==="att"?"mint":""}">${view==="opp"?x.conceded.toFixed(1):x.goals.toFixed(1)}</td>
+    <td class="fig ${view==="def"?"mint":""}">${Math.round(x.cs*100)}%</td>
+    <td class="fig">${x.mk?`${x.mk.xg.toFixed(1)} · ${Math.round(Math.exp(-x.mk.xgc)*100)}%`:"—"}</td>
+    <td style="text-align:left">${x.top.map(p=>`${pName(p)} <span class="mu">${hPts(p,g,h).toFixed(1)}</span>`).join('<span class="mu"> · </span>')}</td></tr>`).join("");
+  const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
+  const note={att:"Ranked by the goals the model expects them to score over the window: attackers to own.",
+    def:"Ranked by the average chance of a clean sheet over the window: defenders and keepers to own.",
+    opp:"Ranked by expected goals conceded this season plus the last four: the defences to attack. Pills show who plays them next, coloured for the attacker."}[view];
+  return `<div class="hubctl">${seg(view,[["att","Attacks to own"],["def","Defences to own"],["opp","Opponents to target"]],"tview")}${hzHTML(h,"th")}
+      <span class="note">${note}</span></div>
+    <div class="panel"><div class="scroll hub"><table><thead><tr><th></th><th style="text-align:left">Club</th>
+      <th title="Expected goals per match this season">xG/g</th><th title="Expected goals per match, last four">Last 4</th>
+      <th title="Expected goals conceded per match this season">xGA/g</th><th title="Expected goals conceded per match, last four">Last 4</th>
+      <th style="text-align:left">${view==="opp"?"Faced next by":"Next "+h}</th><th>${view==="opp"?"Proj. conceded":"Proj. goals"}</th><th>CS %</th>
+      <th title="Bookmakers, next match: expected goals and clean-sheet chance">Market</th><th style="text-align:left">${view==="def"?"Top defenders":view==="opp"?"Attackers facing them":"Top attackers"}</th></tr></thead>
+      <tbody>${body}</tbody></table></div></div>`;
 }
