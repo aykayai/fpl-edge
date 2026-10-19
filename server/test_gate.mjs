@@ -143,7 +143,9 @@ function stubHandler(req, res) {
   if (p.startsWith("/gnews")) return text(HOSTILE_RSS, "application/rss+xml");
   if (p === "/v3odds/leagues") return json([{ name: "Premier League", slug: "england-premier-league", country: "England" }]);
   if (p === "/v3odds/bookmakers/selected") return json(["Bet365"]);
-  if (p === "/v3odds/events") return json([{ id: "e1", home: "Team 1", away: "Team 2", date: "2026-10-12T15:00:00Z" }]);
+  /* kick-off two days ahead: the server now ignores matches already started */
+  if (p === "/v3odds/events") return json([{ id: "e1", home: "Team 1", away: "Team 2", date: new Date(Date.now() + 2 * 86400000).toISOString() },
+    { id: "e0", home: "Team 3", away: "Team 4", date: new Date(Date.now() - 86400000).toISOString() }]);
   if (p === "/v3odds/odds/multi") {
     return json([{ eventId: "e1", home: "Team 1", away: "Team 2", bookmakers: { Bet365: [{ name: "ML", odds: [{ home: "2.10", draw: "3.40", away: "3.30" }] }] } }]);
   }
