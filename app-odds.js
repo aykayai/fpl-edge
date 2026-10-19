@@ -422,6 +422,7 @@ function oddsHTML(){
    are "if he plays" (the bets are void if he does not); the model's figure
    beside each is worked out the same way: 1 - e^-(rate x normal minutes/90 x
    this fixture against his team's average). */
+const SEP='<span class="sep">·</span>';   // tightens on a phone so Fixtures fits 375px
 const oddsPct=v=>v==null?'<span class="mu">—</span>':Math.round(v*100)+"%";
 function modelChance(p,rate){
   const g=S.model.next.id,q=p.gw[g]||{},f=(q.fixtures||[])[0];
@@ -500,9 +501,9 @@ function oddsFixturesHTML(){
     <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr>
       <th>Match</th><th>Result <span class="mu">H · D · A</span></th><th>Goals <span class="mu">mkt · model</span></th><th>Clean Sheet <span class="mu">H · A</span></th><th class="hide-ph">Over 2.5</th><th class="hide-ph">Both Score</th></tr></thead><tbody>
     ${rows.map(r=>`<tr><td>${esc(r.f.ht.short)} v ${esc(r.f.at.short)}<span class="sub">${esc(when(r.f.date))}</span></td>
-      <td>${r.hda?r.hda.map(oddsPct).join(" · "):"—"}</td>
+      <td>${r.hda?r.hda.map(oddsPct).join(SEP):"—"}</td>
       <td><b>${r.f.goals.xgHome.toFixed(1)}–${r.f.goals.xgAway.toFixed(1)}</b><span class="sub">model ${r.mH.toFixed(1)}–${r.mA.toFixed(1)}</span></td>
-      <td>${oddsPct(r.f.goals.csHome)} · ${oddsPct(r.f.goals.csAway)}</td><td class="hide-ph">${oddsPct(r.o25)}</td><td class="hide-ph">${oddsPct(r.btts)}</td></tr>`).join("")}
+      <td>${oddsPct(r.f.goals.csHome)+SEP+oddsPct(r.f.goals.csAway)}</td><td class="hide-ph">${oddsPct(r.o25)}</td><td class="hide-ph">${oddsPct(r.btts)}</td></tr>`).join("")}
     </tbody></table></div></div></div>`;
 }
 
