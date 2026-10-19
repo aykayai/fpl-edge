@@ -32,6 +32,16 @@ function act(k,a,b){
     case"weekh":S.weekH=[1,3,5].includes(+a)?+a:1;LS.set("weekh",S.weekH);break;
     case"pop":S.pop=a||null;break;
     case"popclose":S.pop=null;break;
+    /* wave 3: Players hub */
+    case"pview":S.pView=a;S.pdLimit=PD_PAGE;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
+    case"ph":S.pH=[1,3,5].includes(+a)?+a:1;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
+    case"paround":S.pAround=a==="rank"?"rank":"league";LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
+    case"hubsort":if((S.hubSort||"pts")===a)S.hubDir=(S.hubDir||"desc")==="desc"?"asc":"desc";else{S.hubSort=a;S.hubDir=a==="name"?"asc":"desc";}break;
+    case"tick":{const t=S.pTicks||[];S.pTicks=t.includes(a)?t.filter(x=>x!==a):(t.length>=5?t:[...t,a]);
+      if(t.length>=5&&!t.includes(a))toast("Up to five players at a time");if(!S.pTicks.length)S.pCmp=false;break;}
+    case"tickclear":S.pTicks=[];S.pCmp=false;break;
+    case"pcmp":S.pCmp=!!(S.pTicks||[]).length;break;
+    case"pcmpclose":S.pCmp=false;break;
     case"compare":S.cmp=S.cmp?null:{mode:"edits",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
     case"cmpclose":S.cmp=null;break;
     case"cmpmode":{const C=S.cmp;if(!C)break;Object.assign(C,{mode:a,locks:[],bans:[],pendLocks:[],pendBans:[]});
@@ -356,7 +366,7 @@ document.addEventListener("keydown",e=>{
   if((e.key==="Enter"||e.key===" ")&&el&&el.getAttribute&&el.getAttribute("role")==="button"
      &&!/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)){e.preventDefault();el.click();return;}
   if(e.key==="Escape"&&S.cardId){S.cardId=null;render();return;}
-  if(e.key==="Escape"&&(S.pop||S.cmp)){S.pop=null;S.cmp=null;render();}
+  if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp)){S.pop=null;S.cmp=null;S.pCmp=false;render();}
 });
 window.addEventListener("popstate",()=>{if(applyHash())render();});
 /* wave 1: Predicted, Bank and FT join the sticky bar once the hero is gone */
@@ -374,6 +384,7 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   S.rivals=LS.get("rivals")||[];
   S.leagueId=LS.get("leagueId")||"391690";
   S.weekH=LS.get("weekh")||1;
+  {const hb=LS.get("hub")||{};S.pView=hb.v||"all";S.pH=hb.h||1;S.pAround=hb.ar||"league";S.pTicks=[];}
   {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];}
   /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
      quota on some browsers; the server is close now) and everything odds,

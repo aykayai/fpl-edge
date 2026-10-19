@@ -51,7 +51,8 @@ const { JSDOM } = loadJSDOM();
 const FILES = ["app-core.js", "app-squad.js", "app-render.js", "app-odds.js", "app-tracker.js", "app-main.js"];
 const TABS = ["squad", "transfers", "chips", "rivals", "tracker", "table", "odds", "fixtures", "news", "xfpl"];
 /* pages that must match once the planned differences are stripped */
-const STRICT = TABS.filter(t => t !== "news" && t !== "odds");
+/* the Players page (table) was rebuilt in redesign wave 3 */
+const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table");
 
 /* ---------- old code out of git ---------- */
 function materialiseOld() {
@@ -313,7 +314,7 @@ try {
     check(!d, `page text unchanged outside planned places: ${tab}`,
       d ? `at ${d.at}\n   old: ...${d.old}...\n   new: ...${d.new_}...` : "");
   }
-  for (const tab of ["news", "odds"]) {
+  for (const tab of ["news", "odds", "table"]) {
     const a = OLD.pages[tab].text, b = NEW.pages[tab].text;
     console.log(`INFO  ${tab} page (changed by design): old ${a.length} chars, new ${b.length} chars`);
     const d = firstDiff(a, b);

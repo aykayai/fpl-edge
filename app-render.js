@@ -1863,3 +1863,148 @@ function compareModalHTML(){
       ${C.mode==="edits"?`<button class="pri" onclick="act('save');act('cmpclose')">Save plan</button>`:`<button class="pri" onclick="act('cmpapply')">Apply</button>`}</div>`;
   return modalHTML(`Compare · ${wkSpan(g,h)}`,body,{wide:true,ctl,close:"cmpclose"});
 }
+
+/* ============================================================
+   REDESIGN WAVE 3 (20 Oct 2026): the Players hub (Player Data renamed).
+   One table of every player: views Buy / My Squad / All, horizon 1/3/5
+   (default 1), position filter; predicted points, minutes, the position's
+   key stat (xGI/90 over the last six for MID/FWD, clean-sheet chance for
+   GK/DEF), fixture pills on one colour scale, price with FPL's change
+   progress, overall ownership and ownership around you (mini-league rivals
+   or the 50 managers ranked around you). Tick up to five to compare them
+   in a pop-up of figure cards (replaces the Transfers radar). The full stat
+   table stays as the Stats view, so no Player Data feature loses its home.
+   ============================================================ */
+const pName=(p,cls)=>`<button class="pn${cls?" "+cls:""}" onclick="act('card',${p.id})" title="Open ${esc(p.web_name)}'s card">${esc(p.web_name)}</button>`;
+function keyStat(p,g){
+  if(p.pos>=3){const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));
+    return w?{v:(w.xg90||0)+(w.xa90||0),txt:((w.xg90||0)+(w.xa90||0)).toFixed(2),unit:"xGI/90",est:!!w.estimated}:null;}
+  const c=csProbNext(p,g);return c!=null?{v:c,txt:Math.round(c*100)+"%",unit:"CS",est:false}:null;
+}
+function aroundOwn(p){
+  if(S.pAround==="rank"){const N=S.neighbours;return N&&N.n?{k:N.own[p.id]||0,n:N.n}:null;}
+  const R=rivalOwn();return R&&R.n?{k:R.own[p.id]||0,n:R.n}:null;
+}
+function fixPills(p,g,n){
+  let h="";
+  for(let e=g;e<g+n&&e<=38;e++){const q=p.gw[e];
+    if(!q||q.blank||!q.fixtures.length){h+=`<span class="fdrpill blankpill">—</span>`;continue;}
+    h+=q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f),{short:true,tiny:true})).join("");}
+  return `<span class="fxrow">${h}</span>`;
+}
+const HUB_SORT={
+  pts:(p,g,h)=>hPts(p,g,h),mins:p=>p.xMins||0,key:(p,g)=>{const k=keyStat(p,g);return k?k.v:-1;},
+  fix:(p,g,h)=>{let s=0,n=0;for(let e=g;e<g+Math.max(h,3)&&e<=38;e++)(p.gw[e]?.fixtures||[]).forEach(f=>{s+=posDiff(p,f);n++;});return n?-s/n:-9;},
+  price:p=>p.price,pcp:p=>{const l=fplLive(p);return l&&l.pcp!=null?l.pcp:-999;},owned:p=>p.owned,
+  around:p=>{const a=aroundOwn(p);return a?a.k/a.n:-1;},name:p=>p.web_name};
+function hubRows(){
+  const g=VG(),h=S.pH||1,view=S.pView||"all",mine=new Set(effectiveSquadIds(g).ids);
+  let a=filtered("list");
+  if(view==="mine")a=S.model.players.filter(p=>mine.has(p.id)&&(!S.lPos||p.pos===S.lPos));
+  if(view==="buy")a=a.filter(p=>!mine.has(p.id)&&p.avail>0&&(p.xMins||0)>=45);
+  const k=HUB_SORT[S.hubSort]?S.hubSort:"pts",dir=S.hubDir||"desc";
+  const f=HUB_SORT[k];
+  a=a.slice().sort((x,y)=>{const A=f(x,g,h),B=f(y,g,h);
+    if(typeof A==="string")return dir==="asc"?A.localeCompare(B):B.localeCompare(A);
+    return dir==="asc"?A-B:B-A;});
+  return{g,h,view,mine,a};
+}
+function playersHubHTML(){
+  if(!S.model)return "";
+  const{g,h,view,mine,a}=hubRows();
+  if(view==="stats")return hubHeadHTML(g,h,view)+statsViewHTML();
+  const ticks=S.pTicks||[];
+  const lim=S.pdLimit||PD_PAGE;
+  const th=(k,n,tip,al)=>`<th class="${S.hubSort===k||(!S.hubSort&&k==="pts")?"act":""}" onclick="act('hubsort','${k}')" title="${esc(tip)}" style="text-align:${al||"right"}">${n}${(S.hubSort||"pts")===k?((S.hubDir||"desc")==="desc"?" ↓":" ↑"):""}</th>`;
+  const aroundLbl=S.pAround==="rank"?"Near Rank":"Rivals";
+  const head=`<tr><th style="width:34px"></th>${th("name","Player","Name, club, position and signals","left")}
+    ${th("pts",`Predicted ${h>1?h+" GW":"GW"+g}`,"Model points over the horizon")}${th("mins","Minutes","Expected minutes next gameweek")}
+    ${th("key",S.lPos===1||S.lPos===2?"CS %":S.lPos>=3?"xGI/90 L6":"Key Stat","MID/FWD: expected goal involvements per 90 over the last six matches. GK/DEF: chance of a clean sheet next match.")}
+    ${th("fix",`Fixtures`,"Next fixtures, coloured by difficulty for his position (green easy, red hard). Italic = away.","left")}
+    ${th("price","Price","Price, with FPL's price predictor progress (100% = changes tonight)")}${th("owned","Owned","Overall ownership")}
+    ${th("around",aroundLbl,S.pAround==="rank"?"How many of the 50 managers ranked around you own him":"How many of your mini-league rivals own him")}<th></th></tr>`;
+  const rows=a.slice(0,lim).map(p=>{
+    const ks=keyStat(p,g),ar=aroundOwn(p),l=fplLive(p),on=ticks.includes(p.id),own=mine.has(p.id);
+    const pc=l&&l.pcp!=null&&Math.abs(l.pcp)>=50?`<span class="pcp ${l.pcp>0?"up":"dn"}">${l.pcp>0?"+":""}${Math.round(l.pcp)}%</span>`:"";
+    return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
+      <td><input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></td>
+      <td class="nm"><span class="pcell">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}<span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${own?'<span class="mu" style="font-size:11px">yours</span>':""}</span>
+        <span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}${sigHTML(p,g)}</span></span></span></td>
+      <td class="fig mint">${hPts(p,g,h).toFixed(1)}</td>
+      <td class="fig">${Math.round(p.xMins||0)}′</td>
+      <td class="fig">${ks?ks.txt+(ks.est?'<span class="srctag">est</span>':""):"—"}</td>
+      <td style="text-align:left">${fixPills(p,g,Math.max(h,3))}</td>
+      <td class="fig">£${p.price.toFixed(1)}${arw(p.priceChange)} ${pc}</td>
+      <td class="fig">${p.owned.toFixed(1)}%</td>
+      <td class="fig">${ar?`${ar.k}/${ar.n}`:"—"}</td>
+      <td style="white-space:nowrap"><button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="Shortlist" aria-pressed="${S.stars.includes(p.id)}">★</button>${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to the Planner" aria-label="Add ${esc(p.web_name)} to the Planner">+</button>`}</td></tr>`;}).join("");
+  const more=a.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${a.length} players</span>
+    <button onclick="act('pdmore')">Show ${Math.min(PD_PAGE,a.length-lim)} more</button><button onclick="act('pdall')">Show all ${a.length}</button></div>`:
+    (lim>PD_PAGE&&a.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
+  return hubHeadHTML(g,h,view)+`<div class="panel"><div class="scroll tallscroll hub"><table><thead>${head}</thead><tbody>${rows||`<tr><td colspan="10" class="note" style="padding:14px">No players match.</td></tr>`}</tbody></table></div>${more}</div>`;
+}
+function hubHeadHTML(g,h,view){
+  const ticks=S.pTicks||[];
+  const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
+  const a=hubRows().a.length;
+  return `<div class="pagetabs"><h1>Players</h1>
+      <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        ${ticks.length?`<button class="pri" onclick="act('pcmp')">Compare ${ticks.length}</button><button onclick="act('tickclear')">Clear ticks</button>`:`<span class="note">Tick up to 5 players to compare</span>`}
+        <a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Odds →</a></span></div>
+    <div class="hubctl">
+      ${seg(view,[["buy","Buy"],["mine","My Squad"],["all","All"],["stats","Stats"]],"pview")}
+      ${view==="stats"?"":hzHTML(h,"ph")}
+      <span class="hz">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]].map(([v,n])=>`<button class="${(S.lPos||0)===v?"on":""}" onclick="act('lpos',${v})">${n}</button>`).join("")}</span>
+      ${view==="stats"||view==="mine"?"":`<input id="srch-l" placeholder="Search" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" style="width:170px">
+      <select onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
+      <span class="note">Max £</span><input type="number" min="3.5" max="16" step="0.1" value="${(S.lMax||16).toFixed(1)}" onchange="act('lmax',this.value)" style="width:70px" aria-label="Max price">`}
+      ${view==="stats"?"":`<span class="note" style="margin-left:auto">Around you</span>${seg(S.pAround||"league",[["league","Rivals"],["rank","Near rank"]],"paround")}`}
+      ${view==="stats"?"":`<span class="note">${a} players</span>`}
+    </div>`;
+}
+/* the old Player Data table, kept whole as the Stats view */
+function statsViewHTML(){
+  return `<div class="panel"><div class="phead"><h2>All Stats</h2><span class="note">${filtered("list").length} players · tap any column to sort</span></div>
+    ${filtersHTML(false,'list')}
+    <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
+      <span style="font-size:11px;color:var(--mute);flex:none">Show only</span>
+      ${SIG_ORDER.map(k=>`<button class="fbtn fbtn-icon ${S.iconF.includes(k)?"on":""}" onclick="act('iconf','${k}')" title="${esc(SIGNAL[k][2]+": "+SIG_RULE[k](S.horizon||1))}">${sigTile(k,SIGNAL[k][2])}</button>`).join("")}
+      <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
+        <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button></div>
+    <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
+      <span style="flex:1;min-width:200px"><span style="font-size:11px;color:var(--mute)">Budget</span>
+        <span style="margin:4px 0;display:block">${stepperInput("lmax",S.lMax,{min:3.5,max:16,step:0.1,big:1,dp:1,w:56})}</span></span>
+      <span style="flex:1;min-width:230px"><span style="font-size:11px;color:var(--mute)">Past stats window</span>
+        <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+          ${[1,3,5,10,38].map(n=>`<button class="chipbtn ${(S.lWin||38)===n?"on":""}" onclick="act('lwin',${n})">${n===38?"Season":"Last "+n}</button>`).join("")}</span></span></div>
+    ${tableHTML()}</div>`;
+}
+/* tick-to-compare: up to five players side by side as figure cards */
+function playerCompareHTML(){
+  const ids=S.pTicks||[];if(!S.pCmp||!ids.length||!S.model)return "";
+  const g=VG(),ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
+  const A=S.playerActuals||{};
+  const last6=p=>{const a=A[p.id]||A[String(p.id)]||{},out=[];for(let e=Math.max(1,g-6);e<g;e++){const v=a[e]??a[String(e)];out.push(v==null?0:+v);}return out;};
+  const rows=[
+    ["Predicted 1 GW",p=>hPts(p,g,1),v=>v.toFixed(1),"high"],
+    ["Predicted 3 GW",p=>hPts(p,g,3),v=>v.toFixed(1),"high"],
+    ["Predicted 5 GW",p=>hPts(p,g,5),v=>v.toFixed(1),"high"],
+    ["Expected Minutes",p=>p.xMins||0,v=>Math.round(v)+"′","high"],
+    ["xGI/90, Last 6",p=>{const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));return w?(w.xg90||0)+(w.xa90||0):0;},v=>v.toFixed(2),"high"],
+    ["Clean Sheet Chance",p=>p.pos<=2?(csProbNext(p,g)||0):null,v=>Math.round(v*100)+"%","high"],
+    ["Form",p=>p.form,v=>v.toFixed(1),"high"],
+    ["Price",p=>p.price,v=>"£"+v.toFixed(1),"low"],
+    ["Owned",p=>p.owned,v=>v.toFixed(1)+"%",null],
+    ["Points Per Game",p=>p.ppg,v=>v.toFixed(1),"high"]];
+  const cell=(row,p,best)=>{const v=row[1](p);if(v==null)return `<div class="cmc empty">—</div>`;
+    return `<div class="cmc${best?" best":""}"><span class="cmv">${row[2](v)}</span></div>`;};
+  const head=ps.map(p=>`<div class="cmh">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,34)}<div>${pName(p,"big")}<div class="mu">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)}</div>
+      <div style="margin-top:4px">${sigHTML(p,g)}</div></div><button class="mx" onclick="act('tick',${p.id})" aria-label="Remove ${esc(p.web_name)}">${lic("x",14)}</button></div>`).join("");
+  const body=rows.filter(r=>ps.some(p=>r[1](p)!=null)).map(r=>{const vals=ps.map(p=>r[1](p)),ok=vals.filter(v=>v!=null);
+    const best=r[3]&&ok.length>1?(r[3]==="high"?Math.max(...ok):Math.min(...ok)):null;
+    return `<div class="cml">${r[0]}</div>${ps.map((p,i)=>cell(r,p,best!=null&&vals[i]===best)).join("")}`;}).join("")
+    +`<div class="cml">Next 5 Fixtures</div>${ps.map(p=>`<div class="cmc">${fixPills(p,g,5)}</div>`).join("")}`
+    +`<div class="cml">Last 6 Gameweeks</div>${ps.map(p=>{const s=last6(p);return `<div class="cmc"><span class="cmv sm">${s.reduce((a,b)=>a+b,0)} pts</span>${s.length>1?spark(s,"#3DDC97",90,26):""}</div>`;}).join("")}`;
+  return modalHTML(`Compare ${ps.length} Players`,`<div class="cmgrid" style="grid-template-columns:170px repeat(${ps.length},minmax(0,1fr))"><div></div>${head}${body}</div>
+    <p class="note" style="margin-top:12px">Best in each row is outlined. Tick more players in the table to add them (up to five).</p>`,{wide:true,close:"pcmpclose"});
+}

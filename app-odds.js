@@ -1029,30 +1029,7 @@ function renderPage(){
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
           <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>`;
   }
-  else if(S.tab==="table")main=`<div class="panel"><div class="phead"><h2>Players</h2>
-      <span class="note">${filtered("list").length} players · tap any column to sort</span>
-      <a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Odds →</a></div>
-    ${filtersHTML(false,'list')}
-    <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
-      <span style="font-size:10px;color:var(--mute);font-weight:700;flex:none">Show only</span>
-      ${SIG_ORDER.map(k=>`<button class="fbtn fbtn-icon ${S.iconF.includes(k)?"on":""}"
-        onclick="act('iconf','${k}')" title="${esc(SIGNAL[k][2]+": "+SIG_RULE[k](S.horizon||1))}">${sigTile(k,SIGNAL[k][2])}</button>`).join("")}
-      <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
-        <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button>
-    </div>
-    <p class="note" style="margin:0;padding:2px 14px 0;font-size:10px">Hover an icon for what it filters.</p>
-    <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
-      <span style="flex:1;min-width:200px">
-        <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)">
-          <span>Budget</span></span>
-        <span style="margin:4px 0;display:block">${stepperInput("lmax",S.lMax,{min:3.5,max:16,step:0.1,big:1,dp:1,w:56})}</span>
-      </span>
-      <span style="flex:1;min-width:230px">
-        <span style="font-size:10.5px;color:var(--mute)">Past stats — window</span>
-        <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
-          ${[1,3,5,10,38].map(n=>`<button class="chipbtn ${(S.lWin||38)===n?"on":""}" onclick="act('lwin',${n})">${n===38?"Season":"Last "+n}</button>`).join("")}
-        </span></span></div>
-    ${tableHTML()}</div>`;
+  else if(S.tab==="table")main=playersHubHTML();
   else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();
   else if(S.tab==="xfpl")main=statusPageHTML();
   else if(S.tab==="chips")main=chipsHTML();
@@ -1119,7 +1096,7 @@ function renderPage(){
   }
   app.innerHTML=`${topbar}
    ${hero}
-   ${S.pop?popHTML():""}${S.cmp?compareModalHTML():""}
+   ${S.pop?popHTML():""}${S.cmp?compareModalHTML():""}${S.pCmp?playerCompareHTML():""}
    ${S.cardId?playerCardHTML():""}
    <main id="main" style="display:block;max-width:100%">${main}</main>
    <div class="foot">FPL Signals v${APP_VERSION}</div>`;

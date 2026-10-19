@@ -22,7 +22,8 @@ import { fileURLToPath } from "node:url";
 import { CONFIG } from "./lib/config.mjs";
 import { log } from "./lib/util.mjs";
 import { initDataset, pollDataset, datasetStatus, datasetGW, currentDir } from "./lib/dataset.mjs";
-import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus, fplPlayersPayload } from "./lib/fpl.mjs";
+import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus, fplPlayersPayload, currentGw } from "./lib/fpl.mjs";
+import { buildNeighbours, neighboursStatus } from "./lib/neighbours.mjs";
 import { refreshNews, newsPayload, newsStatus, playerNews } from "./lib/news.mjs";
 import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
 import { buildFeeds, feedsStatus, FEEDS_DIR, SNAP_DIR } from "./lib/feeds.mjs";
@@ -140,7 +141,8 @@ async function handle(req, res) {
         feeds,
         news: newsStatus(),
         odds: oddsStatus(),
-        snapshots: snapshotStatus()
+        snapshots: snapshotStatus(),
+        neighbours: neighboursStatus()
       });
       return;
     }
@@ -202,7 +204,7 @@ async function handle(req, res) {
       const name = path.slice("/data/feeds/".length);
       /* predictions.json (live pre-deadline snapshots) and backtest.json (the
          labelled GW1-6 backtest series) live in the snapshot dir */
-      if (!/^(actuals|rivals|predictions|backtest)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
+      if (!/^(actuals|rivals|predictions|backtest|neighbours)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
       const full = join(/^(predictions|backtest)/.test(name) ? SNAP_DIR() : FEEDS_DIR(), name);
       let mtime = "";
       try { mtime = (await stat(full)).mtime.toISOString(); } catch { /* 404s below */ }
@@ -241,6 +243,7 @@ job("fpl", () => fetchBootstrap());
 job("news", refreshNews);
 job("odds", refreshOdds);
 job("feeds", buildFeeds);
+job("neighbours", () => buildNeighbours(currentGw()));
 
 async function runJob(name, nextMs) {
   const j = jobs[name];
@@ -260,6 +263,8 @@ async function tick() {
   if (CONFIG.ODDS_API_KEY && jobs.odds.due <= now)
     runJob("odds", withinHoursOfDeadline(48) ? Math.min(CONFIG.ODDS_POLL_MS, 3600000) : CONFIG.ODDS_POLL_MS);
   if (CONFIG.FEEDS_POLL_MS > 0 && jobs.feeds.due <= now) runJob("feeds", CONFIG.FEEDS_POLL_MS);
+  /* once an hour it checks; it only fetches when the gameweek has moved on */
+  if (CONFIG.FEEDS_POLL_MS > 0 && jobs.neighbours.due <= now && currentGw()) runJob("neighbours", 3600000);
   if (await anyFixtureLive().catch(() => false)) {
     if (!jobs.live) job("live", fetchLive);
     if (jobs.live.due <= now) runJob("live", CONFIG.FPL_LIVE_MS);

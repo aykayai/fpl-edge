@@ -124,6 +124,12 @@ function trueAccuracy(){
 }
 /* Redesign wave 1: FPL's own price predictor and live set-piece orders,
    which the dataset mirror does not carry (server /api/fpl-players). */
+/* wave 3: ownership among the 50 managers ranked around you (server job) */
+async function loadNeighbours(){
+  if(BACKUP){S.neighbours=null;return;}
+  try{const d=JSON.parse(await dataText("/data/feeds/neighbours.json"));if(d&&d.own)S.neighbours=d;}
+  catch(e){if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("rank neighbours");}
+}
 async function loadFplLive(){
   if(BACKUP){S.fplLive=null;return;}
   try{const d=JSON.parse(await dataText("/api/fpl-players"));if(d&&d.players)S.fplLive=d;}
@@ -223,7 +229,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.24.0";
+const APP_VERSION="12.25.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -497,7 +503,7 @@ async function loadAll(force,opts){
     /* nothing new on the server (or the server is unreachable): keep the
        built model, refresh the light feeds, and re-render once */
     S.capture={};
-    await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive()]);
+    await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours()]);
     if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();
       if(st){_snap.status=st;_snap.statusAt=S.statusAt;}IDB.set("snap",_snap);}
     S.capture=null;
@@ -802,7 +808,7 @@ async function loadAll(force,opts){
     /* The commit is kept so "Check now" can skip an unchanged dataset. The
        copy itself goes to IndexedDB below (localStorage had no room for it). */
     S.datasetCommit=commit;
-    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive()]);
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours()]);
     /* Bring the planner onto the latest official squad when a newer one has
        been published (this also upgrades a seed made before the feeds landed). */
     syncOfficialSquad();

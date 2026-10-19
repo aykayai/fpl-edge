@@ -129,6 +129,7 @@ export function fplStatus() {
 }
 
 export function nextDeadline() { return state.nextDeadline; }
+export function currentGw() { return state.currentGw; }
 
 /* Redesign wave 1 (19 Oct 2026): the per-player fields the dataset mirror
    does not carry - FPL's own price-change predictor and its live set-piece
