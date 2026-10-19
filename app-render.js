@@ -160,15 +160,8 @@ function replHTML(){
     const o=S.model.players.find(p=>p.id===id);if(!o)return"";
     /* every affordable, legal option ranked by projection — not just ones that
        happen to beat the outgoing player */
-    const budget=planBank()+sellPrice(o);
-    const clubs={};(S.squad||[]).filter(x=>x!==id).forEach(x=>{const q=P2(x);
-      if(q)clubs[q.team]=(clubs[q.team]||0)+1;});
-    const opts=S.model.players
-      .filter(q=>q.pos===o.pos&&!(S.squad||[]).includes(q.id)&&q.avail>0
-        &&q.price<=budget+0.001&&(clubs[q.team]||0)<3&&!(S.ignored||[]).includes(q.id))
-      .map(q=>({out:o,inn:q,gain:hPts(q,g,S.horizon)-hPts(o,g,S.horizon)}))
-      .filter(m=>m.gain>=0.1)
-      .sort((a,b)=>b.gain-a.gain).slice(0,3);
+    /* wave 4: ranked by what each adds to your XI over the horizon (the engine) */
+    const opts=engineMoves({squad:S.squad||[],bank:planBank(),g,h:S.horizon||1,outs:[id]}).slice(0,3);
     return `<div class="repl"><div style="padding:9px 12px;display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
       <span style="font-size:10px;font-weight:700;color:var(--cyan)">
         Replace ${esc(o.web_name)} · ${POS[o.pos]}</span>
@@ -178,8 +171,8 @@ function replHTML(){
         <span style="flex:1;min-width:0">
           <span style="display:flex;align-items:center;gap:5px"><span style="font-size:12.5px;font-weight:600">${esc(m.inn.web_name)}</span>${sigHTML(m.inn,g)}</span>
           <span style="display:block;font-size:10px;color:var(--mute)">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${m.inn.xMins}′ xMins</span></span>
-        <span class="mono" style="color:var(--mint);font-weight:700">+${m.gain.toFixed(1)}</span></button>`).join("")
-        :`<div class="pbody"><p class="note">No option improves this pick by +0.1 or more.</p></div>`}</div>`;
+        <span class="mono" style="color:${m.gain>=0?"var(--mint)":"var(--red)"};font-weight:700" title="Change to your XI over ${S.horizon||1} GW">${sgn1(m.gain)}</span></button>`).join("")
+        :`<div class="pbody"><p class="note">No affordable option at this position.</p></div>`}</div>`;
   }).join("");
 }
 const backTag=p=>p.back?`<span class="src" style="background:#4A1220;color:#FFC9D2" title="${esc(p.news)}">${p.back==="unknown"?"no date":esc(p.back)}</span>`:"";
@@ -1574,24 +1567,26 @@ function signalsHTML(){
     posAvg[pos]=xs.reduce((a,b)=>a+b,0)/Math.max(1,xs.length);});
   const keep=mine.filter(p=>p.form>=SIG.formHot&&sgAvail(p)).sort((a,b)=>b.form-a.form).slice(0,5)
     .map((p,i)=>row(p,i+1,sgF1(p.form),"form")).join("")||empty(`No one in your squad is on ${sgF1(SIG.formHot)} form or better.`);
-  const weak=mine.map(p=>{
-    const why=[],nx=hPts(p,G,H);
+  /* wave 4: Sell comes from the one engine (the same rule as the Sell icon):
+     your players whose best affordable replacement adds 2+ to the XI over the
+     next H. The chips say why he may be struggling. */
+  const firstMove=new Map();
+  engineMoves({squad:S.squad||[],bank:planBank(),g:G,h:H}).forEach(m=>{if(!firstMove.has(m.out.id))firstMove.set(m.out.id,m);});
+  const weak=[...firstMove.values()].filter(m=>m.gain>=2).sort((a,b)=>b.gain-a.gain).slice(0,5).map(m=>{
+    const p=m.out,why=[],nx=hPts(p,G,H);
     if(p.form<SIG.replaceForm)why.push(`Form ${sgF1(p.form)}`);
     if(nx<posAvg[p.pos]*SIG.replaceShare)why.push(`Next ${H} ${sgF1(nx)}`);
     if(p.status!=="a")why.push(p.status==="d"?`${Math.round((p.avail??0.75)*100)}% fit${p.availAssumed?" (assumed)":""}`:"Unavailable");
     if((p.xMins||0)<SIG.replaceMins)why.push(`${p.xMins||0}′ expected`);
-    return {p,why,score:why.length*10-nx};
-  }).filter(x=>x.why.length>=2).sort((a,b)=>b.score-a.score).slice(0,4);
-  const replace=weak.map(({p,why})=>{
-    const budget=p.price+bank;
-    const sub=M.players.filter(q=>q.pos===p.pos&&!squad.has(q.id)&&sgAvail(q)&&q.price<=budget+1e-9)
-      .sort((a,b)=>hPts(b,G,SIG.swapHorizon)-hPts(a,G,SIG.swapHorizon))[0];
-    const gain=sub?hPts(sub,G,SIG.swapHorizon)-hPts(p,G,SIG.swapHorizon):0;
+    return {p,why,m};});
+  const replace=weak.map(({p,why,m})=>{
+    const sub=m.inn,gain=m.gain;
     return `<div class="sgrep">
       <div class="sgreph" onclick="act('card',${p.id})"><b>${esc(p.web_name)}</b><em>${esc(p.teamName)} · ${posTag(p)} · £${sgF1(p.price)}</em>${pills(p,SIG.runWeeks,p.pos<=2?"def":"att")}</div>
-      <div class="sgwhy">${why.map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>
-      ${sub&&gain>0?`<div class="sgswap" onclick="act('card',${sub.id})">${sgIcon("arrow-left-right")}<span>Swap to <b>${esc(sub.web_name)}</b> <em>${esc(sub.teamName)} · £${sgF1(sub.price)}</em></span><span class="sggain">+${sgF1(gain)}<em>next ${SIG.swapHorizon}</em></span></div>`:""}
-    </div>`;}).join("")||empty("Nothing in your squad flags on two counts at once.");
+      ${why.length?`<div class="sgwhy">${why.map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>`:""}
+      <div class="sgswap" onclick="act('card',${sub.id})">${sgIcon("arrow-left-right")}<span>Swap to <b>${esc(sub.web_name)}</b> <em>${esc(sub.teamName)} · £${sgF1(sub.price)}</em></span><span class="sggain">${sgn1(gain)}<em>to your XI, next ${H}</em></span></div>
+      <button class="mini" style="margin-top:6px" onclick="act('doswap',${p.id},${sub.id})">Make this transfer</button>
+    </div>`;}).join("")||empty(`No player of yours has a replacement worth 2+ points to your XI over the next ${H}.`);
   const flags=mine.filter(p=>p.status!=="a").map(p=>`<div class="sgrow" onclick="act('card',${p.id})">
     <span class="sgrank">${sgIcon("triangle-alert",p.status==="d"?"warn":"bad")}</span>
     <span class="sgwho"><b>${esc(p.web_name)}</b><em>${esc(p.news||(p.status==="d"?"Doubtful":"Unavailable"))}</em></span>
@@ -1638,10 +1633,11 @@ function signalsHTML(){
   return `<div class="sgpage">
     <div class="sghead"><div><h2>Signals</h2><p>Gameweek ${G} · players and teams worth a look, ranked from the model and this season's data${ds&&ds.committedAt?` · stats ${esc(ukWhen(ds.committedAt))}`:""}</p></div>
       <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}<a class="btnlink" href="${routeFor("transfers")}" onclick="return go(event,'transfers')">Transfers →</a></div></div>
+    ${signalBoardHTML(G,H,posF)}
     <h4 class="sgsec">Your Squad</h4>
     <div class="sggrid g3">
       ${card("sqform","flame","good","In Form",`Your players on ${sgF1(SIG.formHot)} form or better (average points per game over the last 30 days). Bars: points in each of the last six gameweeks.`,keep)}
-      ${card("sqrep","trending-down","warn","Consider Replacing",`Your players flagged on at least two of: form under ${SIG.replaceForm}, the next ${H} gameweeks under ${Math.round(SIG.replaceShare*100)}% of your squad's average for the position, a fitness doubt, under ${SIG.replaceMins} expected minutes. The swap is the best player at the position you can afford with your bank, over the next ${SIG.swapHorizon}.`,replace)}
+      ${card("sqrep","trending-down","warn","Sell",`Your players whose best affordable replacement adds 2 or more points to your best XI plus captain over the next ${H} (the same rule as the Sell icon). The chips show form, fixtures, fitness or minutes concerns where they apply.`,replace)}
       ${card("sqflag","triangle-alert","bad","Availability","Your players with an injury, suspension or doubt flag from FPL.",flags)}
     </div>
     <h4 class="sgsec">Players</h4>
@@ -2007,4 +2003,23 @@ function playerCompareHTML(){
     +`<div class="cml">Last 6 Gameweeks</div>${ps.map(p=>{const s=last6(p);return `<div class="cmc"><span class="cmv sm">${s.reduce((a,b)=>a+b,0)} pts</span>${s.length>1?spark(s,"#3DDC97",90,26):""}</div>`;}).join("")}`;
   return modalHTML(`Compare ${ps.length} Players`,`<div class="cmgrid" style="grid-template-columns:170px repeat(${ps.length},minmax(0,1fr))"><div></div>${head}${body}</div>
     <p class="note" style="margin-top:12px">Best in each row is outlined. Tick more players in the table to add them (up to five).</p>`,{wide:true,close:"pcmpclose"});
+}
+
+/* Signals board (redesign wave 4): one card per signal, in Andy's order,
+   listing who carries it now (yours first), over the page's horizon. */
+function signalBoardHTML(G,H,posF){
+  const mine=new Set(S.squad||[]);
+  const by={};SIG_ORDER.forEach(k=>by[k]=[]);
+  S.model.players.forEach(p=>{if(posF&&p.pos!==posF)return;
+    signals(p,G,false,H).forEach(([k,t])=>by[k].push({p,t}));});
+  const rank=(a,b)=>(mine.has(b.p.id)-mine.has(a.p.id))||(hPts(b.p,G,H)-hPts(a.p,G,H));
+  const cards=SIG_ORDER.map(k=>{
+    const list=by[k].sort(rank);
+    const rows=list.slice(0,6).map(({p,t})=>`<div class="sbrow" onclick="act('card',${p.id})" title="${esc(t)}">
+      <span class="sbn">${esc(p.web_name)}${mine.has(p.id)?' <span class="sgmine">You</span>':""}</span>
+      <span class="sbm">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)}</span>
+      <span class="sbv">${hPts(p,G,H).toFixed(1)}</span></div>`).join("");
+    return `<section class="sbcard"><header>${sigTile(k,SIG_RULE[k](H))}<h3>${SIGNAL[k][2]}</h3><span class="sbc">${list.length}</span></header>
+      ${rows||'<p class="sgempty">Nobody right now.</p>'}${list.length>6?`<div class="sbmore">+${list.length-6} more · <a href="${routeFor("table")}" onclick="S.iconF=['${k}'];S.pView='stats';return go(event,'table')">see all</a></div>`:""}</section>`;}).join("");
+  return `<h4 class="sgsec">Signal Board <span class="mu" style="font-weight:400;font-size:12px">points over the next ${H}</span></h4><div class="sbgrid">${cards}</div>`;
 }

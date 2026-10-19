@@ -145,10 +145,10 @@ function buySet(g,h){
 }
 /* Sell: first version reads Head Scout (bestSwaps); wave 4 brings one engine */
 let _sellBusy=false;
-function sellMap(){
+function sellMap(h){
   if(_sellBusy)return new Map();
   _sellBusy=true;
-  try{const m=new Map();bestSwaps(60).forEach(x=>{if(x.gain>=2&&!m.has(x.out.id))m.set(x.out.id,x);});return m;}
+  try{const m=new Map();bestSwaps(60,h).forEach(x=>{if(x.gain>=2&&!m.has(x.out.id))m.set(x.out.id,x);});return m;}
   finally{_sellBusy=false;}
 }
 /* Momentum: this season's matches only, raw per-90s, as in the study */
@@ -178,11 +178,11 @@ function rivalOwn(){
 }
 /* signals(p,g) -> [[key, hover text]] in Andy's order. noSell skips Sell
    (Head Scout's own tie-break calls this while Sell is being worked out). */
-function signals(p,g,noSell){
-  const out=[],h=S.horizon||1,mine=(S.squad||[]).includes(p.id);
+function signals(p,g,noSell,hh){
+  const out=[],h=hh||S.horizon||1,mine=(S.squad||[]).includes(p.id);
   if(!S.model)return out;
   if(buySet(g,h).has(p.id)&&!mine)out.push(["buy",SIG_RULE.buy(h)+`: ${hPts(p,g,h).toFixed(1)} pts`]);
-  if(mine&&!noSell){const m=sellMap().get(p.id);
+  if(mine&&!noSell){const m=sellMap(h).get(p.id);
     if(m)out.push(["sell",SIG_RULE.sell(h)+`: ${m.inn.web_name} +${m.gain.toFixed(1)}`]);}
   const L=fplLive(p);
   if(L&&L.pcp!=null&&!(L.pcLock&&Date.parse(L.pcLock)>Date.now())){
@@ -568,6 +568,37 @@ function xiGain(ids,outId,inId,g,h,byId,base){
     s+=Math.pow(DECAY,k)*(xiTotal(ns,g+k,byId)-(base?base[k]:xiTotal(ids,g+k,byId)));
   return s;
 }
+/* ONE TRANSFER ENGINE (redesign wave 4, 20 Oct 2026). Every move the app
+   suggests comes from here: Top Move and Sell, the five-week plan, the
+   flagged-player replacements, the multi-player combo and the Signals
+   page's replacements. A move is worth what it adds to the best legal XI
+   plus captain, week by week over the horizon (later weeks x DECAY^k).
+   Candidates: same position, not already owned, available, affordable from
+   the bank plus the selling price, within the club limit, not ignored;
+   twelve per outgoing player are short-listed by player-against-player gain,
+   then each is scored on the XI.
+   o: {squad, bank, g, h, outs (ids, default all), exclude (ids), per (12)} */
+function engineMoves(o){
+  if(!S.model||!o.squad||!o.squad.length)return[];
+  const byId=o.byId||new Map(S.model.players.map(p=>[p.id,p]));
+  const g=o.g,h=o.h||1,squad=o.squad,ex=new Set([...(o.exclude||[]),...(S.ignored||[])]);
+  const base=[];for(let k=0;k<h&&g+k<=38;k++)base.push(xiTotal(squad,g+k,byId));
+  const out=[];
+  (o.outs||squad).forEach(oid=>{
+    const ou=byId.get(oid);if(!ou)return;
+    const cc={};squad.filter(i=>i!==oid).forEach(i=>{const p=byId.get(i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
+    const cands=[];
+    S.model.players.forEach(p=>{
+      if(p.pos!==ou.pos||squad.includes(p.id)||p.avail<=0||ex.has(p.id))return;
+      if(p.price>o.bank+sellPrice(ou)+.001)return;
+      if((cc[p.team]||0)>=RULES.clubMax)return;
+      cands.push({p,pg:dGain(p,ou,g,h)});});
+    cands.sort((a,b)=>b.pg-a.pg).slice(0,o.per||12).forEach(({p,pg})=>{
+      out.push({out:ou,inn:p,gain:xiGain(squad,oid,p.id,g,h,byId,base),pg,sell:sellPrice(ou)});});
+  });
+  out.sort((a,b)=>(b.gain-a.gain)||(b.pg-a.pg));
+  return out;
+}
 let _bsCache={};
 function bestSwaps(limit,hh){
   if(!S.model||!S.squad)return[];
@@ -575,29 +606,10 @@ function bestSwaps(limit,hh){
   const key=[g,h,bank,S.squad.join("."),(S.ignored||[]).join("."),S.model.players.length].join("|");
   const hit=_bsCache[key];
   if(hit&&hit.model===S.model)return hit.res.slice(0,limit||10);
-  const byId=new Map(S.model.players.map(p=>[p.id,p]));
-  const base=[];for(let k=0;k<h&&g+k<=38;k++)base.push(xiTotal(S.squad,g+k,byId));
-  const out=[];
-  S.squad.forEach(oid=>{
-    const o=byId.get(oid);if(!o)return;
-    const cc={};S.squad.filter(i=>i!==oid).forEach(i=>{
-      const p=byId.get(i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
-    /* shortlist by player gain, then score the shortlist on the XI */
-    const cands=[];
-    S.model.players.forEach(p=>{
-      if(p.pos!==o.pos||S.squad.includes(p.id)||p.avail<=0)return;
-      if((S.ignored||[]).includes(p.id))return;
-      if(p.price>bank+sellPrice(o)+.001)return;
-      if((cc[p.team]||0)>=RULES.clubMax)return;
-      cands.push({p,pg:dGain(p,o,g,h)});});
-    cands.sort((a,b)=>b.pg-a.pg).slice(0,12).forEach(({p})=>{
-      const gain=xiGain(S.squad,oid,p.id,g,h,byId,base);
-      /* where gains are level, prefer the player carrying signals */
-      const sig=signals(p,g,true).length;
-      if(gain>0.05)out.push({out:o,inn:p,gain,sig});});});
-  out.sort((a,b)=>(b.gain-a.gain)||(b.sig-a.sig));
+  /* wave 4: the one engine; a move must add something to the XI */
   const seen=new Set(),uniq=[];
-  out.forEach(m=>{const k=m.out.id+"-"+m.inn.id;if(seen.has(k))return;seen.add(k);uniq.push(m);});
+  engineMoves({squad:S.squad,bank,g,h}).forEach(m=>{const k=m.out.id+"-"+m.inn.id;
+    if(m.gain>0.05&&!seen.has(k)){seen.add(k);uniq.push(m);}});
   if(Object.keys(_bsCache).length>24)_bsCache={};
   _bsCache[key]={model:S.model,res:uniq};
   return uniq.slice(0,limit||10);
@@ -618,18 +630,8 @@ function planWeeks(H){
   const weeks=[];
   for(let k=0;k<H&&g0+k<=38;k++){
     const w=g0+k,rem=Math.min(H-k,39-w);
-    const base=[];for(let j=0;j<rem;j++)base.push(xiTotal(squad,w+j,byId));
-    let best=null;
-    squad.forEach(oid=>{
-      const o=byId.get(oid);if(!o)return;
-      const club={};squad.filter(i=>i!==oid).forEach(i=>{const q=byId.get(i);if(q)club[q.team]=(club[q.team]||0)+1;});
-      const sell=sellPrice(o);
-      S.model.players.filter(p=>p.pos===o.pos&&!squad.includes(p.id)&&p.avail>0&&!(S.ignored||[]).includes(p.id)
-          &&p.price<=bank+sell+1e-9&&(club[p.team]||0)<RULES.clubMax)
-        .map(p=>({p,pg:dGain(p,o,w,rem)})).sort((a,b)=>b.pg-a.pg).slice(0,12)
-        .forEach(({p})=>{const gain=xiGain(squad,oid,p.id,w,rem,byId,base);
-          if(!best||gain>best.gain)best={o,p,gain,sell};});
-    });
+    const top=engineMoves({squad,bank,g:w,h:rem,byId})[0];
+    const best=top?{o:top.out,p:top.inn,gain:top.gain,sell:top.sell}:null;
     const bar=ft>0?FT_VALUE:FT_VALUE+HIT;
     if(best&&best.gain>bar){
       const hit=ft>0?0:HIT;
@@ -647,37 +649,29 @@ function planWeeks(H){
   Object.assign(_planCache,{key,model:S.model,res});
   return res;
 }
+/* wave 4: several outs at once, filled one by one through the engine (the
+   dearest slot first, keeping enough back for the cheapest replacement of
+   each slot still to fill), each scored on the XI over the horizon. */
 function bestCombo(outIds){
   if(!S.model||!outIds.length)return null;
-  const g=S.model.next.id;
-  const outs=outIds.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  let budget=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
-  const keep=(S.squad||[]).filter(i=>!outIds.includes(i));
-  const club={};keep.forEach(i=>{const p=S.model.players.find(x=>x.id===i);
-    if(p)club[p.team]=(club[p.team]||0)+1;});
-  const taken=new Set(keep);
-  /* fill the most expensive slot first so the budget isn't eaten by cheap upgrades */
-  const order=[...outs].sort((a,b)=>b.price-a.price);
+  const g=S.model.next.id,h=S.horizon||1;
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));
+  const outs=outIds.map(i=>byId.get(i)).filter(Boolean);
+  const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
+  let squad=(S.squad||[]).slice(),bank=planBank();
   const picks=[];
-  order.forEach(o=>{
+  const order=[...outs].sort((a,b)=>b.price-a.price);
+  order.forEach((o,ix)=>{
     const minFor=pos=>{let m=99;S.model.players.forEach(q=>{
-      if(q.pos===pos&&!taken.has(q.id)&&q.avail>0&&q.price<m)m=q.price;});return m===99?3.9:m;};
-    const cheapestRest=order.filter(x=>x!==o&&!picks.find(pk=>pk.out===x))
-      .reduce((a,x)=>a+minFor(x.pos),0);
-    let best=null;
-    S.model.players.forEach(p=>{
-      /* F60: the players being sold are not candidates for their own slots */
-      if(p.pos!==o.pos||taken.has(p.id)||outIds.includes(p.id)||p.avail<=0)return;
-      if(p.price>budget-cheapestRest+.001)return;
-      if((club[p.team]||0)>=3)return;
-      const gain=dGain(p,o,g,S.horizon);
-      if(!best||gain>best.gain)best={out:o,inn:p,gain};});
+      if(q.pos===pos&&!squad.includes(q.id)&&!outIds.includes(q.id)&&q.avail>0&&q.price<m)m=q.price;});return m===99?3.9:m;};
+    const rest=order.slice(ix+1);
+    const reserve=rest.reduce((a,x)=>a+minFor(x.pos)-sellPrice(x),0);
+    /* F60: the players being sold are not candidates for their own slots */
+    const best=engineMoves({squad,bank:bank-Math.max(0,reserve),g,h,outs:[o.id],exclude:outIds,byId})[0];
     /* F60: a move that gains nothing is not a move; that player stays */
-    if(best&&best.gain>0.05){picks.push(best);taken.add(best.inn.id);
-      club[best.inn.team]=(club[best.inn.team]||0)+1;budget-=best.inn.price;budget+=0;}
+    if(best&&best.gain>0.05){picks.push(best);squad=squad.map(i=>i===o.id?best.inn.id:i);bank=+(bank+best.sell-best.inn.price).toFixed(1);}
   });
   const spent=picks.reduce((a,m)=>a+m.inn.price,0);
-  const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
   return{picks,gain:picks.reduce((a,m)=>a+m.gain,0),left:+(freed-spent).toFixed(1),freed:+freed.toFixed(1)};
 }
 /* Persist an edit to the viewed gameweek's plan. Snapshots the currently-effective
