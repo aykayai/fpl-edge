@@ -1,4 +1,4 @@
-# FPL Edge
+# FPL Signals
 
 Fantasy Premier League planner, projections and transfer assistant.
 

@@ -1,4 +1,4 @@
-/* FPL Edge — app-core.js
+/* FPL Signals - app-core.js
    data loading, team ratings, FDR, the prediction model
 
    Part of a single script split across files so each stays small enough to
@@ -6,54 +6,201 @@
    so the order in index.html matters: app-main.js must come last. */
 
 /* ============================================================
-   FPL ASSISTANT v3
-   Data: FPL Core Insights (github.com/olbauday/FPL-Core-Insights)
-   served from raw.githubusercontent.com with open CORS, so the
-   browser can fetch it directly — no proxy, no file juggling.
+   FPL SIGNALS v12
+   Data: the FPL Core Insights dataset, mirrored and validated by the
+   app's own server (server/server.mjs) and served same-origin under
+   /data/insights with the same relative paths the public repo uses.
    ============================================================ */
-const REPO="https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/main/data";
+/* Cutover (19 Oct 2026, Andy: backup mode on Pages). The same code runs on
+   the FPL Signals server and, as a backup, on GitHub Pages. On Pages there is
+   no server: the dataset comes straight from FPL Core Insights, the team
+   history from the repo's data/actuals.json (the actuals Action keeps that
+   one file fresh), and Rivals, News, Odds and the snapshots say they are on
+   the server only. ?backup=1 forces it, for testing. */
+const BACKUP=typeof location!=="undefined"&&(/\.github\.io$/.test(String(location.hostname||""))
+  ||/[?&]backup=1\b/.test(String(location.search||"")));
+const REPO=BACKUP?"https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/main/data":"/data/insights";
 const SEASON="2026-2027", LAST="2025-2026";
-/* Live "actuals" feed — team GW history, per-player actual points, chips — published
-   by a scheduled GitHub Action into the app's own repo (not the insights dataset,
-   since this is Andy's own entry data). One file feeds the planner header, every
-   pitch card, the xFPL predicted-vs-actual panel, and the whole Tracker page.
+/* Live "actuals" feed: team GW history, per-player actual points, chips. Built
+   locally by the server (scripts/build-actuals.mjs run every 15 minutes) and
+   served same-origin, so Andy's own entry data never touches a public repo.
+   One file feeds the planner header, every pitch card, the xFPL
+   predicted-vs-actual panel, and the whole Tracker page.
    Contract: { season, team:{totalPlayers, gw:[{event,points,gwRank,orRank,bank,
    value,transfers,transferCost,bench,captain,off1m,off500k,off100k,transferDiff}],
    chips:{name:points}}, players:{ "<id>": {"<gw>":points} } }
-   Absent or unreachable until the Action exists — every consumer already renders a
-   clean waiting state, so this fails silently rather than blocking the main load. */
-const ACTUALS_URL="https://raw.githubusercontent.com/aykayai/fpl-edge/main/data/actuals.json";
-const RIVALS_URL="https://raw.githubusercontent.com/aykayai/fpl-edge/main/data/rivals.json";
+   Newer feeds also publish the owner's official per-week history on each gw
+   row: picks [{id,pos,multiplier,isC,isVC}] (1-11 the XI in formation order,
+   12-15 the bench, auto subs already applied by the API), autoSubs [{out,in}],
+   chip/chipLabel, totalPoints, ftAvailable (free transfers into that week) and
+   ftNext (the builder-reconciled count into the following week), and
+   finished/dataChecked from FPL's own event flags (read by weekFinal). Every reader
+   falls back to today's behaviour when those fields are absent (an old feed).
+   Unreachable or not yet built: every consumer already renders a clean waiting
+   state, so this fails silently rather than blocking the main load. */
+/* the season label the feed builder writes (FPL_SEASON) */
+const FEED_SEASON="2027";
+const ACTUALS_URL=BACKUP?"data/actuals.json":"/data/feeds/actuals.json";
+const RIVALS_URL=BACKUP?null:"/data/feeds/rivals.json";
+/* badges and photos: our server's cache, or the Premier League directly on Pages */
+const imgSrc=(kind,code)=>BACKUP
+  ?(kind==="badge"?`https://resources.premierleague.com/premierleague/badges/50/t${esc(String(code||""))}.png`
+    :`https://resources.premierleague.com/premierleague/photos/players/110x140/p${esc(String(code||""))}.png`)
+  :`/img/${kind}/${esc(String(code||""))}.png`;
+/* ---------- instant start ----------
+   The last good copy of every data file (dataset CSVs and both feeds) is kept
+   in IndexedDB, which has room for it where localStorage did not. On open the
+   planner is built from that copy straight away, with no network wait, and the
+   normal load then checks the server and refreshes only what changed.
+   IndexedDB missing or failing (private mode, tests) just means no instant
+   start: every call below degrades to a plain network load. */
+const IDB={
+  db:null,
+  open(){
+    if(this.db)return Promise.resolve(this.db);
+    return new Promise((res,rej)=>{
+      if(typeof indexedDB==="undefined")return rej(new Error("no indexedDB"));
+      const q=indexedDB.open("fpl-signals",1);
+      q.onupgradeneeded=()=>q.result.createObjectStore("kv");
+      q.onsuccess=()=>{this.db=q.result;res(this.db);};
+      q.onerror=()=>rej(q.error);});
+  },
+  async get(k){try{const db=await this.open();return await new Promise((res,rej)=>{
+    const q=db.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>res(q.result??null);q.onerror=()=>rej(q.error);});}
+    catch(e){return null;}},
+  async set(k,v){try{const db=await this.open();await new Promise((res,rej)=>{
+    const t=db.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=res;t.onerror=()=>rej(t.error);});}
+    catch(e){}}
+};
+/* The snapshot the instant start reads: {v, commit, files:{url:text}, at}.
+   SNAP_V changes when what is saved changes shape (2: last season's stats
+   arrive as final rows only, 13 Oct 2026); an older copy is not used. */
+const SNAP_V=2;
+let _snap=null;
+/* Every data read goes through here. In cache mode (the instant start) a file
+   the snapshot holds is served from it; anything it lacks still comes from the
+   network. Network reads are captured so a successful load can be saved as
+   the next snapshot. */
+async function dataText(url){
+  if(S.fromCache&&_snap&&_snap.files&&_snap.files[url]!=null)return _snap.files[url];
+  const r=await fetch(url);
+  if(!r.ok)throw new Error(url+" → HTTP "+r.status);
+  const t=await r.text();
+  if(S.capture)S.capture[url]=t;
+  return t;
+}
+/* F2/X3 (13 Oct 2026): what the model said before each deadline. Live
+   snapshots (predictions.json) are taken by the server from GW7; the GW1-6
+   series (backtest.json) is today's model run on the data as it stood before
+   each deadline, and is always labelled as a backtest. */
+async function loadPredictions(){
+  const one=async u=>{try{const d=JSON.parse(await dataText(u));return d&&d.gw?d:null;}catch(e){return null;}};
+  if(BACKUP){S.predLive=null;S.predBack=null;return;}
+  const [live,back]=await Promise.all([one("/data/feeds/predictions.json"),one("/data/feeds/backtest.json")]);
+  S.predLive=live;S.predBack=back;
+}
+/* The true one-week error: each player's pre-deadline projection against
+   the points he scored, every player with both, finished weeks only. A live
+   snapshot is used where one exists, else the backtest. */
+function trueAccuracy(){
+  const A=S.playerActuals;if(!A)return null;
+  const weeks=[],rows=[];
+  for(let g=1;g<=38;g++){
+    if(!weekFinal(g))continue;
+    const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g], back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
+    const snap=live||back;if(!snap||!snap.players)continue;
+    const src=live?"live":"backtest";
+    let n=0,ae=0,b=0;
+    Object.entries(snap.players).forEach(([id,pred])=>{
+      const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
+      const pl=S.model&&S.model.players.find(p=>p.id==id);
+      n++;ae+=Math.abs(pred-pts);b+=pred-pts;rows.push({pos:pl?pl.pos:0,e:pred-pts});});
+    if(n)weeks.push({g,src,n,mae:ae/n,bias:b/n});
+  }
+  if(!rows.length)return null;
+  const sum=r=>({n:r.length,mae:r.reduce((s,x)=>s+Math.abs(x.e),0)/r.length,bias:r.reduce((s,x)=>s+x.e,0)/r.length});
+  const byPos={};[1,2,3,4].forEach(k=>{const r=rows.filter(x=>x.pos===k);if(r.length)byPos[k]=sum(r);});
+  return {all:sum(rows),weeks,byPos,live:weeks.filter(w=>w.src==="live").length,back:weeks.filter(w=>w.src==="backtest").length};
+}
+/* F53 (13 Oct 2026): every part of the load that fails is named here and
+   listed under the footer, instead of the page quietly using a weaker model */
+function loadWarn(what){(S.loadWarnings=S.loadWarnings||[]).includes(what)||S.loadWarnings.push(what);}
 async function loadRivals(){
+  if(!RIVALS_URL)return;
   try{
-    const r=await fetch(RIVALS_URL);
-    if(!r.ok)return;
-    const d=await r.json();
+    const d=JSON.parse(await dataText(RIVALS_URL));
+    if(d&&d.season&&String(d.season)!==FEED_SEASON){loadWarn("rivals feed (season "+d.season+")");return;}
     if(d&&Array.isArray(d.standings))S.rivalsFeed=d;
-  }catch(e){ /* feed not published yet — the page shows its waiting state */ }
+  }catch(e){ /* a 404 is the waiting state; anything else is named (F53) */
+    if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("rivals feed");
+  }
 }
 async function loadActuals(){
   try{
-    const r=await fetch(ACTUALS_URL);
-    if(!r.ok)return;
-    const d=await r.json();
+    const d=JSON.parse(await dataText(ACTUALS_URL));
+    /* F54: a feed from another season is not shown under this season's labels */
+    if(d.season&&String(d.season)!==FEED_SEASON){loadWarn("your team feed (season "+d.season+", expected "+FEED_SEASON+")");return;}
     if(d.team&&Array.isArray(d.team.gw)){
-      S.tracker={season:d.season,totalPlayers:d.team.totalPlayers,gw:d.team.gw,chips:d.team.chips||null};
+      S.tracker={season:d.season,totalPlayers:d.team.totalPlayers,gw:d.team.gw,chips:d.team.chips||null,
+        purchase:d.team.purchase||null};
+      /* F8: the header's overall rank was never set; it is the latest week's */
+      const ranked=d.team.gw.filter(r=>r.orRank!=null);
+      if(ranked.length){const lr=ranked.reduce((x,y)=>(y.event>x.event?y:x));S.entryRank=lr.orRank;S.entryRankGw=lr.event;}
       const am={};d.team.gw.forEach(row=>{if(row.event!=null&&row.points!=null)am[row.event]=row.points;});
       S.actuals=am;
     }
     if(d.players)S.playerActuals=d.players;
-  }catch(e){ /* feed not published yet — leave the waiting states in place */ }
+  }catch(e){
+    /* F53: a 404 means not published yet (waiting states stay); anything
+       else is a failure and is named under the footer */
+    if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("your team feed");
+  }
+}
+/* F55: is a gameweek's score final? The feed publishes a row as soon as a
+   week kicks off, so the latest row can be a partial, in-play score. A
+   finished flag on the feed row wins when the builder publishes one;
+   otherwise the dataset's own finished flag for that week decides. Until
+   then the score is shown as "so far" with a live tag, never as final. */
+function weekFinal(e){
+  const row=S.tracker&&Array.isArray(S.tracker.gw)?S.tracker.gw.find(r=>r.event===e):null;
+  if(row&&row.finished!=null)return !!row.finished;
+  const ev=(S.events||[]).find(x=>x.id===e);
+  return !!(ev&&ev.finished);
+}
+const LIVE_TAG=`<span class="livetag" title="This gameweek is still being played. The score is partial until FPL marks the week finished.">live</span>`;
+/* F56: a figure taken from last season, blended with pre-season, estimated
+   or assumed used to print exactly like this season's own. Each helper
+   returns a small muted tag naming its source, or nothing when the figure is
+   this season's own. The title says what was used and why. */
+const srcTag=(t,why)=>`<span class="srctag" title="${String(why).replace(/"/g,"&quot;")}">${t}</span>`;
+function formTag(p){
+  if(!p)return "";
+  if(p.formSrc==="2025/26")return srcTag("25/26","Form is last season's (2025/26): he has no minutes this season yet.");
+  if(p.formSrc==="25/26 + pre-season")return srcTag("25/26+","Form blends last season (2025/26) with pre-season: he has no minutes this season yet.");
+  if(p.formSrc==="price prior")return srcTag("est.","Form is estimated from his price and club: no minutes this season or last.");
+  return "";
+}
+function minsTag(p){
+  if(!p||!(p.xMins>0))return "";
+  if(p.minsSrc==="no history")return srcTag("est.","Expected minutes estimated from his price within his club: no Premier League minutes to go on.");
+  if(p.minsSrc==="pre-season")return srcTag("pre","Expected minutes taken from pre-season: no Premier League minutes to go on.");
+  return "";
+}
+function availTag(p){
+  return p&&p.availAssumed?srcTag("assumed","FPL flags him but gives no chance of playing, so 50% is assumed."):"";
 }
 const TEAM_ID="301830", STATE_VERSION=4;
+/* F101 (bundle 10): whose team this is, in one place (the server and feed
+   builder take the id from FPL_TEAM_ID / FPL_ENTRY_ID) */
+const IDENTITY={team:"Armitage Shanks",manager:"Andrew Kenny",id:TEAM_ID};
 /* Tabs are real routes, so they can be bookmarked and opened in a new tab. */
 const NAV=[
   {group:"Plan", items:[["squad","Team Planner"],["transfers","Transfers"],["chips","Chips"],["rivals","Rivals"],["tracker","Tracker"]]},
-  {group:"Tools",items:[["table","Player Data"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]},
+  {group:"Tools",items:[["signals","Signals"],["table","Player Data"],["odds","Odds"],["fixtures","Fixtures"],["news","News Feed"]]},
   {group:"Models",items:[["xfpl","xFPL Model"]]}
 ];
 const TABPATH={squad:"team-planner",transfers:"transfers",rivals:"rivals",chips:"chips",tracker:"tracker",
-  table:"player-data",xfpl:"xfpl-model",odds:"odds",fixtures:"fixtures",news:"news"};
+  table:"player-data",xfpl:"xfpl-model",odds:"odds",fixtures:"fixtures",news:"news",signals:"signals"};
 const FROM_ROUTE=Object.fromEntries(Object.entries(TABPATH).map(([k,v])=>[v,k]));
 function routeFor(tab){return "#/"+(TABPATH[tab]||"team-planner");}
 function applyHash(){
@@ -62,17 +209,41 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="11.4.1";
-const LOGO=`<svg width="40" height="44" viewBox="0 0 200 220" style="flex:none" aria-label="FPL Edge">
- <defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1">
-   <stop offset="0" stop-color="#232B38"/><stop offset="1" stop-color="#11161D"/></linearGradient>
-  <linearGradient id="lgG" x1="0" y1="1" x2="1" y2="0">
-   <stop offset="0" stop-color="#21C97A"/><stop offset="1" stop-color="#5BE8C0"/></linearGradient></defs>
- <path d="M100 8 L184 38 v78c0 46-38 76-84 96-46-20-84-50-84-96V38Z" fill="url(#lgS)" stroke="url(#lgG)" stroke-width="7"/>
- <text x="100" y="104" font-family="Arial Black,Arial,sans-serif" font-size="52" font-weight="900"
-   fill="#3DE38C" text-anchor="middle">FPL</text>
- <path d="M44 168 L84 130 L108 152 L152 104" fill="none" stroke="#5BE8C0" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
- <path d="M124 96 L160 96 L160 132" fill="none" stroke="#FF8A3D" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const APP_VERSION="12.21.1";
+const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
+ <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
+ <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
+ <circle cx="50" cy="64" r="34" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="5 4" opacity=".55"/>
+ <circle cx="50" cy="64" r="22" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".45"/>
+ <circle cx="50" cy="64" r="11" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="3 3" opacity=".4"/>
+ <path d="M50 30 A34 34 0 0 1 82 52" fill="none" stroke="#E8743B" stroke-width="3.5"/>
+ <line x1="50" y1="22" x2="50" y2="106" stroke="#E8743B" stroke-width="1.5" opacity=".6"/>
+ <line x1="54" y1="62" x2="86" y2="24" stroke="#8BE33A" stroke-width="3"/>
+ <path d="M92 16 L78 22 L88 32 Z" fill="#8BE33A"/>
+ <circle cx="73" cy="38" r="3.5" fill="#E8743B"/>
+ <circle cx="50" cy="34" r="8" fill="#8BE33A"/></svg>`;
+/* ---------- UK time ----------
+   Every displayed date or time is Europe/London, whatever zone the viewer's
+   device is set to. Deadlines carry the GMT/BST label, derived from Intl so
+   summer time is never hard-coded. */
+const UK_TZ="Europe/London";
+function ukFmt(d,opts){try{return new Date(d).toLocaleString("en-GB",{timeZone:UK_TZ,...(opts||{})});}catch(e){return "";}}
+function ukZone(d){
+  try{return (new Intl.DateTimeFormat("en-GB",{timeZone:UK_TZ,timeZoneName:"short"})
+    .formatToParts(new Date(d==null?Date.now():d)).find(p=>p.type==="timeZoneName")||{}).value||"";}
+  catch(e){return "";}
+}
+function ukDeadline(d){return ukFmt(d,{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+" "+ukZone(d);}
+function ukHHMM(d){return ukFmt(d,{hour:"2-digit",minute:"2-digit"});}
+function agoMin(v){if(v==null)return null;const t=typeof v==="number"?v:Date.parse(v);
+  if(!isFinite(t))return null;return Math.max(0,Math.round((Date.now()-t)/60000));}
+function agoText(v){const m=agoMin(v);if(m==null)return "—";
+  if(m<1)return "just now";if(m<60)return m+" min ago";
+  const h=Math.round(m/60);if(h<24)return h+"h ago";return Math.round(h/24)+"d ago";}
+/* "today 15:30" for a London-today timestamp, "6 Oct 14:00" otherwise */
+function ukWhen(v){if(v==null||agoMin(v)==null)return "—";
+  const sameDay=ukFmt(v,{day:"numeric",month:"short"})===ukFmt(Date.now(),{day:"numeric",month:"short"});
+  return (sameDay?"today":ukFmt(v,{day:"numeric",month:"short"}))+" "+ukHHMM(v);}
 const POS={1:"GKP",2:"DEF",3:"MID",4:"FWD"};
 const POSNAME={Goalkeeper:1,Defender:2,Midfielder:3,Forward:4,
  GKP:1,DEF:2,MID:3,FWD:4,GK:1,Goalkeepers:1,Defenders:2,Midfielders:3,Forwards:4};
@@ -88,28 +259,9 @@ const SEED=[["Raya","ARS",1,6.0],["Dubravka","TOT",1,4.0],
  ["B.Fernandes","MUN",3,12.0],["Mbeumo","MUN",3,8.0],["Szoboszlai","LIV",3,7.0],
  ["Tzolis","ARS",3,6.5],["Slater","HUL",3,4.5],
  ["Haaland","MCI",4,15.5],["João Pedro","CHE",4,7.5],["Calvert-Lewin","LEE",4,6.0]];
-const REAL_PRICE={};SEED.forEach(([n,,,pr])=>{REAL_PRICE[n]=pr;});
 const norm=s=>(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z]/g,"");
 
 /* Community chip consensus, gathered Aug 2026 */
-const CHIP_CONSENSUS={
- bboost1:{weeks:"GW1–2, or straight after a Wildcard",
-  text:"Everyone starts with 15 fit players and clean fixtures, so an early Bench Boost needs no build-up. First-half doubles are rare and the chip expires at GW19 — don't hold it for a double that may never come."},
- freehit1:{weeks:"GW3–4 in the popular chip chain",
-  text:"A one-week rescue rather than a squad upgrade. Worth holding unless an early blank or a brutal fixture week hits your XI."},
- wildcard1:{weeks:"Around the international break before GW6 (GW5–10 range)",
-  text:"Wildcarding on the break before GW6 gives you real form data and sets up a GW7 Bench Boost. Scout flag Fulham, Bournemouth and Brighton home fixtures that week."},
- "3xc1":{weeks:"GW3, or GW7/16",
-  text:"Haaland at home to promoted sides is the consensus target — Coventry at home in GW3 is the first. Bruno Fernandes is the main alternative given United's run against promoted opposition."},
- wildcard2:{weeks:"Before the second-half double gameweek run",
-  text:"Rebuild for the doubles and blanks once the calendar is published, usually December."},
- freehit2:{weeks:"The major blank, historically GW29–32",
-  text:"Timing matters more than squad quality — target the week where half your squad has no fixture."},
- "3xc2":{weeks:"First big double gameweek, historically GW19–22",
-  text:"A premium with two fixtures is the textbook target. Remember only one chip per gameweek, so it competes with Bench Boost."},
- bboost2:{weeks:"A double gameweek where all 15 have two fixtures",
-  text:"Pair it with a Wildcard the week before so every bench slot is a starter rather than fodder."}
-};
 
 /* ---------- kits ---------- */
 const KITS={ARS:{b:"#EF0107",s:"#FFFFFF"},MCI:{b:"#6CABDD",s:"#6CABDD"},LIV:{b:"#C8102E",s:"#C8102E"},
@@ -152,33 +304,23 @@ function ftFromFeed(){
   const g=S.model.next.id;
   const rows=S.tracker.gw.slice().sort((a,b)=>a.event-b.event);
   if(!rows.length)return null;
-  /* Prefer an explicit ftAvailable if the feed ever publishes one. Otherwise
-     rebuild it from the official per-gameweek transfer counts, which ARE
-     published, using the confirmed FPL rules: 1 granted per deadline, banked
-     up to 5, and a Wildcard or Free Hit week consumes that week's transfer
-     while leaving the bank otherwise untouched (its squad changes are not
-     ordinary transfers, so they must not be counted as such). */
-  const explicit=rows.filter(r=>r.ftAvailable!=null);
-  if(explicit.length){
-    const last=explicit[explicit.length-1];
-    if(last.event>=g)return clamp(last.ftAvailable,0,5);
-    const used=Math.min(last.ftAvailable,(last.transfers||0));
-    return clamp(Math.min(5,(last.ftAvailable-used)+1),0,5);
-  }
-  if(rows.every(r=>r.transfers==null))return null;
-  /* Which gameweeks a chip was played, from the feed's own chip record. */
-  const chipWeeks=new Set();
-  const cm=(S.tracker.chips&&typeof S.tracker.chips==="object")?S.tracker.chips:null;
-  if(cm)Object.entries(cm).forEach(([name,ev])=>{
-    if(/wild|free hit/i.test(name)&&Number.isFinite(+ev))chipWeeks.add(+ev);});
-  let ft=1;                                   // GW1 starts with one
-  rows.forEach(r=>{
-    if(r.event>=g)return;                     // only completed weeks are known
-    if(r.event>1)ft=clamp(ft+1,0,5);          // each new deadline grants one, capped
-    if(chipWeeks.has(r.event))return;         // chip week: bank left alone
-    ft=clamp(ft-Math.min(ft,r.transfers||0),0,5);
-  });
-  return clamp(ft+1,0,5);                     // plus the allowance for the upcoming week
+  /* Only the builder's reconciled number is ever reported here. The builder
+     follows the official rules (start at 1, +1 a week capped at 5, Wildcard
+     and Free Hit weeks carry the bank unchanged) and reconciles against the
+     hits actually charged, then publishes ftNext, the count carried INTO the
+     following gameweek, on every row. Rebuilding the count client-side went
+     wrong twice (the +1 applied in GW1, and S.tracker.chips read as
+     name→gameweek when it stores name→points), so no local reconstruction
+     remains: a feed without these fields returns null and the header falls
+     back to the local tracker, labelled as such, never as official. */
+  const prev=rows.filter(r=>r.event<g);
+  const last=prev[prev.length-1];
+  if(last&&last.event===g-1&&last.ftNext!=null)return clamp(last.ftNext,0,5);
+  /* The viewed week has already started (its row exists): its own published
+     ftAvailable is the count that was available at that deadline. */
+  const cur=rows.find(r=>r.event===g);
+  if(cur&&cur.ftAvailable!=null)return clamp(cur.ftAvailable,0,5);
+  return null;
 }
 function freeTransfers(){const f=ftFromFeed();return f==null?(S.ft??1):f;}
 /* Whether the shown count is the feed's, local tracking's, or just the raw
@@ -187,12 +329,38 @@ function ftSource(){return ftFromFeed()!=null?"feed":(S.ftLastGw?"local":"defaul
 function badgeOrShirt(t,size){
   const sz=size||20;
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${sz}px;height:${sz}px;flex:none">
-    <img src="https://resources.premierleague.com/premierleague/badges/50/t${esc(String(t.code||""))}.png"
+    <img src="${imgSrc("badge",t.code)}"
       alt="" style="width:${sz}px;height:${sz}px;object-fit:contain;display:block"
       onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
     <span style="display:none">${shirtSVG((t.short||"").toUpperCase(),false,sz)}</span></span>`;
 }
+/* Bundle 9 (13 Oct 2026): the sprite. A design is registered once (its
+   gradients and clip paths go in the sprite's defs, the drawing in a
+   <symbol>) and every copy on the page is a two-element <use>. The Planner
+   carried 500+ full inline SVGs (about 500 KB) for ~130 distinct designs. */
+const _spriteDone=new Set();
+function spriteAdd(id,defs,symbol){
+  if(_spriteDone.has(id))return;
+  const sp=typeof document!=="undefined"&&document.getElementById&&document.getElementById("sprite");
+  if(!sp||!sp.insertAdjacentHTML)return;           // no page (snapshot vm): callers keep working
+  _spriteDone.add(id);
+  if(defs)sp.querySelector("defs").insertAdjacentHTML("beforeend",defs);
+  sp.insertAdjacentHTML("beforeend",symbol);
+}
 function shirtSVG(short,isGK,size){
+  const sid="k"+String(short||"d").replace(/[^A-Za-z0-9]/g,"")+(isGK?"g":"o");
+  if(_spriteDone.has(sid)||(typeof document!=="undefined"&&document.getElementById&&document.getElementById("sprite"))){
+    if(!_spriteDone.has(sid)){
+      const full=shirtSVGFull(short,isGK);
+      const m=/<defs>([\s\S]*?)<\/defs>([\s\S]*)<\/svg>/.exec(full);
+      spriteAdd(sid,m[1],`<symbol id="${sid}" viewBox="0 0 40 40">${m[2]}</symbol>`);
+    }
+    if(_spriteDone.has(sid))return `<svg width="${size}" height="${size}" viewBox="0 0 40 40" aria-hidden="true" style="display:block;flex:none"><use href="#${sid}"/></svg>`;
+  }
+  return shirtSVGFull(short,isGK,size);
+}
+function shirtSVGFull(short,isGK,size){
+  size=size||40;
   const k=isGK?GK_KIT:(KITS[short]||KITS._d);
   const light=["#FFFFFF","#FFF200","#F5A12D","#FDB913","#78D0F3"].includes(k.b);
   const st=light?"#4A4458":"rgba(0,0,0,.4)";const id="c"+(short||"d")+(isGK?"g":"o");
@@ -216,9 +384,6 @@ const PBAND=[["#4A0010","#FFD9DF"],["#96122A","#FFE3E8"],["#D4545E","#3A0009"],
   ["#5FE083","#04250D"],["#7DFB9E","#042A0E"]];
 /* One seven-step ramp, dark red through to bright green, used for both
    projected points and fixture difficulty so the two read consistently. */
-const RAMP=[["#5C0011","#FFD9DF"],["#96122A","#FFE3E8"],["#C0392B","#FFF0F2"],
-  ["#E0631E","#2A1000"],["#F0A02A","#2A1000"],["#2E9E52","#EAFFF1"],
-  ["#3FBF63","#06240F"],["#7DFB9E","#042A0E"]];
 const fdrCol=d=>({5:["#4A0010","#FFD9DF"],4:["#C0182F","#FFF0F2"],3:["#F0A02A","#2A1000"],
   2:["#2E9E52","#EAFFF1"],1:["#7DFB9E","#042A0E"]}[d]||["#F0A02A","#2A1000"]);
 /* One pill renderer so every fixture looks the same wherever it appears.
@@ -232,7 +397,7 @@ function fdrPill(opp,home,diff,opts){
   const o=opts||{};
   const[b,c]=fdrCol(diff);
   const label=o.short?String(opp).slice(0,3):String(opp);
-  const sz=o.tiny?"font-size:8px;padding:1px 4px;":"";
+  const sz=o.tiny?"font-size:10px;padding:1px 4px;":"";
   return `<span class="fdrpill" style="background:${b};color:${c};${sz}${home?"":"font-style:italic;"}${o.style||""}"
     title="${esc(opp)} ${home?"(home)":"(away)"} · difficulty ${diff}">${esc(label)}</span>`;
 }
@@ -259,6 +424,7 @@ const S={players:null,teams:null,fixtures:null,events:null,model:null,last:null,
  squad:null,original:null,captain:null,vice:null,forceXI:null,subFrom:null,
  flagged:[],benchOrder:null,bank:0,ft:1,chips:{},horizon:1,tab:"squad",
  loading:false,progress:"",err:null,stamp:null,seeded:false,
+ status:null,statusAt:0,statusErr:null,datasetCommit:null,newsFetchedAt:null,
  news:[],reddit:[],squadNews:[],srcLog:{},srcFilter:null,playerFilter:null,entryRank:null,ignored:[],odds:[],oddsDemo:false,oddsLog:[],oddsState:'nokey',oddsKey:'',oddsErr:'',oddsTeams:null,oddsView:'att',oddsMarkets:null,rivals:[],rivalSel:0,rivalsFeed:null,rivalPick:null,rivalGwView:"next",newsState:"idle",newsWindow:24,expand:{},pendingOpt:null,planByGw:{},ftLastGw:0,tracker:null,trkStat:"points",trkGwStart:0,trkGwAll:false,radarIds:[null,null,null],radarSearch:["","",""],radarHorizon:5,radarPos:null,radarAxes:{},actuals:null,playerActuals:{},xfplGW:0,
  fPos:0,fTeam:0,fMin:3.5,fMax:16,startGW:0,lPos:0,lTeam:0,lSearch:"",lMax:16,lHorizon:5,lGwFrom:0,lGwTo:0,lWin:38,iconF:[],spF:null,starOnly:false,stars:[],fSearch:"",sortKey:"pred",sortDir:"desc",
  lSort:"pred",lDir:"desc",fixGW:null,fixSort:"d5",fixDir:"asc",fdrLens:null,fixMode:"team",
@@ -270,30 +436,81 @@ const LS={get(k){try{return JSON.parse(localStorage.getItem("fpl3:"+k));}catch(e
    LOADING
    ============================================================ */
 async function getCSV(path){
-  const r=await fetch(`${REPO}/${path}`);
-  if(!r.ok)throw new Error(path+" → HTTP "+r.status);
-  return parseCSV(await r.text());
+  return parseCSV(await dataText(`${REPO}/${path}`));
 }
-async function loadAll(force){
-  S.loading=true;S.err=null;render();
+/* One cheap call that drives the status chip, the provenance footer and the
+   should-we-redownload decision. Failures keep the last known copy so the
+   footer never blanks; the chip reports the server as unreachable instead. */
+async function loadStatus(){
   try{
-    const cached=LS.get("data");
-    if(cached&&!force&&Date.now()-cached.t<1000*60*60*6){
-      Object.assign(S,{players:cached.players,teams:cached.teams,fixtures:cached.fixtures,
-        events:cached.events,last:cached.last,pre:cached.pre||{},preMax:cached.preMax||1,lastTeams:cached.lastTeams||{},lastTeamStats:cached.lastTeamStats||{},lastTeamRecent:cached.lastTeamRecent||{},curTeamStats:cached.curTeamStats||{},hist:cached.hist||{},teamMatch:cached.teamMatch||{},stamp:cached.t});
-      buildModel();dedupeSquad();snapshotPredictions();localFtTrack();Promise.all([loadActuals(),loadRivals()]).then(render);S.loading=false;return;
-    }
-    S.progress="players and prices…";render();
+    if(BACKUP)throw new Error("backup copy: no server");
+    const r=await fetch("/api/status");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    S.status=await r.json();S.statusAt=Date.now();S.statusErr=null;
+  }catch(e){S.statusErr=String(e.message||e);}
+  return S.statusErr?null:S.status;
+}
+/* Runs on every page open and on every "Check now". The dataset itself is
+   ~12 MB, so it is only re-downloaded when the server's mirrored commit
+   differs from the copy the model was built from (S.datasetCommit); the
+   status, feeds and everything light refresh every time. */
+/* F75 (bundle 9): progress shows on the Check now / Load buttons without
+   redrawing the whole page; with no such button on screen it draws once. */
+function setProgress(t){
+  S.progress=t;
+  const bs=typeof document!=="undefined"&&document.querySelectorAll?document.querySelectorAll('button[onclick="act(\'load\')"]'):[];
+  if(bs.length)bs.forEach(b=>{b.textContent=t||"…";});else render();
+}
+async function loadAll(force,opts){
+  /* opts.fromSnap: the instant start. Build from the saved snapshot with no
+     network wait and no status call; the normal load that follows checks the
+     server and refreshes anything newer. */
+  const fromSnap=!!(opts&&opts.fromSnap&&_snap);
+  S.loading=true;S.err=null;
+  /* the instant start reuses the status saved with the snapshot, so the
+     gameweek and the chip are right from the first frame; the chip says it is
+     checking until the live status call answers */
+  if(fromSnap&&_snap.status&&!S.status){S.status=_snap.status;S.statusAt=_snap.statusAt||_snap.at;S.statusPending=true;}
+  render();
+  const st=fromSnap?null:await loadStatus();
+  if(!fromSnap)S.statusPending=false;
+  const commit=fromSnap?_snap.commit:(st&&st.dataset?st.dataset.commit:null);
+  const sameData=!!S.model&&commit!=null&&S.datasetCommit===commit;
+  if(!fromSnap&&((sameData&&!force)||(!st&&S.model&&!BACKUP))){
+    /* nothing new on the server (or the server is unreachable): keep the
+       built model, refresh the light feeds, and re-render once */
+    S.capture={};
+    await Promise.all([loadActuals(),loadRivals(),loadPredictions()]);
+    if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();
+      if(st){_snap.status=st;_snap.statusAt=S.statusAt;}IDB.set("snap",_snap);}
+    S.capture=null;
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();
+    syncOfficialSquad();
+    S.loading=false;setProgress("");
+    savePaint();
+    return;
+  }
+  S.fromCache=fromSnap;S.capture=fromSnap?null:{};
+  S.loadWarnings=[];S.fixFail=[];let calendarFailed=false;
+  try{
+    setProgress("players and prices…");
     const [players,pstats,teams]=await Promise.all([
       getCSV(`${SEASON}/players.csv`),
       getCSV(`${SEASON}/playerstats.csv`),
       getCSV(`${SEASON}/teams.csv`)]);
 
-    S.progress="last season…";render();
+    setProgress("last season…");
     let lastStats=[];
-    try{lastStats=await getCSV(`${LAST}/playerstats.csv`);}catch(e){}
+    try{lastStats=await getCSV(`${LAST}/playerstats.csv`);}catch(e){loadWarn("last season's player stats");}
+    /* playerstats holds one row per player per gameweek, in no fixed order,
+       and every join below keeps the LAST row it meets. Sorted by gameweek
+       first, that last row is always the latest one. Unsorted, 326 of 667
+       players were read from an older week on 12 Oct 2026 (stale totals,
+       form, prices and injury flags shown as current). */
+    const byGw=(a,b)=>(num(a.gw)||0)-(num(b.gw)||0);
+    pstats.sort(byGw);lastStats.sort(byGw);
 
-    S.progress="fixtures…";render();
+    setProgress("fixtures…");
     const fixtures=[];
     /* Current-season team output, accumulated from the very rows already being
        parsed for the fixture list. No extra requests: the xG columns are in the
@@ -302,7 +519,7 @@ async function loadAll(force){
     for(let batch=1;batch<=38;batch+=8){
       const jobs=[];
       for(let gw=batch;gw<batch+8&&gw<=38;gw++){
-        jobs.push(getCSV(`${SEASON}/By%20Gameweek/GW${gw}/fixtures.csv`).catch(()=>[]));
+        jobs.push(getCSV(`${SEASON}/By%20Gameweek/GW${gw}/fixtures.csv`).catch(e=>{if(!/HTTP 404/.test(e.message))S.fixFail.push(gw);return[];}));
       }
       (await Promise.all(jobs)).forEach(rows=>rows.forEach(f=>{
         /* the gameweek folders also carry EFL Cup ties — those are not FPL
@@ -328,11 +545,11 @@ async function loadAll(force){
           });
         }
       }));
-      S.progress=`fixtures… ${Math.min(38,batch+7)}/38`;render();
+      setProgress(`fixtures… ${Math.min(38,batch+7)}/38`);
     }
     /* Pre-season friendlies carry the only real signal on who is starting
        before a ball is kicked in the league */
-    S.progress="pre-season minutes…";render();
+    setProgress("pre-season minutes…");
     const pre={};
     try{
       const rows=await getCSV(`${SEASON}/By%20Tournament/Friendlies/GW0/playermatchstats.csv`);
@@ -349,19 +566,25 @@ async function loadAll(force){
         o.dcList=(o.dcList||[]);o.dcList.push(dcv);
       });
       S.preMax=Math.max(1,...Object.values(pre).map(v=>v.apps));
-    }catch(e){}
+    }catch(e){loadWarn("pre-season friendlies (minutes before GW1)");}
     S.pre=pre;
     let events=[];
+    /* Sorted by numeric id before anything scans for the first unfinished
+       row: the CSV's own order is not guaranteed, and an out-of-order file
+       silently pointed the whole app at the wrong gameweek. */
     try{events=(await getCSV(`${SEASON}/gameweek_summaries.csv`)).map(e=>({
       id:Math.round(num(e.id)),name:e.name,deadline:e.deadline_time,
-      finished:String(e.finished).toLowerCase()==="true"}));}catch(e){}
+      finished:String(e.finished).toLowerCase()==="true"})).sort((a,b)=>a.id-b.id);}catch(e){calendarFailed=true;}
+    if(calendarFailed){
+      if(S.status&&S.status.fpl&&S.status.fpl.gw)loadWarn("gameweek calendar (using FPL's own gameweek from the server)");
+      else throw new Error("the gameweek calendar did not load and the server gave no gameweek, so the app cannot tell which week to plan");
+    }
 
     /* merge players + stats */
     const byId={};players.forEach(p=>byId[p.player_id]={
       id:Math.round(num(p.player_id)),code:p.player_code,first:p.first_name,last:p.second_name,
       web_name:p.web_name,teamCode:p.team_code,pos:posOf(p.position)||3});
     pstats.forEach(s=>{const p=byId[s.id];if(p)Object.assign(p,{stats:s});});
-    const lastByCode={};lastStats.forEach(s=>{if(s.id)lastByCode[s.id]=s;});
     /* Keyed by player_code: web_name is not unique — 17 names are shared this
        season, and keying by name gave 29 players another player's history
        (Reece James's record landing on a Leeds midfielder, and so on). */
@@ -371,13 +594,10 @@ async function loadAll(force){
     try{
       const lp=await getCSV(`${LAST}/players.csv`);
       lp.forEach(r=>{lastIdToCode[String(Math.round(num(r.player_id)))]=String(r.player_code);});
-    }catch(e){}
+    }catch(e){loadWarn("last season's player ids");}
     const lastByCode2={};
     lastStats.forEach(s=>{const code=lastIdToCode[String(Math.round(num(s.id)))];
       if(code)lastByCode2[code]=s;});
-    const lastByName={};lastStats.forEach(s=>{
-      const k=norm(s.web_name);
-      if(!lastByName[k])lastByName[k]=s; else lastByName[k]="__AMBIGUOUS__";});
 
     /* last season's team goals for and against — the base for the ratings */
     const lt={};const tstat={};
@@ -421,7 +641,7 @@ async function loadAll(force){
         (lt[f.h]=lt[f.h]||{gf:0,ga:0,games:0});(lt[f.a]=lt[f.a]||{gf:0,ga:0,games:0});
         lt[f.h].gf+=f.hs;lt[f.h].ga+=f.as;lt[f.h].games++;
         lt[f.a].gf+=f.as;lt[f.a].ga+=f.hs;lt[f.a].games++;});
-    }catch(e){}
+    }catch(e){loadWarn("last season's team results (ratings base)");}
     S.lastTeams=lt;S.lastTeamStats=tstat;
     /* the closing eight matches of the season, as a recent-form window */
     const recent={};
@@ -435,14 +655,14 @@ async function loadAll(force){
     /* ---- per-match player history ----
        63 columns per player per match, which is what makes real rolling windows,
        venue splits and a proper minutes model possible. ~3MB a season, cached. */
-    S.progress="match history…";render();
+    setProgress("match history…");
     /* player_id is re-issued every season — only player_code is stable, so the
        history is keyed by code and joined to this season's ids at the end. */
     const idToCode={};
     try{
       const lastPlayers=await getCSV(`${LAST}/players.csv`);
       lastPlayers.forEach(r=>{idToCode["last|"+Math.round(num(r.player_id))]=String(r.player_code);});
-    }catch(e){}
+    }catch(e){loadWarn("last season's player list");}
     players.forEach(r=>{idToCode["now|"+Math.round(num(r.player_id))]=String(r.player_code);});
     const hist={};                       // player_code -> [match rows, oldest first]
     const teamMatch={};                  // match_id -> {h,a,gw}
@@ -489,7 +709,7 @@ async function loadAll(force){
           });
         }
       }
-    }catch(e){}
+    }catch(e){loadWarn("match history (per-match stats)");}
     /* stamp each appearance with venue and opponent */
     Object.values(hist).forEach(rows=>rows.forEach(r=>{
       const m=teamMatch[r.mid];if(!m)return;r.mgw=m.gw;}));
@@ -560,29 +780,50 @@ async function loadAll(force){
     S.fixtures=fixtures.filter(f=>{
       const k=f.event+"|"+Math.min(f.h,f.a)+"|"+Math.max(f.h,f.a);
       if(fseen.has(k))return false;fseen.add(k);return true;});
-    S.events=events;S.last={byName:lastByName,byCode:lastByCode2};
+    S.events=events;S.last={byCode:lastByCode2};
     S.stamp=Date.now();
-    LS.set("data",{t:S.stamp,players:S.players,teams:S.teams,fixtures:S.fixtures,events,last:S.last,pre:S.pre,preMax:S.preMax,lastTeams:S.lastTeams,lastTeamStats:S.lastTeamStats,lastTeamRecent:S.lastTeamRecent,curTeamStats:S.curTeamStats,hist:S.hist,teamMatch:S.teamMatch});
-    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals()]);toast("Live data loaded");
+    /* The commit is kept so "Check now" can skip an unchanged dataset. The
+       copy itself goes to IndexedDB below (localStorage had no room for it). */
+    S.datasetCommit=commit;
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions()]);
+    /* Bring the planner onto the latest official squad when a newer one has
+       been published (this also upgrades a seed made before the feeds landed). */
+    syncOfficialSquad();
+    if(!fromSnap){
+      /* save this load as the next instant start: dataset files and feeds */
+      _snap={v:SNAP_V,commit,files:S.capture,at:Date.now(),status:st,statusAt:S.statusAt};IDB.set("snap",_snap);
+      toast("Live data loaded");
+    }
   }catch(e){
     S.err="Couldn't load the dataset: "+e.message+". Check your connection and try again.";
   }
-  S.loading=false;S.progress="";render();
+  S.fromCache=false;S.capture=null;
+  S.loading=false;setProgress("");
+  /* the picture for the next open is taken only after a load that spoke to
+     the server, never from the in-between instant-start frame */
+  if(S.model&&!fromSnap)savePaint();
+}
+/* The last drawn page, kept so the next open can show it the instant the page
+   loads, before the model is rebuilt. It is a picture of the page only: clicks
+   are held off (see .booting) until the real render replaces it. */
+function savePaint(){
+  const app=document.getElementById("app");
+  if(S.loading||S.statusPending||S.booting)return;
+  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint",{tab:S.tab,html:app.innerHTML,at:Date.now()});
 }
 
 /* ============================================================
    MODEL
    ============================================================ */
-const GOAL_PTS={1:10,2:6,3:5,4:4}, CS_PTS={1:4,2:4,3:1,4:0}, DC_THRESH={1:99,2:10,3:12,4:12};
+/* X42 (13 Oct 2026): the game's rules in one place */
+const RULES={
+  squad:{1:2,2:5,3:5,4:3},        // keepers, defenders, midfielders, forwards
+  clubMax:3, ftMax:5, hit:4,
+  goal:{1:10,2:6,3:5,4:4}, cs:{1:4,2:4,3:1,4:0},
+  dcThresh:{1:99,2:10,3:12,4:12}  // defensive contributions for 2 points
+};
+const GOAL_PTS=RULES.goal, CS_PTS=RULES.cs, DC_THRESH=RULES.dcThresh;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
-
-/* Elo spread → 1-5 difficulty, adjusted for venue */
-/* Difficulty 1-5 from the opponent's Elo, ranked against the league rather than
-   stretched between two extremes — one runaway team was skewing every band.
-   Home advantage is applied as an Elo shift (~65 pts), which is the accepted
-   figure, before the band is assigned. */
-function eloDiff(){return 3;}   /* superseded by fdrOf() */
-
 /* Fixture difficulty from FPL's own team strength ratings, banded into league
    quintiles. Elo alone put Newcastle near the top while they faced Liverpool. */
 /* ============================================================
@@ -603,6 +844,7 @@ const PROMOTED={
   IPS:{gf:80/46, ga:47/46, note:"best xGA in the division, 1.01 per 90"},
   HUL:{gf:62/46, ga:58/46, note:"6th, promoted via play-offs, overperformed xG"}
 };
+
 const CHAMP_ATT=0.62, PL_GF=1.42;   /* CHAMP_DEF removed at v11.3: declared, never read */
 
 /* ---- current-season blend -------------------------------------------------
@@ -976,15 +1218,23 @@ function teamMaxPrice(teamId){
     S._tmax[p.team]=Math.max(S._tmax[p.team]||0,p.price);});}
   return S._tmax[teamId]||10;
 }
+/* F39: four caches hold figures derived from one dataset: the per-90 windows
+   above, the club price ceilings, the target clubs (app-squad.js) and the
+   Chips squads (app-render.js). None of their keys names the dataset, so
+   after "Check now" brought in new data they kept serving the old figures
+   until a reload. buildModel() empties all four before it builds. The other
+   two live in later files, so each is looked up by name and skipped when
+   that file has not loaded. */
+function clearModelCaches(){
+  for(const k in _wsCache)delete _wsCache[k];
+  S._tmax=null;
+  if(typeof _tcCache!=="undefined")_tcCache=null;
+  if(typeof _sqCache!=="undefined")for(const k in _sqCache)delete _sqCache[k];
+}
 
 /* ---- expected minutes ----
    Fitted per position against Fantasy Football Hub's published xMins
    (n=289). Keepers are role-based: one plays, the understudy does not. */
-const XM={
-  2:{a:77.1,last:0.16,pre:0.04,price:-1.41},
-  3:{a:56.0,last:0.23,pre:0.06,price:0.94},
-  4:{a:14.0,last:0.44,pre:0.22,price:3.60}
-};
 const GK_START=89, GK_BACKUP=15;
 /* How far a fixture moves a player's score around his own average. Retuned
    after the xG engine took over the fixture view: 1.26 against the published
@@ -1035,11 +1285,22 @@ const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kell
 const CAL_BASE={1:{A:0.51,B:0.77},2:{A:1.92,B:0.33},3:{A:2.45,B:0.39},4:{A:1.18,B:0.55}};
 let CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
 
-/* Once real gameweeks exist, compare what each position actually returns per
-   appearance with what we project and nudge B toward the truth. Needs 25+
-   players and is capped at +/-30% so one freak week can't distort the model. */
+/* Learning is RECORDED, NOT APPLIED. learnFromResults still writes the learn
+   record so the xFPL page can show what the results say, but projections stay
+   on CAL_BASE until Andy decides to switch learning on (decision D4 from the
+   audit; the backtest showed it made GW5 worse). This used to be moot: the
+   old flow built the model once per session, before the actuals feed landed,
+   so the record was never written and the apply path below never fired. The
+   server-era boot can build several times per session with actuals in hand,
+   which would have armed that path silently, so the switch is now explicit:
+   every build projects from CAL_BASE, however many builds a session runs,
+   until LEARN_APPLY is flipped by the owner. */
+/* D4 (13 Oct 2026, Andy): learning stays off. Position levels are re-fitted
+   by backtest instead (D5 half applied 13 Oct, full re-fit after GW10). */
+const LEARN_APPLY=false;
 function applyLearning(){
   CAL={1:{...CAL_BASE[1]},2:{...CAL_BASE[2]},3:{...CAL_BASE[3]},4:{...CAL_BASE[4]}};
+  if(!LEARN_APPLY)return;
   const L=LS.get("learn");if(!L)return;
   [1,2,3,4].forEach(k=>{
     if(!L[k]||L[k].n<25)return;
@@ -1140,7 +1401,50 @@ function learnFromResults(){
   LS.set("learn",out);
   applyLearning();
 }
+/* D1 (approved 12 Oct 2026). The projection was effectively "points if he
+   plays": everyone on 17+ expected minutes was taken as 98.5% to appear. The
+   whole projection is now scaled by the share of players in his expected-
+   minutes band who actually appeared, relative to the 0.985 it assumed.
+   Shares re-fitted 12 Oct 2026 on the bundle-1 minutes (D2, D7, D9, D15) over
+   GW1-5, players with no flag; the flag itself is applied separately (D9).
+   Out of sample: MAE 1.695 against 2.110 before, bias +0.03 (was +0.72).
+   Under 31 xMins the old ramp was already level with reality. */
+const APPEAR_SHARE=[[45,.494],[60,.682],[75,.786],[90,.882]];
+/* D15: weeks over which this season's minutes take over for a player without
+   ten appearances of history, and whether no minutes so far counts as evidence */
+const MINS_RAMP_GW=4, MINS_RAMP_ZERO=true;
+/* D6 (13 Oct 2026): how fast this season's per-90 rates take over from the
+   prior. RATE_SHRINK>0 weights this season by minutes/(minutes+RATE_SHRINK);
+   0 keeps the linear ramp to NOW_FULL minutes. Chosen by backtest. */
+const NOW_FULL=250, RATE_SHRINK=450;
+/* D8 (13 Oct 2026): clean sheets and goals conceded from the fixture's own
+   expected goals against, scaled by the player's on-pitch xGC against his
+   team's, rather than from his xGC/90 divided by a powered difficulty. */
+const CS_FROM_FIXTURE=true;
+/* Weight on player odds in a player's goals and assists (0 = off).
+   0.75, Andy 19 Oct 2026, after a GW1-6 backtest on closing prices: average
+   miss 2.375 -> 2.345 for priced players, 1.258 -> 1.243 overall, out-of-sample
+   pick 0.75-1. Closing prices know the line-ups, so this flatters them; it is
+   re-tested at GW12 on the prices archived at each deadline. */
+let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); method being rebuilt and re-tested */
+/* D5 (13 Oct 2026, Andy: apply half now, re-fit at GW10). Per-position level
+   on the final projection. Full out-of-sample scales over GW1-5 were GK 1.334,
+   DEF 1.095, MID 0.896, FWD 1.098 (leans -0.33/-0.17/+0.22/-0.17 a week);
+   these are halfway, so each lean is roughly halved until ten weeks of data. */
+const POS_LEVEL={1:1.167,2:1.048,3:0.948,4:1.049};
+/* D17: chance he appears at all in a week, on the same evidence as D1 */
+function appearShare(m){
+  if(!(m>30))return clamp(m/17,0,.985);
+  const band=APPEAR_SHARE.find(([hi])=>m<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
+  return band[1];
+}
+function appearFactor(xMins){
+  if(!(xMins>30))return 1;
+  const band=APPEAR_SHARE.find(([hi])=>xMins<=hi)||APPEAR_SHARE[APPEAR_SHARE.length-1];
+  return band[1]/.985;
+}
 function buildModel(){
+  clearModelCaches();
   const teams={};S.teams.forEach(t=>teams[t.id]=t);
   const byCode={};S.teams.forEach(t=>byCode[t.code]=t);
   const refs=new Set();S.fixtures.forEach(f=>{refs.add(f.h);refs.add(f.a);});
@@ -1176,8 +1480,15 @@ function buildModel(){
   S.strSorted=strSorted;
 
   const evs=(S.events||[]).slice().sort((a,b)=>a.id-b.id);
-  const gwPlayed=evs.filter(e=>e.finished).length;
-  const nextEv=evs.find(e=>!e.finished)||{id:1,name:"Gameweek 1"};
+  /* The official FPL API (via /api/status) knows the upcoming gameweek before
+     the dataset's finished flags catch up, so it wins when both exist. F51
+     (13 Oct 2026): without the calendar file the server's gameweek still
+     decides; it used to fall back to GW1. */
+  const statusGw=Number(S.status&&S.status.fpl&&S.status.fpl.gw)||0;
+  const gwPlayed=evs.length?evs.filter(e=>e.finished).length:Math.max(0,statusGw-1);
+  const nextEv=(statusGw?evs.find(e=>e.id===statusGw&&!e.finished):null)
+    ||evs.find(e=>!e.finished)
+    ||(statusGw&&!evs.length?{id:statusGw,name:"Gameweek "+statusGw}:null)||{id:1,name:"Gameweek 1"};
 
   const byEv={};S.fixtures.forEach(f=>{f.ht=anyTeam(f.h);f.at=anyTeam(f.a);
     (byEv[f.event]=byEv[f.event]||[]).push(f);});
@@ -1205,17 +1516,23 @@ function buildModel(){
   S._tmaxRaw={};
   S.players.forEach(p=>{
     const v=num(p.stats?.now_cost);if(!v)return;
-    const t=S.teams.find(x=>x.code===p.teamCode||x.id===p.teamCode);
-    [p.teamCode,t&&t.code,t&&t.id].forEach(k=>{if(k!=null)S._tmaxRaw[k]=Math.max(S._tmaxRaw[k]||0,v);});
+    /* F22: keyed by the club code only. It used to be stored under the code
+       AND the id, and four clubs' codes are other clubs' ids, so those clubs
+       read another club's price ceiling (15 players' minutes projected 5 to
+       15 low on 9 Oct 2026). Every reader looks it up by p.teamCode. */
+    const k=String(p.teamCode);
+    S._tmaxRaw[k]=Math.max(S._tmaxRaw[k]||0,v);
   });
   S.bandCuts=null;buildBands();
   const players=S.players.map(p=>{
     const s=p.stats, team=byCode[p.teamCode]||{};
     const price=num(s.now_cost), mins=num(s.minutes), starts=num(s.starts);
-    /* code first; fall back to name only when it is unambiguous */
-    let L=S.last?.byCode?.[String(p.code||"")];
-    if(!L){const cand=S.last?.byName?.[norm(p.web_name)];
-      if(cand&&cand!=="__AMBIGUOUS__")L=cand;}
+    /* Matched by player code only. A name fallback sat here, but last
+       season's file has a row per player per gameweek, so every name looked
+       ambiguous and it never matched anyone (found 13 Oct 2026). It was
+       removed rather than switched on: turning it on would change
+       projections, which is Andy's call. */
+    const L=S.last?.byCode?.[String(p.code||"")];
     const lastMins=L?num(L.minutes):0, lastPPG=L?num(L.points_per_game):0;
     const lastStarts=L?num(L.starts):0, lastApps=L?Math.max(num(L.starts),Math.round(num(L.minutes)/60)):0;
     const pr=S.pre?S.pre[p.id]:null;
@@ -1258,7 +1575,8 @@ function buildModel(){
     if(lastPPG>0)baseForm=lastPPG;
     else{
       const cs=S.coldStart&&S.coldStart[p.pos];
-      const rel=clamp(price/Math.max(4,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100)*10,0.4,1.4);
+      /* D14: now_cost is in pounds, so the old x10 pinned this at 1.4 for everyone */
+      const rel=clamp(price/Math.max(4,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100),0.4,1.4);
       baseForm=cs?clamp(1.6*rel+(p.pos>=3?cs.xg90*2.2:cs.dc90*0.16),0.6,5.5):pricePrior;
     }
     const form=liveForm>0?liveForm
@@ -1268,10 +1586,11 @@ function buildModel(){
 
     /* availability, and a parsed return date where the game gives one */
     const st=s.status||"a";
-    let av=1;
+    let av=1, availAssumed=false;
     if(st==="u"||st==="n"||st==="s")av=0;
     else if(st==="i"||st==="d"){const c=s.chance_of_playing_next_round;
-      av=(c===""||c==null)?0.5:num(c)/100;}
+      availAssumed=(c===""||c==null);              // F56: shown with an "assumed" tag
+      av=availAssumed?0.5:num(c)/100;}
     const back=parseReturn(s.news||"");
 
     /* expected minutes */
@@ -1314,7 +1633,6 @@ function buildModel(){
       xMins=clamp((srP*ws2+(1-srP)*offBench)*MP.sc,0,90);
       minsSrc="appearances";
     }
-    else if(gwPlayed>2&&mins>0){xMins=clamp(mins/gwPlayed,0,90);minsSrc="this season";}
     else{
       /* No Premier League history. For a player signed from abroad, pre-season
          is the only evidence of his role and is worth using once he has 180+
@@ -1333,8 +1651,19 @@ function buildModel(){
         xMins=clamp(rel*66+preSignal*0.22, 6, 86);
         minsSrc="no history";
       }
+      /* D15 (12 Oct 2026). This season's minutes per gameweek take over from
+         the estimate gradually, fully from MINS_RAMP_GW weeks played, instead
+         of replacing it for 300+ players in one step at GW3. */
+      if(gwPlayed>=1&&(mins>0||MINS_RAMP_ZERO)){
+        const w=clamp(gwPlayed/MINS_RAMP_GW,0,1);
+        xMins=xMins*(1-w)+clamp(mins/gwPlayed,0,90)*w;
+        minsSrc=w>=1?"this season":"this season (blend)";
+      }
     }
-    if(av===0)xMins=0; else xMins*=clamp(av,0,1);
+    /* D9: the normal role, before any flag. The flag is applied once, to the
+       points of the week it is about, so a return date can bring him back. */
+    const roleMins=xMins;
+    xMins=av===0?0:xMins*clamp(av,0,1);
 
     /* 30% last season, 30% season to date, 40% last six gameweeks — the
        weighting the public component models converge on. `form` already is
@@ -1352,12 +1681,11 @@ function buildModel(){
        At mins=0 the ramp is 0 and cur is 0, so this returns the prior exactly
        as before: pre-season projections, and the published GW1-8 reference
        set, are untouched. */
-    const NOW_FULL=250;
     const pick=(a,b,fb,lim)=>{const cur=num(a);
       const rel=clamp(lastMins/(lastMins+420),0,0.95);
       const y=L?num(b):0;
       const prior=y>0?(y*rel+fb*(1-rel)):fb;
-      const nowTrust=cur>0?clamp(mins/NOW_FULL,0,1):0;
+      const nowTrust=cur>0?(RATE_SHRINK>0?mins/(mins+RATE_SHRINK):clamp(mins/NOW_FULL,0,1)):0;
       const v=cur>0?cur*nowTrust+prior*(1-nowTrust):prior;
       return lim?clamp(v,0,lim):v;};
     const posPrior={1:0,2:.06,3:.16,4:.34}[p.pos]||.15;
@@ -1395,57 +1723,25 @@ function buildModel(){
 
     return{id:p.id,code:String(p.code||""),web_name:p.web_name,first:p.first,last:p.last,pos:p.pos,
       team:team.id,teamName:team.short||"",teamFull:team.name||"",price,
-      form,formSrc,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
+      form,formSrc,availAssumed,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
       priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,ppg:num(s.points_per_game),total:num(s.total_points),
       owned:num(s.selected_by_percent),minutes:mins,status:st,news:s.news||"",back,
-      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,
+      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,roleMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),
       pensSaved:num(s.penalties_saved),ownGoals:num(s.own_goals),
       spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
   });
 
-  /* keepers: exactly one starts */
-  const gkClub={};
-  players.filter(p=>p.pos===1).forEach(p=>{(gkClub[p.team]=gkClub[p.team]||[]).push(p);});
-  Object.values(gkClub).forEach(list=>{
-    /* An unavailable first choice does not keep the shirt — the deputy starts.
-       Hull's pinned keeper was injured and the club ended up with nobody
-       projected to play at all. */
-    const rank=p=>(p.avail>0?1e9:0)
-      +(GK_FIRST.includes(norm(p.web_name))?1e7:0)
-      +p.lastMins*3+p.price*400+(p.preMinPerApp||0)*4;
-    list.sort((a,b)=>rank(b)-rank(a));
-    list.forEach((p,i)=>{if(p.avail<=0){p.xMins=0;return;}
-      /* only one keeper plays: the understudy is projected at zero, not a fraction */
-      p.xMins=(i===0?GK_START*clamp(p.avail,0,1):0);
-      if(i>0)p.backup=true;});
-  });
-  /* an absent team-mate frees minutes for whoever is fit behind him */
-  const cp={};players.forEach(p=>{(cp[p.team+"|"+p.pos]=cp[p.team+"|"+p.pos]||[]).push(p);});
-  Object.values(cp).forEach(list=>{
-    const out=list.filter(p=>p.avail<=0), fit=list.filter(p=>p.avail>0);
-    if(!out.length||!fit.length)return;
-    const lift=clamp(1+out.reduce((a,p)=>a+clamp(p.price/8,.25,1.2),0)*0.12,1,1.3);
-    fit.forEach(p=>{if(p.xMins>=84||p.pos===1)return;p.xMins=Math.round(clamp(p.xMins*lift,0,89));p.lifted=true;});
-  });
-
-  /* per-gameweek projection */
+  /* D9 (12 Oct 2026): when each absent player is due back (0 = available
+     now). A known return date resumes his normal role from that gameweek;
+     without one he is assumed out about four gameweeks; a player who has left
+     or is not registered (status u or n) never returns. */
+  const nextId=S.model.next.id;
+  const evDl=(S.events||[]).filter(x=>x.deadline).sort((a,b)=>a.id-b.id);
   players.forEach(p=>{
-    const team=p._team;
-    /* Appearance behaviour is what gives cameo players their floor: a 15-minute
-       average means he features most weeks, just briefly. */
-    /* These used to saturate at 75 and 80 minutes, so two-thirds of the active
-       pool were treated identically however many minutes they were expected to
-       play — a player on 81 scored exactly like one on 90. Extended so the
-       75-90 band still separates, which is where most regulars sit. */
-    const pPlay=clamp(p.xMins/17,0,.985);
-    const p60=clamp((p.xMins-22)/62,0,.985);
-    const share=clamp(p.xMins/90,0,1);
-    /* An injury suppresses the next few weeks, not the whole season. A player
-       with a known return date misses until then and resumes his normal role
-       after; without one, he is assumed out about four gameweeks then eased in. */
-    const outUntil=(()=>{
+    p.outUntil=(()=>{
       if(p.avail>0)return 0;
+      if(p.status==="u"||p.status==="n")return 39;
       if(p.back&&p.back!=="unknown"){
         const m=/^(\d{2})-([A-Za-z]{3})$/.exec(p.back);
         if(m){
@@ -1455,18 +1751,92 @@ function buildModel(){
             let yr=now.getFullYear();
             if(mi<now.getMonth()-3)yr++;
             const back=new Date(yr,mi,+m[1]);
-            const ev=(S.events||[]).filter(x=>x.deadline).sort((a,b)=>a.id-b.id);
-            const first=ev.find(x=>new Date(x.deadline)>=back);
-            return first?first.id:S.model.next.id+4;
+            const first=evDl.find(x=>new Date(x.deadline)>=back);
+            return first?first.id:nextId+4;
           }
         }
-        return S.model.next.id+8;
+        return nextId+8;
       }
-      return S.model.next.id+4;
+      return nextId+4;
     })();
+    p.coverMins=0;p.coverUntil=0;
+  });
+
+  /* keepers: exactly one starts. D2 (12 Oct 2026): once two gameweeks are
+     played, this season's minutes decide who holds the shirt and the GK_FIRST
+     list only breaks ties (before that the list leads). An absent first
+     choice hands the shirt to the best fit deputy until he is due back. */
+  const gkClub={};
+  players.filter(p=>p.pos===1).forEach(p=>{(gkClub[p.team]=gkClub[p.team]||[]).push(p);});
+  Object.values(gkClub).forEach(list=>{
+    const score=p=>p.lastMins*3+p.price*400+(p.preMinPerApp||0)*4;
+    const listed=p=>GK_FIRST.includes(norm(p.web_name))?1:0;
+    const gone=p=>p.outUntil>38?1:0;
+    list.sort((a,b)=>gone(a)-gone(b)
+      ||(gwPlayed>=2?b.minutes-a.minutes:0)
+      ||listed(b)-listed(a)
+      ||score(b)-score(a));
+    /* only one keeper plays: the understudy is projected at zero, not a fraction */
+    list.forEach((p,i)=>{p.roleMins=i===0?GK_START:0;if(i>0)p.backup=true;});
+    const first=list[0];
+    if(first&&first.outUntil){
+      const dep=list.slice(1).find(p=>p.avail>0);
+      if(dep){dep.coverMins=GK_START;dep.coverUntil=first.outUntil;if(first.outUntil>nextId)dep.backup=false;}
+    }
+  });
+  /* An absent team-mate frees minutes for whoever is fit behind him. D7
+     (12 Oct 2026): the extra is capped at the minutes the absentees leave
+     free and at the shirts the position has, and lasts only until they are
+     due back. Uncapped it lifted 357 players, putting 22,535 outfield
+     minutes a week on the league against 16,746 played. */
+  const SLOTS={1:1,2:4.3,3:4.3,4:2.0};
+  const cp={};players.forEach(p=>{(cp[p.team+"|"+p.pos]=cp[p.team+"|"+p.pos]||[]).push(p);});
+  Object.values(cp).forEach(list=>{
+    if(list[0].pos===1)return;
+    const out=list.filter(p=>p.avail<=0), fit=list.filter(p=>p.avail>0);
+    if(!out.length||!fit.length)return;
+    const lift=clamp(1+out.reduce((a,p)=>a+clamp(p.price/8,.25,1.2),0)*0.12,1,1.3);
+    const want=fit.map(p=>p.roleMins>=84?0:Math.max(0,Math.min(p.roleMins*lift,89)-p.roleMins));
+    const E=want.reduce((a,x)=>a+x,0);
+    if(!(E>0))return;
+    const freed=out.reduce((a,p)=>a+p.roleMins,0);
+    const headroom=Math.max(0,SLOTS[list[0].pos]*90-fit.reduce((a,p)=>a+p.roleMins,0));
+    const k=Math.min(E,freed,headroom)/E;
+    const until=Math.max(...out.map(p=>p.outUntil));
+    fit.forEach((p,i)=>{const m=want[i]*k;if(m<0.5)return;
+      p.coverMins=m;p.coverUntil=until;p.lifted=true;});
+  });
+
+  /* per-gameweek projection */
+  players.forEach(p=>{
+    const team=p._team;
+    /* minutes in week e: the normal role plus any cover for an absent
+       team-mate while he is out */
+    const minsAt=e=>clamp(p.roleMins+(e<p.coverUntil?p.coverMins:0),0,90);
+    /* D9: availability for THIS gameweek. A doubt applies to the next week
+       only, and once (to the points, not to the minutes as well); an absent
+       player misses until he is due back, then is eased in over two weeks. */
+    const availAt=e=>{
+      if(p.outUntil){
+        if(e<p.outUntil)return 0;
+        if(e<p.outUntil+2)return 0.55+0.25*(e-p.outUntil);
+        return 1;
+      }
+      return e===nextId?clamp(p.avail,0,1):1;
+    };
     for(let e=S.model.next.id;e<=38;e++){
       const fx=teamFix(team,e);
       if(!fx.length){p.gw[e]={pts:0,fixtures:[],blank:true};continue;}
+      const mE=minsAt(e), availE=availAt(e);
+      /* Appearance behaviour is what gives cameo players their floor: a 15-minute
+         average means he features most weeks, just briefly. */
+      /* These used to saturate at 75 and 80 minutes, so two-thirds of the active
+         pool were treated identically however many minutes they were expected to
+         play — a player on 81 scored exactly like one on 90. Extended so the
+         75-90 band still separates, which is where most regulars sit. */
+      const pPlay=clamp(mE/17,0,.985);
+      const p60=clamp((mE-22)/62,0,.985);
+      const share=clamp(mE/90,0,1);
       let tot=0;
       fx.forEach(f=>{
         const opp=f.oppT||{};
@@ -1495,27 +1865,54 @@ function buildModel(){
           def=def*(1-FDR_MIX)+nD*FDR_MIX;
         }
         const od=oddsFor(team,opp,f.home);
-        if(od){                       // odds override the ratings when available
-          atk=clamp(od.xg/1.42,.40,1.75);
-          def=clamp(1.42/Math.max(.35,od.xgc),.45,1.70);
+        /* D10 (13 Oct 2026): odds override the ratings when available, through
+           the same power and limits, so switching odds on keeps the fixture
+           spread instead of flattening it */
+        if(od){
+          atk=clamp(Math.pow(od.xg/PL_GF,1.9),.30,2.40);
+          def=clamp(Math.pow(PL_GF/Math.max(.35,od.xgc),1.9),.35,2.30);
         }
-        const xGC=clamp(p.gc90/def,.25,3.2);
+        /* D8: the fixture's expected goals against (odds when priced), scaled by
+           how his on-pitch xGC compares with his team's */
+        const fxGC=od?od.xgc:f.xgc;
+        const teamGA=((team.defH||0)+(team.defA||0))/2;
+        const xGC=CS_FROM_FIXTURE&&fxGC!=null&&teamGA>0
+          ? clamp(fxGC*clamp(p.gc90/teamGA,0.75,1.33),.25,3.2)
+          : clamp(p.gc90/def,.25,3.2);
         const app=p60*2+(pPlay-p60);
         /* Keepers score almost entirely from clean sheets and concessions;
            saves pay only one point per three, and a busy keeper behind a poor
            defence loses more to goals than he gains in saves. Validated against
            the published projections, where the best-rated keepers sit behind the
            best defences rather than making the most saves. */
+        /* Player odds (19 Oct 2026, weight PROP_W; 0 = off). The market's
+           expected goals for this match (from P(score)) is set against the
+           model's own figure in the same units - his rate x his minutes x how
+           this fixture compares with his team's average - and the ratio,
+           capped at 0.5-2 and raised to PROP_W, scales this term. Only for
+           expected starters (normal role 60+ min): anytime prices assume he
+           plays, which matches a starter but not a rotation player. The first
+           version blended raw market goals into this already fixture-
+           stretched term and was switched off the same day. */
+        let gL=p.xg90*share*atk, aL=p.xa90*share*atk;
+        const pm=PROP_W>0&&fx.length===1&&p.roleMins>=60&&S.propMarket&&S.propMarket[p.id]&&S.propMarket[p.id][e];
+        if(pm){
+          const fr=(f.xgf>0&&team.att>0)?f.xgf/team.att:1, m=Math.min(1,p.roleMins/90)*fr;
+          const bg=p.xg90*m, ba=p.xa90*m;
+          if(pm.g!=null&&bg>0.02)gL*=Math.pow(clamp(pm.g/bg,0.5,2),PROP_W);
+          if(pm.a!=null&&ba>0.02)aL*=Math.pow(clamp(pm.a/ba,0.5,2),PROP_W);
+        }
         const attack=p.pos===1
           ? (p.sv90*(xGC/1.35))/3*share*0.55
-          : (p.xg90*(GOAL_PTS[p.pos]||4)+p.xa90*3)*share*atk;
+          : gL*(GOAL_PTS[p.pos]||4)+aL*3;
         /* Poisson clean-sheet probability. For keepers this is the dominant
            term, so it carries a shot-quality adjustment: a defence that concedes
            few high-quality chances keeps more clean sheets than raw xGC implies. */
         let csP=Math.exp(-xGC);
         if(p.pos===1&&p.gpRate)csP=clamp(csP*(1+clamp(p.gpRate,-0.25,0.25)),0.02,0.75);
         const cs=(CS_PTS[p.pos]||0)*csP*p60;
-        const conc=p.pos<=2?-0.5*clamp(xGC/2,0,1.6)*p60:0;
+        /* D11: -1 per two conceded is, in expectation, xGC/2 - (1 - e^-2xGC)/4 */
+        const conc=p.pos<=2?-(xGC/2-(1-Math.exp(-2*xGC))/4)*p60:0;
         /* DefCon pays only when a player clears the threshold in that match.
            Modelling it from his average badly overstates it — Tielemans averages
            9.8 actions, which the old curve scored as 1.29 points a game, when he
@@ -1528,38 +1925,37 @@ function buildModel(){
         /* penalties earned scale with how often the side attacks */
         const teamAtk=clamp((team.att||PL_GF)/PL_GF,0.55,1.45);
         const extras=(p.penBoost*teamAtk*atk+p.setBoost)*share;
-        /* availability for THIS gameweek rather than for the season */
-        let availE=p.avail;
-        if(outUntil){
-          if(e<outUntil)availE=0;
-          else if(e<outUntil+2)availE=0.55+0.25*(e-outUntil);   // easing back in
-          else availE=1;
-        }
-        tot+=(app+attack+cs+conc+defcon+bon+extras)*clamp(availE,0,1);
+        tot+=(app+attack+cs+conc+defcon+bon+extras)*availE;
       });
       const c=CAL[p.pos]||{A:0,B:1};
       const rawTot=tot;
       /* the flat term scales with minutes too, and capping it at 80 meant every
          regular shared an identical floor regardless of expected minutes */
-      tot=c.A*clamp(p.xMins/88,0,1.02)+c.B*tot;
+      /* D3: the flat term is per match, so a double carries it twice */
+      tot=c.A*clamp(mE/88,0,1.02)*availE*fx.length+c.B*tot;
       if(e===S.model.next.id)p.rawPts=rawTot;
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot),fixtures:fx,blank:false};
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false,
+        pPlay:clamp(availE,0,1)*appearShare(mE)*Math.min(1,fx.length)};
     }
     /* --- fixture sensitivity ---
        Applied per player: hold his average across the horizon fixed and stretch
        the deviations around it. Cross-player calibration is unaffected, so the
        accuracy fit holds, but a kind fixture now reads clearly above a hard one. */
-    const ws=Object.keys(p.gw).map(Number).filter(w=>p.gw[w]&&!p.gw[w].blank);
+    /* D3: single weeks only. A double stretched around a single-week mean was
+       pushed to over 2.5x a single; doubles keep their own sum. */
+    const ws=Object.keys(p.gw).map(Number).filter(w=>p.gw[w]&&!p.gw[w].blank&&p.gw[w].fixtures.length===1);
+    Object.keys(p.gw).forEach(w=>{const q=p.gw[w];if(q&&!q.blank&&q.fixtures.length>1)q.pre=q.pts;});
     if(ws.length>1){
       const mean=ws.reduce((a,w)=>a+p.gw[w].pts,0)/ws.length;
       if(mean>0.3)ws.forEach(w=>{
         p.gw[w].pre=p.gw[w].pts;
         p.gw[w].pts=Math.max(0,mean+(p.gw[w].pts-mean)*FIXTURE_AMP);});
     }
-    p.xMins=Math.round(p.xMins);
+    /* the figure every page shows: next week's minutes, flag applied */
+    p.xMins=Math.round(minsAt(nextId)*availAt(nextId));
     delete p._team;
   });
 
@@ -1577,7 +1973,6 @@ function buildModel(){
      eleven shirts allow, somebody is going to be rotated — and last season's
      record cannot say who. Flag the ones most at risk rather than silently
      adjusting them, because nothing in the data says by how much. */
-  const SLOTS={1:1,2:4.3,3:4.3,4:2.0};
   const byClubPos={};
   players.forEach(p=>{(byClubPos[p.team+"|"+p.pos]=byClubPos[p.team+"|"+p.pos]||[]).push(p);});
   Object.entries(byClubPos).forEach(([k,list])=>{
@@ -1597,18 +1992,20 @@ function buildModel(){
   S.model.players=players;
   S.model.teamById=teams;
   learnFromResults();
-  /* Prices change through the week, so refresh on load rather than waiting for
-     the tab to be opened — the projections use them, not just the display. */
-  if(S.oddsKey&&(S.oddsState==="idle"||S.oddsState==="nokey")&&!S._oddsTried){
+  /* Prices change through the week, so refresh on load rather than waiting
+     for the tab to be opened: the projections use them, not just the display.
+     The server holds the key and the 4-hour cache, so one fetch per load is
+     cheap, and it answers { state:"nokey" } when no key is configured. */
+  if(!S._oddsTried){
     S._oddsTried=true;
-    /* free tiers are capped at a few hundred calls a month, so reuse a recent
-       response rather than refetching on every visit */
-    const c=LS.get("oddsCache");
-    if(c&&c.t&&Date.now()-c.t<4*3600*1000&&(c.odds||[]).length){
-      S.odds=c.odds;S.oddsState="ok";buildOddsTeams();
-    }else setTimeout(()=>loadOdds(),400);
+    setTimeout(()=>loadOdds(),400);
   }
-  if(!S.seeded&&(!S.squad||!S.squad.length)){S.seeded=true;resolveSeed(true);}
+  if(!S.seeded&&(!S.squad||!S.squad.length)){S.seeded=true;
+    /* resolveSeed prefers the latest official picks from the feed; it only
+       falls back to the hard-coded GW1 seed when no history is loaded. On the
+       cold path the feeds land after this, so a seed-sourced squad is marked
+       provisional and upgraded to the official picks as soon as they arrive. */
+    S.seedProvisional=resolveSeed(true)==="seed";}
   render();
 }
 /* "Expected back 30 Aug" → 30-Aug */
@@ -1620,9 +2017,18 @@ function parseReturn(news){
 }
 
 const VG=()=>clamp(S.startGW||(S.model?S.model.next.id:1),1,38);
+/* D13 (13 Oct 2026): what he paid. The feed publishes the price of every
+   player he owns (his transfers, or the start price for the GW1 squad); a
+   player he does not own is a planned buy at today's price. Without the feed
+   the season-start price is the estimate, and says so. */
+function purchaseOf(p){
+  const pm=S.tracker&&S.tracker.purchase&&S.tracker.purchase.players;
+  if(pm){const r=pm[p.id]||pm[String(p.id)];return{paid:r?r.paid:p.price,est:false};}
+  return{paid:+(p.price-(p.seasonChange||0)).toFixed(1),est:true};
+}
 /* FPL sells at purchase price plus half the rise, rounded down to 0.1 */
 function sellPrice(p){
-  const bought=+(p.price-(p.seasonChange||0)).toFixed(1);
+  const bought=purchaseOf(p).paid;
   const rise=+(p.price-bought).toFixed(1);
   return rise<=0?p.price:+(bought+Math.floor(rise*10/2)/10).toFixed(1);
 }

@@ -23,14 +23,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
 
-      - name: Build data/actuals.json and data/rivals.json
+      # Cutover (19 Oct 2026): only actuals.json is published, for the GitHub
+      # Pages backup. The rivals feed (other managers' names and squads) is
+      # built on the FPL Signals server only, so it goes to the runner's temp
+      # dir here and is never committed.
+      - name: Build data/actuals.json
         env:
+          FPL_RIVALS_OUT: ${{ runner.temp }}/rivals.json
           FPL_ENTRY_ID: "301830"
           FPL_SEASON: "2027"
           FPL_LEAGUE_ID: "391690"
@@ -41,7 +46,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/actuals.json data/rivals.json
+          git add data/actuals.json
           if git diff --staged --quiet; then
             echo "No change."
           else

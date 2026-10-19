@@ -1,4 +1,4 @@
-/* FPL Edge — app-squad.js
+/* FPL Signals - app-squad.js
    signals, squad handling, transfers, chips, news, dashboard
 
    Part of a single script split across files so each stays small enough to
@@ -14,8 +14,21 @@
 /* Shields rather than discs, with a gloss highlight so they read as objects
    rather than flat labels. One silhouette throughout keeps the set coherent. */
 let _bid=0;
+/* keyed on the design itself: badges built during a render (e.g. a number
+   that changes) reuse their symbol instead of adding a new one each time */
+const _bKey=new Map();
 function badge(glyph,fill,ring){
-  const id=++_bid;
+  const key=glyph+"|"+fill+"|"+ring;
+  if(_bKey.has(key)&&_spriteDone.has("b"+_bKey.get(key)))
+    return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${_bKey.get(key)}"/></svg>`;
+  const id=++_bid;_bKey.set(key,id);
+  const full=badgeFull(id,glyph,fill,ring);
+  /* Bundle 9: drawn once in the sprite, referenced everywhere after */
+  const m=/<defs>([\s\S]*?)<\/defs>([\s\S]*)<\/svg>/.exec(full);
+  spriteAdd("b"+id,m[1],`<symbol id="b${id}" viewBox="0 0 26 28">${m[2]}</symbol>`);
+  return _spriteDone.has("b"+id)?`<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true"><use href="#b${id}"/></svg>`:full;
+}
+function badgeFull(id,glyph,fill,ring){
   return `<svg viewBox="0 0 26 28" class="bdg" aria-hidden="true">
     <defs>
       <linearGradient id="sg${id}" x1="0" y1="0" x2="0" y2="1">
@@ -160,9 +173,67 @@ const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
   vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,ftLastGw:S.ftLastGw,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
-  planByGw:S.planByGw});}
+  planByGw:S.planByGw,baseGw:S.baseGw??null});}
+/* The owner's official squad for the latest gameweek the feed has picks for.
+   Returns null when the feed (or a complete, resolvable 15) isn't there, so
+   callers fall back honestly rather than dressing the hard-coded seed up as
+   official. */
+function latestOfficialPicks(){
+  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
+  const rows=S.tracker.gw.filter(r=>Array.isArray(r.picks)&&r.picks.length===15);
+  if(!rows.length)return null;
+  const last=rows.reduce((a,b)=>(b.event>a.event?b:a));
+  const picks=last.picks.slice().sort((a,b)=>(a.pos||0)-(b.pos||0));
+  if(picks.some(pk=>!S.model.players.find(p=>p.id===pk.id)))return null; // a pick the dataset can't name: don't half-seed
+  return {event:last.event,picks};
+}
+/* Seed an empty planner from the LATEST official picks. Returns false when no
+   history is published yet (old feed cached, or feed unreachable). */
+function resolveOfficial(quiet){
+  const off=latestOfficialPicks();
+  if(!off)return false;
+  const ids=off.picks.map(pk=>pk.id);
+  S.squad=ids.slice();S.original=ids.slice();S.forceXI=null;
+  const cap=off.picks.find(pk=>pk.isC)||off.picks.find(pk=>pk.multiplier>=2);
+  const vice=off.picks.find(pk=>pk.isVC);
+  S.captain=cap?cap.id:ids[0];
+  S.vice=(vice&&vice.id!==S.captain)?vice.id:ids.find(i=>i!==S.captain);
+  S.benchOrder=off.picks.slice(11).map(pk=>pk.id);
+  const bf=(typeof bankFromFeed==="function")?bankFromFeed():null;
+  if(bf!=null)S.bank=bf;
+  else{const P=id=>S.model.players.find(p=>p.id===id);
+    S.bank=+Math.max(0,100-ids.reduce((a,i)=>a+(P(i)?.price||0),0)).toFixed(1);}
+  S.baseGw=off.event;
+  saveState();
+  if(!quiet)toast("Squad set to your official GW"+off.event+" line-up");
+  return true;
+}
+/* Keep the planner on the real squad. The draft remembers which official
+   gameweek it was built from (baseGw). When FPL publishes a newer official
+   squad (after each deadline), or the draft predates this (the old GW1 seed),
+   the planner moves onto the latest official squad. The draft it replaces is
+   kept under its own key so nothing is lost, and the toast says so. */
+function syncOfficialSquad(){
+  if(typeof latestOfficialPicks!=="function")return false;
+  const off=latestOfficialPicks();
+  if(!off)return false;
+  if(S.baseGw!=null&&off.event<=S.baseGw)return false;
+  const had=!!(S.squad&&S.squad.length);
+  if(had){try{LS.set("state_before_gw"+off.event,LS.get("state"));}catch(e){}}
+  /* plans were drafted against the old squad, so they go with the old draft */
+  S.planByGw={};S.replacedBy={};
+  resolveOfficial(true);
+  dedupeSquad();
+  S.seedProvisional=false;
+  if(had)toast("Planner now starts from your official GW"+off.event+" squad. Your earlier draft is saved.");
+  return true;
+}
+/* Returns "official" when the squad came from the feed's official picks, or
+   "seed" when only the hard-coded GW1 seed was available (the last resort,
+   kept for a fresh install whose feed has no history yet). */
 function resolveSeed(quiet){
   if(!S.model)return;
+  if(resolveOfficial(quiet))return "official";
   const used=new Set(),ids=[],miss=[];
   SEED.forEach(([n,t,pos])=>{
     const target=norm(n);
@@ -181,6 +252,7 @@ function resolveSeed(quiet){
   S.bank=+Math.max(0,100-ids.reduce((a,i)=>a+(P(i)?.price||0),0)).toFixed(1);
   saveState();
   if(miss.length&&!quiet)toast("Couldn't match: "+miss.join(", "));
+  return "seed";
 }
 /* Captain/multiplier for the currently-viewed historical gameweek, keyed by
    player id — set as a side effect of squadPlayers() so cardHTML can read who
@@ -188,6 +260,12 @@ function resolveSeed(quiet){
    the player objects (several call sites compare these by reference, e.g.
    xi.includes(p), so a spread copy would silently break those checks). */
 let _histCaptain=null,_histSquadActive=false,_gwLocked=false;
+/* The rest of the official record for that week, set alongside _histCaptain:
+   the vice, the XI/bench split and order straight from the picks' positions
+   (auto subs already applied by the API), and each pick's multiplier so a
+   Triple Captain week multiplies by what was actually played, not by the
+   local chip plan. Null whenever the viewed week has no official picks. */
+let _histVice=null,_histXI=null,_histBench=null,_histMult=null;
 /* The squad shown depends on which gameweek is being viewed:
    - a finished GW: the officially-locked squad from the feed (immutable);
    - the current/future GW: the base squad (S.squad) with any local per-GW plan
@@ -230,6 +308,7 @@ function effectiveCaptainVice(g){
 }
 const squadPlayers=()=>{
   _histCaptain=null;_histSquadActive=false;_gwLocked=false;
+  _histVice=null;_histXI=null;_histBench=null;_histMult=null;
   const g=VG();
   const next=S.model?S.model.next.id:1;
   /* Finished gameweek → the officially-locked squad, immutable. */
@@ -238,10 +317,29 @@ const squadPlayers=()=>{
     if(S.tracker&&Array.isArray(S.tracker.gw)){
       const row=S.tracker.gw.find(r=>r.event===g);
       if(row&&Array.isArray(row.picks)&&row.picks.length){
-        const list=[];
-        row.picks.forEach(pk=>{const p=S.model.players.find(x=>x.id===pk.id);
-          if(p){list.push(p);if(pk.multiplier>=2)_histCaptain=p.id;}});
-        if(list.length){_histSquadActive=true;return list;}
+        /* Position order from the API: 1-11 the XI as it finally counted
+           (auto subs applied), 12-15 the bench. Old feeds have no pos field,
+           in which case the array order (already positional) is kept. */
+        const picks=row.picks.slice().sort((a,b)=>((a.pos||0)-(b.pos||0)));
+        const list=[];const mult={};const xi=[];const bench=[];
+        picks.forEach((pk,i)=>{const p=S.model.players.find(x=>x.id===pk.id);
+          if(!p)return;
+          list.push(p);mult[p.id]=pk.multiplier;
+          const slot=pk.pos||i+1;
+          (slot<=11?xi:bench).push(p.id);});
+        /* The C badge goes on whoever actually carried the armband that week:
+           the pick with a 2x/3x multiplier (how the API reports an auto
+           vice-captain takeover), falling back to the picked captain. */
+        const capPk=picks.find(pk=>pk.multiplier>=2)||picks.find(pk=>pk.isC);
+        if(capPk&&list.some(p=>p.id===capPk.id))_histCaptain=capPk.id;
+        const vicePk=picks.find(pk=>pk.isVC);
+        if(vicePk&&list.some(p=>p.id===vicePk.id))_histVice=vicePk.id;
+        if(list.length){
+          _histSquadActive=true;_histMult=mult;
+          if(xi.length===11)_histXI=xi;
+          if(bench.length)_histBench=bench;
+          return list;
+        }
       }
     }
     /* Feed hasn't published that week's official picks yet — fall back to the
@@ -263,6 +361,13 @@ const squadPlayers=()=>{
 function startingXI(){
   const sp=squadPlayers();if(!sp.length)return[];
   const g=VG();
+  /* The official XI for a finished gameweek, straight from the picks'
+     positions. This outranks any local snapshot, because it is the line-up
+     that actually scored. */
+  if(_histSquadActive&&Array.isArray(_histXI)&&_histXI.length===11){
+    const xi=_histXI.map(id=>sp.find(p=>p.id===id)).filter(Boolean);
+    if(xi.length===11)return xi;
+  }
   /* A finished gameweek uses the line-up captured at the time. Without this
      the XI was re-derived from that week's predicted points, which are all
      zero once the week is past, so the formation reshuffled on every render. */
@@ -275,12 +380,21 @@ function startingXI(){
   }
   if(S.forceXI?.length===11){const xi=S.forceXI.map(i=>sp.find(p=>p.id===i)).filter(Boolean);
     if(xi.length===11)return xi;}
+  return legalBestXI(sp,p=>p.gw[g]?.pts||0);
+}
+/* The best legal XI from a 15-man squad by any value: one keeper, at least
+   three defenders and one forward, then the best six outfielders left. From
+   a legal squad (2/5/5/3) that is the true best, since the upper limits of
+   five defenders, five midfielders and three forwards cannot be broken.
+   Shared by the header XI and the Chips page's "your XI" (F34), which used
+   to take the top 11 by points with no formation check. */
+function legalBestXI(sp,val){
   const by={};sp.forEach(p=>(by[p.pos]=by[p.pos]||[]).push(p));
-  Object.values(by).forEach(a=>a.sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0)));
+  Object.values(by).forEach(a=>a.sort((x,y)=>val(y)-val(x)));
   const xi=[];if(by[1]?.[0])xi.push(by[1][0]);
   (by[2]||[]).slice(0,3).forEach(p=>xi.push(p));(by[4]||[]).slice(0,1).forEach(p=>xi.push(p));
   [...(by[2]||[]).slice(3),...(by[3]||[]),...(by[4]||[]).slice(1)]
-    .sort((a,b)=>(b.gw[g]?.pts||0)-(a.gw[g]?.pts||0)).slice(0,11-xi.length).forEach(p=>xi.push(p));
+    .sort((a,b)=>val(b)-val(a)).slice(0,11-xi.length).forEach(p=>xi.push(p));
   return xi;
 }
 function legalXI(ids){const ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
@@ -308,45 +422,170 @@ function chipForWeek(w){
     if(S.chips[k+half]===w)return k;
   return null;
 }
-function weekPts(){
-  const xi=startingXI();if(!xi.length)return 0;
-  const g=VG();
-  let s=xi.reduce((a,p)=>a+hPts(p,g,S.horizon),0);
-  const cap=S.model.players.find(p=>p.id===S.captain);
-  if(cap&&xi.includes(cap))s+=hPts(cap,g,S.horizon);
-  const bench=squadPlayers().filter(p=>!xi.includes(p));
-  const chip=chipForWeek(g);
-  if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,S.horizon),0);
-  if(chip==="3xc"&&cap)s+=hPts(cap,g,S.horizon);
+/* ---------- F19: free transfers and hits for planned weeks ----------
+   The rule is the one the feed builder verified against FPL's own charged
+   hits (scripts/build-actuals.mjs): one free transfer is added each week up
+   to 5; a Wildcard or Free Hit week is free and carries the bank forward
+   unchanged; every transfer beyond the free ones costs 4 points. A Free Hit
+   squad reverts afterwards, so the week after one is compared with the
+   squad from before it. */
+const FT_MAX=RULES.ftMax,HIT=RULES.hit;
+function officialBaseIds(){
+  const off=(typeof latestOfficialPicks==="function")?latestOfficialPicks():null;
+  return off?off.picks.map(pk=>pk.id):((S.original||S.squad||[]).slice());
+}
+function squadBefore(g){
+  const next=S.model?S.model.next.id:1;
+  let e=g-1;
+  while(e>=next&&chipForWeek(e)==="freehit")e--;
+  return e<next?officialBaseIds():(((effectiveSquadIds(e)||{}).ids)||[]);
+}
+function transfersIn(g){
+  if(!S.model||g<S.model.next.id)return 0;
+  const cur=((effectiveSquadIds(g)||{}).ids)||[], prev=squadBefore(g);
+  return cur.filter(i=>!prev.includes(i)).length;
+}
+function freeWeek(g){const c=chipForWeek(g);return c==="wildcard"||c==="freehit";}
+/* free transfers available going into week g */
+function planFT(g){
+  const next=S.model?S.model.next.id:1;
+  let ft=freeTransfers();
+  for(let e=next;e<g;e++){if(freeWeek(e))continue;ft=Math.min(FT_MAX,Math.max(0,ft-transfersIn(e))+1);}
+  return ft;
+}
+function hitCost(g){return freeWeek(g)?0:Math.max(0,transfersIn(g)-planFT(g))*HIT;}
+function hitsOver(g,h){let s=0;for(let e=g;e<g+(h||1);e++)s+=hitCost(e);return s;}
+/* free transfers still unused in week g (Infinity in a free-squad week) */
+function freeLeft(g){return freeWeek(g)?Infinity:Math.max(0,planFT(g)-transfersIn(g));}
+/* D16 (13 Oct 2026, FPL Review's defaults). A move's gain counts week k of
+   the horizon at DECAY^k, because later weeks are less certain, and it must
+   beat FT_VALUE, what rolling the free transfer is worth; a move that costs a
+   hit must beat the hit as well. In a Free Hit or Wildcard week nothing is
+   given up, so TRANSFER_MIN applies. */
+const DECAY=0.85, FT_VALUE=1.75;
+function dGain(inn,out,g,h){
+  let s=0;
+  for(let k=0;k<(h||1)&&g+k<=38;k++)s+=Math.pow(DECAY,k)*((inn.gw[g+k]?.pts||0)-(out.gw[g+k]?.pts||0));
   return s;
 }
+function moveBar(g){return freeWeek(g)?TRANSFER_MIN:freeLeft(g)>0?FT_VALUE:FT_VALUE+HIT;}
+/* The squad's predicted total from week g over h weeks: XI, captain, chip,
+   vice and bench cover, less hits. The header uses the planner's week and
+   horizon; the xFPL comparison asks for any single week (F103: these were
+   two copies of the same sum). */
+function weekPtsFor(g,h){
+  h=h||1;
+  const xi=startingXI();if(!xi.length)return 0;
+  let s=xi.reduce((a,p)=>a+hPts(p,g,h),0);
+  const cap=S.model.players.find(p=>p.id===S.captain);
+  if(cap&&xi.includes(cap))s+=hPts(cap,g,h);
+  const bench=squadPlayers().filter(p=>!xi.includes(p));
+  const chip=chipForWeek(g);
+  if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,h),0);
+  if(chip==="3xc"&&cap)s+=hPts(cap,g,h);
+  if(chip!=="bboost"){const ob=orderBench(bench),vice=S.model.players.find(p=>p.id===S.vice);
+    for(let e=g;e<g+h&&e<=38;e++)s+=coverPts(xi,ob,cap&&xi.includes(cap)?cap:null,vice,e,chip==="3xc"?3:2);}
+  return s-hitsOver(g,h);
+}
+function weekPts(){return weekPtsFor(VG(),S.horizon);}
 /* ---------- transfer engine ---------- */
+/* Stage 1 (19 Oct 2026, Andy): a move is worth what it adds to the best
+   legal XI plus captain, week by week over the horizon (later weeks x DECAY),
+   not player against player. Player against player, Head Scout suggested
+   swapping a bench keeper who never plays for "+4.0". */
+function xiTotal(ids,e,byId){
+  const ps=ids.map(i=>byId.get(i)).filter(Boolean),v=p=>p.gw[e]?.pts||0;
+  const xi=legalBestXI(ps,v);
+  return xi.reduce((a,p)=>a+v(p),0)+(xi.length?Math.max(...xi.map(v)):0);
+}
+function xiGain(ids,outId,inId,g,h,byId,base){
+  const ns=ids.map(i=>i===outId?inId:i);let s=0;
+  for(let k=0;k<(h||1)&&g+k<=38;k++)
+    s+=Math.pow(DECAY,k)*(xiTotal(ns,g+k,byId)-(base?base[k]:xiTotal(ids,g+k,byId)));
+  return s;
+}
+const _bsCache={};
 function bestSwaps(limit){
   if(!S.model||!S.squad)return[];
-  const g=VG(),out=[];
+  const g=VG(),h=S.horizon||1,bank=planBank();
+  const key=[g,h,bank,S.squad.join("."),(S.ignored||[]).join("."),S.model.players.length].join("|");
+  if(_bsCache.key===key&&_bsCache.model===S.model)return _bsCache.res.slice(0,limit||10);
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));
+  const base=[];for(let k=0;k<h&&g+k<=38;k++)base.push(xiTotal(S.squad,g+k,byId));
+  const out=[];
   S.squad.forEach(oid=>{
-    const o=S.model.players.find(p=>p.id===oid);if(!o)return;
+    const o=byId.get(oid);if(!o)return;
     const cc={};S.squad.filter(i=>i!==oid).forEach(i=>{
-      const p=S.model.players.find(x=>x.id===i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
+      const p=byId.get(i);if(p)cc[p.team]=(cc[p.team]||0)+1;});
+    /* shortlist by player gain, then score the shortlist on the XI */
+    const cands=[];
     S.model.players.forEach(p=>{
       if(p.pos!==o.pos||S.squad.includes(p.id)||p.avail<=0)return;
       if((S.ignored||[]).includes(p.id))return;
-      if(p.price>S.bank+o.price+.001)return;
-      if((cc[p.team]||0)>=3)return;
-      const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
+      if(p.price>bank+sellPrice(o)+.001)return;
+      if((cc[p.team]||0)>=RULES.clubMax)return;
+      cands.push({p,pg:dGain(p,o,g,h)});});
+    cands.sort((a,b)=>b.pg-a.pg).slice(0,12).forEach(({p})=>{
+      const gain=xiGain(S.squad,oid,p.id,g,h,byId,base);
       /* where gains are level, prefer the player carrying signals */
       const sig=signals(p,g).length;
       if(gain>0.05)out.push({out:o,inn:p,gain,sig});});});
   out.sort((a,b)=>(b.gain-a.gain)||(b.sig-a.sig));
   const seen=new Set(),uniq=[];
   out.forEach(m=>{const k=m.out.id+"-"+m.inn.id;if(seen.has(k))return;seen.add(k);uniq.push(m);});
+  Object.assign(_bsCache,{key,model:S.model,res:uniq});
   return uniq.slice(0,limit||10);
+}
+/* S3 (Stage 1, 19 Oct 2026): a five-week plan. Week by week, the best single
+   move scored on the XI over the weeks left in the plan; made only if it
+   beats the bar (a saved transfer's worth, plus a hit when no free transfer
+   is left), otherwise the transfer is rolled. */
+const _planCache={};
+function planWeeks(H){
+  if(!S.model||!S.squad)return null;
+  H=H||5;
+  const g0=S.model.next.id;
+  const key=[g0,H,planBank(),freeTransfers(),S.squad.join("."),(S.ignored||[]).join(".")].join("|");
+  if(_planCache.key===key&&_planCache.model===S.model)return _planCache.res;
+  const byId=new Map(S.model.players.map(p=>[p.id,p]));
+  let squad=S.squad.slice(),bank=planBank(),ft=freeTransfers(),total=0;
+  const weeks=[];
+  for(let k=0;k<H&&g0+k<=38;k++){
+    const w=g0+k,rem=Math.min(H-k,39-w);
+    const base=[];for(let j=0;j<rem;j++)base.push(xiTotal(squad,w+j,byId));
+    let best=null;
+    squad.forEach(oid=>{
+      const o=byId.get(oid);if(!o)return;
+      const club={};squad.filter(i=>i!==oid).forEach(i=>{const q=byId.get(i);if(q)club[q.team]=(club[q.team]||0)+1;});
+      const sell=sellPrice(o);
+      S.model.players.filter(p=>p.pos===o.pos&&!squad.includes(p.id)&&p.avail>0&&!(S.ignored||[]).includes(p.id)
+          &&p.price<=bank+sell+1e-9&&(club[p.team]||0)<RULES.clubMax)
+        .map(p=>({p,pg:dGain(p,o,w,rem)})).sort((a,b)=>b.pg-a.pg).slice(0,12)
+        .forEach(({p})=>{const gain=xiGain(squad,oid,p.id,w,rem,byId,base);
+          if(!best||gain>best.gain)best={o,p,gain,sell};});
+    });
+    const bar=ft>0?FT_VALUE:FT_VALUE+HIT;
+    if(best&&best.gain>bar){
+      const hit=ft>0?0:HIT;
+      bank=+(bank+best.sell-best.p.price).toFixed(1);
+      weeks.push({w,ft,out:best.o,inn:best.p,gain:best.gain,hit,bank});
+      total+=best.gain-hit;
+      squad=squad.map(i=>i===best.o.id?best.p.id:i);
+      ft=Math.min(FT_MAX,Math.max(0,ft-1)+1);
+    }else{
+      weeks.push({w,ft,roll:true,best:best?{out:best.o,inn:best.p,gain:best.gain}:null,bar});
+      ft=Math.min(FT_MAX,ft+1);
+    }
+  }
+  const res={weeks,total,H};
+  Object.assign(_planCache,{key,model:S.model,res});
+  return res;
 }
 function bestCombo(outIds){
   if(!S.model||!outIds.length)return null;
   const g=S.model.next.id;
   const outs=outIds.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  let budget=S.bank+outs.reduce((a,p)=>a+p.price,0);
+  let budget=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
   const keep=(S.squad||[]).filter(i=>!outIds.includes(i));
   const club={};keep.forEach(i=>{const p=S.model.players.find(x=>x.id===i);
     if(p)club[p.team]=(club[p.team]||0)+1;});
@@ -361,16 +600,18 @@ function bestCombo(outIds){
       .reduce((a,x)=>a+minFor(x.pos),0);
     let best=null;
     S.model.players.forEach(p=>{
-      if(p.pos!==o.pos||taken.has(p.id)||p.avail<=0)return;
+      /* F60: the players being sold are not candidates for their own slots */
+      if(p.pos!==o.pos||taken.has(p.id)||outIds.includes(p.id)||p.avail<=0)return;
       if(p.price>budget-cheapestRest+.001)return;
       if((club[p.team]||0)>=3)return;
-      const gain=hPts(p,g,S.horizon)-hPts(o,g,S.horizon);
+      const gain=dGain(p,o,g,S.horizon);
       if(!best||gain>best.gain)best={out:o,inn:p,gain};});
-    if(best){picks.push(best);taken.add(best.inn.id);
+    /* F60: a move that gains nothing is not a move; that player stays */
+    if(best&&best.gain>0.05){picks.push(best);taken.add(best.inn.id);
       club[best.inn.team]=(club[best.inn.team]||0)+1;budget-=best.inn.price;budget+=0;}
   });
   const spent=picks.reduce((a,m)=>a+m.inn.price,0);
-  const freed=S.bank+outs.reduce((a,p)=>a+p.price,0);
+  const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
   return{picks,gain:picks.reduce((a,m)=>a+m.gain,0),left:+(freed-spent).toFixed(1),freed:+freed.toFixed(1)};
 }
 /* Persist an edit to the viewed gameweek's plan. Snapshots the currently-effective
@@ -467,12 +708,18 @@ function applySwap(oid,iid){
      twice (and a man short elsewhere). */
   if(iid!==oid&&cur.includes(iid)){toast(i.web_name+" is already in your squad");return;}
   const ids=cur.map(x=>x===oid?iid:x);
-  const bank=+((planBank())+o.price-i.price).toFixed(1);
+  /* F26: a sale credits the selling price (purchase price plus half the
+     rise, rounded down), not the current price. F46: a swap the bank cannot
+     cover is refused here, where every route to a swap passes, and the bank
+     is left untouched. */
+  const bank=+((planBank())+sellPrice(o)-i.price).toFixed(1);
+  if(bank<-0.001){toast(`Not enough in the bank: £${(-bank).toFixed(1)} short for ${i.web_name}`,{warn:true});return false;}
   const extra={bank};
   if(S.captain===oid)extra.captain=iid;
   if(S.vice===oid)extra.vice=iid;
   writePlan(g,ids,extra);
   S.flagged=S.flagged.filter(x=>x!==oid);S.forceXI=null;saveState();
+  return true;
 }
 /* A squad should never contain the same player twice. Repairs any state that
    already went wrong before the guard above existed, rather than leaving a
@@ -494,6 +741,41 @@ function bankFromFeed(){
   if(!rows.length)return null;
   return +rows[rows.length-1].bank;
 }
+/* F59: FPL's own team value for the latest published week (it includes the
+   bank), so the header can set it beside the squad's buy prices. */
+function valueFromFeed(){
+  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
+  const g=S.model.next.id;
+  const rows=S.tracker.gw.filter(r=>r.value!=null&&r.event<=g).sort((a,b)=>a.event-b.event);
+  return rows.length?{value:+rows[rows.length-1].value,event:rows[rows.length-1].event}:null;
+}
+/* D12 (13 Oct 2026): what a Free Hit or Wildcard can spend, by FPL's rule:
+   the squad's selling value plus the bank. One function for the Chips page,
+   the Team Rating and anything else that needs the whole budget. */
+function squadBudget(){
+  return +(squadPlayers().reduce((a,p)=>a+sellPrice(p),0)+planBank()).toFixed(1);
+}
+/* D17 (13 Oct 2026): expected points the vice-captain and the bench add in
+   week e. If the captain does not play the vice's score is doubled instead:
+   (1 - P(captain plays)) x vice. A starter who does not play is replaced by
+   the bench in order: the keeper by the bench keeper, outfielders by the
+   outfield bench, each used with the probability that at least that many
+   outfield starters miss (formation limits ignored). */
+function coverPts(xi,bench,cap,vice,e,capMult){
+  const pp=p=>{const q=p&&p.gw[e];return q&&!q.blank&&q.pPlay!=null?q.pPlay:1;};
+  const pts=p=>(p&&p.gw[e]&&p.gw[e].pts)||0;
+  let s=0;
+  if(cap&&vice&&vice!==cap&&xi.includes(vice))s+=(1-pp(cap))*pts(vice)*((capMult||2)-1);
+  const gkS=xi.find(p=>p.pos===1), gkB=bench.find(p=>p.pos===1);
+  if(gkS&&gkB)s+=(1-pp(gkS))*pts(gkB);
+  /* distribution of how many outfield starters miss (Poisson binomial) */
+  let dist=[1];
+  xi.filter(p=>p.pos!==1).forEach(p=>{const q=1-pp(p),nd=new Array(dist.length+1).fill(0);
+    dist.forEach((v,k)=>{nd[k]+=v*(1-q);nd[k+1]+=v*q;});dist=nd;});
+  const atLeast=k=>dist.slice(k).reduce((a,v)=>a+v,0);
+  bench.filter(p=>p.pos!==1).forEach((p,i)=>{s+=atLeast(i+1)*pts(p);});
+  return s;
+}
 function planBank(){
   const g=VG(), next=S.model?S.model.next.id:1;
   if(g>next&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)return S.planByGw[g].bank;
@@ -508,15 +790,48 @@ function planBank(){
 const TRANSFER_MIN=1.0;   // a suggestion has to be worth the transfer
 const CHIP_HISTORY={wildcard:10.2,bboost:23.7,freehit:10.7,"3xc":14.2};
 const chipKind=k=>k.replace(/[12]$/,"");
+const CHIP_NAME={wildcard:"Wildcard",freehit:"Free Hit",bboost:"Bench Boost","3xc":"Triple Captain"};
+/* The gameweek a chip (key like "freehit1") was actually played, from the
+   official history in the feed; null when it has not been played. */
+function chipPlayed(k){
+  const kind=chipKind(k), half2=k.endsWith("2");
+  const rows=(S.tracker&&S.tracker.gw)||[];
+  const r=rows.find(r=>r.chip===kind&&((r.event>=20)===half2));
+  return r?r.event:null;
+}
+/* F47: the official chip rules, checked for every planned chip. Returns the
+   reason a plan is not allowed, or null when it is. */
+function chipRuleBreak(k,e){
+  const kind=chipKind(k), half2=k.endsWith("2"), name=CHIP_NAME[kind]||kind;
+  const played=chipPlayed(k);
+  if(played!=null)return `${name} ${half2?"2":"1"} was already played in GW${played}`;
+  if(half2?(e<20||e>38):(e<1||e>19))return `${name} ${half2?"2":"1"} can only be played in GW${half2?"20 to 38":"1 to 19"}`;
+  if(kind==="freehit"&&e===1)return "Free Hit cannot be played in GW1";
+  const other=Object.entries(S.chips||{}).find(([kk,v])=>kk!==k&&v===e);
+  if(other)return `Only one chip per gameweek: GW${e} already has ${CHIP_NAME[chipKind(other[0])]||other[0]}`;
+  const playedThatWeek=((S.tracker&&S.tracker.gw)||[]).find(r=>r.event===e&&r.chip);
+  if(playedThatWeek)return `GW${e} already had ${CHIP_NAME[playedThatWeek.chip]||playedThatWeek.chip} played`;
+  if(kind==="freehit"){
+    const near=["freehit1","freehit2"].filter(kk=>kk!==k).map(kk=>S.chips&&S.chips[kk]).concat(
+      ((S.tracker&&S.tracker.gw)||[]).filter(r=>r.chip==="freehit").map(r=>r.event));
+    if(near.some(v=>v===e-1||v===e+1))return "Free Hit cannot be played in two gameweeks in a row";
+  }
+  return null;
+}
 
 /* ---------- chip planning ----------
    Each chip is judged on what actually makes it pay, not one shared formula. */
+/* "Your XI" for a week: the legal best XI plus the captain (its top scorer),
+   and the four left on the bench (F34; was the top 11 with no formation). */
 function weekScore(sp,e){
-  const xi=[...sp].sort((a,b)=>(b.gw[e]?.pts||0)-(a.gw[e]?.pts||0));
-  const start=xi.slice(0,11);
-  return{xi:start,bench:xi.slice(11),
-    pts:start.reduce((a,p)=>a+(p.gw[e]?.pts||0),0)+(start[0]?.gw[e]?.pts||0),
-    benchPts:xi.slice(11).reduce((a,p)=>a+(p.gw[e]?.pts||0),0)};
+  const v=p=>p.gw[e]?.pts||0;
+  const start=legalBestXI(sp,v);
+  const bench=sp.filter(p=>!start.includes(p)).sort((a,b)=>v(b)-v(a));
+  const cap=start.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
+  const vice=start.filter(p=>p!==cap).reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
+  return{xi:start,bench,
+    pts:start.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0)+coverPts(start,[],cap,vice,e),   // vice only: compared with bestXIScore, which has no bench
+    benchPts:bench.reduce((a,p)=>a+v(p),0)};
 }
 function bestXIScore(e){
   const pool=S.model.players.filter(p=>p.avail>0&&p.gw[e]&&!p.gw[e].blank);
@@ -529,8 +844,9 @@ function bestXIScore(e){
   const rest=[...by[2].slice(3),...by[3],...by[4].slice(1)].sort((a,b)=>b.gw[e].pts-a.gw[e].pts);
   for(const p of rest){if(take.length>=11)break;if(take.includes(p))continue;
     if((club[p.team]||0)>=3)continue;club[p.team]=(club[p.team]||0)+1;take.push(p);}
-  const c=take.slice().sort((a,b)=>b.gw[e].pts-a.gw[e].pts)[0];
-  return take.reduce((a,p)=>a+p.gw[e].pts,0)+(c?c.gw[e].pts:0);
+  const byPts=take.slice().sort((a,b)=>b.gw[e].pts-a.gw[e].pts),c=byPts[0];
+  /* D17: vice cover, as weekScore counts it, so the two compare like for like */
+  return take.reduce((a,p)=>a+p.gw[e].pts,0)+(c?c.gw[e].pts:0)+coverPts(take,[],c,byPts[1],e);
 }
 function chipPlan(kind){
   const sp=squadPlayers();if(!sp.length||!S.model)return[];
@@ -573,7 +889,9 @@ function chipPlan(kind){
 const FORMATIONS=[[3,4,3],[3,5,2],[4,3,3],[4,4,2],[4,5,1],[5,3,2],[5,4,1],[5,2,3]];
 function teamOfWeek(){
   if(!S.model)return null;
-  const g=VG(), BUDGET=100.0, BENCH_MAX=17.5, need={1:2,2:5,3:5,4:3};
+  /* D19 (13 Oct 2026): the same budget as the Free Hit card (D12), not a
+     fixed £100.0 */
+  const g=VG(), BUDGET=squadBudget(), BENCH_MAX=17.5, need=RULES.squad;
   const pool=S.model.players.filter(p=>p.avail>0&&p.gw[g]&&!p.gw[g].blank&&p.gw[g].pts>0);
   if(!pool.length)return null;
   const by={1:[],2:[],3:[],4:[]};
@@ -652,140 +970,58 @@ function teamRating(){
   const g=VG();const xi=startingXI();if(!xi.length)return null;
   const cap=S.model.players.find(p=>p.id===S.captain);
   let mine=xi.reduce((a,p)=>a+(p.gw[g]?.pts||0),0)+(cap&&xi.includes(cap)?(cap.gw[g]?.pts||0):0);
-  return{pct:Math.round(clamp(mine/t.total,0,1)*100),mine,best:t.total,totw:t};
+  return{pct:Math.round(clamp(mine/t.total,0,1)*100),mine,best:t.total,totw:t,budget:squadBudget()};
 }
 
 /* ---------- news ---------- */
-/* News is fetched alongside everything else on refresh. Each source gets a
-   handful of routes; a source only counts as failed once all of them have been
-   tried, and nothing here blocks the squad data. */
-/* r.jina.ai sends CORS headers of its own and renders the target server-side,
-   which is why it survives where the generic proxies fail. It goes first. */
-const ROUTES=[
-  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u=>`https://r.jina.ai/${u}`,
-  u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-  u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
-  u=>`https://api.cors.lol/?url=${encodeURIComponent(u)}`
-];
-async function grab(url,ms){
-  for(const fn of ROUTES){
-    try{
-      const ctl=new AbortController();
-      const timer=setTimeout(()=>ctl.abort(),ms||9000);
-      const r=await fetch(fn(url),{signal:ctl.signal});
-      clearTimeout(timer);
-      if(!r.ok)continue;
-      let t=await r.text();
-      if(t&&t.trim().startsWith("{")&&t.includes('"contents"')){
-        try{t=JSON.parse(t).contents;}catch(e){}
-      }
-      if(t&&t.length>120)return t;
-    }catch(e){}
-  }
-  return null;
-}
-/* jina hands back markdown for HTML pages, so pull [title](url) pairs out of it */
-function parseLinks(txt,src,sink,filter){
-  if(!txt)return 0;
-  let n=0,m;const seen=new Set();
-  const re=/\[([^\]\n]{14,160})\]\((https?:\/\/[^\s)]+)\)/g;
-  while((m=re.exec(txt))&&n<60){
-    const title=m[1].replace(/\s+/g," ").trim(), url=m[2];
-    if(filter&&!filter.test(url))continue;
-    const k=title.toLowerCase();if(seen.has(k))continue;seen.add(k);
-    sink.push({src,title,url,time:Date.now()});n++;
-  }
-  return n;
-}
-function parseFeed(txt,src,sink){
-  if(!txt)return 0;let n=0;
-  try{
-    const d=new DOMParser().parseFromString(txt,"text/xml");
-    d.querySelectorAll("item, entry").forEach(it=>{
-      const t=(it.querySelector("title")?.textContent||"").trim();
-      const l=it.querySelector("link")?.getAttribute("href")||it.querySelector("link")?.textContent||"";
-      const pd=it.querySelector("pubDate, updated, published")?.textContent||"";
-      if(t){sink.push({src,title:t,url:l,time:pd?new Date(pd).getTime():Date.now()});n++;}});
-  }catch(e){}
-  return n;
-}
-const FEEDS=[
-  ["Fantasy Football Scout","https://www.fantasyfootballscout.co.uk/feed/"],
-  ["Fantasy Football Pundit","https://www.fantasyfootballpundit.com/feed/"],
-  ["All About FPL","https://allaboutfpl.com/feed/"],
-  ["FPL Family","https://www.fplfamily.com/feed/"],
-  ["Premier League","https://www.premierleague.com/rss/news"],
-  ["BBC Football","https://feeds.bbci.co.uk/sport/football/rss.xml"]
-];
-const FPL_WORDS=["fpl","fantasy","gameweek","captain","wildcard","differential","defcon",
-  "price change","bench boost","free hit","triple captain","clean sheet","predicted lineup"];
-const looksFPL=t=>{const l=(t||"").toLowerCase();return FPL_WORDS.some(w=>l.includes(w));};
-
+/* All feeds are fetched, parsed and sanitised by the FPL Signals server every
+   15 minutes, so the page makes two cheap same-origin calls: /api/news for
+   the general feeds and r/FantasyPL, and /api/player-news for the per-player
+   Google News searches (the page knows the squad; the server does not). A
+   source that fails upstream keeps serving its last good copy and reports its
+   error in perSource, which fills srcLog. Nothing here blocks the squad data. */
 async function loadNews(){
   if(!S.model)return;
+  if(BACKUP){S.newsState="backup";render();return;}
   S.newsState="loading";S.news=[];S.reddit=[];S.squadNews=[];S.srcLog={};render();
-  const news=[],reddit=[],squad=[],log={};
-
-  const jobs=FEEDS.map(async([name,url])=>{
-    const t=await grab(url);
-    const before=news.length;
-    if(!parseFeed(t,name,news))parseLinks(t,name,news);
-    /* general feeds only contribute FPL-flavoured items */
-    if(/BBC|Premier League/.test(name)){
-      const kept=news.slice(before).filter(n=>looksFPL(n.title));
-      news.length=before;kept.forEach(n=>news.push(n));
-    }
-    log[name]=news.length-before;
-  });
-
-  jobs.push((async()=>{
-    /* the original working route: allorigins wrapping reddit's own JSON */
-    for(const u of ["https://www.reddit.com/r/FantasyPL/hot.json?limit=50&raw_json=1",
-                    "https://www.reddit.com/r/FantasyPL/hot/.json?limit=50",
-                    "https://old.reddit.com/r/FantasyPL/hot.json?limit=50",
-                    "https://api.reddit.com/r/FantasyPL/hot?limit=50",
-                    "https://www.reddit.com/r/FantasyPL/top.json?t=day&limit=50"]){
-      const t=await grab(u,12000);if(!t)continue;
-      try{
-        const kids=JSON.parse(t)?.data?.children||[];
-        if(kids.length){
-          kids.forEach(c=>{const d=c.data;if(!d?.title)return;
-            reddit.push({src:"r/FantasyPL",title:d.title,url:"https://www.reddit.com"+d.permalink,
-              time:(d.created_utc||0)*1000,score:d.score||0,comments:d.num_comments||0,
-              extra:d.link_flair_text||""});});
-          log["r/FantasyPL"]=reddit.length;return;
-        }
-      }catch(e){}
-    }
-    for(const u of ["https://www.reddit.com/r/FantasyPL/hot/.rss?limit=50",
-                    "https://old.reddit.com/r/FantasyPL/.rss?sort=hot&limit=50"]){
-      const t=await grab(u);
-      if(t&&parseFeed(t,"r/FantasyPL",reddit)){log["r/FantasyPL"]=reddit.length;return;}
-    }
-    /* last resort: read the rendered hot page and lift the post links */
-    const t=await grab("https://www.reddit.com/r/FantasyPL/hot/");
-    log["r/FantasyPL"]=parseLinks(t,"r/FantasyPL",reddit,/\/r\/FantasyPL\/comments\//);
-  })());
-
-  /* one search per squad player — the only reliable route to pre-season coverage */
-  squadPlayers().forEach(p=>{
-    jobs.push((async()=>{
-      const q=encodeURIComponent(`"${p.first} ${p.last}" ${p.teamFull||p.teamName} when:7d`);
-      const t=await grab(`https://news.google.com/rss/search?q=${q}&hl=en-GB&gl=GB&ceid=GB:en`,7000);
-      const n=parseFeed(t,p.web_name,squad);log["· "+p.web_name]=n;
-    })());
-  });
-
-  await Promise.all(jobs);
-  const seen=new Set();
-  const dedupe=a=>a.filter(n=>{const k=(n.title||"").slice(0,64).toLowerCase();
-    if(!k||seen.has(k))return false;seen.add(k);return true;});
-  S.news=dedupe(news.sort((a,b)=>b.time-a.time));
-  S.squadNews=dedupe(squad.sort((a,b)=>b.time-a.time));
-  S.reddit=dedupe(reddit);
-  S.srcLog=log;
-  S.newsState=(S.news.length||S.reddit.length||S.squadNews.length)?"ok":"fail";
+  const log={};
+  try{
+    const r=await fetch("/api/news");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    const news=Array.isArray(d.news)?d.news:[];
+    const reddit=Array.isArray(d.reddit)?d.reddit:[];
+    Object.entries(d.perSource||{}).forEach(([name,s])=>{
+      log[name]=s&&s.ok?(s.count??0):"failed"+(s&&s.error?" ("+s.error+")":"");
+    });
+    S.newsFetchedAt=d.fetchedAt||null;
+    /* one server call for all fifteen squad searches, searched by full name
+       as before; items come back keyed by the name that was sent */
+    const squad=[];
+    try{
+      const sp=squadPlayers();
+      const names=sp.map(p=>(((p.first||"")+" "+(p.last||"")).trim())||p.web_name);
+      const r2=await fetch("/api/player-news?names="+encodeURIComponent(names.join(",")));
+      if(r2.ok){
+        const d2=await r2.json();
+        sp.forEach((p,i)=>{
+          const items=(d2.items&&d2.items[names[i]])||[];
+          items.forEach(it=>squad.push({...it,src:p.web_name}));
+          log["· "+p.web_name]=items.length;
+        });
+      }
+    }catch(e){/* squad search is additive; the general feed already landed */}
+    const seen=new Set();
+    const dedupe=a=>a.filter(n=>{const k=(n.title||"").slice(0,64).toLowerCase();
+      if(!k||seen.has(k))return false;seen.add(k);return true;});
+    S.news=dedupe(news.sort((a,b)=>b.time-a.time));
+    S.squadNews=dedupe(squad.sort((a,b)=>b.time-a.time));
+    S.reddit=dedupe(reddit);
+    S.srcLog=log;
+    S.newsState=(S.news.length||S.reddit.length||S.squadNews.length)?"ok":"fail";
+  }catch(e){
+    S.srcLog=log;S.newsState="fail";
+  }
   render();
 }
 function hits(title){
@@ -802,9 +1038,13 @@ function hits(title){
    RENDER
    ============================================================ */
 let tT=null;
-function toast(m){let el=document.getElementById("toast");
+function toast(m,o){let el=document.getElementById("toast");
   if(!el){el=document.createElement("div");el.id="toast";el.className="toast";document.body.appendChild(el);}
-  el.textContent=m;el.style.display="block";clearTimeout(tT);tT=setTimeout(()=>el.style.display="none",3000);}
+  /* o.warn: a refusal, shown in the warning colour for longer so it is read */
+  el.textContent=m;el.classList.toggle("warn",!!(o&&o.warn));el.style.display="block";clearTimeout(tT);
+  tT=setTimeout(()=>el.style.display="none",(o&&o.ms)||(o&&o.warn?6000:3000));}
+/* F93: a signed one-decimal figure that never shows "-0.0" */
+const sgn1=x=>{const r=Math.round(x*10)/10;return (r>0?"+":r<0?"−":"")+Math.abs(r).toFixed(1);};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 
@@ -823,10 +1063,17 @@ function cardHTML(p,bench,ctx){
   const flaggedList=C?(C.flagged||[]):S.flagged;
   const {captain:capForGw,vice:viceForGw}=C?{captain:capId,vice:viceId}:effectiveCaptainVice(g);
   const isC=C?(capId===p.id):(_histCaptain!=null?_histCaptain===p.id:capForGw===p.id);
-  const isV=C?(viceId===p.id):(_histCaptain==null&&viceForGw===p.id);
+  const isV=C?(viceId===p.id):(_histSquadActive?_histVice===p.id:(_histCaptain==null&&viceForGw===p.id));
   const fl=flaggedList.includes(p.id);
+  /* A finished week with official picks is a record, not a draft: the edit
+     controls don't render, and the multiplier comes from the official pick
+     (so a real Triple Captain week triples), never from the local chip plan. */
+  const official=_histSquadActive&&!C;
 
   const chipNow=chipForWeek(g);
+  const capMult=official
+    ?((_histMult&&_histMult[p.id]>=2)?_histMult[p.id]:1)
+    :(isC?(chipNow==="3xc"?3:2):1);
   /* For a historical week, hPts() can't compute a real number (the model only
      projects forward) — use the snapshot captured while that week was still
      live, if one was taken. */
@@ -839,14 +1086,14 @@ function cardHTML(p,bench,ctx){
   const isPast=S.model&&g<S.model.next.id;
   const basePred=snapPred!=null?snapPred:(isPast?null:hPts(p,g,S.horizon));
   const hasPred=basePred!=null;
-  const shownPts=hasPred?basePred*(isC?(chipNow==="3xc"?3:2):1):null;
+  const shownPts=hasPred?basePred*capMult:null;
   /* Actual points for this specific gameweek — only present once the live-actuals
      feed has that GW. Captain-multiplied the same way as the prediction, so the two
      compare like-for-like (both = "contribution to the squad total"). */
   const feedGW=(S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]))||null;
   const actualRaw=feedGW?feedGW[g]??feedGW[String(g)]:null;
   const hasActual=actualRaw!=null;
-  const actualShown=hasActual?actualRaw*(isC?(chipNow==="3xc"?3:2):1):null;
+  const actualShown=hasActual?actualRaw*capMult:null;
   const diff=(hasActual&&hasPred)?actualShown-shownPts:null;
   /* The score box colour must follow whichever number is actually displayed —
      previously it always used the predicted band, so a past week with a real
@@ -883,15 +1130,23 @@ function cardHTML(p,bench,ctx){
     : `act('${A.sub}',${p.id})`;
   const subGlyph=isBench?(S.subFrom==null?slot:"⇄"):"⇄";
   const subTitle=isBench?(cyc?`Bench ${slot} · tap to change order (or to receive a substitution)`:`Bench ${slot} · goalkeeper (fixed)`):"Substitute";
+  /* Official past week: no edit controls at all, just the armbands that were
+     actually worn, as plain badges, and the bench number as a plain label. */
+  const controls=official
+    ?`${isC?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)" title="Captain (official)">C</span>`:""}
+      ${isV?`<span class="badge" style="bottom:-2px;right:4px;background:var(--cyan);color:var(--ink)" title="Vice-captain (official)">V</span>`:""}
+      ${isBench?`<span class="badge" style="top:-2px;left:2px;background:var(--ink3);color:var(--cream)" title="Bench ${slot} (official)">${slot}</span>`:""}`
+    :`<button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('${A.flag}',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
+    <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="${subOnclick}" title="${subTitle}">${subGlyph}</button>
+    <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
+    <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('${A.vice}',${p.id})" title="Vice-captain">V</button>`;
   return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
    <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
     ${p.avail<1?`<span class="dot" style="top:-2px;left:20px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
-    <button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('${A.flag}',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
-    <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="${subOnclick}" title="${subTitle}">${subGlyph}</button>
-    <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
-    <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('${A.vice}',${p.id})" title="Vice-captain">V</button></div>
+    ${controls}</div>
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
     <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
+   ${p.avail<1?injLine(p):""}
    <div class="ptsbar" style="background:${noHistData?"var(--ink3)":bg};color:${noHistData?"var(--mute)":fg}${elite&&!noHistData?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
     <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):(hasPred?shownPts.toFixed(1):"—"))}</div>
     ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}</div>
@@ -901,15 +1156,31 @@ function cardHTML(p,bench,ctx){
      :(hasActual
        ?`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">no prediction stored</div>`
        :(()=>{const[fb,ff]=ptsCol(p.form||0);
-        return `<div class="fxpill formpill" style="background:${fb};color:${ff}">
+        /* F56: form from last season, blended or estimated is muted and tagged */
+        const ft=formTag(p);
+        return `<div class="fxpill formpill${ft?" prior":""}" style="background:${fb};color:${ff}">
           <svg viewBox="0 0 14 10" width="10" height="8" aria-hidden="true"><path d="M0.5 8.5 L4 4.5 L6.5 6.5 L13.5 1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b></div>`;})())}
+          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b>${ft}</div>`;})())}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
+}
+/* F108 (bundle 8, 13 Oct 2026): the flag is readable on the pitch, not
+   hover-only: "75% · Knee", "Out · Hamstring", "Suspended". */
+function injLine(p){
+  const n=String(p.news||"");
+  const what=(/suspend/i.test(n)?"Suspended":n.replace(/\s*-\s*.*$/,"").replace(/\s*injury$/i,"").trim())||"Doubt";
+  const pct=p.avail>0?Math.round(p.avail*100)+"%":"Out";
+  return `<div class="injline${p.avail===0?" out":""}" title="${esc(n||what)}">${pct} · ${esc(what)}</div>`;
 }
 /* keep any explicit bench order the optimiser set, else best first */
 function orderBench(list){
   const g=VG();
+  /* A finished week with official picks keeps the official bench order
+     (positions 12-15, auto subs applied), not the local S.benchOrder. */
+  if(_histSquadActive&&Array.isArray(_histBench)&&_histBench.length){
+    const off=_histBench.map(id=>list.find(p=>p.id===id)).filter(Boolean);
+    if(off.length===list.length)return off;
+  }
   const gk=list.filter(p=>p.pos===1);
   const out=list.filter(p=>p.pos!==1);
   const ordered=(S.benchOrder&&S.benchOrder.length)
@@ -980,8 +1251,8 @@ function compareHTML(){
     <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:14px;flex-wrap:wrap">
       ${deltas.map(d=>{const diff=d.theirs-d.mine;
         return `<span style="flex:1;min-width:96px;text-align:center">
-          <span style="display:block;font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);font-weight:800">${d.w===1?"This GW":d.w+" GW"}</span>
-          <span style="display:block;font-family:'Barlow Condensed';font-weight:800;font-size:22px;line-height:1.1;
+          <span style="display:block;font-size:10px;color:var(--mute);font-weight:800">${d.w===1?"This GW":d.w+" GW"}</span>
+          <span style="display:block;font-family:'Geist';font-weight:800;font-size:22px;line-height:1.1;
             color:${diff>0.05?"var(--mint)":diff<-0.05?"var(--red)":"var(--cream)"}">${diff>0?"+":""}${diff.toFixed(1)}</span>
           <span style="display:block;font-size:10px;color:var(--mute)" class="mono">${d.theirs.toFixed(1)} v ${d.mine.toFixed(1)}</span></span>`;}).join("")}
     </div>
@@ -989,7 +1260,7 @@ function compareHTML(){
       return r.length?`<div class="row">${r.map(card).join("")}</div>`:"";}).join("")}</div>
     <div class="benchbar"><div class="lb">Bench</div><div class="row">${bench.map(card).join("")}</div></div>
     ${(C.flagged||[]).length?`<div class="repl">
-      <div style="padding:9px 12px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);font-weight:700">
+      <div style="padding:9px 12px;font-size:10px;color:var(--cyan);font-weight:700">
         Replace ${(C.flagged||[]).map(id=>esc(S.model.players.find(p=>p.id===id)?.web_name||"")).join(", ")} — pick from the player pool</div></div>`:""}
   </div>`;
 }
@@ -1037,7 +1308,7 @@ function dashData(){
   const risks=[];
   sp.forEach(p=>{
     if(p.avail===0)risks.push({sev:3,who:p.web_name,what:p.back?`out · back ${p.back}`:"unavailable"});
-    else if(p.avail<1)risks.push({sev:2,who:p.web_name,what:`doubt · ${Math.round(p.avail*100)}% to play`});
+    else if(p.avail<1)risks.push({sev:2,who:p.web_name,what:`doubt · ${Math.round(p.avail*100)}% to play${p.availAssumed?" (assumed)":""}`});
     else if(p.xMins<55&&xi.includes(p))risks.push({sev:1,who:p.web_name,what:`rotation risk · ${p.xMins}′`});
   });
   for(let e=g;e<g+5&&e<=38;e++){
@@ -1128,10 +1399,20 @@ function dashHTML(){
          `${st[k].got.toFixed(1)} / ${st[k].best.toFixed(1)}`,
          st[k].pct<0.75?"color:var(--red)":st[k].pct>=0.9?"color:var(--mint)":"")).join("")}`,
       barPct>=88?"color:var(--mint)":barPct>=75?"color:var(--amber)":"color:var(--red)")}
-    ${cell("caps","Captain",d.caps.length?`${esc(d.caps[0].p.web_name)} ${(d.caps[0].pts*2).toFixed(1)}`:"—",
-      d.caps.map(c=>plLine(c.p,(c.pts*2).toFixed(1),"color:var(--mint)")).join("")
-      +`<p class="note" style="margin:8px 0 0">Doubled score for GW${g}.</p>`,
-      "color:var(--mint)")}
+    ${(()=>{
+      /* F63: this cell is a ranking of options, and it used to be titled
+         "Captain" while the captain actually picked was someone else. The
+         picked captain now leads, then the options by projected points. */
+      const capId=_histCaptain!=null?_histCaptain:effectiveCaptainVice(g).captain;
+      const mine=sp.find(p=>p.id===capId)||null, mp=mine?(mine.gw[g]?.pts||0)*2:0;
+      const head=mine?`${esc(mine.web_name)} ${mp.toFixed(1)}`
+        :(d.caps.length?`${esc(d.caps[0].p.web_name)} ${(d.caps[0].pts*2).toFixed(1)}`:"—");
+      return cell("caps","Captain options",head,
+        (mine?`<p class="dsub">Your captain</p>${plLine(mine,mp.toFixed(1),"color:var(--cream)")}<p class="dsub">Best options</p>`:"")
+        +d.caps.map(c=>plLine(c.p,(c.pts*2).toFixed(1),"color:var(--mint)")).join("")
+        +`<p class="note" style="margin:8px 0 0">Doubled score for GW${g}. The options are ranked by projected points.</p>`,
+        mine?"color:var(--cream)":"color:var(--mint)");
+    })()}
     ${cell("risk","Points at risk",
       `${d.riskPts.toFixed(1)} of ${d.xiPts.toFixed(1)}`,
       d.risky.length?d.risky.map(p=>plLine(p,(p.gw[g]?.pts||0).toFixed(1),
@@ -1140,8 +1421,8 @@ function dashHTML(){
         :`<p class="note" style="margin:0">Nothing flagged.</p>`,
       d.riskPts/Math.max(1,d.xiPts)>0.25?"color:var(--red)":d.riskPts>0?"color:var(--amber)":"")}
     ${cell("form","Form",byForm.length?`${esc(byForm[0].web_name)} ${byForm[0].form.toFixed(1)}`:"—",
-      `<p class="dsub">Best</p>${byForm.slice(0,3).map(p=>plLine(p,p.form.toFixed(1),"color:var(--mint)")).join("")}
-       <p class="dsub">Worst</p>${byForm.slice(-3).reverse().map(p=>plLine(p,p.form.toFixed(1),"color:var(--red)")).join("")}`,
+      `<p class="dsub">Best</p>${byForm.slice(0,3).map(p=>plLine(p,p.form.toFixed(1)+formTag(p),"color:var(--mint)")).join("")}
+       <p class="dsub">Worst</p>${byForm.slice(-3).reverse().map(p=>plLine(p,p.form.toFixed(1)+formTag(p),"color:var(--red)")).join("")}`,
       "color:var(--mint)")}
     ${cell("aout","Attack outlook",
       att.length?`${esc(att[0].p.web_name)} ${att[0].good}/${att[0].n}`:"none kind",
@@ -1164,11 +1445,15 @@ function squadListHTML(){
   const g=VG(), xi=startingXI();
   const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
   const all=squadPlayers();
+  /* Official past week: the armbands actually worn, and no edit controls,
+     the same rule the pitch cards follow. */
+  const official=_histSquadActive;
+  const capId=official?_histCaptain:S.captain, viceId=official?_histVice:S.vice;
   const key=S.sqSort||"pos", dir=S.sqDir||"asc";
   const val={
     pos:p=>p.pos*100-(xi.includes(p)?50:0),
     name:p=>p.web_name.toLowerCase(),
-    buy:p=>REAL_PRICE[p.web_name]??p.price,
+    buy:p=>purchaseOf(p).paid,
     sell:p=>sellPrice(p),
     form:p=>p.form, xmins:p=>p.xMins,
     pred:p=>p.gw[g]?.pts||0, p3:p=>hPts(p,g,3), p5:p=>hPts(p,g,5)
@@ -1187,16 +1472,16 @@ function squadListHTML(){
   const body=rows.map(p=>{
     const starting=xi.includes(p);
     const q=p.gw[g]||{fixtures:[]};
-    const buy=REAL_PRICE[p.web_name]??p.price;
+    const buy=purchaseOf(p).paid;
     const sell=sellPrice(p);
     return `<tr class="${starting?"":"sub"}">
       <td class="nm"><span style="display:flex;align-items:center;gap:8px">
         ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
         <span style="min-width:0">
           <button class="lname" onclick="act('card',${p.id})">${esc(p.web_name)}</button>
-          ${S.captain===p.id?'<span class="tag c">C</span>':""}${S.vice===p.id?'<span class="tag v">V</span>':""}
+          ${capId===p.id?'<span class="tag c">C</span>':""}${viceId===p.id?'<span class="tag v">V</span>':""}
           ${starting?"":'<span class="tag s">SUB</span>'}
-          <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]}</span>
+          <span style="display:block;font-size:10px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]}</span>
         </span></span></td>
       <td class="mono" style="text-align:right">£${buy.toFixed(1)}</td>
       <td class="mono" style="text-align:right;color:${sell>buy?"var(--mint)":sell<buy?"var(--red)":"var(--cream)"}">£${sell.toFixed(1)}</td>
@@ -1208,9 +1493,9 @@ function squadListHTML(){
       <td style="white-space:nowrap"><span class="psrow">${posStats(p).map(([k,v])=>
         `<span class="ps"><span class="k">${k}</span><span class="v">${v}</span></span>`).join("")}</span></td>
       <td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>
-      <td style="text-align:right;white-space:nowrap">
+      <td style="text-align:right;white-space:nowrap">${official?"":`
         <button class="mini" onclick="act('sub',${p.id})" title="Substitute">⇄</button>
-        <button class="mini" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
-        <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button></td></tr>`;}).join("");
+        <button class="mini" onclick="act('cap',${p.id})" title="Captain">C</button>
+        <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button>`}</td></tr>`;}).join("");
   return `<div class="scroll"><table class="sqtable"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }

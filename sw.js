@@ -1,9 +1,11 @@
-/* FPL Edge service worker.
-   Its job is to make the site installable as a real Android app and to survive a
-   dropped connection. Deliberately network-first for the page itself, so a new
-   version published to GitHub Pages is picked up on the next load rather than
-   being pinned to a stale cache. */
-const CACHE = "fpl-edge-v11.4.1";
+/* FPL Signals service worker.
+   Its job is to make the site installable as a real Android app and to survive
+   a dropped connection. Deliberately network-first for the page itself, so a
+   new version deployed to the server is picked up on the next load rather than
+   being pinned to a stale cache. The API and /data are never cached here: the
+   server is the source of truth and the app handles its own waiting states. */
+const CACHE = "fpl-signals-v12.21.1";
+const IMG_CACHE = "fpl-signals-img";
 const SHELL = [
   "./",
   "./index.html",
@@ -11,6 +13,7 @@ const SHELL = [
   "./app-squad.js",
   "./app-render.js",
   "./app-odds.js",
+  "./app-tracker.js",
   "./app-main.js",
   "./manifest.json",
   "./icon-192.png",
@@ -26,7 +29,7 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== IMG_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -36,17 +39,30 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  /* Player and fixture data comes from GitHub and must always be live — never
-     served from cache, or the projections would silently go stale. */
+  /* The dataset, feeds and API are served same-origin now, and they must
+     always be live: never cached, or the projections and the status chip
+     would silently go stale. The browser's default network handling applies. */
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/data/")
+      || url.pathname.includes("/api/") || url.pathname.includes("/data/")) return;
+
   if (url.hostname !== self.location.hostname) return;
+
+  /* Club badges and player photos (served by our server since bundle 8):
+     cache first, in a cache that survives releases. */
+  if (url.pathname.startsWith("/img/")) {
+    e.respondWith(caches.open(IMG_CACHE).then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok) c.put(req, res.clone());
+      return res;
+    }))));
+    return;
+  }
 
   /* The page: try the network first so updates arrive, fall back to cache. */
   if (req.mode === "navigate" || url.pathname.endsWith("index.html") || url.pathname.endsWith("/")) {
     e.respondWith(
       fetch(req)
         .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put("./index.html", copy));
+          if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put("./index.html", copy)); }
           return res;
         })
         .catch(() => caches.match("./index.html").then(r => r || caches.match("./")))
@@ -59,25 +75,9 @@ self.addEventListener("fetch", e => {
   if(url.pathname.endsWith(".js") && !url.pathname.endsWith("sw.js")){
     e.respondWith(
       fetch(req).then(res=>{
-        const copy=res.clone();
-        caches.open(CACHE).then(c=>c.put(req,copy));
+        if(res.ok){const copy=res.clone();caches.open(CACHE).then(c=>c.put(req,copy));}
         return res;
-      }).catch(()=>caches.match(req))
-    );
-    return;
-  }
-
-  /* The actuals feed is rewritten by a scheduled job, so it must never be
-     pinned: network first, cache only so the last known scores survive
-     offline. Without this it falls through to the icon rule below and freezes
-     until the next cache bump. */
-  if(url.pathname.includes("/data/")){
-    e.respondWith(
-      fetch(req).then(res=>{
-        const copy=res.clone();
-        caches.open(CACHE).then(c=>c.put(req,copy));
-        return res;
-      }).catch(()=>caches.match(req))
+      }).catch(()=>caches.match(req,{ignoreSearch:true}))
     );
     return;
   }
@@ -85,8 +85,7 @@ self.addEventListener("fetch", e => {
   /* Icons and the manifest rarely change: cache first, refresh in the background. */
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
       return res;
     }))
   );

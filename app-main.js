@@ -1,4 +1,4 @@
-/* FPL Edge — app-main.js
+/* FPL Signals - app-main.js
    actions and init — must load last
 
    Part of a single script split across files so each stays small enough to
@@ -20,7 +20,7 @@ function searchInput(action,el,extra){
 function act(k,a,b){
   const P=id=>S.model?.players.find(p=>p.id===id);
   switch(k){
-    case"load":loadAll(true).then(()=>loadNews());return;
+    case"load":loadAll().then(()=>loadNews());return;
     case"tab":S.tab=a;S.menuOpen=false;break;
     case"menu":S.menuOpen=!S.menuOpen;break;
     case"dash":S.dash={...S.dash,[a]:!S.dash[a]};break;
@@ -37,6 +37,15 @@ function act(k,a,b){
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
+    case"pdmore":S.pdLimit=(S.pdLimit||PD_PAGE)+PD_PAGE;break;
+    case"pdall":S.pdLimit=1000;break;
+    case"fixread":S.fixRead=a;break;
+    case"poolmore":S.poolLimit=Math.min(150,(S.poolLimit||50)+50);break;
+    case"pdless":S.pdLimit=PD_PAGE;break;
+    case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[]});break;
+    case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[]});break;
+    case"sigfold":{const f=new Set(S.sigFold||[]);f.has(a)?f.delete(a):f.add(a);S.sigFold=[...f];
+      LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold});break;}
     case"radarpick":{S.radarIds=S.radarIds||[null,null,null];S.radarSearch=S.radarSearch||["","",""];
       const id=b?+b:null;
       if(id){
@@ -128,8 +137,8 @@ function act(k,a,b){
       if((S.squad||[]).includes(p.id)){toast(p.web_name+" is already in your squad");break;}
       const target=(S.flagged||[]).map(x=>P(x)).find(o=>o&&o.pos===p.pos);
       if(target){
-        if(p.price>S.bank+sellPrice(target)+.001)
-          toast("Over budget by £"+(p.price-S.bank-sellPrice(target)).toFixed(1));
+        if(p.price>planBank()+sellPrice(target)+.001)
+          toast("Over budget by £"+(p.price-planBank()-sellPrice(target)).toFixed(1));
         applySwap(target.id,p.id);toast(target.web_name+" → "+p.web_name);break;}
       const cur=(S.squad||[]).filter(i=>!S.flagged.includes(i));
       if(cur.filter(i=>P(i)?.pos===p.pos).length>=SHAPE[p.pos]){
@@ -173,7 +182,7 @@ function act(k,a,b){
       break;}
     case"pick":S.selected=P(a);break;
     case"cancel":S.selected=null;break;
-    case"sub":console.log("[DIAG] sub fired, a=",a,"S.subFrom=",S.subFrom,"player=",P(a)?.web_name,"pos=",P(a)?.pos);
+    case"sub":
       if(S.subFrom===a){S.subFrom=null;break;}
       if(S.subFrom==null){S.subFrom=a;toast("Now tap who to swap with");break;}
       trySub(S.subFrom,a);break;
@@ -198,11 +207,9 @@ function act(k,a,b){
         :(S.flagged.find(id=>P(id)?.pos===p.pos) ?? null);
       if(target){const o=P(target);
         if(o.pos!==p.pos){toast("Swap must be like for like — "+POS[o.pos]+" for "+POS[o.pos]);break;}
-        if(p.price>planBank()+sellPrice(o)+.001)
-        toast("Over budget by £"+(p.price-planBank()-sellPrice(o)).toFixed(1)+" — you can plan it, but not save it");
         const clubs=(squadPlayers().map(x=>x.id)).filter(i=>i!==target).filter(i=>P(i)?.team===p.team).length;
-        if(clubs>=3){toast("Max 3 per club");break;}
-        applySwap(target,p.id);S.selected=null;toast(o.web_name+" → "+p.web_name);break;}
+        if(clubs>=3){toast("Max 3 per club",{warn:true});break;}
+        if(applySwap(target,p.id)){S.selected=null;toast(o.web_name+" → "+p.web_name);}break;}
       /* players marked for transfer are treated as already gone, so they don't
          block a replacement at the same club or in the same position */
       const cur=(squadPlayers().map(p=>p.id)||[]).filter(i=>!S.flagged.includes(i));
@@ -210,8 +217,10 @@ function act(k,a,b){
       if(cur.filter(i=>P(i)?.pos===p.pos).length>=SHAPE[p.pos]){toast("Already have "+SHAPE[p.pos]+" "+POS[p.pos]);break;}
       if(cur.filter(i=>P(i)?.team===p.team).length>=3){toast("Max 3 per club");break;}
       {const gw=editableGw();if(gw==null)break;
-       writePlan(gw,[...cur,p.id],{bank:+(planBank()-p.price).toFixed(1)});saveState();}break;}
-    case"doswap":applySwap(a,b);S.pendingOpt=null;toast("Transfer made");break;
+       const nb=+(planBank()-p.price).toFixed(1);
+       if(nb<-0.001){toast(`Not enough in the bank: £${(-nb).toFixed(1)} short for ${p.web_name}`,{warn:true});break;}
+       writePlan(gw,[...cur,p.id],{bank:nb});saveState();}break;}
+    case"doswap":if(applySwap(a,b)){S.pendingOpt=null;toast("Transfer made");}break;
     case"opt":{S.forceXI=null;
       const g2=S.model.next.id;const xi=startingXI();
       const rank=xi.slice().sort((x,y)=>(y.gw[g2]?.pts||0)-(x.gw[g2]?.pts||0));
@@ -230,7 +239,11 @@ function act(k,a,b){
          chip applied. */
       const w=VG(), half=w>=20?"2":"1", next={...S.chips};
       ["bboost","3xc","freehit","wildcard"].forEach(k=>{if(next[k+half]===w)delete next[k+half];});
-      if(a!=="none")next[a+half]=w;
+      if(a!=="none"){
+        const keep=S.chips;S.chips=Object.fromEntries(Object.entries(next));   /* the rule sees the week cleared */
+        const why=chipRuleBreak(a+half,w);S.chips=keep;
+        if(why){toast(why,{warn:true});break;}
+        next[a+half]=w;}
       S.chips=next;saveState();break;}
     case"save":{if(S.bank<-0.001){toast("You're £"+Math.abs(S.bank).toFixed(1)+" over budget — sell someone first");break;}
       S.original=S.squad;saveState();toast("Squad saved");break;}
@@ -241,18 +254,21 @@ function act(k,a,b){
       const next=S.model?S.model.next.id:1;
       if(S.planByGw)Object.keys(S.planByGw).map(Number).forEach(e=>{
         if(e>=next)delete S.planByGw[e];});
-      resolveSeed(true);S.flagged=[];S.pendingOpt=null;
+      const src=resolveSeed(true);S.flagged=[];S.pendingOpt=null;
       const bf=(typeof bankFromFeed==="function")?bankFromFeed():null;
       if(bf!=null)S.bank=bf;                     // prefer the official bank when published
       saveState();
-      toast("Reset to your official squad (this week onward)");break;}
+      /* Say what actually happened: the seed is a fallback, never "official". */
+      toast(src==="official"?"Reset to your official squad (this week onward)"
+        :"Reset to the GW1 seed squad (no official history available yet)");break;}
     case"resetOld":{if(!S.original)break;
       const cur=(S.squad||[]).reduce((s,i)=>s+(P(i)?.price||0),0);
       const org=S.original.reduce((s,i)=>s+(P(i)?.price||0),0);
       S.bank=+(S.bank+cur-org).toFixed(1);S.squad=S.original;S.flagged=[];S.forceXI=null;
       S.pendingOpt=null;saveState();toast("Reverted to saved squad");break;}
     case"seed":resolveSeed();break;
-    case"setchip":S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;
+    case"setchip":{const why=chipRuleBreak(a,b);if(why){toast(why,{warn:true});break;}
+      S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;}
     case"clearchip":{const c={...S.chips};delete c[a];S.chips=c;saveState();break;}
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
     case"fixgw":S.fixGW=clamp(+a,1,38);break;
@@ -264,7 +280,11 @@ function act(k,a,b){
     case"clearout":S.outList=[];break;
     case"ignore":S.ignored=[...(S.ignored||[]),a];LS.set("ignored",S.ignored);
       toast("Won't suggest "+(P(a)?.web_name||"that player")+" again");break;
-    case"unignore":S.ignored=[];LS.set("ignored",[]);toast("Ignore list cleared");break;
+    case"unignore":{
+      /* F95: one player back, or everyone when no player is given */
+      const id=a==null?null:+a;
+      S.ignored=id?(S.ignored||[]).filter(x=>x!==id):[];LS.set("ignored",S.ignored);
+      toast(id?"Will suggest "+(P(id)?.web_name||"that player")+" again":"Suggesting everyone again");break;}
     case"docombo":{const c=bestCombo(S.outList);if(!c){break;}
       c.picks.forEach(m=>applySwap(m.out.id,m.inn.id));S.outList=[];
       toast("Transfers made · +"+c.gain.toFixed(1)+" pts");break;}
@@ -274,16 +294,12 @@ function act(k,a,b){
     case"plf":S.playerFilter=a||null;break;
     case"odds":loadOdds();return;
     case"oddsdemo":S.oddsDemo=!S.oddsDemo;break;
-    case"oddsview":S.oddsView=a;break;
-    case"oddsreset":LS.set("oddsLeague","");LS.set("oddsBooks",null);LS.set("oddsCache",null);loadOdds();return;
-    case"oddskey":S.oddsKey=a.trim();LS.set("oddsKey",S.oddsKey);if(S.oddsKey)loadOdds();return;
+    case"oddspv":S.oddsPv=a;break;
     case"addrival":{const n=document.getElementById("rvName")?.value?.trim();
       const id=document.getElementById("rvId")?.value?.trim();
       if(!n){toast("Give the rival a name");break;}
       S.rivals=[...(S.rivals||[]),{name:n,id,squad:[]}];S.rivalSel=S.rivals.length-1;
       LS.set("rivals",S.rivals);break;}
-    case"oddssort":if(S.oddsSort===a)S.oddsSortDir=S.oddsSortDir==="desc"?"asc":"desc";
-      else{S.oddsSort=a;S.oddsSortDir=a==="name"?"asc":"desc";}break;
     case"rivalpick":S.rivalPick=a;break;
     case"rivalgw":S.rivalGwView=a;break;
     case"selrival":S.rivalSel=a;break;
@@ -301,27 +317,64 @@ function act(k,a,b){
 }
 /* ---------- init ---------- */
 window.addEventListener("hashchange",()=>{if(applyHash())render();});
+/* F10: Enter and Space press anything given a button role by a11yPass();
+   F108: Escape closes the player card. */
+document.addEventListener("keydown",e=>{
+  const el=e.target;
+  if((e.key==="Enter"||e.key===" ")&&el&&el.getAttribute&&el.getAttribute("role")==="button"
+     &&!/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)){e.preventDefault();el.click();return;}
+  if(e.key==="Escape"&&S.cardId){S.cardId=null;render();}
+});
 window.addEventListener("popstate",()=>{if(applyHash())render();});
 (function(){
   const st=LS.get("state");
   if(st&&(st.v===STATE_VERSION||st.v===3)){Object.assign(S,{squad:st.squad,original:st.original,captain:st.captain,
     vice:st.vice,chips:st.chips||{},bank:st.bank??0,ft:st.ft??1,forceXI:st.forceXI||null,
-    planByGw:st.planByGw||{},ftLastGw:st.ftLastGw||0
+    planByGw:st.planByGw||{},ftLastGw:st.ftLastGw||0,baseGw:st.baseGw??null
     });S.seeded=!!(st.squad&&st.squad.length);}
   applyLearning();
-  /* Not defaulted to a key: this file is public on GitHub Pages, and a free-tier
-     key committed to a public repo gets scraped and its quota drained. Entered
-     once in the Odds tab and kept in this browser only. */
-  S.oddsKey=LS.get("oddsKey")||"";
   S.ignored=LS.get("ignored")||[];
-  if(S.oddsKey)S.oddsState="idle";
   S.stars=LS.get("stars")||[];
   S.rivals=LS.get("rivals")||[];
   S.leagueId=LS.get("leagueId")||"391690";
-  const c=LS.get("data");
-  if(c&&c.players){Object.assign(S,{players:c.players,teams:c.teams,fixtures:c.fixtures,
-    events:c.events,last:c.last,pre:c.pre||{},preMax:c.preMax||1,lastTeams:c.lastTeams||{},lastTeamStats:c.lastTeamStats||{},lastTeamRecent:c.lastTeamRecent||{},hist:c.hist||{},teamMatch:c.teamMatch||{},stamp:c.t});buildModel();}
+  {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];}
+  /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
+     quota on some browsers; the server is close now) and everything odds,
+     which lives on the server. Every key that is Andy's own work (state,
+     learn, stars, rivals, leagueId, ignored) keeps its name and survives. */
+  ["data","oddsKey","oddsLeague","oddsBooks","oddsCache"].forEach(k=>{
+    try{localStorage.removeItem("fpl3:"+k);}catch(e){}});
   applyHash();
   if(!location.hash)history.replaceState({},"",routeFor(S.tab));
-  else render();
+  /* Instant start: paint the last page straight away, build the model from
+     the saved data with no network wait, then run the normal load, which
+     checks the server and refreshes only what changed. With nothing saved
+     (first visit on a device, or no IndexedDB) this is the plain load. */
+  /* Bundle 9: every club's shirts go into the sprite before a saved page is
+     repainted, so its <use> references have something to point at */
+  Object.keys(KITS).forEach(k=>{shirtSVG(k,false,20);shirtSVG(k,true,20);});
+  (async()=>{
+    const [snap,paint]=await Promise.all([IDB.get("snap"),IDB.get("paint")]);
+    const app=document.getElementById("app");
+    if(snap&&snap.files&&snap.v===SNAP_V){
+      _snap=snap;
+      if(paint&&paint.html&&paint.tab===S.tab){
+        app.innerHTML=paint.html;app.classList.add("booting");S.booting=true;}
+      else render();
+      await loadAll(false,{fromSnap:true});
+    }else render();
+    /* Always load. Render whatever exists, then fetch the dataset, feeds and
+       status in the background and re-render when they land. */
+    await loadAll();
+    loadNews();
+  })();
+  /* Save the current page as the next instant start when the tab is hidden
+     or closed. */
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")savePaint();});
+  /* Keep an open page honest: refetch /api/status every minute and repaint
+     only the chip and the footer. During a live gameweek this is also what
+     moves the chip to Live. A full load still only happens on open, on
+     Check now, or when the server reports a new dataset commit. */
+  if(!BACKUP)setInterval(()=>{if(S.loading)return;
+    loadStatus().then(s=>{if(s)refreshStatusUI();});},60000);
 })();

@@ -1,0 +1,13 @@
+# FPL Signals server. Zero npm dependencies, so no install step.
+FROM node:24-slim
+
+WORKDIR /app
+COPY . /app
+
+# State lives in a volume; the app directory can be mounted read-only.
+ENV STATE_DIR=/state PORT=8090
+RUN mkdir -p /state && chown node:node /state
+
+USER node
+EXPOSE 8090
+CMD ["node", "server/server.mjs"]

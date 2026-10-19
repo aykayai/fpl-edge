@@ -1,12 +1,13 @@
-/* FPL Edge — app-odds.js
+/* FPL Signals - app-odds.js
    bookmaker odds: fetching, de-vigging, the Odds page
 
    Part of a single script split across files so each stays small enough to
    fetch whole. Loaded in order as classic scripts, sharing one global scope,
    so the order in index.html matters: app-main.js must come last. */
 /* ---------- Odds ----------
-   Bookmaker prices are a live consensus model — they price form, team news,
-   penalties and venue in one number. Needs a free key from odds-api.io. */
+   Bookmaker prices are a live consensus model: they price form, team news,
+   penalties and venue in one number. The odds-api.io key lives on the FPL
+   Signals server (ODDS_API_KEY); the page only talks to /api/odds. */
 /* ---------- reading the market ----------
    Both available bookmakers are soft books, so their prices carry a wider
    margin than a sharp book's. Everything below is de-vigged before use. */
@@ -120,6 +121,14 @@ function oddsFixtures(){
   }).filter(Boolean);
 }
 /* player prices, keyed to our own player records */
+/* name words, accents and punctuation removed: "Gabriel dos Santos Magalhães" -> [gabriel,dos,santos,magalhaes] */
+const nameWords=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().split(/[^a-z]+/).filter(w=>w.length>1);
+function wordMatch(label,p){
+  const q=nameWords(label);if(q.length<2)return false;
+  const first=nameWords(p.first),last=nameWords(p.last);
+  if(!last.includes(q[q.length-1]))return false;
+  return first.includes(q[0])||last.includes(q[0]);
+}
 function oddsPlayers(){
   const out={};
   const P=S.model?S.model.players:[];
@@ -136,6 +145,12 @@ function oddsPlayers(){
       let sc=0;
       if(full&&full===q)sc=100;
       else if(web===q)sc=90;
+      /* 19 Oct 2026: FPL carries long legal surnames ("Borges Fernandes",
+         "dos Santos Magalhaes") that bookmakers shorten, so 12% of goalscorer
+         names matched nobody (Bruno Fernandes, Gabriel, Zubimendi, Merino).
+         Word by word: the bookmaker's last word must be one of his surname
+         words, and the first word his first name or another surname word. */
+      else if(wordMatch(name,p))sc=80;
       else if(last&&last.length>=4&&q.endsWith(last))sc=70+last.length;
       else if(last&&last.length>=4&&q.includes(last))sc=55+last.length;
       else if(web.length>=5&&q.includes(web))sc=40+web.length;
@@ -154,6 +169,7 @@ function oddsPlayers(){
           Math.max(1,(m.outcomes||[]).length)*0-0)+0.06;
         (m.outcomes||[]).forEach(o=>{
           if(!o.price)return;
+          if(/\((first|last)\)/i.test(o.name))return;     // first / last scorer, not anytime
           const pl=match(o.name,ids);if(!pl)return;
           const rec=out[pl.id]=out[pl.id]||{p:pl,fx};
           const prob=devig1(o.price,margin);
@@ -166,209 +182,144 @@ function oddsPlayers(){
   });
   return out;
 }
-/* the market's own view of a player's FPL score */
-function marketPoints(p,rec,fx){
-  if(!rec&&!fx)return null;
-  const GOAL={1:10,2:6,3:5,4:4}[p.pos]||4, CS={1:4,2:4,3:1,4:0}[p.pos]||0;
-  const mins=clamp(p.xMins/90,0,1);
-  const app=p.xMins>=60?2:(p.xMins>0?1:0);
-  let pts=app;
-  if(rec){
-    if(rec.goal)pts+=rec.goal*GOAL;
-    if(rec.assist)pts+=rec.assist*3;
-    else if(rec.ret&&rec.goal)pts+=Math.max(0,rec.ret-rec.goal)*3;
-    if(rec.card)pts-=rec.card*1;
-  }
-  if(fx&&fx.goals&&p.pos<=3){
-    const mine=fx.ht&&fx.ht.id===p.team;
-    const cs=mine?fx.goals.csHome:(fx.at&&fx.at.id===p.team?fx.goals.csAway:0);
-    pts+=cs*CS;
-    if(p.pos<=2){
-      const conceded=mine?fx.goals.xgAway:fx.goals.xgHome;
-      pts-=Math.floor(conceded/2)*0.5;
-    }
-  }
-  if(p.pos===1&&fx&&fx.goals){
-    const shots=(fx.ht&&fx.ht.id===p.team?fx.goals.xgAway:fx.goals.xgHome)*3.4;
-    pts+=shots/3*0.6;
-  }
-  return pts*clamp(p.avail,0,1)*(0.55+0.45*mins);
+/* S10 (Stage 1, 19 Oct 2026): captain options from the XI. Gap is the cost
+   against the best option (the armband doubles it); Plays is the chance he
+   appears; League C is how many of the league captained him last week. */
+function captaincyHTML(){
+  const g=VG();if(!S.model||g<S.model.next.id)return "";
+  const xi=startingXI();if(!xi.length)return "";
+  const v=p=>p.gw[g]?.pts||0;
+  const opts=xi.slice().sort((a,b)=>v(b)-v(a)).slice(0,6);
+  const top=v(opts[0]);
+  const rf=S.rivalsFeed||{},caps={};let nRiv=0;
+  Object.entries(rf.entries||{}).forEach(([id,e])=>{if(id===TEAM_ID)return;
+    const last=(e.gw||[])[(e.gw||[]).length-1];const c=last&&(last.picks||[]).find(x=>x.isC);
+    nRiv++;if(c)caps[c.id]=(caps[c.id]||0)+1;});
+  const {captain}=effectiveCaptainVice(g);
+  return `<div class="panel"><div class="phead"><h2>Captaincy</h2><span class="note">GW${g} · your XI</span></div>
+    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr><th>Option</th><th>Predicted</th><th>Gap</th><th>Plays</th>
+      <th class="hide-ph">xGI/90</th><th class="hide-ph">Owned</th>${nRiv?"<th>League C</th>":""}<th></th></tr></thead><tbody>
+    ${opts.map(p=>{const q=p.gw[g]||{},f=(q.fixtures||[])[0],gap=v(p)-top,isC=p.id===captain;
+      return `<tr${isC?' class="me"':""}><td>${esc(p.web_name)}<span class="mu" style="display:block;font-size:11.5px">${f?esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
+        <td><b>${v(p).toFixed(1)}</b></td><td>${Math.abs(gap)<0.05?'<span class="up">best</span>':`<span class="dn">${sgn1(gap*2)}</span>`}</td>
+        <td>${Math.round((q.pPlay??1)*100)}%</td><td class="hide-ph">${(p.xg90+p.xa90).toFixed(2)}</td><td class="hide-ph">${p.owned}%</td>
+        ${nRiv?`<td>${caps[p.id]||0}/${nRiv}</td>`:""}
+        <td>${isC?'<span class="tagy">C</span>':`<button class="mini" onclick="act('cap',${p.id})" aria-label="Make ${esc(p.web_name)} captain">C</button>`}</td></tr>`;}).join("")}
+    </tbody></table></div>
+    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
+      <p style="margin:0">Gap is what each option costs against the best one with the armband on (the difference doubled). Plays is the chance he appears at all. ${nRiv?"League C is how many of your league captained him last week: a popular pick protects your place, an unpopular one is the differential. ":""}Tap C to make him captain for this week.</p></div></details>
+    </div></div>`;
 }
-/* Turn match prices into expected goals per side, margin removed. */
-function buildOddsTeams(){
-  const M={};
-  (S.odds||[]).forEach(ev=>{
-    const h=ev.home||ev.home_team||ev.homeTeam,a=ev.away||ev.away_team||ev.awayTeam;
-    if(!h||!a)return;
-    const bm=(ev.bookmakers||[])[0];if(!bm)return;
-    const h2h=(bm.markets||[]).find(m=>m.key==="h2h");
-    const tot=(bm.markets||[]).find(m=>/^totals$/i.test(m.key||"")&&m.hdp===2.5)
-      ||(bm.markets||[]).find(m=>/goals? totals|^totals$/i.test(m.key||""));
-    if(!h2h)return;
-    const pick=n=>(h2h.outcomes||[]).find(o=>String(o.name).toLowerCase()===n);
-    const oH=pick("home"),oD=pick("draw"),oA=pick("away");
-    if(!oH||!oD||!oA)return;
-    const inv=[oH,oD,oA].map(o=>1/o.price),sum=inv.reduce((s2,x)=>s2+x,0);
-    const pH=inv[0]/sum,pA=inv[2]/sum;
-    let total=2.7;
-    if(tot){const ov=(tot.outcomes||[]).find(x=>/over/i.test(x.name));
-      const un=(tot.outcomes||[]).find(x=>/under/i.test(x.name));
-      if(ov&&un){const i2=[1/ov.price,1/un.price],s3=i2[0]+i2[1];
-        total=(tot.hdp||2.5)+(i2[0]/s3-0.5)*2.2;}}
-    const tilt=clamp(0.5+(pH-pA)*0.55,0.2,0.8);
-    const teams=S.model?S.model.teams:S.teams;
-    /* the feed gives full club names ("Brentford FC", "Tottenham Hotspur"),
-       so match on the longest overlapping token rather than an exact string */
-    const find=clubFromName;
-    const th=find(h),ta=find(a);
-    if(!th||!ta)return;
-    M[th.short+"|"+ta.short+"|H"]={xg:total*tilt,xgc:total*(1-tilt)};
-    M[ta.short+"|"+th.short+"|A"]={xg:total*(1-tilt),xgc:total*tilt};
+/* D17: say so when the captain will not score as the armband suggests */
+function capWarnHTML(){
+  const g=VG();if(!S.model||g<S.model.next.id)return "";
+  const xi=startingXI(),cap=S.model.players.find(p=>p.id===S.captain);
+  if(!cap)return "";
+  if(!xi.includes(cap))return ` · <span style="color:var(--red);font-weight:700">captain benched</span>`;
+  const q=cap.gw[g];
+  if(cap.avail<1||(q&&q.pPlay!=null&&q.pPlay<0.7))
+    return ` · <span style="color:var(--amber);font-weight:700">captain ${cap.avail<1?Math.round(cap.avail*100)+"%":"may not start"}</span>`;
+  return "";
+}
+/* Player odds per gameweek, for the PROP_W hook: {playerId:{gw:{g,a}}},
+   g and a the expected goals and assists implied by P(score) and P(assist)
+   (-ln(1-p)). A fixture is placed in its gameweek by matching both clubs. */
+function buildPropMarket(){
+  S.propMarket=null;
+  if(!S.model||!S.model.byEv)return;
+  const gwOf=fx=>{if(!fx.ht||!fx.at)return null;
+    for(const [e,list] of Object.entries(S.model.byEv)){
+      if(list.some(f=>f.ht&&f.at&&f.ht.id===fx.ht.id&&f.at.id===fx.at.id))return +e;}
+    return null;};
+  const out={};
+  Object.values(oddsPlayers()).forEach(r=>{
+    const e=gwOf(r.fx);if(!e||(r.goal==null&&r.assist==null))return;
+    const lam=p=>p>0&&p<0.99?-Math.log(1-p):null;
+    (out[r.p.id]=out[r.p.id]||{})[e]={g:lam(r.goal),a:lam(r.assist)};
   });
+  S.propMarket=out;
+}
+/* Turn match prices into expected goals per side, margin removed. D10
+   (13 Oct 2026): the same conversion the Odds page shows (Correct Score when
+   priced, else match result + totals), so the page and the model agree. */
+function buildOddsTeams(){
+  const M={},rej=[];
+  oddsFixtures().forEach(fx=>{
+    const g=fx.goals,th=fx.ht,ta=fx.at;
+    if(!g||!th||!ta||!(g.xgHome>0)||!(g.xgAway>0))return;
+    /* A side priced under 1.10 is a stale or in-play line, not a pre-match
+       market (13 Oct 2026 the feed had Coventry 1.03 v Newcastle 151). Such a
+       fixture is left to the ratings and listed in S.oddsRejected. */
+    const ml=fx.mk&&fx.mk.h2h&&fx.mk.h2h[0];
+    const fav=ml?Math.min(...(ml.outcomes||[]).map(o=>+o.price||99)):99;
+    if(fav<1.10){rej.push(fx.home+" v "+fx.away);return;}
+    M[th.short+"|"+ta.short+"|H"]={xg:g.xgHome,xgc:g.xgAway};
+    M[ta.short+"|"+th.short+"|A"]={xg:g.xgAway,xgc:g.xgHome};
+  });
+  S.oddsRejected=rej;
   S.oddsTeams=Object.keys(M).length?M:null;
   return S.oddsTeams;
 }
+/* The odds now come from this app's own server (/api/odds), which holds the
+   odds-api.io key, looks the league slug up, reads the account's bookmaker
+   selection and caches for four hours. Its rows carry the raw per-book
+   object, so normaliseBooks runs on each row exactly as it did against the
+   upstream API. Server states map one-to-one onto S.oddsState. */
 async function loadOdds(){
-  if(!S.oddsKey){S.oddsState="nokey";render();return;}
-  S.oddsState="loading";S.oddsErr="";S._sampled=false;S._markets={};S.oddsLog=["v"+APP_VERSION+" · started "+new Date().toLocaleTimeString("en-GB")];render();
-  const key=encodeURIComponent(S.oddsKey);
-  const base="https://api.odds-api.io/v3";
-  const log=m=>{S.oddsLog.push(m);};
-  const readErr=async r=>{try{const e=await r.json();return e.message||e.error||"";}catch(_){return "";}};
-  const get=async(path,label)=>{
-    const r=await fetch(base+path);
-    if(!r.ok){
-      const why=await readErr(r);
-      log(`${label}: HTTP ${r.status}${why?" — "+why:""}`);
-      if(r.status===401||/invalid[_ ]?key/i.test(why))S.oddsErr="Key rejected by odds-api.io";
-      else if(r.status===429)S.oddsErr="Rate limit reached";
-      return null;
-    }
-    const j=await r.json();
-    return j;
-  };
+  S.oddsState="loading";S.oddsErr="";S.oddsLog=[];render();
   try{
-    /* The league slug is looked up rather than guessed — the previous build
-       assumed "england-premier-league" and silently got back nothing. */
-    let slug=LS.get("oddsLeague");
-    if(!slug){
-      const lj=await get(`/leagues?sport=football&apiKey=${key}`,"leagues");
-      if(lj===null){S.oddsState="fail";render();return;}
-      const leagues=Array.isArray(lj)?lj:(lj.data||lj.leagues||[]);
-      log(`leagues: ${leagues.length} returned`);
-      /* 892 leagues come back and dozens contain "Premier League" — the loose
-         match landed on an amateur northern division. Score candidates instead,
-         rejecting anything amateur, regional or age-group, and require the name
-         to be the Premier League rather than merely contain it. */
-      const BAD=/amateur|women|u1[6-9]|u2[0-3]|youth|reserve|northern|southern|isthmian|county|regional|division\s*[a-z0-9]|cup|friendly|qualif/i;
-      const score=l=>{
-        const name=String(l.name||l.title||"");
-        const slug=String(l.slug||l.id||l.key||"");
-        const hay=`${name} ${slug} ${l.country||""}`;
-        if(BAD.test(hay))return -1;
-        let sc=0;
-        if(/^(england[- ])?premier league$/i.test(name.trim()))sc+=10;
-        if(/^england-premier-league$|^epl$/i.test(slug))sc+=10;
-        if(/premier league/i.test(name))sc+=3;
-        if(/england|english/i.test(hay))sc+=3;
-        if(/^premier league$/i.test(name.trim()))sc+=4;
-        return sc;
-      };
-      const ranked=leagues.map(l=>({l,sc:score(l)})).filter(x=>x.sc>=6)
-        .sort((a,b)=>b.sc-a.sc);
-      const hit=ranked.length?ranked[0].l:null;
-      if(!hit){
-        S.oddsErr="Couldn't find a Premier League entry among "+leagues.length+" football leagues";
-        S.oddsState="fail";render();return;
-      }
-      slug=hit.slug||hit.id||hit.key;
-      LS.set("oddsLeague",slug);
-      log(`league matched: ${hit.name||hit.title||slug} → ${slug}`+(ranked.length>1?` (from ${ranked.length} candidates)`:""));
+    if(BACKUP){S.oddsState="backup";render();return;}
+    const r=await fetch("/api/odds");
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    const state=d&&d.state;
+    if(state==="nokey"){S.oddsState="nokey";render();return;}
+    if(state==="loading"){
+      S.oddsState="loading";
+      S.oddsLog=["The server has not finished its first odds fetch yet. Try again in a minute."];
+      render();return;
     }
-
-    /* /odds rejects a call with no bookmakers, so establish the account's own
-       selection first and fall back to a couple of mainstream UK books. */
-    let books=LS.get("oddsBooks");
-    if(!books){
-      const bj=await get(`/bookmakers/selected?apiKey=${key}`,"bookmakers");
-      const list=bj?(Array.isArray(bj)?bj:(bj.data||bj.bookmakers||[])):[];
-      books=list.map(b=>(typeof b==="string"?b:(b.name||b.key||b.id))).filter(Boolean);
-      if(!books.length)books=["Bet365","PaddyPower"];
-      LS.set("oddsBooks",books);
-      log(`bookmakers: ${books.join(", ")}`);
-    }
-    const bParam="&bookmakers="+encodeURIComponent(books.join(","));
-
-    const ej=await get(`/events?sport=football&league=${encodeURIComponent(slug)}&apiKey=${key}`,"events");
-    if(ej===null){S.oddsState="fail";render();return;}
-    const events=(Array.isArray(ej)?ej:(ej.data||ej.events||[])).slice(0,10);
-    log(`events: ${events.length} for ${slug}`);
-    if(!events.length){S.oddsState="empty";render();return;}
-
-    /* /odds/multi takes up to ten event ids at a time */
+    if(d.error)S.oddsErr=String(d.error);
+    S.oddsFetchedAt=d.fetchedAt||null;
+    const rows=Array.isArray(d.rows)?d.rows:[];
+    /* the bookmakers behind the prices, for the coverage line */
+    S.oddsBooks=[...new Set(rows.flatMap(r=>Object.keys((r&&r.bookmakers)||{})))].filter(n=>!/no latency/i.test(n));
+    /* Catalogue every market the feed returns, as before. Player-level
+       markets are often gated behind paid tiers, and the design of the Odds
+       tab depends on whether they come through; one raw player-market line
+       is kept so an unfamiliar shape can be inspected rather than guessed. */
+    S._markets={};S._plSample=null;
+    rows.forEach(rw=>{
+      Object.entries(rw&&rw.bookmakers||{}).forEach(([bk,ms])=>{
+        (Array.isArray(ms)?ms:[]).forEach(m=>{
+          const n=String(m&&m.name||"").trim();if(!n)return;
+          (S._markets[n]=S._markets[n]||new Set()).add(bk);
+          if(!S._plSample&&/scorer|to score|assist|player|shots|card|anytime|goalscorer/i.test(n)){
+            const arr=m.odds||m.outcomes||m.prices||m.selections||m.runners||m.lines;
+            if(Array.isArray(arr)&&arr.length)
+              S._plSample=`"${n}" line 1: ${JSON.stringify(arr[0]).slice(0,200)}`;
+          }
+        });});});
     const out=[];
-    for(let i2=0;i2<events.length;i2+=10){
-      const chunk=events.slice(i2,i2+10);
-      const ids=chunk.map(e=>e.id||e.eventId).filter(Boolean);
-      if(!ids.length)continue;
-      const oj=await get(`/odds/multi?eventIds=${encodeURIComponent(ids.join(","))}${bParam}&apiKey=${key}`,"odds");
-      if(oj===null)break;
-      const rows=Array.isArray(oj)?oj:(oj.data||Object.values(oj||{}));
-      log(`odds: ${rows.length} rows for ${ids.length} events`);
-      /* Catalogue every market the feed actually returns. Player-level markets
-         are often gated behind paid tiers, and the design of the Odds tab
-         depends on whether they come through, so this is worth knowing exactly
-         rather than assuming from the bookmaker's own website. */
-      rows.forEach(rw=>{
-        Object.entries(rw&&rw.bookmakers||{}).forEach(([bk,ms])=>{
-          (Array.isArray(ms)?ms:[]).forEach(m=>{
-            const n=String(m&&m.name||"").trim();if(!n)return;
-            S._markets=S._markets||{};
-            (S._markets[n]=S._markets[n]||new Set()).add(bk);
-            /* Sample the exact raw shape of one real player-market line once,
-               so if outcomes still don't come through, the cause is visible
-               without needing another guess at the format. Shown in the
-               always-visible "Markets returned" panel, not the failure log —
-               fixtures already parse successfully via team markets, so the
-               failure branch that shows S.oddsLog never actually runs. */
-            if(!S._plSample&&/scorer|to score|assist|player|shots|card|anytime|goalscorer/i.test(n)){
-              const arr=m.odds||m.outcomes||m.prices||m.selections||m.runners||m.lines;
-              if(Array.isArray(arr)&&arr.length)
-                S._plSample=`"${n}" line 1: ${JSON.stringify(arr[0]).slice(0,200)}`;
-            }
-          });});});
-      if(rows.length&&!S._sampled){S._sampled=true;
-        log("keys on row: "+Object.keys(rows[0]||{}).join(", "));}
-      rows.forEach(rw=>{
-        const id=rw.eventId||rw.id;
-        const ev=chunk.find(e=>String(e.id||e.eventId)===String(id))||{};
-        const books=normaliseBooks(rw);
-        if(!books.length)return;
-        out.push({home:rw.home||ev.home,away:rw.away||ev.away,
-          commence:rw.date||ev.date,bookmakers:books});
-      });
-    }
-    /* report the catalogue, flagging anything player-level */
-    const mk=S._markets||{};
-    const names=Object.keys(mk).sort();
-    log(`markets available (${names.length}):`);
-    const PLAYER=/scorer|to score|assist|player|shots|card|anytime|first goal|goalscorer/i;
-    const players=names.filter(n=>PLAYER.test(n));
-    names.forEach(n=>log(`   ${PLAYER.test(n)?"★ ":"  "}${n}  [${[...mk[n]].join(", ")}]`));
-    log(players.length?`player-level markets: ${players.length} — ${players.join(" | ")}`
-      :"player-level markets: NONE returned by this tier");
-    log(`usable fixtures with prices: ${out.length}`);
-    if(out.length){
-      S.oddsMarkets=Object.fromEntries(Object.entries(S._markets||{})
+    rows.forEach(rw=>{
+      const books=normaliseBooks(rw);
+      if(!books.length)return;
+      out.push({home:rw.home,away:rw.away,commence:rw.commence,bookmakers:books});
+    });
+    if(state==="ok"&&out.length){
+      S.oddsMarkets=Object.fromEntries(Object.entries(S._markets)
         .map(([k,v])=>[k,[...v]]));
       S.oddsPlSample=S._plSample||null;
       S.odds=out;S.oddsState="ok";
-      LS.set("oddsCache",{t:Date.now(),odds:out});
-      buildOddsTeams();buildModel();render();return;
+      buildOddsTeams();buildPropMarket();buildModel();render();return;
     }
-    S.oddsState=S.oddsErr?"fail":"empty";render();
+    if(state==="fail"){
+      if(!S.oddsErr)S.oddsErr="The server's last odds fetch failed.";
+      S.oddsState="fail";
+    }else S.oddsState="empty";
+    render();
   }catch(e){
-    S.oddsErr=String(e.message||e)+" — this looks like a network or CORS failure";
+    S.oddsErr="Couldn't reach the server: "+String(e.message||e);
     S.oddsState="fail";render();
   }
 }
@@ -418,6 +369,11 @@ function normaliseBooks(row){
         const priceField=PRICE_FIELDS.find(f=>num(line[f]));
         if(nameField&&priceField){
           outcomes.push({name:String(line[nameField]),price:num(line[priceField])});
+        }else if(nameField&&num(line.over)){
+          /* Player markets (19 Oct 2026): {label:"Dominic Solanke", hdp:0.5,
+             over:"2.20"}. The price sits under "over" (the yes side), so the
+             old reader named every player "over" and none ever matched. */
+          outcomes.push({name:String(line[nameField]),price:num(line.over)});
         }else{
           Object.entries(line).forEach(([k,v])=>{
             if(k==="hdp"||k==="updatedAt"||NAME_FIELDS.includes(k)||PRICE_FIELDS.includes(k))return;
@@ -438,201 +394,117 @@ function normaliseBooks(row){
   });
   return books;
 }
-/* keep a trimmed sample of the raw response so an unfamiliar shape can be
-   inspected rather than guessed at */
-function sampleJSON(o){
-  try{
-    const t=JSON.stringify(o);
-    return t.length>1400?t.slice(0,1400)+" …":t;
-  }catch(e){return "(not serialisable)";}
-}
-
 function oddsHTML(){
   const g=VG();
   const head=`<div class="panel"><div class="phead"><h2>Odds</h2>
-     <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button>
-       <button onclick="act('oddsreset')" title="Clear the cached league and refetch">Reset</button></span></div>
+     <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button></span></div>
     <div class="pbody">
-      <p class="note" style="margin:0 0 8px">Uses <a href="https://odds-api.io" target="_blank" style="color:var(--cyan)">odds-api.io</a>. Your key stays in this browser. Prices are cached for four hours and shown with the bookmaker's margin removed — both available books are recreational, so treat these as a second opinion rather than truth.</p>
-      <span class="pricebox"><input type="password" placeholder="Paste your odds API key" value="${esc(S.oddsKey||"")}"
-        onchange="act('oddskey',this.value)" style="flex:1"></span></div></div>`;
-  if(S.oddsState==="idle")
-    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching current prices…</p></div></div>`;
-  if(S.oddsState==="nokey"||!S.oddsKey)
-    return head+`<div class="panel"><div class="pbody"><p class="note">No key set — everything else in the app works without one.</p></div></div>`;
+      <p class="note" style="margin:0">Uses <a href="https://odds-api.io" target="_blank" style="color:var(--cyan)">odds-api.io</a> through the FPL Signals server. The key is held on the server, so there is nothing to paste here. Prices are cached for four hours and shown with the bookmaker's margin removed. Both available books are recreational, so treat these as a second opinion rather than truth.${S.oddsFetchedAt?` <span style="color:var(--cream)">Last fetched ${esc(ukWhen(S.oddsFetchedAt))}.</span>`:""}</p></div></div>`;
+  if(S.oddsState==="backup")return head+backupNote("Odds");
+  if(S.oddsState==="nokey")
+    return head+`<div class="panel"><div class="pbody"><p class="note">No key is set on the server (ODDS_API_KEY). Everything else in the app works without one.</p></div></div>`;
   if(S.oddsState==="loading")
-    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching prices…</p></div></div>`;
+    return head+`<div class="panel"><div class="pbody"><p class="note">Fetching prices…</p>
+      ${(S.oddsLog||[]).length?`<p class="note" style="margin:8px 0 0">${S.oddsLog.map(x=>esc(x)).join("<br>")}</p>`:""}</div></div>`;
   if(S.oddsState!=="ok")
     return head+`<div class="panel"><div class="pbody"><div class="warn">${S.oddsErr
-      ? `<b>${esc(S.oddsErr)}</b>` : "The feed responded but returned nothing usable."}
+      ? `<b>${esc(S.oddsErr)}</b>` : "The server responded but returned nothing usable."}
       ${(S.oddsLog||[]).length?`<div class="mono" style="font-size:10.5px;margin-top:10px;opacity:.9;line-height:1.6">
         ${S.oddsLog.map(x=>esc(x)).join("<br>")}</div>`:""}</div>
       <span style="display:flex;gap:6px;margin-top:10px">
-        <button class="pri" onclick="act('odds')">↻ Fetch now</button>
-        <button onclick="act('oddsreset')">Reset league cache</button></span></div></div>`;
+        <button class="pri" onclick="act('odds')">↻ Fetch now</button></span></div></div>`;
 
-  const fixtures=oddsFixtures();
-  const players=oddsPlayers();
-  const pct=v=>Math.round(v*100)+"%";
-  const owned=id=>(S.squad||[]).includes(id);
-
-  /* ---- squad: what the market makes of your fifteen ---- */
-  const sp=squadPlayers(), xi=startingXI();
-  const teamFx={};fixtures.forEach(f=>{
-    if(f.ht)teamFx[f.ht.id]=f;if(f.at)teamFx[f.at.id]=f;});
-  const rows=sp.map(p=>{
-    const fx=teamFx[p.team]||null;
-    const rec=players[p.id]||null;
-    const mkt=(fx||rec)?marketPoints(p,rec,fx):null;
-    const model=p.gw[g]?.pts||0;
-    const cs=fx&&fx.goals&&p.pos<=3
-      ? (fx.ht&&fx.ht.id===p.team?fx.goals.csHome:fx.goals.csAway) : null;
-    return{p,fx,rec,model,mkt,cs,d:mkt==null?null:mkt-model,start:xi.includes(p)};
-  });
-  const capId=S.captain;
-  const sum=k=>rows.filter(r=>r.start).reduce((a,r)=>a+(k==="model"?r.model:(r.mkt||0)),0)
-    +(()=>{const c=rows.find(r=>r.p.id===capId&&r.start);
-      return c?(k==="model"?c.model:(c.mkt||0)):0;})();
-  const mdl=sum("model"), mkt=sum("mkt");
-  const priced=rows.filter(r=>r.mkt!=null).length;
-  const big=(v,c)=>`<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;line-height:1;color:${c}">${v}</span>`;
-  const delta=mkt-mdl;
-  const squadPanel=`<div class="panel">
-    <div class="phead"><h2>Your squad · market vs model</h2>
-      <span class="note">GW${g} · ${priced} of 15 priced · captain doubled</span></div>
-    <div class="pbody" style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--ink3)">
-      <span><span class="note" style="display:block">Model</span>${big(mdl.toFixed(1),"var(--mint)")}</span>
-      <span><span class="note" style="display:block">Market</span>${big(mkt.toFixed(1),"var(--cyan)")}</span>
-      <span><span class="note" style="display:block">Difference</span>
-        ${big((delta>0?"+":"")+delta.toFixed(1),delta>0.5?"var(--mint)":delta<-0.5?"var(--red)":"var(--cream)")}</span>
-      <span class="note" style="flex:1;min-width:180px">GK first, highest price first by default — click any column to sort by it.</span>
-    </div>
-    <div class="scroll"><table class="sqtable"><thead><tr>
-      ${[["name","Player","left"],["model","Model","right"],["mkt","Market","right"],
-         ["d","Diff","right"],["goal","Score","right"],["assist","Assist","right"],
-         ["cs","CS","right"]].map(([k,lbl,align])=>{
-        const on=S.oddsSort===k;
-        return `<th style="text-align:${align};cursor:pointer" onclick="act('oddssort','${k}')">${lbl}${on?(S.oddsSortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("")}
-      <th style="text-align:center">Fixture</th></tr></thead><tbody>
-      ${(()=>{
-        const dir=S.oddsSortDir==="asc"?1:-1;
-        const val={name:r=>r.p.web_name.toLowerCase(),model:r=>r.model,mkt:r=>r.mkt??-1,
-          d:r=>r.d??-999,goal:r=>(r.rec&&r.rec.goal)||-1,assist:r=>(r.rec&&r.rec.assist)||-1,cs:r=>r.cs??-1};
-        const sorted=rows.slice().sort((a,b)=>{
-          if(!S.oddsSort)return a.p.pos-b.p.pos||b.p.price-a.p.price;   // default: GK first, highest price first
-          const va=val[S.oddsSort](a),vb=val[S.oddsSort](b);
-          if(typeof va==="string")return dir*va.localeCompare(vb);
-          return dir*(va-vb);
-        });
-        return sorted.map(r=>{
-        const f0=r.p.gw[g]?.fixtures?.[0];
-        return `<tr class="${r.start?"":"sub"}">
-          <td class="nm"><span style="display:flex;align-items:center;gap:7px">
-            ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,20)}
-            <span><b>${esc(r.p.web_name)}</b>${r.p.id===capId?'<span class="tag c">C</span>':""}
-            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
-          <td class="mono" style="text-align:right;color:var(--mint)">${r.model.toFixed(1)}</td>
-          <td class="mono" style="text-align:right;color:${r.mkt==null?"var(--mute)":"var(--cyan)"}">${r.mkt==null?"—":r.mkt.toFixed(1)}</td>
-          <td class="mono" style="text-align:right;font-weight:700;color:${r.d==null?"var(--mute)":r.d>0.4?"var(--mint)":r.d<-0.4?"var(--red)":"var(--cream)"}">${r.d==null?"—":(r.d>0?"+":"")+r.d.toFixed(1)}</td>
-          <td class="mono" style="text-align:right">${r.rec&&r.rec.goal?pct(r.rec.goal):"—"}</td>
-          <td class="mono" style="text-align:right">${r.rec&&r.rec.assist?pct(r.rec.assist):"—"}</td>
-          <td class="mono" style="text-align:right">${r.cs!=null?pct(r.cs):"—"}</td>
-          <td style="text-align:center;white-space:nowrap">${f0?fdrPill(f0.opp,f0.home,posDiff(r.p,f0),{short:true}):"—"}</td></tr>`;}).join("");
-      })()}
-    </tbody></table></div></div>`;
-
-  /* ---- attack ---- */
-  const teamAtt=[];
-  fixtures.forEach(f=>{
-    if(!f.goals)return;                          // this match's xG didn't parse — nothing to rank
-    if(f.ht)teamAtt.push({t:f.ht,xg:f.goals.xgHome,opp:f.at,home:true,f});
-    if(f.at)teamAtt.push({t:f.at,xg:f.goals.xgAway,opp:f.ht,home:false,f});});
-  teamAtt.sort((a,b)=>b.xg-a.xg);
-  const plist=Object.values(players).filter(r=>r.ret||r.goal||r.assist)
-    .sort((a,b)=>(b.ret||b.goal||0)-(a.ret||a.goal||0));
-  const attCol=`<div class="panel"><div class="phead"><h2 style="color:var(--amber)">Attack</h2>
-      <span class="note">${teamAtt.length} teams · ${plist.length} players priced</span></div>
-    <div class="dashrow" onclick="act('dash','oxg')"><span class="dkey">Team goals</span>
-      <span class="dval">${teamAtt.length?esc(teamAtt[0].t.short)+" "+teamAtt[0].xg.toFixed(2):"—"}</span>
-      <span class="dchev">${S.dash.oxg?"▲":"▼"}</span></div>
-    ${S.dash.oxg?`<div class="dashbody">${teamAtt.map(x=>`<div class="dline">
-      <span>${shirtSVG(x.t.short.toUpperCase(),false,18)} <b>${esc(x.t.short)}</b>
-        <span class="note">${x.home?"v":"at"} ${esc(x.opp?x.opp.short:"?")}</span></span>
-      <span class="mono" style="color:var(--amber);font-weight:700">${x.xg.toFixed(2)}</span></div>`).join("")}</div>`:""}
-    <div class="dashrow" onclick="act('dash','oret')"><span class="dkey">Score or assist</span>
-      <span class="dval">${plist.length?esc(plist[0].p.web_name)+" "+pct(plist[0].ret||plist[0].goal):"—"}</span>
-      <span class="dchev">${S.dash.oret?"▲":"▼"}</span></div>
-    ${S.dash.oret!==false?`<div class="dashbody">
-      <table class="sqtable"><thead><tr><th style="text-align:left">Player</th>
-        <th style="text-align:right">Ret</th><th style="text-align:right">Goal</th>
-        <th style="text-align:right">Asst</th><th style="text-align:right">SoT</th></tr></thead><tbody>
-      ${plist.slice(0,40).map(r=>`<tr class="${owned(r.p.id)?"":""}" style="${owned(r.p.id)?"background:rgba(45,220,135,.08)":""}">
-        <td class="nm"><span style="display:flex;align-items:center;gap:6px">
-          ${shirtSVG(r.p.teamName.toUpperCase(),r.p.pos===1,18)}
-          <span><b>${esc(r.p.web_name)}</b>${owned(r.p.id)?' <span class="tag c">✓</span>':""}
-          <span style="display:block;font-size:9px;color:var(--mute)">${esc(r.p.teamName)} · ${POS[r.p.pos]} · £${r.p.price.toFixed(1)}</span></span></span></td>
-        <td class="mono" style="text-align:right;color:var(--amber);font-weight:700">${r.ret?pct(r.ret):"—"}</td>
-        <td class="mono" style="text-align:right">${r.goal?pct(r.goal):"—"}</td>
-        <td class="mono" style="text-align:right">${r.assist?pct(r.assist):"—"}</td>
-        <td class="mono" style="text-align:right;color:var(--mute)">${r.sot?pct(r.sot):"—"}</td></tr>`).join("")}
-      </tbody></table></div>`:""}</div>`;
-
-  /* ---- defence ---- */
-  const cs=[];
-  fixtures.forEach(f=>{
-    if(!f.goals)return;                           // this match's xG didn't parse — nothing to rank
-    if(f.ht)cs.push({t:f.ht,p:f.goals.csHome,conc:f.goals.xgAway,opp:f.at,home:true});
-    if(f.at)cs.push({t:f.at,p:f.goals.csAway,conc:f.goals.xgHome,opp:f.ht,home:false});});
-  cs.sort((a,b)=>b.p-a.p);
-  const keepers=cs.map(x=>{
-    const gk=(S.model.players||[]).filter(p=>p.pos===1&&p.team===x.t.id&&p.xMins>50)[0];
-    return gk?{...x,gk}:null;}).filter(Boolean);
-  const cards=Object.values(players).filter(r=>r.card).sort((a,b)=>b.card-a.card);
-  const defCol=`<div class="panel"><div class="phead"><h2 style="color:var(--sky)">Defence</h2>
-      <span class="note">${cs.length} teams priced</span></div>
-    <div class="dashrow" onclick="act('dash','ocs')"><span class="dkey">Clean sheet</span>
-      <span class="dval">${cs.length?esc(cs[0].t.short)+" "+pct(cs[0].p):"—"}</span>
-      <span class="dchev">${S.dash.ocs!==false?"▲":"▼"}</span></div>
-    ${S.dash.ocs!==false?`<div class="dashbody">${cs.map(x=>`<div class="dline">
-      <span>${shirtSVG(x.t.short.toUpperCase(),false,18)} <b>${esc(x.t.short)}</b>
-        <span class="note">${x.home?"v":"at"} ${esc(x.opp?x.opp.short:"?")} · concede ${x.conc.toFixed(2)}</span></span>
-      <span class="mono" style="color:var(--sky);font-weight:700">${pct(x.p)}</span></div>`).join("")}</div>`:""}
-    <div class="dashrow" onclick="act('dash','ogk')"><span class="dkey">Goalkeepers</span>
-      <span class="dval">${keepers.length?esc(keepers[0].gk.web_name)+" "+pct(keepers[0].p):"—"}</span>
-      <span class="dchev">${S.dash.ogk?"▲":"▼"}</span></div>
-    ${S.dash.ogk?`<div class="dashbody">${keepers.map(x=>`<div class="dline">
-      <span><b>${esc(x.gk.web_name)}</b>${owned(x.gk.id)?' <span class="tag c">✓</span>':""}
-        <span class="note">${esc(x.t.short)} · £${x.gk.price.toFixed(1)} · faces ${x.conc.toFixed(2)} xG</span></span>
-      <span class="mono" style="color:var(--sky);font-weight:700">${pct(x.p)}</span></div>`).join("")}</div>`:""}
-    <div class="dashrow" onclick="act('dash','ocard')"><span class="dkey">Booking risk</span>
-      <span class="dval">${cards.length?esc(cards[0].p.web_name)+" "+pct(cards[0].card):"none priced"}</span>
-      <span class="dchev">${S.dash.ocard?"▲":"▼"}</span></div>
-    ${S.dash.ocard?`<div class="dashbody">${cards.slice(0,20).map(r=>`<div class="dline">
-      <span><b>${esc(r.p.web_name)}</b>${owned(r.p.id)?' <span class="tag c">✓</span>':""}
-        <span class="note">${esc(r.p.teamName)} · ${POS[r.p.pos]}</span></span>
-      <span class="mono" style="color:var(--red)">${pct(r.card)}</span></div>`).join("")
-        ||`<p class="note" style="margin:0">Not priced by your bookmakers.</p>`}</div>`:""}</div>`;
-
-  const cat=S.oddsMarkets&&Object.keys(S.oddsMarkets).length
-    ? `<div class="panel"><div class="phead" style="cursor:pointer" onclick="act('dash','omk')">
-        <h2>Markets returned</h2><span class="note">${Object.keys(S.oddsMarkets).length} ${S.dash.omk?"▲":"▼"}</span></div>
-      ${S.dash.omk?`<div class="pbody">
-        ${S.oddsPlSample?`<p class="note mono" style="margin:0 0 8px;font-size:10px;word-break:break-all">Raw sample — ${esc(S.oddsPlSample)}</p>`:""}
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${Object.entries(S.oddsMarkets).sort().map(([n,bks])=>{
-          const pl=/scorer|to score|assist|player|shots|card|anytime/i.test(n);
-          return `<span class="chipbtn" style="${pl?"border-color:var(--mint);color:var(--mint)":""}"
-            title="${esc(bks.join(", "))}">${esc(n)}</span>`;}).join("")}</div></div>`:""}</div>` : "";
-
-  return head+squadPanel
-    +`<div class="sqgrid">
-        <div class="${S.oddsView==="def"?"hideSm":""}">${attCol}</div>
-        <div class="${S.oddsView==="att"||!S.oddsView?"hideSm":""}">${defCol}</div>
-      </div>
-      <div class="sqtoggle">
-        <button class="${(S.oddsView||"att")==="att"?"on":""}" onclick="act('oddsview','att')">Attack</button>
-        <button class="${S.oddsView==="def"?"on":""}" onclick="act('oddsview','def')">Defence</button>
-      </div>`+cat;
+  return head+oddsPlayersHTML()+minutesWatchHTML()+oddsFixturesHTML();
+}
+/* ---- Odds page panels (19 Oct 2026, built from the approved mock) ----
+   Prices are shown for reference; they do not change the predictions (the
+   GW1-6 backtest found no gain; re-test after GW11). Score and assist chances
+   are "if he plays" (the bets are void if he does not); the model's figure
+   beside each is worked out the same way: 1 - e^-(rate x normal minutes/90 x
+   this fixture against his team's average). */
+const SEP='<span class="sep">·</span>';   // tightens on a phone so Fixtures fits 375px
+const oddsPct=v=>v==null?'<span class="mu">—</span>':Math.round(v*100)+"%";
+function modelChance(p,rate){
+  const g=S.model.next.id,q=p.gw[g]||{},f=(q.fixtures||[])[0];
+  const team=S.model.teams.find(t=>t.id===p.team)||{};
+  const fr=f&&f.xgf>0&&team.att>0?f.xgf/team.att:1;
+  return 1-Math.exp(-rate*Math.min(1,(p.roleMins||0)/90)*fr);
+}
+function oddsPair(mk,md){
+  if(mk==null)return '<span class="mu">—</span>';
+  const cls=md!=null&&mk-md>=0.08?"up":md!=null&&md-mk>=0.08?"dn":"";
+  return `<b class="${cls}">${oddsPct(mk)}</b> <span class="mu">${oddsPct(md)}</span>`;
+}
+function oddsPlayersHTML(){
+  const g=S.model.next.id,view=S.oddsPv||"squad";
+  const op=oddsPlayers();
+  const inWeek=p=>{const q=p.gw[g];return q&&!q.blank;};
+  let list;
+  if(view==="squad")list=squadPlayers().slice().sort((x,y)=>(y.gw[g]?.pts||0)-(x.gw[g]?.pts||0));
+  else{
+    const pool=Object.values(op).map(r=>r.p).filter(p=>inWeek(p)&&op[p.id].goal!=null);
+    const f=view==="att"?(p=>p.pos>=3):view==="def"?(p=>p.pos<=2):(()=>true);
+    list=pool.filter(f).sort((x,y)=>(op[y.id].goal||0)-(op[x.id].goal||0)).slice(0,25);
+  }
+  const all=Object.values(op).filter(r=>inWeek(r.p));
+  const cover=k=>all.filter(r=>r[k]!=null).length;
+  const seg=[["squad","Your Squad"],["all","Most Likely to Score"],["att","Attackers"],["def","Defenders"]]
+    .map(([k,n])=>`<button class="${view===k?"on":""}" onclick="act('oddspv','${k}')">${n}</button>`).join("");
+  return `<div class="panel"><div class="phead"><h2>Players</h2><span class="pseg">${seg}</span></div>
+    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt oddsp"><thead><tr>
+      <th>Player</th><th class="hide-ph">Predicted</th><th>Score <span class="mu">mkt · model</span></th><th class="hide-ph">Assist <span class="mu">mkt · model</span></th>
+      <th>Goal or Assist</th><th class="hide-ph">Shot on Target</th><th>Card</th></tr></thead><tbody>
+    ${list.map(p=>{const r=op[p.id]||{},q=p.gw[g]||{},f=(q.fixtures||[])[0];
+      return `<tr onclick="act('card',${p.id})" style="cursor:pointer"><td>${esc(p.web_name)}<span class="sub">${esc(p.teamName)}${f?" · "+esc(f.opp)+(f.home?" (H)":" (A)"):""} · ${p.xMins}′</span></td>
+        <td class="hide-ph"><b>${(q.pts||0).toFixed(1)}</b></td>
+        <td>${oddsPair(r.goal,r.goal!=null?modelChance(p,p.xg90):null)}</td>
+        <td class="hide-ph">${oddsPair(r.assist,r.assist!=null?modelChance(p,p.xa90):null)}</td>
+        <td>${oddsPct(r.ret)}</td><td class="hide-ph">${oddsPct(r.sot)}</td>
+        <td>${r.card!=null&&r.card>=0.2?`<span class="dn">${oddsPct(r.card)}</span>`:oddsPct(r.card)}</td></tr>`;}).join("")}
+    </tbody></table></div>
+    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
+      <p style="margin:0 0 6px">Market figures are the bookmakers' prices with their margin removed. Score and assist chances are "if he plays" (the bets are void if he does not), and the model's figure beside each is worked out the same way, from his rate, his normal minutes and this fixture. The market figure is green where it rates him 8+ points higher than the model, red where lower. On a phone, tap a player for the full card.</p>
+      <p style="margin:0">Coverage for GW${g}: ${cover("goal")} players priced to score, ${cover("assist")} to assist, ${cover("sot")} for shots on target, ${cover("card")} for a card (${esc((S.oddsBooks||[]).join(" and ")||"the selected bookmakers")}; assists, shots and cards are added closer to kick-off). These prices are shown for reference and do not change the predictions (tested 19 Oct 2026, re-tested after GW11).</p></div></details>
+    </div></div>`;
+}
+/* players the market prices like starters but the model gives under 45 minutes */
+function minutesWatchHTML(){
+  const g=S.model.next.id,op=oddsPlayers(),mine=new Set(S.squad||[]);
+  const list=Object.values(op).filter(r=>r.p.pos>=3&&r.goal!=null&&r.goal>=0.25&&r.p.xMins<45&&r.p.gw[g]&&!r.p.gw[g].blank)
+    .sort((x,y)=>y.goal-x.goal).slice(0,10);
+  if(!list.length)return "";
+  return `<div class="panel"><div class="phead"><h2>Minutes Watch</h2><span class="note">the market expects a bigger role</span></div>
+    <div class="pbody" style="padding-top:6px"><table class="mkt"><thead><tr><th>Player</th><th>Score if he plays</th><th>Model minutes</th><th class="hide-ph">Owned</th></tr></thead><tbody>
+    ${list.map(r=>{const p=r.p,f=(p.gw[g].fixtures||[])[0];
+      return `<tr${mine.has(p.id)?' class="me"':""} onclick="act('card',${p.id})" style="cursor:pointer"><td>${esc(p.web_name)}<span class="sub">${esc(p.teamName)}${f?" · "+esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
+        <td><b>${oddsPct(r.goal)}</b></td><td>${p.xMins}′</td><td class="hide-ph">${p.owned}%</td></tr>`;}).join("")}
+    </tbody></table>
+    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Why this matters</summary><div class="infobox">
+      <p style="margin:0">Bookmakers only offer a short price on a player they expect to play a real part, so a forward or midfielder priced to score 25%+ whom the model gives under 45 minutes is a sign the model's minutes may be out of date (a return from injury, a new starter), or occasionally a bookmaker error. Worth a look before the deadline; the model does not change on this.</p></div></details>
+    </div></div>`;
+}
+/* the next gameweek's matches: result, goals (market and model), clean sheets */
+function oddsFixturesHTML(){
+  const g=S.model.next.id;
+  const two=(m,a,b)=>{const o=m&&m.outcomes.find(x=>a.test(x.name)),u=m&&m.outcomes.find(x=>b.test(x.name));return o&&u?devig([o.price,u.price])[0]:null;};
+  const rows=oddsFixtures().filter(f=>f.goals&&f.ht&&f.at).map(f=>{
+    const mf=(S.model.byEv[g]||[]).find(x=>x.ht&&x.at&&x.ht.id===f.ht.id&&x.at.id===f.at.id);
+    if(!mf)return null;
+    const ml=(f.mk["h2h"]||[])[0];let hda=null;
+    if(ml){const h=ml.outcomes.find(x=>x.name==="home"),d=ml.outcomes.find(x=>x.name==="draw"),a=ml.outcomes.find(x=>x.name==="away");if(h&&d&&a)hda=devig([h.price,d.price,a.price]);}
+    return{f,hda,o25:two((f.mk["totals"]||[]).find(m=>m.hdp===2.5),/over/i,/under/i),btts:two((f.mk["btts"]||[])[0],/yes/i,/no/i),
+      mH:fdrCalc(f.ht,f.at,true,"xgf"),mA:fdrCalc(f.at,f.ht,false,"xgf")};
+  }).filter(Boolean).sort((x,y)=>String(x.f.date).localeCompare(String(y.f.date)));
+  if(!rows.length)return "";
+  const when=d=>d?ukFmt(new Date(d),{weekday:"short",hour:"2-digit",minute:"2-digit"}):"";
+  return `<div class="panel"><div class="phead"><h2>Fixtures</h2><span class="note">GW${g} · market, with the model's goals beside</span></div>
+    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr>
+      <th>Match</th><th>Result <span class="mu">H · D · A</span></th><th>Goals <span class="mu">mkt · model</span></th><th>Clean Sheet <span class="mu">H · A</span></th><th class="hide-ph">Over 2.5</th><th class="hide-ph">Both Score</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td>${esc(r.f.ht.short)} v ${esc(r.f.at.short)}<span class="sub">${esc(when(r.f.date))}</span></td>
+      <td>${r.hda?r.hda.map(oddsPct).join(SEP):"—"}</td>
+      <td><b>${r.f.goals.xgHome.toFixed(1)}–${r.f.goals.xgAway.toFixed(1)}</b><span class="sub">model ${r.mH.toFixed(1)}–${r.mA.toFixed(1)}</span></td>
+      <td>${oddsPct(r.f.goals.csHome)+SEP+oddsPct(r.f.goals.csAway)}</td><td class="hide-ph">${oddsPct(r.o25)}</td><td class="hide-ph">${oddsPct(r.btts)}</td></tr>`).join("")}
+    </tbody></table></div></div></div>`;
 }
 
 function rivalsHTML(){
@@ -643,6 +515,7 @@ function rivalsHTML(){
   const actOf=(id,gw)=>{const f=S.playerActuals&&(S.playerActuals[id]||S.playerActuals[String(id)]);
     const v=f?(f[gw]??f[String(gw)]):null;return v==null?null:+v;};
 
+  if(BACKUP)return backupNote("Leagues and rivals");
   if(!feed||!feed.standings||!feed.standings.length){
     return `<div class="panel"><div class="phead"><h2>Leagues &amp; rivals</h2>
         <span class="note">league ${esc(S.leagueId||"391690")}</span></div>
@@ -660,10 +533,15 @@ function rivalsHTML(){
     const d=r.lastRank-r.rank;
     if(!d)return `<span style="color:var(--mute)">–</span>`;
     return `<span style="color:${d>0?"var(--mint)":"var(--red)"}">${d>0?"▲":"▼"}${Math.abs(d)}</span>`;};
+  /* S9 (Stage 1, 19 Oct 2026): LiveFPL-style rows. Captain, chip, transfers
+     and hits, bench points and how many of their XI you also own, all from
+     the latest week in the rivals feed. */
+  const lastOf=id=>{const e=(feed.entries||{})[id];const a=(e&&e.gw)||[];return a.length?a[a.length-1]:null;};
+  const chipOf=(id,ev)=>{const e=(feed.entries||{})[id];const c=((e&&e.chips)||[]).find(x=>x.event===ev);return c?(c.label||c.name):null;};
   const table=`<div class="panel"><div class="phead"><h2>${esc(feed.leagueName||"League")}</h2>
       <span class="note">${esc(feed.leagueId||S.leagueId||"391690")} · GW${feed.lastEvent||gLast}</span></div>
     <div class="scroll"><table class="trktable"><thead><tr>
-      <th>#</th><th></th><th>Team</th><th>GW</th><th>Total</th></tr></thead><tbody>
+      <th>#</th><th></th><th>Team</th><th>GW</th><th>Total</th><th>Captain</th><th class="hide-ph">Chip</th><th class="hide-ph">Transfers</th><th class="hide-ph">Bench</th><th>Shared</th></tr></thead><tbody>
       ${rows.map(r=>{const isMe=String(r.entryId)===String(TEAM_ID);
         const isSel=String(r.entryId)===selId;
         return `<tr class="rvrow${isSel?" on":""}" ${isMe?"":`onclick="act('rivalpick','${r.entryId}')"`}
@@ -672,10 +550,18 @@ function rivalsHTML(){
           <td style="text-align:left">${mv(r)}</td>
           <td style="text-align:left">
             <span style="font-weight:700;color:${isMe?"var(--mint)":isSel?"var(--amber)":"var(--cream)"}">${esc(r.entryName||"—")}</span>
-            <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(r.manager||"")}${isMe?" · you":""}</span></td>
-          <td>${r.gwPoints??"—"}</td><td>${r.totalPoints??"—"}</td></tr>`;}).join("")}
+            <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.manager||"")}${isMe?" · you":""}</span></td>
+          <td>${r.gwPoints??"—"}</td><td><b>${r.totalPoints??"—"}</b></td>
+          ${(()=>{const L=lastOf(r.entryId)||{},pk=L.picks||[],c=pk.find(x=>x.isC),cp=c&&pOf(c.id);
+            const chip=chipOf(r.entryId,L.event);
+            const shared=pk.filter(x=>x.multiplier>0&&myIds.has(x.id)).length;
+            return `<td>${cp?esc(cp.web_name):"—"}</td>
+              <td class="hide-ph">${chip?`<span class="tagy">${esc(chip)}</span>`:'<span class="mu">—</span>'}</td>
+              <td class="hide-ph">${L.transfers??"—"}${L.transferCost?` <span class="dn">−${L.transferCost}</span>`:""}</td>
+              <td class="hide-ph">${L.bench??"—"}</td>
+              <td>${isMe?"—":(pk.length?shared+"/11":"—")}</td>`;})()}</tr>`;}).join("")}
     </tbody></table></div>
-    <div class="pbody"><p class="note" style="margin:0">Tap a rival for their squad, chips, transfers and differentials.</p></div></div>`;
+    <div class="pbody"><p class="note" style="margin:0">Tap a rival for their squad, chips, transfers and differentials. Shared is how many of their starting XI you also own.</p></div></div>`;
 
   /* ---------- league-wide summary ---------- */
   const entries=feed.entries||{};
@@ -699,7 +585,7 @@ function rivalsHTML(){
     ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
     <span style="flex:1;min-width:0">
       <span style="font-size:12.5px;font-weight:600">${esc(p.web_name)}</span>
-      <span style="display:block;font-size:9.5px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)}${sub?" · "+sub:""}</span></span>
+      <span style="display:block;font-size:10px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)}${sub?" · "+sub:""}</span></span>
     <span class="mono" style="font-weight:700;color:var(--mint)">${right}</span></div>`;
 
   const summary=`<div class="rvsum">
@@ -816,22 +702,25 @@ function newsHTML(){
   const red=S.reddit.filter(match).slice(0,10);
   const creators=CREATORS.slice(0,S.expand.creators?CREATORS.length:5);
 
+  const srcN=Object.keys(S.srcLog||{}).filter(k=>!k.startsWith("·")).length;
   const ctrl=`<div class="panel"><div class="phead"><h2>News feed</h2>
+     ${S.newsState==="ok"&&S.newsFetchedAt?`<span class="note" style="margin-right:auto;margin-left:8px">Updated ${esc(agoText(S.newsFetchedAt))}${srcN?` · ${srcN} sources`:""} · checked every 15 min</span>`:""}
      <span style="display:flex;gap:6px;align-items:center">
       ${[24,72,168].map(w=>`<button class="${S.newsWindow===w?"on":""}" onclick="act('nwin',${w})">${w===24?"24h":w===72?"3d":"7d"}</button>`).join("")}
       <button onclick="act('news')">${S.newsState==="loading"?"…":"↻"}</button></span></div>
+     ${S.newsState==="backup"?backupNote("The news feed"):""}
      ${S.newsState==="idle"?`<div class="pbody"><button class="pri" onclick="act('news')">Load the feed</button></div>`:""}
      ${S.newsState==="loading"?`<div class="pbody"><p class="note">Reading the feeds…</p></div>`:""}
      ${S.newsState==="fail"?`<div class="pbody"><div class="warn">
-       ${Object.keys(S.srcLog||{}).length?`<div class="mono" style="font-size:10px;margin-bottom:8px">${Object.entries(S.srcLog).map(([k,v])=>esc(k)+": "+v).join("<br>")}</div>`:""}No feed came back — the public CORS proxies are refusing right now. Squad data is unaffected.</div></div>`:""}
+       ${Object.keys(S.srcLog||{}).length?`<div class="mono" style="font-size:10px;margin-bottom:8px">${Object.entries(S.srcLog).map(([k,v])=>esc(k)+": "+v).join("<br>")}</div>`:""}The server returned no news items. It refetches every 15 minutes; squad data is unaffected.</div></div>`:""}
      ${S.newsState==="ok"?`<div class="pbody" style="border-top:1px solid var(--ink3);display:flex;flex-direction:column;gap:8px">
        <span style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-         <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;width:46px">Source</span>
+         <span style="font-size:10px;color:var(--mute);font-weight:700;width:46px">Source</span>
          <button class="chipbtn ${sf?"":"on"}" onclick="act('srcf','')">All</button>
          ${Object.entries(srcCount).sort((a,b)=>b[1]-a[1]).slice(0,14)
            .map(([k,v])=>`<button class="chipbtn ${sf===k?"on":""}" onclick="act('srcf','${esc(k).replace(/'/g,"")}')">${esc(k)} ${v}</button>`).join("")}</span>
        <span style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-         <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;width:46px">Player</span>
+         <span style="font-size:10px;color:var(--mute);font-weight:700;width:46px">Player</span>
          <button class="chipbtn ${pf?"":"on"}" onclick="act('plf','')">All</button>
          ${squadPlayers().map(p=>`<button class="chipbtn ${pf===p.web_name?"on":""}" onclick="act('plf','${esc(p.web_name).replace(/'/g,"")}')">${esc(p.web_name)}</button>`).join("")}</span>
        </div>`:""}</div>`;
@@ -896,18 +785,106 @@ function go(ev,tab){
   act('tab',tab);
   return false;
 }
+/* ---------- status chip and provenance footer ---------- */
+/* The header chip replaces the old Refresh button: it reports the server's
+   own /api/status and carries the Check now button, which runs the same
+   loadAll the old button did. Green: everything fresh. Green pulsing: a
+   fixture is in play and live points are flowing. Amber: a source is late or
+   the server itself cannot be reached, with the last good copy's time. */
+/* Cutover: what a server-only page says on the Pages backup */
+function backupNote(what){
+  return `<div class="panel"><div class="pbody"><p class="note" style="margin:0">${what} runs on the FPL Signals server only. This is the backup copy on GitHub Pages: the model, planner, chips, fixtures and signals work here from the public dataset.</p></div></div>`;
+}
+function statusChipHTML(){
+  const st=S.status;
+  let cls="",txt;
+  if(BACKUP)return `<span class="sigchip"><span class="sigdot wait"></span><span>Backup copy on GitHub Pages · <b>loaded ${ukHHMM(S.stamp||Date.now())}</b></span>
+    <button onclick="act('load')">${S.loading?esc(S.progress||"…"):"Check now"}</button></span>`;
+  if(S.statusPending&&!S.statusErr)txt=`Checking for updates · <b>last copy ${ukHHMM(S.statusAt||Date.now())}</b>`;
+  else if(!st||S.statusErr){cls="wait";txt=`Server unreachable · <b>showing last copy</b>`;}
+  else{
+    const ds=st.dataset||{},fpl=st.fpl||{},feeds=st.feeds||{};
+    const liveAge=agoMin(fpl.liveFetchedAt);
+    if(ds.stale)txt=`Waiting on FPL Core Insights · <b>last good copy ${ukHHMM(ds.committedAt||ds.fetchedAt||Date.now())}</b>`,cls="wait";
+    else if(fpl.error)txt=`Waiting on FPL · <b>last good copy ${ukHHMM(fpl.fetchedAt||Date.now())}</b>`,cls="wait";
+    else if(feeds.error)txt=`Waiting on the feed builder · <b>last good copy ${ukHHMM(feeds.lastOk||Date.now())}</b>`,cls="wait";
+    else if(liveAge!=null&&liveAge<=10){cls="live";txt=`Live · <b>updated ${agoText(fpl.liveFetchedAt)}</b>`;}
+    else txt=`Up to date · <b>checked ${S.statusAt?agoText(S.statusAt):"just now"}</b>`;
+  }
+  return `<span class="sigchip"><span class="sigdot ${cls}"></span><span>${txt}</span>
+    <button onclick="act('load')">${S.loading?esc(S.progress||"…"):"Check now"}</button></span>`;
+}
+/* Repaint only the chip and the footer in place. The minute timer uses this
+   so an open page's ages stay honest without a full re-render, which would
+   wipe scroll position and open menus. */
+function refreshStatusUI(){
+  const c=document.querySelector(".sigchip");if(c)c.outerHTML=statusChipHTML();
+  const p=document.querySelector(".prov");if(p)p.outerHTML=provHTML();
+}
+/* Real per-source ages from /api/status. If the last status check failed the
+   last known values keep showing (S.status is only replaced on success). */
+function provHTML(){
+  const st=S.status||{};
+  const ds=st.dataset||{},fpl=st.fpl||{},news=st.news||{},odds=st.odds||{},feeds=st.feeds||{};
+  return `<div class="prov"><span>FPL Signals v${APP_VERSION}</span>
+    <span>Stats: <b>FPL Core Insights, ${esc(ukWhen(ds.committedAt))}</b>${ds.committedAt?` (${esc(agoText(ds.committedAt))})`:""}</span>
+    <span>Prices, flags and deadlines: <b>FPL, ${esc(agoText(fpl.fetchedAt))}</b></span>
+    <span>News: <b>${esc(agoText(news.fetchedAt))}</b></span>
+    <span>Odds: <b>${esc(ukWhen(odds.fetchedAt))}</b></span>
+    <span>Your team and rivals: <b style="${feeds.error?"color:var(--red)":""}">${feeds.error?"last build failed, showing "+esc(agoText(feeds.lastOk))+" copy":esc(agoText(feeds.lastOk))}</b></span>
+    ${(S.loadWarnings||[]).length||(S.fixFail||[]).length?`<span style="color:var(--amber);flex-basis:100%">Did not load: ${esc([...(S.loadWarnings||[]),...((S.fixFail||[]).length?["fixtures for GW"+S.fixFail.join(", GW")+" (those weeks show no projection)"]:[])].join("; "))}. Figures that use them are less reliable; Check now retries.</span>`:""}</div>`;
+}
+/* The outer guard (F7): if even the header cannot be drawn, show the menu and
+   a plain message rather than a frozen page. The pass after it makes every
+   clickable element reachable by keyboard and named for screen readers. */
 function render(){
+  try{renderPage();}
+  catch(e){
+    try{console.error("render failed",e);}catch(_){}
+    const app=document.getElementById("app");
+    let nav="";try{nav=navHTML();}catch(_){}
+    app.innerHTML=`<div class="stick">${nav}</div><div class="panel"><div class="pbody"><div class="warn" role="alert">
+      <b>This page hit a problem and could not be drawn.</b> Try another page or Check now. <span class="mono" style="font-size:11px">${esc(String(e&&e.message||e))}</span></div></div></div>`;
+  }
+  try{a11yPass();}catch(_){}
+}
+/* F10, F11, F89: after every render. Elements that act on click but are not
+   buttons or links get a tab stop and a button role (Enter and Space press
+   them, see the key handler in app-main.js); inputs without a label take
+   their placeholder or title as their name; the document title names the
+   page. */
+function a11yPass(){
+  const app=document.getElementById("app");if(!app)return;
+  app.querySelectorAll("[onclick]:not(button):not(a):not(input):not(select):not(textarea)").forEach(el=>{
+    if(!el.hasAttribute("tabindex"))el.setAttribute("tabindex","0");
+    if(!el.hasAttribute("role"))el.setAttribute("role","button");});
+  app.querySelectorAll("input:not([aria-label]),select:not([aria-label]),textarea:not([aria-label])").forEach(el=>{
+    const id=el.id&&app.querySelector(`label[for="${el.id}"]`);if(id)return;
+    const name=el.getAttribute("placeholder")||el.getAttribute("title")||el.name||(el.closest("label")?"":"Value");
+    if(name)el.setAttribute("aria-label",name);});
+  app.querySelectorAll("button:not([aria-label])").forEach(b=>{
+    if(!b.textContent.trim()){const t=b.getAttribute("title");b.setAttribute("aria-label",t||"Button");}});
+  const t=document.getElementById("toast");if(t&&!t.hasAttribute("role")){t.setAttribute("role","status");t.setAttribute("aria-live","polite");}
+  const cur=NAV.flatMap(g=>g.items).find(([k])=>k===S.tab);
+  document.title=(cur?cur[1]+" · ":"")+"FPL Signals";
+}
+function renderPage(){
   const app=document.getElementById("app");
+  /* Instant start: while the saved picture of the last page is showing and the
+     model is still being built from the saved data, leave the picture alone
+     instead of flashing the loading screen. The first real render clears it. */
+  if(!S.model&&S.booting)return;
+  if(S.booting){S.booting=false;app.classList.remove("booting");}
   if(!S.model){
     app.innerHTML=`<div style="max-width:460px;margin:0 auto;padding:28px 4px">
-      <h1 style="font-size:44px;line-height:.95;font-weight:800">FPL<br><span style="color:var(--mint)">Assistant</span></h1>
-      <p class="note" style="margin-top:12px">Armitage Shanks · team 301830</p>
+      <h1 style="font-size:44px;line-height:.95;font-weight:800">FPL<br><span style="color:var(--mint)">Signals</span></h1>
+      <p class="note" style="margin-top:12px">${esc(IDENTITY.team)} · team ${IDENTITY.id}</p>
       <div class="panel" style="border-color:var(--mint);margin-top:18px"><div class="pbody">
-        <p class="note" style="margin:0 0 10px">Loads players, prices, fixtures and last season's underlying stats straight from the FPL Core Insights dataset. No proxy, no downloads.</p>
+        <p class="note" style="margin:0 0 10px">Loads players, prices, fixtures and last season's underlying stats from this box's own FPL Signals server, which mirrors the FPL Core Insights dataset.</p>
         <button class="pri" style="width:100%" onclick="act('load')">${S.loading?esc(S.progress||"Loading…"):"Load data"}</button>
       </div></div>
       ${S.err?`<div class="warn" style="margin-top:12px">${esc(S.err)}</div>`:""}
-      <p class="note" style="margin-top:14px">Data: <a href="https://github.com/olbauday/FPL-Core-Insights" target="_blank" style="color:var(--cyan)">FPL Core Insights</a>, refreshed twice daily.</p></div>`;
+      <p class="note" style="margin-top:14px">Data: <a href="https://github.com/olbauday/FPL-Core-Insights" target="_blank" style="color:var(--cyan)">FPL Core Insights</a>, mirrored locally about three times a day.</p></div>`;
     return;
   }
   const g=VG();
@@ -919,19 +896,23 @@ function render(){
   const rating=teamRating();
   const tabs=NAV.flatMap(gp=>gp.items);
   let main="";
+  /* F7: a throw in one page builder used to freeze the whole app. It is caught
+     here, so the header, the menu and every other page keep working, and the
+     page says what went wrong instead of going blank. */
+  try{
   if(S.tab==="squad"){
     const first=S.model.next.id;
     const hSlider=`<div class="chipbar" style="align-items:center;justify-content:space-between">
       <button onclick="act('vgw',${Math.max(1,g-1)})" ${g<=1?"disabled style=\"opacity:.35\"":""}>←</button>
       <span style="text-align:center">
-        <span style="display:block;font-family:'Barlow Condensed';font-weight:700;font-size:18px;letter-spacing:.05em">
+        <span style="display:block;font-family:'Geist';font-weight:700;font-size:18px;">
           GAMEWEEK ${g}${S.horizon>1?`–${g+S.horizon-1}`:""}</span>
-        <span style="display:block;font-size:9.5px;color:var(--mute)">${g===first?"next deadline":`${g-first} week${g-first>1?"s":""} ahead`}${S.horizon>1?` · ${S.horizon}-week total`:""}</span>
+        <span style="display:block;font-size:10px;color:var(--mute)">${g===first?"next deadline":`${g-first} week${g-first>1?"s":""} ahead`}${S.horizon>1?` · ${S.horizon}-week total`:""}</span>
         ${(g<first&&S.tracker&&(S.tracker.gw||[]).find(r=>r.event===g&&r.picks&&r.picks.length))
-          ?`<span style="display:block;font-size:8.5px;color:var(--mint)" title="Squad and captain confirmed from the official FPL API. The starting XI/bench split shown is a best estimate — that specific detail isn't in the feed yet.">official squad · GW${g}</span>`:""}</span>
+          ?`<span style="display:block;font-size:10px;color:var(--mint)" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`:""}</span>
       <button onclick="act('vgw',${Math.min(38,g+1)})" ${g>=38?"disabled style=\"opacity:.35\"":""}>→</button></div>`;
     const chipBarUnused=`<div class="chipzone">
-      <span style="font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:#9E86C6;font-weight:700;width:100%;text-align:center">Play a chip</span>
+      <span style="font-size:10px;color:#9E86C6;font-weight:700;width:100%;text-align:center">Play a chip</span>
       ${[["none","None"],["bboost","Bench Boost"],["3xc","Triple Captain"],["freehit","Free Hit"],["wildcard","Wildcard"]]
         .map(([k,n])=>{
           /* a chip is only lit on the gameweek it is actually assigned to */
@@ -942,24 +923,38 @@ function render(){
       <div class="phead"><h2 style="color:var(--mint)">Transfer Advice</h2></div>
       <div class="pbody"><p class="note">Top ${S.pendingOpt.length} by predicted gain. Nothing changes until you confirm.</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:8px">
-          ${S.pendingOpt.map(m=>`<div><div style="font-size:9px;letter-spacing:.13em;text-transform:uppercase;
+          ${S.pendingOpt.map(m=>`<div><div style="font-size:10px;
             color:var(--cyan);font-weight:700;margin-bottom:4px">${POS[m.out.pos]}</div>${swapCardHTML(m,g)}</div>`).join("")}</div>
         <button style="margin-top:10px" onclick="act('cancelopt')">Cancel</button></div></div>`:"";
     main=`<div class="grid2"><div>
       <div class="panel"><div class="phead"><h2>Planner</h2>
 
         <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="act('reset')" style="background:var(--amber);color:#20130A;border-color:var(--amber);font-weight:800">Reset</button><button onclick="act('save')" style="background:var(--mint);color:var(--ink);border-color:var(--mint);font-weight:800">Save</button></span></div>
+          <button onclick="act('reset')">Reset</button><button class="pri" onclick="act('save')">Save</button></span></div>
         <div class="gwbar">
           <button onclick="act('startgw',${Math.max(1,VG()-1)})" title="Earlier gameweek">←</button>
           <span style="text-align:center;min-width:130px">
-            ${(S.actuals&&S.actuals[VG()]!=null)?`
-            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} actual</span>
-            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+S.actuals[VG()]).toFixed(0)}</span>
-            <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">pred ${weekPts().toFixed(1)} · <span style="font-weight:700;color:${S.actuals[VG()]-weekPts()>=0?"var(--mint)":"var(--red)"}">${S.actuals[VG()]-weekPts()>=0?"+":""}${(S.actuals[VG()]-weekPts()).toFixed(1)}</span></span>`
-            :`
-            <span style="display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:700">GW${VG()} predicted</span>
-            <span style="display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>`}
+            ${(()=>{
+              /* Finished week with the official history published: the real
+                 total, the transfers and hit paid for it, and the chip. */
+              const offRow=(g<first&&S.tracker&&Array.isArray(S.tracker.gw))
+                ?(S.tracker.gw.find(r=>r.event===g&&Array.isArray(r.picks)&&r.picks.length)||null):null;
+              if(offRow)return `
+            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} official</span>
+            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+offRow.points).toFixed(0)}</span>
+            <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">${offRow.transfers||0} transfer${(offRow.transfers||0)===1?"":"s"}${offRow.transferCost>0?`, <span style="font-weight:700;color:var(--red)">-${offRow.transferCost} hit</span>`:""}${offRow.chipLabel?` · <span style="color:var(--amber)">${esc(offRow.chipLabel)}</span>`:""}</span>
+            <span style="display:block;font-size:10px;color:var(--mint);margin-top:1px" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`;
+              /* F55: a week in play shows its score so far, tagged live */
+              if(S.actuals&&S.actuals[g]!=null)return `
+            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} ${weekFinal(g)?"actual":"so far"+LIVE_TAG}</span>
+            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+S.actuals[g]).toFixed(0)}</span>
+            <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">pred ${weekPts().toFixed(1)} · <span style="font-weight:700;color:${S.actuals[g]-weekPts()>=0?"var(--mint)":"var(--red)"}">${S.actuals[g]-weekPts()>=0?"+":""}${(S.actuals[g]-weekPts()).toFixed(1)}</span></span>`;
+              return `
+            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} predicted</span>
+            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>
+            ${(()=>{const t=transfersIn(g);if(!t||freeWeek(g))return "";const h=hitCost(g);
+              return `<span style="display:block;font-size:10px;color:${h?"var(--red)":"var(--mute)"};margin-top:1px">${t} transfer${t>1?"s":""} · ${h?`-${h} hit`:"free"}</span>`;})()}`;
+            })()}
           </span>
           <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button>
         </div>
@@ -985,6 +980,7 @@ function render(){
                 return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
           </span></div></div>
       <div class="panel">${legendHTML()}</div>
+      ${captaincyHTML()}
       <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
         <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
       <div class="poolcol">
@@ -999,7 +995,7 @@ function render(){
       <span class="note">${filtered("list").length} players · tap any column to sort</span></div>
     ${filtersHTML(false,'list')}
     <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
-      <span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:700;flex:none">Show only</span>
+      <span style="font-size:10px;color:var(--mute);font-weight:700;flex:none">Show only</span>
       ${SIGDEF.map(([l,c,t],ix)=>`<button class="fbtn fbtn-icon ${S.iconF.includes(ix)?"on":""}"
         onclick="act('iconf',${ix})" title="${t==="Stats caution"?"Hide players whose stats may be unreliable":esc(t)}" style="--fc:${c}">
         <span class="sig">${l}</span></button>`).join("")}
@@ -1009,7 +1005,7 @@ function render(){
       <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
         <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button>
     </div>
-    <p class="note" style="margin:0;padding:2px 14px 0;font-size:9px">Hover an icon for what it filters.</p>
+    <p class="note" style="margin:0;padding:2px 14px 0;font-size:10px">Hover an icon for what it filters.</p>
     <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
       <span style="flex:1;min-width:200px">
         <span style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)">
@@ -1030,55 +1026,82 @@ function render(){
   else if(S.tab==="odds")main=oddsHTML();
   else if(S.tab==="rivals")main=rivalsHTML();
   else if(S.tab==="news")main=newsHTML();
+  else if(S.tab==="signals")main=signalsHTML();
+  }catch(e){
+    try{console.error("page failed",S.tab,e);}catch(_){}
+    main=`<div class="panel"><div class="pbody"><div class="warn" role="alert"><b>This page hit a problem and could not be drawn.</b>
+      Every other page still works. <span class="mono" style="font-size:11px;opacity:.85">${esc(String(e&&e.message||e))}</span></div></div></div>`;
+  }
 
+  /* F83/F82 (bundle 8, 13 Oct 2026): the header figures are cards (title
+     with (i), figure, change line; what used to be the caption lives in the
+     (i)), and the sticky bar is one line: gameweek, Predicted and Bank, with
+     Rating, Transfers and Rank added on a laptop. */
+  const gv=VG(), freeSq=["freehit","wildcard"].includes(chipForWeek(gv));
+  const fRows=((S.tracker&&S.tracker.gw)||[]).slice().sort((x,y)=>x.event-y.event);
+  const lastRow=fRows[fRows.length-1], prevRow=fRows[fRows.length-2];
+  const chg=(d,f,goodUp)=>(d==null||!isFinite(d)||Math.abs(d)<1e-9)?"":
+    `<span class="${(d>0)===goodUp?"up":"dn"}">${d>0?"▲":"▼"} ${f(Math.abs(d))}</span> `;
+  const pred=weekPts(), hits=hitsOver(gv,S.horizon), lastAct=S.actuals?S.actuals[gv-1]:null;
+  const fv=valueFromFeed();
+  const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
+  const card=(title,tip,v,change,tone,vstyle)=>`<div class="fc${tone?" "+tone:""}">
+      <div class="fct">${title}<button class="fci" aria-label="About ${title}" data-tip="${esc(tip)}">i</button></div>
+      <div class="fcv"${vstyle?` style="${vstyle}"`:""}>${v}</div>
+      <div class="fcc">${change||"&nbsp;"}</div></div>`;
+  const cards=[
+    card(S.horizon===1?`Predicted GW${gv}`:`Predicted GW${gv}–${Math.min(38,gv+S.horizon-1)}`,
+      "Your XI and captain, plus cover from the vice-captain and bench"+(chipForWeek(gv)?", with "+CHIP_NAME[chipKind(chipForWeek(gv))]:"")
+        +(S.oddsTeams?". Bookmaker odds included, fetched "+ukWhen(S.oddsFetchedAt):"")+(hits?". Less a "+hits+"-point hit":"")+".",
+      pred.toFixed(1),
+      (S.horizon===1&&lastAct!=null?chg(pred-lastAct,x=>x.toFixed(1),true)+`vs GW${gv-1}'s ${lastAct}`:"")
+        +(hits?` · <span class="dn">−${hits} hit</span>`:""),"mint"),
+    card("Team Rating",`Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.`,
+      rating?rating.pct:"—",rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100","",`color:${rateCol}`),
+    card("Free Transfers","Free transfers into this week, maximum 5. Official means taken from FPL's own history.",
+      freeSq?"Unlimited":freeTransfers(),
+      chipForWeek(gv)==="freehit"?"Free Hit this week":chipForWeek(gv)==="wildcard"?"Wildcard this week":
+        ({feed:"official",local:"tracked locally",default:"untracked"}[ftSource()]),"",freeSq?"color:var(--amber)":""),
+    card("Overall Rank","Your overall rank after the last finished gameweek, from FPL.",
+      S.entryRank?S.entryRank.toLocaleString():"—",
+      S.entryRank?(prevRow&&lastRow&&prevRow.orRank&&lastRow.orRank?chg(prevRow.orRank-lastRow.orRank,x=>Math.round(x).toLocaleString(),true):"")+"after GW"+S.entryRankGw:"waiting"),
+    card("Squad Value",`Today's buy prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan, before any bank.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included, taken at its own time and prices.`:""}`,
+      "£"+sv.toFixed(1),
+      fv?(prevRow&&lastRow&&prevRow.value!=null?chg(lastRow.value-prevRow.value,x=>x.toFixed(1),true):"")+`FPL £${fv.value.toFixed(1)}`:"buy prices"),
+    card("In the Bank","Money to spend in this week's plan, after planned transfers and any sales.",
+      "£"+bank.toFixed(1),
+      raised>0?`incl. £${raised.toFixed(1)} from sales`:(prevRow&&lastRow&&prevRow.bank!=null?chg(lastRow.bank-prevRow.bank,x=>x.toFixed(1),true)+"since GW"+prevRow.event:"to spend"),
+      "",bank<0?"color:var(--red)":"")
+  ].join("");
+  const capWarn=capWarnHTML().replace(/^ · /,"");
   app.innerHTML=`
-   <div class="panel" style="background:linear-gradient(135deg,#161C26 0%,#10161E 55%,#0C0E12 100%);border-color:#2B3442">
+   <div class="panel">
     <div class="phead bare">
       <div style="display:flex;gap:11px;align-items:center">
         ${LOGO}
-        <div><div style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mint);font-weight:700">FPL Edge · Gameweek ${g}</div>
-        <h1 style="font-size:29px">Armitage Shanks</h1>
-        <div style="font-size:11px;color:var(--mute)">Andrew Kenny · team ${TEAM_ID}</div></div></div>
-      <button class="pri" style="background:var(--amber);border-color:var(--amber);color:#20130A" onclick="act('load')">${S.loading?esc(S.progress||"…"):"↻ Refresh"}</button></div>
-    <div class="stats">
-      <div class="stat"><div class="k">${S.horizon===1?`Predicted GW${VG()}`:`Predicted GW${VG()}–${Math.min(38,VG()+S.horizon-1)}`}</div>
-        <div class="v" style="color:var(--mint)">${weekPts().toFixed(1)}</div>
-        <div class="s">XI + captain${chipForWeek(VG())?" + "+chipForWeek(VG()):""}</div></div>
-      <div class="stat"><div class="k">Team rating</div>
-        <div class="v" style="color:${rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"}">${rating?rating.pct:"—"}</div>
-        <div class="s">${rating?`best legal XI ${rating.best.toFixed(1)}`:"out of 100"}</div></div>
-      <div class="stat"><div class="k">Free transfers</div>
-        <div class="v" style="${chipForWeek(VG())==="freehit"?"color:var(--amber)":""}">${chipForWeek(VG())==="freehit"?"Unlimited":freeTransfers()}</div>
-        <div class="s">${chipForWeek(VG())==="freehit"?"Free Hit — this week only":
-          {feed:"official · max 5",local:"tracked locally · max 5",default:"untracked · max 5"}[ftSource()]}</div></div>
-      <div class="stat"><div class="k">Overall rank</div>
-        <div class="v">${S.entryRank?S.entryRank.toLocaleString():"—"}</div>
-        <div class="s">${S.entryRank?"live":"from GW1"}</div></div>
-      <div class="stat"><div class="k">Squad value</div><div class="v">£${sv.toFixed(1)}</div><div class="s">of £100.0</div></div>
-      <div class="stat"><div class="k">In the bank</div><div class="v" style="color:${bank<0?"var(--red)":raised>0?"var(--mint)":"var(--cream)"}">£${bank.toFixed(1)}</div><div class="s">${raised>0?`incl. £${raised.toFixed(1)} from sales`:"to spend"}</div></div></div>
+        <div><div style="font-size:12px;color:var(--mint);font-weight:600">FPL Signals · Gameweek ${g}</div>
+        <h1 style="font-size:24px">${esc(IDENTITY.team)}</h1>
+        <div style="font-size:12px;color:var(--mute)">${esc(IDENTITY.manager)} · team ${IDENTITY.id}</div></div></div>
+      ${statusChipHTML()}</div>
+    <div class="fcgrid">${cards}</div>
+    ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}
    </div>
    ${S.cardId?playerCardHTML():""}
    <div class="stick">
      <div class="ministats">
-       ${LOGO}
-       <span class="msrow">
-         ${[["Predicted",weekPts().toFixed(1),"var(--mint)"],
-            ["Rating",rating?rating.pct:"—",rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)"],
-            ["Transfers",chipForWeek(VG())==="freehit"?"∞":freeTransfers(),chipForWeek(VG())==="freehit"?"var(--amber)":"var(--cream)"],
-            ["Rank",S.entryRank?S.entryRank.toLocaleString():"—","var(--cream)"],
-            ["Value","£"+sv.toFixed(1),"var(--cream)"],
-            ["Bank","£"+bank.toFixed(1),bank<0?"var(--red)":"var(--cream)"]]
-           .map(([k,v,c])=>`<span class="mspill"><span class="msk">${k}</span>
-             <span class="msv" style="color:${c}">${v}</span></span>`).join("")}
-       </span>
-       <span class="gwpill">
-         <button onclick="act('startgw',${Math.max(1,VG()-1)})" aria-label="Earlier">←</button>
-         <span class="gwv">GW${VG()}</span>
-         <button onclick="act('startgw',${Math.min(38,VG()+1)})" aria-label="Later">→</button>
-       </span>
+       <span class="slogo">${LOGO}</span>
+       <span class="sgw">
+         <button onclick="act('startgw',${Math.max(1,gv-1)})" aria-label="Previous gameweek">‹</button>
+         <b>GW${gv}</b>
+         <button onclick="act('startgw',${Math.min(38,gv+1)})" aria-label="Next gameweek">›</button></span>
+       <span class="sfig"><span class="sk">Predicted</span><span class="sv mint">${pred.toFixed(1)}</span></span>
+       <span class="sfig"><span class="sk">Bank</span><span class="sv"${bank<0?' style="color:var(--red)"':""}>£${bank.toFixed(1)}</span></span>
+       <span class="sfig hide-ph"><span class="sk">Rating</span><span class="sv" style="color:${rateCol}">${rating?rating.pct:"—"}</span></span>
+       <span class="sfig hide-ph"><span class="sk">Transfers</span><span class="sv">${freeSq?"∞":freeTransfers()}</span></span>
+       <span class="sfig hide-ph"><span class="sk">Rank</span><span class="sv">${S.entryRank?S.entryRank.toLocaleString():"—"}</span></span>
      </div>
      ${navHTML()}</div>
-   ${main}
-   <p class="note" style="text-align:center;padding:14px 0">FPL Edge v${APP_VERSION} · data refreshed ${S.stamp?new Date(S.stamp).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—"}</p>`;
+   <main id="main" style="display:block;max-width:100%">${main}</main>
+   ${provHTML()}`;
 }
 
