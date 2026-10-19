@@ -67,8 +67,8 @@ function playerCardHTML(){
       </div>
       <div class="pclab">${POS[p.pos]} detail</div>
       <div class="pcgrid">${posStats(p).map(([k,v])=>stat(k,v)).join("")}</div>
-      ${setPieceHTML(p)?`<div class="pclab">Set pieces</div>
-        <div style="padding-top:6px">${setPieceHTML(p)}</div>`:""}
+      ${setPieceText(p)?`<div class="pclab">Set pieces</div>
+        <div style="padding-top:6px;font-size:12.5px">${esc(setPieceText(p))}</div>`:""}
     </div></div>`;
 }
 
@@ -106,11 +106,7 @@ function filtered(scope){
     const g=S.model.next.id;
     if(S.starOnly)out=out.filter(p=>S.stars.includes(p.id));
     if(S.iconF.length)out=out.filter(p=>{const ic=signals(p,g).map(x=>x[0]);
-      return S.iconF.every(ix=>{
-        /* the caution flag is an exclusion: selecting it hides those players */
-        if(SIGDEF[ix][2]==="Stats caution")return !ic.includes(SIGDEF[ix][0]);
-        return ic.includes(SIGDEF[ix][0]);});});
-    if(S.spF)out=out.filter(p=>setPieceHTML(p).includes(">"+S.spF+"<"));
+      return S.iconF.every(k=>ic.includes(k));});
   }
   return out;
 }
@@ -344,9 +340,7 @@ function tableHTML(){
     return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')" title="${TDESC[k]||n}"
       style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("");
   const iconCell=p=>{
-    const s=signals(p,g).map(([l,c,t])=>sigIcon(l,c,t)).join("");
-    const sp=setPieceHTML(p).replace(/^<span class="sigs">/,"").replace(/<\/span>$/,"");
-    const all=s+sp;
+    const all=signals(p,g).map(([k,t])=>sigTile(k,t)).join("");
     return all?`<span class="sigcell">${all}</span>`:`<span style="color:var(--ink3)">·</span>`;};
   const pct=v=>(v*100).toFixed(0)+"%";
   const CELL={
@@ -1636,7 +1630,7 @@ function signalsHTML(){
   const ds=S.status&&S.status.dataset;
   return `<div class="sgpage">
     <div class="sghead"><div><h2>Signals</h2><p>Gameweek ${G} · players and teams worth a look, ranked from the model and this season's data${ds&&ds.committedAt?` · stats ${esc(ukWhen(ds.committedAt))}`:""}</p></div>
-      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}</div></div>
+      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}<a class="btnlink" href="${routeFor("transfers")}" onclick="return go(event,'transfers')">Transfers →</a></div></div>
     <h4 class="sgsec">Your Squad</h4>
     <div class="sggrid g3">
       ${card("sqform","flame","good","In Form",`Your players on ${sgF1(SIG.formHot)} form or better (average points per game over the last 30 days). Bars: points in each of the last six gameweeks.`,keep)}

@@ -117,7 +117,7 @@ try {
   check(!threw, "F7 a throwing page does not escape render()", threw && String(threw));
   const alert = doc.querySelector('[role="alert"]');
   check(!!alert && /could not be drawn/.test(alert.textContent) && /test throw/.test(alert.textContent), "F7 the page says what went wrong");
-  check(!!doc.querySelector(".sigchip") && !!doc.querySelector("nav"), "F7 the header and menu survive");
+  check(!!doc.querySelector(".tb") && !!doc.querySelector("nav"), "F7 the header and menu survive");
   w.signalsHTML = real; vm.runInContext("signalsHTML=window.signalsHTML", ctx);
   show("fixtures");
   check(!!doc.querySelector("main") && !doc.querySelector('[role="alert"]'), "F7 other pages still draw afterwards");

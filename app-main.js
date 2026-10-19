@@ -131,7 +131,6 @@ function act(k,a,b){
       S.lGwTo=clamp(Math.round(+a)||from,from,38);break;}
     case"lwin":S.lWin=+a;break;
     case"iconf":S.iconF=S.iconF.includes(a)?S.iconF.filter(x=>x!==a):[...S.iconF,a];break;
-    case"spf":S.spF=S.spF===a?null:a;break;
     case"staronly":S.starOnly=!S.starOnly;break;
     case"addplan":{const p=P(a);if(!p)break;
       if((S.squad||[]).includes(p.id)){toast(p.web_name+" is already in your squad");break;}
@@ -326,6 +325,9 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&S.cardId){S.cardId=null;render();}
 });
 window.addEventListener("popstate",()=>{if(applyHash())render();});
+/* wave 1: Predicted, Bank and FT join the sticky bar once the hero is gone */
+window.addEventListener("scroll",()=>{const on=window.scrollY>170;
+  if(document.body.classList.contains("scrolled")!==on)document.body.classList.toggle("scrolled",on);},{passive:true});
 (function(){
   const st=LS.get("state");
   if(st&&(st.v===STATE_VERSION||st.v===3)){Object.assign(S,{squad:st.squad,original:st.original,captain:st.captain,

@@ -129,3 +129,31 @@ export function fplStatus() {
 }
 
 export function nextDeadline() { return state.nextDeadline; }
+
+/* Redesign wave 1 (19 Oct 2026): the per-player fields the dataset mirror
+   does not carry - FPL's own price-change predictor and its live set-piece
+   orders - trimmed from the last bootstrap, cached until the next fetch. */
+let _slim = null;
+export async function fplPlayersPayload() {
+  if (_slim && _slim.at === state.fetchedAt) return _slim.body;
+  let b;
+  try { b = JSON.parse(await readFile(join(DIR(), "bootstrap.json"), "utf8")); }
+  catch { return { fetchedAt: null, players: {} }; }
+  const players = {};
+  for (const e of b.elements || []) {
+    players[e.id] = {
+      pcp: e.price_change_percent == null ? null : +e.price_change_percent,
+      pcRate: e.price_change_hourly_rate ?? null,
+      pcProj: (e.price_change_projections || []).map(x => [x.offset, +x.projected_percent, x.likelihood]),
+      pcLock: e.price_change_locked_until || null,
+      pcCal: !!e.price_change_calibrating,
+      pen: e.penalties_order ?? null,
+      cor: e.corners_and_indirect_freekicks_order ?? null,
+      dfk: e.direct_freekicks_order ?? null,
+      ep: e.ep_next == null ? null : +e.ep_next
+    };
+  }
+  const body = { fetchedAt: state.fetchedAt, players };
+  _slim = { at: state.fetchedAt, body };
+  return body;
+}

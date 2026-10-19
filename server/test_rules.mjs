@@ -155,8 +155,9 @@ try {
     for (const o of sq.filter(p => p.pos >= 2).slice(0, 4)) { const i = cheapSwap(o, used3); if (!i) continue; used3.push(i.id); g.applySwap(o.id, i.id); }
     check(g.hitCost(wcWeek) === 0, "F19 a Wildcard week costs nothing however many transfers", `transfers ${g.transfersIn(wcWeek)} hit ${g.hitCost(wcWeek)}`);
     g.render();
-    const ftStat = [...doc.querySelectorAll(".fc, .stat")].find(s => /Free transfers/i.test(s.textContent));
-    check(ftStat && /Unlimited/.test(ftStat.textContent) && /Wildcard this week/.test(ftStat.textContent), "F61 a Wildcard week shows Unlimited", ftStat && ftStat.textContent.replace(/\s+/g, " "));
+    /* since the redesign (wave 1) free transfers sit on the Budget card */
+    const ftStat = [...doc.querySelectorAll(".fc")].find(s => /Budget/i.test(s.textContent));
+    check(ftStat && /Unlimited FT/.test(ftStat.textContent) && /Wildcard this week/.test(ftStat.textContent), "F61 a Wildcard week shows Unlimited", ftStat && ftStat.textContent.replace(/\s+/g, " "));
   } else check(false, "F61 setup: Wildcard could be planned for the next week", g.chipRuleBreak("wildcard" + half, wcWeek));
   restore(clean); g.render();
 

@@ -46,12 +46,6 @@ function badgeFull(id,glyph,fill,ring){
 const G=(t,size)=>`<text x="13" y="${size>=11?18.6:18.1}" font-family="Inter,Segoe UI,Arial,sans-serif"
   font-size="${size}" font-weight="900" fill="#0A0D12" text-anchor="middle" letter-spacing="-0.4"
   paint-order="stroke" stroke="rgba(255,255,255,.35)" stroke-width="0.6">${t}</text>`;
-/* Differential — a diamond, the odd one out */
-const ICON_DIFF=badge(`<path d="M13 8.4 18.2 14.6 13 20.8 7.8 14.6Z" fill="#06222B" opacity=".9"/>
-  <path d="M13 11.2 15.8 14.6 13 18 10.2 14.6Z" fill="#9FF2FF"/>`,"#22C3E6","#8FEAFB");
-/* Hot streak — flame */
-const ICON_HOT=badge(`<path d="M13 6.6c2.7 3 4.6 5.2 4.6 8.1a4.6 4.6 0 0 1-9.2 0c0-1.6.8-2.9 1.8-4.1.5 1 1.1 1.7 2 2-.1-2.1.3-4.1.8-6Z"
-  fill="#3A1400"/><path d="M13 12.6c1.1 1.3 1.8 2.3 1.8 3.4a1.8 1.8 0 0 1-3.6 0c0-.8.4-1.5 1-2.1.3.4.5.6.8.7Z" fill="#FFE0C2"/>`,"#FF7A2F","#FFC08A");
 /* Attack — a football */
 const ICON_ATT=badge(`<circle cx="13" cy="15" r="6.1" fill="#FFFDF6" stroke="#8A5A12" stroke-width="1"/>
   <path d="M13 11.1 15.9 13.2 14.8 16.6H11.2L10.1 13.2Z" fill="#20160A"/>
@@ -61,18 +55,6 @@ const ICON_ATT=badge(`<circle cx="13" cy="15" r="6.1" fill="#FFFDF6" stroke="#8A
 const ICON_DEF=badge(`<path d="M13 8.6 18 10.3v3.9c0 2.7-1.9 4.4-5 5.4-3.1-1-5-2.7-5-5.4v-3.9Z" fill="#06222B"/>
   <path d="M10.8 14.4l1.6 1.7 3-3.3" stroke="#9FF2FF" stroke-width="1.7" fill="none"
     stroke-linecap="round" stroke-linejoin="round"/>`,"#22C3E6","#8FEAFB");
-/* DefCon — a stop sign */
-const ICON_DC=badge(`<path d="M10.9 8.9h4.2l3 3v4.2l-3 3h-4.2l-3-3v-4.2Z" fill="#7A0F1E" stroke="#FFD9DF" stroke-width="1"/>
-  <text x="13" y="16.9" font-family="Inter,Arial,sans-serif" font-size="5.6" font-weight="900"
-    fill="#FFF" text-anchor="middle" letter-spacing="-0.2">STOP</text>`,"#E14156","#FFB3BF");
-/* Nailed — stopwatch */
-const ICON_MIN=badge(`<path d="M10.9 7.1h4.2" stroke="#0A0D12" stroke-width="2.1" stroke-linecap="round"/>
-  <circle cx="13" cy="15.4" r="5.4" fill="#121B25" stroke="#E6EFFA" stroke-width="1.3"/>
-  <path d="M13 12.1v3.5l2.4 1.5" stroke="#E6EFFA" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,"#93A8C2","#DCE8F5");
-/* Stats caution — exclamation */
-const ICON_STALE=badge(`<path d="M13 8.4 19 19.4H7Z" fill="#3A2000"/>
-  <path d="M13 12v3.2" stroke="#FFEFC9" stroke-width="1.8" stroke-linecap="round"/>
-  <circle cx="13" cy="17.3" r="1" fill="#FFEFC9"/>`,"#F2B33D","#FFE2A0");
 const SPCOL={P:["#FF4D6D","#FFD1DA"],F:["#34D399","#C6F7E4"],C:["#C084FC","#E9D8FF"]};
 const SETPIECE={
  ARS:{P:["Saka"],            F:["Saka","Rice"],            C:["Rice","Saka"]},
@@ -96,56 +78,142 @@ const SETPIECE={
  SUN:{P:["Le Fée"],          F:["Xhaka","Le Fée"],         C:["Xhaka","Le Fée"]},
  TOT:{P:["Richarlison"],     F:["Porro","Tonali"],         C:["Porro","Tonali"]}
 };
-function setPieceHTML(p){
-  const duty=SETPIECE[(p.teamName||"").toUpperCase()];
-  if(!duty)return "";
-  const me=norm(p.web_name), out=[];
-  const hit=list=>(list||[]).some(nm=>{const t=norm(nm);
-    return t&&(me===t||me.includes(t)||t.includes(me));});
-  [["P","Penalties"],["F","Free kicks"],["C","Corners"]].forEach(([k,label])=>{
-    if(!hit(duty[k]))return;
-    const[b,c]=SPCOL[k];
-    out.push(`<span class="sig" title="${label}">${badge(G(k,11),b,c)}</span>`);
-  });
-  return out.length?`<span class="sigs">${out.join("")}</span>`:"";
+/* SETPIECE above still feeds the model's penalty and set-piece points
+   (app-core.js); changing it moves projections, so it waits for Andy. The
+   icons below read FPL's live orders instead. */
+/* ---------- signal icons (redesign wave 1, 19 Oct 2026) ----------
+   Andy's set, in this order, as Lucide line icons in round tinted tiles
+   (Fintel's .tile: background = tone at 22% over #171717). One rule each;
+   the rule is the tile's hover text. Hot streak, Attack, Defence, DefCon,
+   Nailed and Stats caution were dropped; Luck was tested and replaced by
+   Heating Up / Cooling Off (research/predictors/momentum.py). */
+const SIGNAL={
+  buy:["circle-arrow-up","#3DDC97","Buy"],
+  sell:["circle-arrow-down","#FF5A6E","Sell"],
+  rise:["trending-up","#4ADE80","Price Rise"],
+  fall:["trending-down","#FF5A6E","Price Fall"],
+  mins:["clock-alert","#FFB020","Minutes Risk"],
+  heat:["flame","#4ADE80","Heating Up"],
+  cool:["snowflake","#FF5A6E","Cooling Off"],
+  rival:["swords","#B388FF","Rival Threat"],
+  diff:["gem","#BAE6FD","Differential"],
+  pen:["circle-dot","NAVY","Penalty"],
+  set:["flag-triangle-right","#22D3EE","Set Piece"]};
+const SIG_ORDER=Object.keys(SIGNAL);
+const SIG_RULE={
+  buy:h=>"In the top picks for his position over "+(h>1?"the next "+h+" gameweeks":"this gameweek")+", with 60+ expected minutes",
+  sell:h=>"One of yours whose best replacement gains 2+ pts over "+(h>1?"the next "+h+" gameweeks":"this gameweek"),
+  rise:()=>"FPL's predictor: 100%+ progress to a rise tonight",
+  fall:()=>"FPL's predictor: 100%+ progress to a fall tonight",
+  mins:()=>"Doubt, out, or under 60 expected minutes",
+  heat:()=>"Chances rising: last-4 xGI/90 at least 1.5x his season rate (and +0.15)",
+  cool:()=>"Chances falling: last-4 xGI/90 at most 0.6x his season rate (and -0.15)",
+  rival:()=>"Owned by managers around you, not by you",
+  diff:()=>"Under 8% owned and predicted 3.5+ pts",
+  pen:()=>"First-choice penalty taker",
+  set:()=>"First choice on corners or free kicks"};
+function sigTile(k,tip){
+  const[ic,tone,label]=SIGNAL[k];
+  return `<span class="tile${tone==="NAVY"?" navy":""}"${tone==="NAVY"?"":` style="--tc:${tone}"`} title="${esc(tip||label)}" data-sig="${k}">${lic(ic)}</span>`;
 }
-
-const SIGDEF=[[ICON_DIFF,"#3ED8F0","Differential"],
- [ICON_HOT,"#FF8A3D","Hot streak"],
- [ICON_ATT,"#FFB020","Attack"],
- [ICON_DEF,"var(--sky)","Defence"],
- [ICON_DC,"#7C4DFF","DefCon"],
- [ICON_MIN,"#8FA3BC","Nailed 85+"],
- [ICON_STALE,"#F2C14E","Stats caution"]];
-function legendHTML(){
-  return `<div class="legend">
-    ${SIGDEF.map(([l,c,t])=>`<span class="lgi">${sigIcon(l,c,t)}<span>${esc(t)}</span></span>`).join("")}
-    ${[["P","Penalties"],["F","Free kicks"],["C","Corners"]].map(([k,t])=>{const[b,c]=SPCOL[k];
-      return `<span class="lgi"><span class="sig">${badge(G(k,11),b,c)}</span><span>${t}</span></span>`;}).join("")}</div>`;
+/* FPL's own live fields (server /api/fpl-players): price predictor and
+   set-piece orders. Missing on the Pages backup, where the dataset's
+   penalty order stands in and set pieces are not shown. */
+function fplLive(p){return (S.fplLive&&S.fplLive.players&&S.fplLive.players[p.id])||null;}
+/* Penalties: FPL's order, except where this season's kicks and a published
+   source agree on someone else (research/setpieces.md, 19 Oct 2026). */
+const PEN_OVERRIDE={COV:"Torp",NEW:"Wissa",SUN:"Le Fée"};
+function setPieces(p){
+  const L=fplLive(p),club=(p.teamName||"").toUpperCase();
+  let pen;
+  if(PEN_OVERRIDE[club]){const t=norm(PEN_OVERRIDE[club]),me=norm(p.web_name);pen=!!t&&(me===t||me.includes(t)||t.includes(me));}
+  else pen=L?L.pen===1:p.penOrder===1;
+  return{pen,cor:L?L.cor:null,dfk:L?L.dfk:null};
 }
-function signals(p,g){
-  const out=[];
-  if(p.owned>0&&p.owned<8&&(p.gw[g]?.pts||0)>3.4)out.push(SIGDEF[0]);
-  /* Only meaningful when both sides of the comparison come from actual
-     matches. A synthetic form estimate minus a two-game sample is noise, and
-     a player projected not to play cannot be in form at all. */
-  const realForm=p.formSrc==="this season"||/25\/26|2025/.test(p.formSrc||"");
-  if(realForm&&p.ppg>=1.5&&p.xMins>=45&&p.form-p.ppg>0.7)out.push(SIGDEF[1]);
-  /* the two target flags come from the club shortlists, so a player's badge and
-     the Fixtures page always agree */
-  /* Each target badge only goes to the players it can actually help: the star
-     to midfielders and forwards, who score from attacking returns, and the
-     shield to keepers and defenders, who score from clean sheets. */
-  const T=targetClubs();
-  if(p.pos>=3&&T.att.has(p.team))out.push(SIGDEF[2]);
-  if(p.pos<=2&&T.def.has(p.team))out.push(SIGDEF[3]);
-  /* DefCon is only a route to points for defenders and midfielders, and only
-     worth flagging where he clears the threshold in a decent share of matches */
-  if((p.pos===2||p.pos===3)&&p.dcHitRate!=null
-     &&p.dcHitRate>=(p.pos===2?0.45:0.22))out.push(SIGDEF[4]);
-  if(p.xMins>=85)out.push(SIGDEF[5]);
-  if(p.staleRole)out.push(SIGDEF[6]);
+const ORD=n=>n===1?"1st":n===2?"2nd":n===3?"3rd":n+"th";
+/* Buy: the top of each position over the horizon, regular starters only */
+const BUY_N={1:3,2:6,3:6,4:4};
+let _buyCache=null;
+function buySet(g,h){
+  const k=g+"|"+h;
+  if(_buyCache&&_buyCache.k===k&&_buyCache.m===S.model)return _buyCache.set;
+  const set=new Set();
+  [1,2,3,4].forEach(pos=>S.model.players
+    .filter(p=>p.pos===pos&&p.avail>0&&(p.xMins||0)>=60)
+    .sort((a,b)=>hPts(b,g,h)-hPts(a,g,h)).slice(0,BUY_N[pos]).forEach(p=>set.add(p.id)));
+  _buyCache={k,m:S.model,set};return set;
+}
+/* Sell: first version reads Head Scout (bestSwaps); wave 4 brings one engine */
+let _sellBusy=false;
+function sellMap(){
+  if(_sellBusy)return new Map();
+  _sellBusy=true;
+  try{const m=new Map();bestSwaps(60).forEach(x=>{if(x.gain>=2&&!m.has(x.out.id))m.set(x.out.id,x);});return m;}
+  finally{_sellBusy=false;}
+}
+/* Momentum: this season's matches only, raw per-90s, as in the study */
+const _momCache=new Map();
+function momentum(p){
+  if(p.pos<3)return null;
+  if(_momCache.has(p.code)&&_momCache.get(p.code).h===S.hist)return _momCache.get(p.code).v;
+  const rows=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now"&&r.mins>0);
+  const per=rs=>{const m=rs.reduce((a,r)=>a+r.mins,0);return m>0?rs.reduce((a,r)=>a+(r.xg||0)+(r.xa||0),0)*90/m:null;};
+  let v=null;
+  const l4=rows.slice(-4);
+  if(rows.length>=6&&rows.reduce((a,r)=>a+r.mins,0)>=450&&l4.reduce((a,r)=>a+r.mins,0)>=180){
+    const sea=per(rows),last=per(l4);
+    v={sea,last,heat:last>=1.5*sea&&last-sea>=0.15,cool:last<=0.6*sea&&sea-last>=0.15};}
+  _momCache.set(p.code,{h:S.hist,v});return v;
+}
+/* Rival Threat: how many of the mini-league rivals own each player */
+let _rivCache=null;
+function rivalOwn(){
+  const f=S.rivalsFeed;if(!f||!f.entries)return null;
+  if(_rivCache&&_rivCache.f===f)return _rivCache;
+  const own={};let n=0;
+  Object.keys(f.entries).filter(k=>String(k)!==String(TEAM_ID)).forEach(k=>{
+    const a=(f.entries[k]&&f.entries[k].gw)||[],r=a[a.length-1];if(!r||!r.picks)return;n++;
+    r.picks.forEach(pk=>{const id=pk.id??pk;own[id]=(own[id]||0)+1;});});
+  return _rivCache={f,own,n};
+}
+/* signals(p,g) -> [[key, hover text]] in Andy's order. noSell skips Sell
+   (Head Scout's own tie-break calls this while Sell is being worked out). */
+function signals(p,g,noSell){
+  const out=[],h=S.horizon||1,mine=(S.squad||[]).includes(p.id);
+  if(!S.model)return out;
+  if(buySet(g,h).has(p.id)&&!mine)out.push(["buy",SIG_RULE.buy(h)+`: ${hPts(p,g,h).toFixed(1)} pts`]);
+  if(mine&&!noSell){const m=sellMap().get(p.id);
+    if(m)out.push(["sell",SIG_RULE.sell(h)+`: ${m.inn.web_name} +${m.gain.toFixed(1)}`]);}
+  const L=fplLive(p);
+  if(L&&L.pcp!=null&&!(L.pcLock&&Date.parse(L.pcLock)>Date.now())){
+    if(L.pcp>=100)out.push(["rise",`FPL's predictor: ${Math.round(L.pcp)}% progress to a rise tonight`]);
+    else if(L.pcp<=-100)out.push(["fall",`FPL's predictor: ${Math.round(-L.pcp)}% progress to a fall tonight`]);}
+  if(p.status!=="u"&&((p.avail<1&&(mine||(p.roleMins||0)>=60))||((p.roleMins||0)>=60&&(p.xMins||0)<60)))
+    out.push(["mins",p.avail<1?`${p.avail>0?Math.round(p.avail*100)+"% chance":"Out"}${p.news?" · "+p.news:""}`:`${Math.round(p.xMins||0)} expected minutes`]);
+  const mo=momentum(p);
+  if(mo&&mo.heat)out.push(["heat",`Heating Up: last-4 xGI/90 ${mo.last.toFixed(2)} vs season ${mo.sea.toFixed(2)}`]);
+  if(mo&&mo.cool)out.push(["cool",`Cooling Off: last-4 xGI/90 ${mo.last.toFixed(2)} vs season ${mo.sea.toFixed(2)}`]);
+  const R=rivalOwn();
+  if(R&&R.n&&!mine){const k=R.own[p.id]||0;
+    if(k>=Math.max(2,Math.ceil(R.n*0.3)))out.push(["rival",`Owned by ${k} of ${R.n} rivals, not you`]);}
+  if(p.owned>0&&p.owned<8&&(p.gw[g]?.pts||0)>3.4)out.push(["diff",`${p.owned}% owned, predicted ${(p.gw[g]?.pts||0).toFixed(1)} pts`]);
+  const sp=setPieces(p);
+  if(sp.pen)out.push(["pen","First-choice penalty taker"]);
+  if(sp.cor===1||sp.dfk===1)out.push(["set","Set pieces: "+[sp.cor&&sp.cor<=2?"Corners "+ORD(sp.cor):"",sp.dfk&&sp.dfk<=2?"Free kicks "+ORD(sp.dfk):""].filter(Boolean).join(" · ")]);
   return out;
+}
+function legendHTML(){
+  const h=S.horizon||1;
+  return `<div class="legend">${SIG_ORDER.map(k=>`<span class="lgi">${sigTile(k,SIG_RULE[k](h))}<span>${SIGNAL[k][2]}</span></span>`).join("")}</div>`;
+}
+const sigHTML=(p,g)=>{const s=signals(p,g);return s.length?`<span class="sigs">${s.map(([k,t])=>sigTile(k,t)).join("")}</span>`:"";};
+/* the set-piece line on the player card */
+function setPieceText(p){
+  const sp=setPieces(p),bits=[];
+  if(sp.pen)bits.push("Penalties 1st");
+  if(sp.cor&&sp.cor<=3)bits.push("Corners "+ORD(sp.cor));
+  if(sp.dfk&&sp.dfk<=3)bits.push("Free kicks "+ORD(sp.dfk));
+  return bits.join(" · ");
 }
 /* Clubs whose next five contain at least four kind fixtures on that lens.
    Cached per gameweek — signals() runs for every player on every render. */
@@ -166,10 +234,6 @@ function targetClubs(){
   });
   return _tcCache={g,n:(S.model?S.model.teams.length:0),att,def};
 }
-const sigIcon=(l,c,t)=>`<span class="sig" title="${t}">${l}</span>`;
-const sigHTML=(p,g)=>{const s=signals(p,g);return setPieceHTML(p)+(s.length?
-  `<span class="sigs">${s.map(([l,c,t])=>sigIcon(l,c,t)).join("")}</span>`:"");};
-
 /* ---------- squad ---------- */
 function saveState(){LS.set("state",{v:STATE_VERSION,squad:S.squad,original:S.original,captain:S.captain,
   vice:S.vice,chips:S.chips,bank:S.bank,ft:S.ft,ftLastGw:S.ftLastGw,forceXI:S.forceXI,benchOrder:S.benchOrder,replacedBy:S.replacedBy,
@@ -528,7 +592,7 @@ function bestSwaps(limit){
     cands.sort((a,b)=>b.pg-a.pg).slice(0,12).forEach(({p})=>{
       const gain=xiGain(S.squad,oid,p.id,g,h,byId,base);
       /* where gains are level, prefer the player carrying signals */
-      const sig=signals(p,g).length;
+      const sig=signals(p,g,true).length;
       if(gain>0.05)out.push({out:o,inn:p,gain,sig});});});
   out.sort((a,b)=>(b.gain-a.gain)||(b.sig-a.sig));
   const seen=new Set(),uniq=[];

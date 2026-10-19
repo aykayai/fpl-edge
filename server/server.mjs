@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { CONFIG } from "./lib/config.mjs";
 import { log } from "./lib/util.mjs";
 import { initDataset, pollDataset, datasetStatus, datasetGW, currentDir } from "./lib/dataset.mjs";
-import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus } from "./lib/fpl.mjs";
+import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus, fplPlayersPayload } from "./lib/fpl.mjs";
 import { refreshNews, newsPayload, newsStatus, playerNews } from "./lib/news.mjs";
 import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
 import { buildFeeds, feedsStatus, FEEDS_DIR, SNAP_DIR } from "./lib/feeds.mjs";
@@ -150,6 +150,7 @@ async function handle(req, res) {
       return;
     }
     if (path === "/api/odds") { sendJson(res, method, 200, oddsPayload()); return; }
+    if (path === "/api/fpl-players") { sendJson(res, method, 200, await fplPlayersPayload()); return; }
 
     if (path.startsWith("/data/insights/")) {
       const full = safeJoin(currentDir(), path.slice("/data/insights/".length));
