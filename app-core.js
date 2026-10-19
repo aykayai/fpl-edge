@@ -209,7 +209,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.20.0";
+const APP_VERSION="12.20.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1426,7 +1426,7 @@ const CS_FROM_FIXTURE=true;
    miss 2.375 -> 2.345 for priced players, 1.258 -> 1.243 overall, out-of-sample
    pick 0.75-1. Closing prices know the line-ups, so this flatters them; it is
    re-tested at GW12 on the prices archived at each deadline. */
-let PROP_W=0.75;
+let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); method being rebuilt and re-tested */
 /* D5 (13 Oct 2026, Andy: apply half now, re-fit at GW10). Per-position level
    on the final projection. Full out-of-sample scales over GW1-5 were GK 1.334,
    DEF 1.095, MID 0.896, FWD 1.098 (leans -0.33/-0.17/+0.22/-0.17 a week);
