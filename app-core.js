@@ -1885,14 +1885,23 @@ function buildModel(){
            defence loses more to goals than he gains in saves. Validated against
            the published projections, where the best-rated keepers sit behind the
            best defences rather than making the most saves. */
-        /* Player odds (19 Oct 2026, OFF until Andy approves a weight after the
-           backtest): where bookmakers price him to score / assist in this
-           match, his expected goals and assists for it move toward the
-           market's by PROP_W. Market figures are per match if he plays
-           (anytime bets are void if he does not), as is this term. */
+        /* Player odds (19 Oct 2026, weight PROP_W; 0 = off). The market's
+           expected goals for this match (from P(score)) is set against the
+           model's own figure in the same units - his rate x his minutes x how
+           this fixture compares with his team's average - and the ratio,
+           capped at 0.5-2 and raised to PROP_W, scales this term. Only for
+           expected starters (normal role 60+ min): anytime prices assume he
+           plays, which matches a starter but not a rotation player. The first
+           version blended raw market goals into this already fixture-
+           stretched term and was switched off the same day. */
         let gL=p.xg90*share*atk, aL=p.xa90*share*atk;
-        const pm=PROP_W>0&&fx.length===1&&S.propMarket&&S.propMarket[p.id]&&S.propMarket[p.id][e];
-        if(pm){if(pm.g!=null)gL=(1-PROP_W)*gL+PROP_W*pm.g;if(pm.a!=null)aL=(1-PROP_W)*aL+PROP_W*pm.a;}
+        const pm=PROP_W>0&&fx.length===1&&p.roleMins>=60&&S.propMarket&&S.propMarket[p.id]&&S.propMarket[p.id][e];
+        if(pm){
+          const fr=(f.xgf>0&&team.att>0)?f.xgf/team.att:1, m=Math.min(1,p.roleMins/90)*fr;
+          const bg=p.xg90*m, ba=p.xa90*m;
+          if(pm.g!=null&&bg>0.02)gL*=Math.pow(clamp(pm.g/bg,0.5,2),PROP_W);
+          if(pm.a!=null&&ba>0.02)aL*=Math.pow(clamp(pm.a/ba,0.5,2),PROP_W);
+        }
         const attack=p.pos===1
           ? (p.sv90*(xGC/1.35))/3*share*0.55
           : gL*(GOAL_PTS[p.pos]||4)+aL*3;
