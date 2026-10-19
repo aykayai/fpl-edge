@@ -84,14 +84,18 @@ export async function refreshOdds() {
       if (!hit) throw new Error(`no Premier League among ${leagues.length} leagues`);
       state.slug = hit.slug || hit.id || hit.key;
     }
-    if (!state.books || !state.books.length) {
+    /* The selection is read on every refresh (one request), so a change made
+       in the odds-api.io dashboard is picked up without a restart; if the
+       read fails the last known selection stays. */
+    {
       let books = [];
       try {
         const bj = await get(`/bookmakers/selected?apiKey=${key}`);
         const list = bj ? (Array.isArray(bj) ? bj : (bj.data || bj.bookmakers || [])) : [];
         books = list.map(b => (typeof b === "string" ? b : (b.name || b.key || b.id))).filter(Boolean);
-      } catch { /* fall back below */ }
-      state.books = books.length ? books : ["Bet365", "PaddyPower"];
+      } catch { /* keep the last known selection */ }
+      if (books.length) state.books = books;
+      else if (!state.books || !state.books.length) state.books = ["Bet365", "PaddyPower"];
     }
     const ej = await get(`/events?sport=football&league=${encodeURIComponent(state.slug)}&apiKey=${key}`);
     /* 19 Oct 2026: matches not yet kicked off, soonest first, up to 20 (a
