@@ -93,6 +93,9 @@ body.scrolled .tbfig{display:flex}
 .wkl+.wkft{margin-top:8px}
 @media(max-width:1100px){.wkrow{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.wkrow{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.wkrow{grid-template-columns:1fr}}
+/* phone: the page menu gets its own full-width row under the logo and GW */
+@media(max-width:720px){.tbin{flex-wrap:wrap;height:auto;padding:8px 0 6px;row-gap:6px}.tn{order:3;width:100%;margin:0}.tr{margin-left:auto}}
 .up{color:var(--mint)}.dn{color:var(--red)}
 .modal{position:fixed;inset:0;z-index:150;background:rgba(4,6,9,.72);display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto}
 .mbox{background:#121212;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line),0 24px 80px rgba(0,0,0,.7);width:100%;max-width:760px}
@@ -169,6 +172,9 @@ body.scrolled .tbfig{display:flex}
 .sbmore{font-size:12px;color:var(--mute);padding-top:6px}.sbmore a{color:var(--cyan)}
 .pagetabs .pseg button{padding:6px 14px;font-size:13px}
 .pagetabs .pseg button.on{background:#EDEDED;color:#0A0A0A}
+.fleg{font-size:13px;margin-bottom:5px}.fsum{font-size:13px;border-top:1px solid var(--ink3);padding-top:6px;margin-top:4px}
+.sqshape{display:grid;grid-template-columns:repeat(auto-fit,minmax(640px,1fr));gap:12px}
+@media(max-width:700px){.sqshape{grid-template-columns:1fr}}
 .foot{text-align:center;padding:18px 0 4px;font-size:11px;color:#5A5A5A}
 .prov{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 18px;padding:14px;font-size:12.5px;color:var(--mute)}
 .prov b{color:var(--cream);font-weight:600}
@@ -508,8 +514,6 @@ details[open]>summary::after{content:" ▴"}
 .trkband{padding:0;overflow:hidden}
 .tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px;padding:10px}
 .tcard{background:var(--ink2);border:1px solid var(--ink3);border-radius:11px;padding:9px 10px}
-.trow{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0}
-.trow+.trow{border-top:1px solid rgba(255,255,255,.05)}
 .tsumrow{display:flex;gap:8px;flex-wrap:wrap}
 .tsum{flex:1;min-width:96px;background:var(--ink2);border:1px solid var(--ink3);border-radius:10px;padding:9px 10px;text-align:center}
 .tsum b{display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:22px;color:var(--cream)}
@@ -555,8 +559,8 @@ details[open]>summary::after{content:" ▴"}
 .sgseg button.on{background:#262D3A;color:var(--cream)}
 .sgsec{margin:10px 0 -4px;font:700 11px Geist,system-ui,sans-serif;color:var(--mute)}
 .sggrid{display:grid;gap:16px}
-.g1{grid-template-columns:1fr}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g1{grid-template-columns:1fr}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .sgcard{background:var(--ink2);border-radius:12px;padding:16px 18px;box-shadow:0 0 0 1px rgba(255,255,255,.05),0 1px 2px rgba(0,0,0,.4);position:relative;min-width:0}
 .sgcard.good{box-shadow:inset 3px 0 0 var(--mint),0 0 0 1px rgba(255,255,255,.05)}
 .sgcard.warn{box-shadow:inset 3px 0 0 var(--amber),0 0 0 1px rgba(255,255,255,.05)}
@@ -605,8 +609,8 @@ details[open]>summary::after{content:" ▴"}
 .sggain{font:800 17px 'Geist',system-ui,sans-serif;color:var(--mint);display:flex;flex-direction:column;align-items:flex-end;line-height:1}
 .sggain em{font:400 10px Geist,system-ui,sans-serif;color:var(--mute)}
 .sgempty{color:var(--mute);font-size:12.5px;margin:4px 0}
-@media(max-width:1100px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:1fr}.sgsplit{grid-template-columns:1fr}.sgsplit .sgrow:nth-child(-n+3){border-top:1px solid rgba(255,255,255,.06)}.sgsplit .sgrow:first-child{border-top:0}}
-@media(max-width:720px){.g2,.g4{grid-template-columns:1fr}.sgcols{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:14px}
+@media(max-width:1100px){.g3{grid-template-columns:1fr}.sgsplit{grid-template-columns:1fr}.sgsplit .sgrow:nth-child(-n+3){border-top:1px solid rgba(255,255,255,.06)}.sgsplit .sgrow:first-child{border-top:0}}
+@media(max-width:720px){.sgcols{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:14px}
  .sghead{align-items:flex-start}.sgctl{width:100%}.sgseg{flex-wrap:wrap}
  .sgrow{grid-template-columns:18px minmax(0,1fr) auto}.sgrow .sgspark{display:none}
  .sgrow .sgfxrow{grid-column:2/-1}.sgfx{width:30px}.sgcard{padding:14px}}
@@ -727,12 +731,12 @@ details[open]>summary::after{content:" ▴"}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.29.0"></script>
-<script src="./app-squad.js?v=12.29.0"></script>
-<script src="./app-render.js?v=12.29.0"></script>
-<script src="./app-odds.js?v=12.29.0"></script>
-<script src="./app-tracker.js?v=12.29.0"></script>
-<script src="./app-main.js?v=12.29.0"></script>
+<script src="./app-core.js?v=12.31.1"></script>
+<script src="./app-squad.js?v=12.31.1"></script>
+<script src="./app-render.js?v=12.31.1"></script>
+<script src="./app-odds.js?v=12.31.1"></script>
+<script src="./app-tracker.js?v=12.31.1"></script>
+<script src="./app-main.js?v=12.31.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

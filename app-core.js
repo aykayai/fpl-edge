@@ -130,6 +130,9 @@ async function loadNeighbours(){
   try{const d=JSON.parse(await dataText("/data/feeds/neighbours.json"));if(d&&d.own)S.neighbours=d;}
   catch(e){if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("rank neighbours");}
 }
+/* Penalties: FPL's order, except where this season's kicks and a published
+   source agree on someone else (research/setpieces.md, 19 Oct 2026). */
+const PEN_OVERRIDE={COV:"Torp",NEW:"Wissa",SUN:"Le Fée"};
 async function loadFplLive(){
   if(BACKUP){S.fplLive=null;return;}
   try{const d=JSON.parse(await dataText("/api/fpl-players"));if(d&&d.players)S.fplLive=d;}
@@ -229,7 +232,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.29.0";
+const APP_VERSION="12.31.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -808,7 +811,9 @@ async function loadAll(force,opts){
     /* The commit is kept so "Check now" can skip an unchanged dataset. The
        copy itself goes to IndexedDB below (localStorage had no room for it). */
     S.datasetCommit=commit;
-    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours()]);
+    /* FPL's live set-piece orders feed the model, so they load first */
+    await loadFplLive();
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadNeighbours()]);
     /* Bring the planner onto the latest official squad when a newer one has
        been published (this also upgrades a seed made before the feeds landed). */
     syncOfficialSquad();
@@ -1735,9 +1740,20 @@ function buildModel(){
        attacking output. Scaled by the club's attacking strength, since a weak
        team wins far fewer penalties, and trimmed because a player's xG per 90
        already contains the penalties he took. */
-    /* published duties override the dataset's order, which lags transfers */
-    const duty=SETPIECE[(team.short||"").toUpperCase()];
+    /* Named duties beat the dataset's order, which lags transfers. Since
+       20 Oct 2026 (Andy) they come from FPL's live orders: first-choice
+       penalty taker (overrides in PEN_OVERRIDE), first or second on direct
+       free kicks or on corners. The hand-kept SETPIECE table is only the
+       fallback when FPL's orders did not load (the Pages backup). */
+    const club=(team.short||"").toUpperCase(),duty=SETPIECE[club];
+    const liveOn=!!(S.fplLive&&S.fplLive.players&&Object.keys(S.fplLive.players).length);
+    const LV=liveOn?S.fplLive.players[p.id]:null;
     const isNamed=(k)=>{const me=norm(p.web_name);
+      if(liveOn){
+        if(k==="P"&&PEN_OVERRIDE[club]){const t=norm(PEN_OVERRIDE[club]);return !!t&&(me===t||me.includes(t)||t.includes(me));}
+        if(!LV)return false;
+        if(k==="P")return LV.pen===1;
+        const ord=k==="F"?LV.dfk:LV.cor;return ord===1||ord===2;}
       return !!(duty&&(duty[k]||[]).some(nm=>{const t=norm(nm);
         return t&&(me===t||me.includes(t)||t.includes(me));}));};
     const penRate=isNamed("P")?0.45:(penOrder===1?0.30:(penOrder===2?0.08:0));
