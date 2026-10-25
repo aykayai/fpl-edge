@@ -228,11 +228,14 @@ const FROM_ROUTE={...Object.fromEntries(Object.entries(TABPATH).map(([k,v])=>[v,
 function routeFor(tab){return "#/"+(TABPATH[tab]||"planner");}
 function applyHash(){
   const h=(location.hash||"").replace(/^#\/?/,"").replace(/\/$/,"");
+  /* Signals tabs have their own links: #/signals/transfers and so on */
+  const sg=/^signals\/(transfers|squad|teams|players)$/.exec(h);
+  if(sg){const ch=S.tab!=="signals"||S.sgTab!==sg[1];S.tab="signals";S.sgTab=sg[1];return ch;}
   const t=FROM_ROUTE[h];
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.32.0";
+const APP_VERSION="12.33.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

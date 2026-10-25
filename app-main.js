@@ -94,10 +94,14 @@ function act(k,a,b){
     case"fixread":S.fixRead=a;break;
     case"poolmore":S.poolLimit=Math.min(150,(S.poolLimit||50)+50);break;
     case"pdless":S.pdLimit=PD_PAGE;break;
-    case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[]});break;
-    case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[]});break;
+    case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});break;
+    case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[],tab:S.sgTab});break;
+    /* Signals tabs (25 Oct 2026) */
+    case"sgtab":S.sgTab=["transfers","squad","teams","players"].includes(a)?a:"transfers";
+      LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});
+      try{history.replaceState({},"","#/signals/"+S.sgTab);}catch(e){}break;
     case"sigfold":{const f=new Set(S.sigFold||[]);f.has(a)?f.delete(a):f.add(a);S.sigFold=[...f];
-      LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold});break;}
+      LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold,tab:S.sgTab});break;}
     case"xfplgw":{const cur=clamp(S.xfplGW||(S.model.gwPlayed>=1?S.model.gwPlayed:S.model.next.id),1,38);
       S.xfplGW=clamp(cur+(a==="next"?1:-1),1,38);break;}
     case"trkstat":S.trkStat=a;break;
@@ -323,6 +327,14 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp)){S.pop=null;S.cmp=null;S.pCmp=false;render();}
 });
 window.addEventListener("popstate",()=>{if(applyHash())render();});
+/* Signals charts: the hover card reads data-tip "title|figure|note" */
+document.addEventListener("mouseover",e=>{const tip=document.getElementById("ctip");if(!tip)return;
+  const t=e.target&&e.target.closest?e.target.closest("svg.chart [data-tip]"):null;
+  if(!t){tip.hidden=true;return;}
+  const [a,b,c]=String(t.getAttribute("data-tip")).split("|");
+  tip.innerHTML=`<span>${esc(a||"")}</span><b>${esc(b||"")}</b>${c?`<em>${esc(c)}</em>`:""}`;tip.hidden=false;});
+document.addEventListener("mousemove",e=>{const tip=document.getElementById("ctip");
+  if(tip&&!tip.hidden){tip.style.left=Math.min(window.innerWidth-190,e.clientX+14)+"px";tip.style.top=(e.clientY+16)+"px";}});
 /* wave 1: Predicted, Bank and FT join the sticky bar once the hero is gone */
 window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   if(document.body.classList.contains("scrolled")!==on)document.body.classList.toggle("scrolled",on);},{passive:true});
@@ -339,7 +351,7 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   S.leagueId=LS.get("leagueId")||"391690";
   S.weekH=LS.get("weekh")||1;
   {const hb=LS.get("hub")||{};S.pView=hb.v||"all";S.pH=hb.h||1;S.pAround=hb.ar||"league";S.pTicks=[];}
-  {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];}
+  {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];S.sgTab=sg.tab||"transfers";}
   /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
      quota on some browsers; the server is close now) and everything odds,
      which lives on the server. Every key that is Andy's own work (state,
