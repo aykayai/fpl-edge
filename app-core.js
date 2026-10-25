@@ -232,7 +232,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.31.1";
+const APP_VERSION="12.32.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -600,7 +600,14 @@ async function loadAll(force,opts){
        silently pointed the whole app at the wrong gameweek. */
     try{events=(await getCSV(`${SEASON}/gameweek_summaries.csv`)).map(e=>({
       id:Math.round(num(e.id)),name:e.name,deadline:e.deadline_time,
-      finished:String(e.finished).toLowerCase()==="true"})).sort((a,b)=>a.id-b.id);}catch(e){calendarFailed=true;}
+      finished:String(e.finished).toLowerCase()==="true",
+      /* the game-wide figures for the Signals page (25 Oct 2026) */
+      avg:Math.round(num(e.average_entry_score))||null,high:Math.round(num(e.highest_score))||null,
+      mostCapt:Math.round(num(e.most_captained))||null,mostSel:Math.round(num(e.most_selected))||null,
+      mostIn:Math.round(num(e.most_transferred_in))||null,topEl:Math.round(num(e.top_element))||null,
+      topPts:+((/'points':\s*(\d+)/.exec(e.top_element_info||"")||[])[1]||0)||null,
+      chips:[...String(e.chip_plays||"").matchAll(/'chip_name':\s*'(\w+)',\s*'num_played':\s*(\d+)/g)].map(m=>({name:m[1],n:+m[2]}))
+      })).sort((a,b)=>a.id-b.id);}catch(e){calendarFailed=true;}
     if(calendarFailed){
       if(S.status&&S.status.fpl&&S.status.fpl.gw)loadWarn("gameweek calendar (using FPL's own gameweek from the server)");
       else throw new Error("the gameweek calendar did not load and the server gave no gameweek, so the app cannot tell which week to plan");
@@ -1763,7 +1770,7 @@ function buildModel(){
     return{id:p.id,code:String(p.code||""),web_name:p.web_name,first:p.first,last:p.last,pos:p.pos,
       team:team.id,teamName:team.short||"",teamFull:team.name||"",price,
       form,formSrc,availAssumed,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
-      priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,ppg:num(s.points_per_game),total:num(s.total_points),
+      priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,dreamteam:num(s.dreamteam_count),ppg:num(s.points_per_game),total:num(s.total_points),
       owned:num(s.selected_by_percent),minutes:mins,status:st,news:s.news||"",back,
       minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,roleMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),

@@ -109,7 +109,8 @@ try {
   check(!!page, "Signals page renders");
   const cards = [...doc.querySelectorAll(".sgcard")];
   /* 20 Oct 2026: the six team cards moved to Teams > Clubs (sortable columns) */
-  check(cards.length === 9, "all 9 cards present", `found ${cards.length}`);
+  /* 25 Oct 2026: eleven stats cards added (Your Season, Your League, The Game, players, team form) */
+  check(cards.length === 20, "all 20 cards present", `found ${cards.length}`);
   const text = page ? page.textContent : "";
   check(!/NaN|undefined/.test(text), "no NaN or undefined anywhere on the page");
   const blank = cards.filter(c => !c.querySelector(".sgrow,.sgrep,.sgempty"));
@@ -163,6 +164,16 @@ try {
   check(JSON.stringify(lrows.map(r => r.ga)) === JSON.stringify(wantGa), "leakiest defences: goals conceded match the raw fixtures", `page ${lrows.map(r => r.ga)} vs raw ${wantGa}`);
   const lbad = lrows.filter(r => ga[r.name] !== r.ga);
   check(lrows.length === 5 && lbad.length === 0, "leakiest defences: each team's own total is right", lbad.map(b => `${b.name} page ${b.ga} raw ${ga[b.name]}`).join(", "));
+
+  /* ---------- 1c. independent: the game's weekly average (25 Oct 2026) ---------- */
+  const sums = csv(await get(`/data/insights/${season}/gameweek_summaries.csv`))
+    .filter(r => String(r.finished).toLowerCase() === "true").sort((a, b) => +a.id - +b.id);
+  const lastFin = sums[sums.length - 1];
+  const vs = [...doc.querySelectorAll(".sgcard")].find(c => /Your Score vs The Game/.test(c.textContent));
+  const first = vs ? vs.querySelector(".sgrow") : null;
+  const m = first ? /average (\d+)/.exec(first.textContent) : null;
+  check(!!lastFin && !!m && +m[1] === Math.round(+lastFin.average_entry_score) && first.textContent.includes("GW" + Math.round(+lastFin.id)),
+    "score vs game: latest finished week's average matches gameweek_summaries", `page ${first ? first.textContent.replace(/\s+/g, " ").slice(0, 60) : "none"} vs raw GW${lastFin && lastFin.id} ${lastFin && lastFin.average_entry_score}`);
 
   /* ---------- 2. behaviour ---------- */
   const squadNames = new Set(S.model.players.filter(p => (S.squad || []).includes(p.id)).map(p => p.web_name));

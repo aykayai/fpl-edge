@@ -175,6 +175,12 @@ body.scrolled .tbfig{display:flex}
 .fleg{font-size:13px;margin-bottom:5px}.fsum{font-size:13px;border-top:1px solid var(--ink3);padding-top:6px;margin-top:4px}
 .sqshape{display:grid;grid-template-columns:repeat(auto-fit,minmax(640px,1fr));gap:12px}
 @media(max-width:700px){.sqshape{grid-template-columns:1fr}}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:720px){.g2{grid-template-columns:1fr}}
+.sgnote{font-size:12px;color:var(--mute);margin:2px 0 6px}
+.sgrow.sgme b{color:var(--mint)}
+.wdl{display:inline-flex;gap:3px}.wdl i{font:700 10px 'Geist Mono',monospace;font-style:normal;width:17px;height:17px;border-radius:4px;display:inline-grid;place-items:center}
+.wdl i.W{background:rgba(61,220,151,.22);color:#3DDC97}.wdl i.D{background:rgba(255,255,255,.08);color:var(--mute)}.wdl i.L{background:rgba(255,90,110,.2);color:#FF8FA3}
 .foot{text-align:center;padding:18px 0 4px;font-size:11px;color:#5A5A5A}
 .prov{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 18px;padding:14px;font-size:12.5px;color:var(--mute)}
 .prov b{color:var(--cream);font-weight:600}
@@ -731,12 +737,12 @@ details[open]>summary::after{content:" ▴"}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.31.1"></script>
-<script src="./app-squad.js?v=12.31.1"></script>
-<script src="./app-render.js?v=12.31.1"></script>
-<script src="./app-odds.js?v=12.31.1"></script>
-<script src="./app-tracker.js?v=12.31.1"></script>
-<script src="./app-main.js?v=12.31.1"></script>
+<script src="./app-core.js?v=12.32.0"></script>
+<script src="./app-squad.js?v=12.32.0"></script>
+<script src="./app-render.js?v=12.32.0"></script>
+<script src="./app-odds.js?v=12.32.0"></script>
+<script src="./app-tracker.js?v=12.32.0"></script>
+<script src="./app-main.js?v=12.32.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
