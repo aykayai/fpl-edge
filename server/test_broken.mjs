@@ -154,7 +154,7 @@ try {
   show("signals");
   /* jsdom in this mode does not run inline onclick attributes, so the check
      is on what the key handler owns: Enter and Space press the element */
-  const rowEl = doc.querySelector(".sgrow[role='button']");
+  const rowEl = doc.querySelector(".sgpage .hbr[role='button'], .sgpage .sbrow[role='button'], .sgrow[role='button']");
   let pressed = 0; rowEl.click = () => { pressed++; };
   rowEl.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   rowEl.dispatchEvent(new w.KeyboardEvent("keydown", { key: " ", bubbles: true }));

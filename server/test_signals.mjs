@@ -104,18 +104,21 @@ try {
   await waitForServer();
   const { w, g, S } = await runApp();
   const doc = w.document;
-  S.tab = "signals"; g.render();
-  const page = doc.querySelector(".sgpage");
-  check(!!page, "Signals page renders");
-  const cards = [...doc.querySelectorAll(".sgcard")];
-  /* 20 Oct 2026: the six team cards moved to Teams > Clubs (sortable columns) */
-  /* 25 Oct 2026: eleven stats cards added (Your Season, Your League, The Game, players, team form) */
-  check(cards.length === 20, "all 20 cards present", `found ${cards.length}`);
-  const text = page ? page.textContent : "";
-  check(!/NaN|undefined/.test(text), "no NaN or undefined anywhere on the page");
-  const blank = cards.filter(c => !c.querySelector(".sgrow,.sgrep,.sgempty"));
-  check(blank.length === 0, "every card has rows or a waiting message", blank.map(c => c.querySelector("h3").textContent).join(", "));
+  /* 25 Oct 2026: Signals has four tabs (Transfers, My Squad, Teams, Players) */
+  const showTab = t => { S.tab = "signals"; g.act("sgtab", t); };
+  const WANT = { transfers: 11, squad: 9, teams: 6, players: 8 };
+  let allText = "";
+  for (const [t, n] of Object.entries(WANT)) {
+    showTab(t);
+    const reps = [...doc.querySelectorAll(".sgpage .rep")];
+    check(reps.length === n, `${t}: all ${n} reports present`, `found ${reps.length}: ${reps.map(r => r.querySelector("h3").textContent).join(", ")}`);
+    const blank = reps.filter(r => !r.classList.contains("shut") && !(r.querySelector(".rb") && r.querySelector(".rb").textContent.trim().length > 3));
+    check(blank.length === 0, `${t}: every report has content or a waiting message`, blank.map(r => r.querySelector("h3").textContent).join(", "));
+    allText += doc.querySelector(".sgpage") ? doc.querySelector(".sgpage").textContent : "";
+  }
+  check(!/NaN|undefined/.test(allText), "no NaN or undefined on any tab");
   check([...doc.querySelectorAll(".navlink")].some(a => a.textContent.trim() === "Signals"), "Signals is in the menu");
+  const cardBy2 = id => doc.getElementById("r-" + id);
 
   /* ---------- 1. independent: season scorers by position ---------- */
   const season = "2026-2027";
@@ -125,12 +128,13 @@ try {
   const latest = {};
   stats.forEach(r => { const id = r.id, gw = +r.gw; if (!latest[id] || gw > +latest[id].gw) latest[id] = r; });
   const POSNAME = { GKP: ["Goalkeeper", "GKP", "1"], DEF: ["Defender", "DEF", "2"], MID: ["Midfielder", "MID", "3"], FWD: ["Forward", "FWD", "4"] };
-  const scorersCard = cardBy(doc, "Top Scorers By Position");
+  showTab("players");
+  const scorersCard = cardBy2("scorers");
   const cols = scorersCard ? [...scorersCard.querySelectorAll(".sgcol")] : [];
   check(cols.length === 4, "scorer card has four position columns", `found ${cols.length}`);
   for (const col of cols) {
     const pos = col.querySelector(".sgcolh").textContent.trim();
-    const pageRows = [...col.querySelectorAll(".sgrow")].map(r => ({ name: r.querySelector(".sgwho b").textContent.trim(), pts: +r.querySelector(".sgfig b").textContent }));
+    const pageRows = [...col.querySelectorAll(".hbr")].map(r => ({ name: r.querySelector(".hbl b").textContent.trim(), pts: +r.querySelector(".hbv").textContent }));
     const ours = Object.values(latest).filter(r => POSNAME[pos].includes(String(posOf[r.id])) && +r.minutes > 0)
       .map(r => ({ name: r.web_name, pts: +r.total_points })).sort((a, b) => b.pts - a.pts);
     const want = ours.slice(0, 5).map(x => x.pts), got = pageRows.map(x => x.pts);
@@ -168,45 +172,45 @@ try {
   /* ---------- 1c. independent: the game's weekly average (25 Oct 2026) ---------- */
   const sums = csv(await get(`/data/insights/${season}/gameweek_summaries.csv`))
     .filter(r => String(r.finished).toLowerCase() === "true").sort((a, b) => +a.id - +b.id);
-  const lastFin = sums[sums.length - 1];
-  const vs = [...doc.querySelectorAll(".sgcard")].find(c => /Your Score vs The Game/.test(c.textContent));
-  const first = vs ? vs.querySelector(".sgrow") : null;
-  const m = first ? /average (\d+)/.exec(first.textContent) : null;
-  check(!!lastFin && !!m && +m[1] === Math.round(+lastFin.average_entry_score) && first.textContent.includes("GW" + Math.round(+lastFin.id)),
-    "score vs game: latest finished week's average matches gameweek_summaries", `page ${first ? first.textContent.replace(/\s+/g, " ").slice(0, 60) : "none"} vs raw GW${lastFin && lastFin.id} ${lastFin && lastFin.average_entry_score}`);
+  showTab("squad");
+  const latest2 = doc.querySelector("#r-vsgame .rlatest");
+  const tracked = (S.tracker && S.tracker.gw || []).map(r => r.event);
+  const lastFin = sums.filter(r => tracked.includes(Math.round(+r.id))).pop();
+  const m = latest2 ? /GW(\d+): you \d+ · average (\d+)/.exec(latest2.textContent) : null;
+  check(!!lastFin && !!m && +m[1] === Math.round(+lastFin.id) && +m[2] === Math.round(+lastFin.average_entry_score),
+    "score vs game: latest finished week's average matches gameweek_summaries", `page ${latest2 ? latest2.textContent : "none"} vs raw GW${lastFin && lastFin.id} ${lastFin && lastFin.average_entry_score}`);
 
   /* ---------- 2. behaviour ---------- */
   const squadNames = new Set(S.model.players.filter(p => (S.squad || []).includes(p.id)).map(p => p.web_name));
-  for (const t of ["In Form", "Availability"]) {
-    const c = cards.slice(0, 3).find(x => x.querySelector("h3").textContent.trim() === t);
-    const names = c ? [...c.querySelectorAll(".sgwho b")].map(b => b.textContent.trim()) : [];
-    check(names.every(n => squadNames.has(n)), `Your Squad "${t}" names only squad players`, names.filter(n => !squadNames.has(n)).join(", "));
-  }
-  const rep = cardBy(doc, "Consider Replacing");
-  const repNames = rep ? [...rep.querySelectorAll(".sgreph b")].map(b => b.textContent.trim()) : [];
-  check(repNames.every(n => squadNames.has(n)), "Consider Replacing names only squad players", repNames.join(", "));
-  const swaps = rep ? [...rep.querySelectorAll(".sgswap b")].map(b => b.textContent.trim()) : [];
-  check(swaps.every(n => !squadNames.has(n)), "every suggested swap is a player you do not own", swaps.join(", "));
+  showTab("squad");
+  const formNames = [...doc.querySelectorAll("#r-sqform .hbl b")].map(b => b.textContent.trim());
+  check(formNames.length > 0 && formNames.every(n => squadNames.has(n)), `My Squad "In Form" names only squad players`, formNames.filter(n => !squadNames.has(n)).join(", "));
+  const availNames = [...doc.querySelectorAll("#r-sqflag .sgwho b")].map(b => b.textContent.trim());
+  check(availNames.every(n => squadNames.has(n)), `My Squad "Availability" names only squad players`, availNames.join(", "));
+  showTab("transfers");
+  const sellOut = [...doc.querySelectorAll("#r-sqrep .mvh .dn")].map(b => b.textContent.trim());
+  check(sellOut.every(n => squadNames.has(n)), "Sell names only squad players", sellOut.join(", "));
+  const sellIn = [...doc.querySelectorAll("#r-sqrep .mvh .up")].filter(b => b.tagName === "SPAN").map(b => b.textContent.trim());
+  check(sellIn.every(n => !squadNames.has(n)), "every suggested swap is a player you do not own", sellIn.join(", "));
 
+  showTab("players");
   g.act("sigpos", 3);
-  const midCols = [...cardBy(doc, "Top Scorers By Position").querySelectorAll(".sgcol")];
-  check(midCols.length === 1, "position filter MID leaves one column", `found ${midCols.length}`);
-  const formPos = [...cardBy(doc, "In Form", true) ? doc.querySelectorAll(".sgcard") : []]
-    .filter(c => c.querySelector("h3").textContent.trim() === "In Form").pop();
-  const posTags = formPos ? [...formPos.querySelectorAll(".sgpos")].map(s => s.textContent) : [];
+  check(!cardBy2("scorers").querySelector(".sgcol") && cardBy2("scorers").querySelectorAll(".hbr").length > 0, "position filter MID leaves one ranking");
+  const posTags = [...cardBy2("form").querySelectorAll(".sgpos")].map(s => s.textContent);
   check(posTags.length > 0 && posTags.every(t => t === "MID"), "position filter MID applies to the In Form leaderboard", posTags.join(","));
   g.act("sigpos", 0);
   g.act("sigh", 5);
-  const diffSub = cardBy(doc, "Differentials")?.querySelector(".sgfig em")?.textContent;
-  check(diffSub === "next 5", "horizon Next 5 relabels the differentials", diffSub);
+  const tip = cardBy2("pred").querySelector(".fci").getAttribute("data-tip");
+  check(/next 5/.test(tip), "horizon Next 5 relabels Top Predicted", tip);
   g.act("sigh", 3);
   g.act("sigfold", "scorers");
-  const folded = cardBy(doc, "Top Scorers By Position");
-  check(folded.classList.contains("shut") && !folded.querySelector(".sgrow"), "fold hides a card's rows");
+  check(cardBy2("scorers").classList.contains("shut") && !cardBy2("scorers").querySelector(".rb"), "fold hides a report's body");
   const saved = JSON.parse(w.localStorage.getItem("fpl3:sig") || "{}");
-  check(Array.isArray(saved.fold) && saved.fold.includes("scorers") && saved.h === 3 && saved.pos === 0, "position, horizon and folds are remembered", JSON.stringify(saved));
+  check(Array.isArray(saved.fold) && saved.fold.includes("scorers") && saved.h === 3 && saved.pos === 0 && saved.tab === "players", "tab, position, horizon and folds are remembered", JSON.stringify(saved));
   g.act("sigfold", "scorers");
-  check(!cardBy(doc, "Top Scorers By Position").classList.contains("shut"), "unfold brings it back");
+  check(!cardBy2("scorers").classList.contains("shut"), "unfold brings it back");
+  showTab("teams");
+  check(/#\/signals\/teams$/.test(w.location.hash), "each tab has its own link", w.location.hash);
 } catch (e) {
   fail++; console.log("FAIL  run aborted -- " + (e && e.stack || e));
 } finally {

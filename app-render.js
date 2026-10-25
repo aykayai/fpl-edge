@@ -560,7 +560,7 @@ function swapCardHTML(m,g){
    Move pop-up (several players at once, best moves by position, the
    players not being suggested). The five-week plan sits beside them, price
    moves are in Price Watch and the radar became Players > Compare. */
-function transfersHTML(){
+function transfersHTML(part){
   const g=VG();
   const outIds=S.outList.length?S.outList:null;
   const all=bestSwaps(400);
@@ -611,7 +611,7 @@ function transfersHTML(){
     <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap">${ignoredP.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}</div></div>`:"";
   const suggestTitle=ignoredPanel+`<div class="panel"><div class="phead"><h2>Best Moves by Position</h2>
       <span class="note">up to four per position, each worth a transfer</span></div></div>`;
-  const byPos=[1,2,3,4].map(pos=>{
+  const byPos=[1,2,3,4].filter(pos=>part!=="bypos"||!S.sigPos||pos===S.sigPos).map(pos=>{
     /* One recommendation per player being sold, not a list of near-identical
        alternatives, and only where the gain is worth a transfer. */
     const seen=new Set();
@@ -626,6 +626,10 @@ function transfersHTML(){
         :`<p class="note" style="margin:0">Head Scout recommends no transfers in this position.</p>`}</div></div>`;
   }).join("");
 
+  /* Signals > Transfers (25 Oct 2026) shows the parts in their own reports */
+  if(part==="picker")return picker+comboPanel;
+  if(part==="bypos")return byPos;
+  if(part==="ignored")return ignoredPanel;
   return picker+comboPanel+suggestTitle+byPos;
 }
 /* S3 (Stage 1, 19 Oct 2026): the five-week plan, one card per week */
@@ -1330,158 +1334,8 @@ const CREATORS=[["Ben Crellin","Blanks, doubles and fixture swings","https://x.c
    behind (i), and a fold arrow; colours are FPL Signals' own.
    Icons are Lucide (ISC licence), inlined so nothing is fetched.
    ============================================================ */
-const SIG_ICONS={
-  "trending-down":'<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
-  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
-  sparkles:'<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>',
-  "triangle-alert":'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
-  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
-  "chevron-down":'<path d="m6 9 6 6 6-6"/>',
-  "calendar-range":'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M16 2v3"/><path d="M3 9h18"/><path d="M8 2v3"/><path d="M17 13h-6"/><path d="M13 17H7"/><path d="M7 13h.01"/><path d="M17 17h.01"/>',
-  "arrow-left-right":'<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
-  flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
-  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
-  "shield-off":'<path d="m2 2 20 20"/><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"/><path d="M9.309 3.652A12.252 12.252 0 0 0 11.24 2.28a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.784 9.784 0 0 1-.08 1.264"/>',
-  gem:'<path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/>',
-  crosshair:'<circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/>',
-  trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>'
-};
-const sgIcon=(k,cls="")=>`<svg class="sgi ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SIG_ICONS[k]||""}</svg>`;
 /* thresholds, agreed with the mock-up */
-const SIG={formHot:5,diffOwned:5,diffMins:60,sellOwned:10,sellForm:3,threatMins:270,replaceForm:3,replaceShare:0.8,replaceMins:45,swapHorizon:5,runWeeks:5};
-const sgF1=v=>(Math.round(v*10)/10).toFixed(1);
-const sgAvail=p=>p.status==="a"||p.status==="d";
 
-function signalsHTML(){
-  if(!S.model)return "";
-  const M=S.model,G=VG(),H=S.sigH||3,posF=S.sigPos||0;
-  const squad=new Set(S.squad||[]);
-  const bank=+(S.bank||0);
-  const pa=S.playerActuals||{};
-  const lastGws=[];for(let e=G-6;e<G;e++)if(e>=1)lastGws.push(e);
-  const pool=M.players.filter(p=>p.minutes>0);
-  const posOk=p=>!posF||p.pos===posF;
-  const fold=new Set(S.sigFold||[]);
-
-  const spark=p=>{
-    const a=pa[p.id]||pa[String(p.id)]||{};
-    const vals=lastGws.map(e=>a[e]??a[String(e)]??null);
-    const max=Math.max(8,...vals.map(v=>v||0)),bw=6,gap=3,h=22,wd=Math.max(1,vals.length*(bw+gap)-gap);
-    const bars=vals.map((v,i)=>{
-      if(v==null)return `<rect x="${i*(bw+gap)}" y="${h-2}" width="${bw}" height="2" rx="1" fill="var(--ink3)"/>`;
-      const bh=Math.max(2,Math.round(Math.max(v,0)/max*h));
-      const col=v>=8?"var(--mint)":v>=4?"#7FA8C9":"#55606F";
-      return `<rect x="${i*(bw+gap)}" y="${h-bh}" width="${bw}" height="${bh}" rx="1.5" fill="${col}"><title>GW${lastGws[i]}: ${v} pts</title></rect>`;}).join("");
-    return `<svg class="sgspark" width="${wd}" height="${h}" viewBox="0 0 ${wd} ${h}" role="img" aria-label="Points in the last ${vals.length} gameweeks">${bars}</svg>`;
-  };
-  const pills=(p,n,lens)=>{
-    const out=[];
-    for(let e=G;e<G+n;e++){
-      const wk=p.gw[e];
-      if(!wk||!wk.fixtures||!wk.fixtures.length){out.push(`<span class="sgfx blank" title="No fixture">-</span>`);continue;}
-      wk.fixtures.forEach(f=>{const d=lens==="def"?(f.diffDef||f.diff):(f.diffAtt||f.diff);
-        out.push(`<span class="sgfx d${d}" title="GW${e} ${esc(f.oppName||f.opp)} ${f.home?"home":"away"}">${esc(f.opp)}<i>${f.home?"H":"A"}</i></span>`);});
-    }
-    return `<span class="sgfxrow">${out.join("")}</span>`;
-  };
-  const posTag=p=>`<span class="sgpos p${p.pos}">${POS[p.pos]}</span>`;
-  const row=(p,rank,fig,sub,o={})=>`<div class="sgrow" onclick="act('card',${p.id})">
-    <span class="sgrank">${rank}</span>
-    <span class="sgwho"><b>${esc(p.web_name)}</b>${squad.has(p.id)?`<span class="sgmine" title="In your squad">You</span>`:""}
-      <em>${esc(p.teamName)} · ${posTag(p)} · £${sgF1(p.price)}${o.owned===false?"":` · ${sgF1(p.owned)}%`}</em></span>
-    ${o.spark===false?"":spark(p)}
-    <span class="sgfig"><b>${fig}</b>${sub?`<em>${sub}</em>`:""}</span></div>`;
-  const card=(key,ic,tone,title,info,body,wide)=>{
-    const shut=fold.has(key);
-    return `<section class="sgcard ${tone}${shut?" shut":""}${wide?" wide":""}">
-      <header><span class="sgico">${sgIcon(ic)}</span><h3>${title}</h3>
-        <span class="sginfo" tabindex="0" title="${esc(info)}" aria-label="${esc(info)}">${sgIcon("info")}</span>
-        <button class="sgfold" onclick="act('sigfold','${key}')" aria-label="${shut?"Open":"Fold"} ${esc(title)}" aria-expanded="${!shut}">${sgIcon("chevron-down")}</button></header>
-      ${shut?"":body}</section>`;
-  };
-  const empty=t=>`<p class="sgempty">${t}</p>`;
-
-  /* ----- your squad ----- */
-  const mine=M.players.filter(p=>squad.has(p.id));
-  const posAvg={};[1,2,3,4].forEach(pos=>{const xs=mine.filter(p=>p.pos===pos).map(p=>hPts(p,G,H));
-    posAvg[pos]=xs.reduce((a,b)=>a+b,0)/Math.max(1,xs.length);});
-  const keep=mine.filter(p=>p.form>=SIG.formHot&&sgAvail(p)).sort((a,b)=>b.form-a.form).slice(0,5)
-    .map((p,i)=>row(p,i+1,sgF1(p.form),"form")).join("")||empty(`No one in your squad is on ${sgF1(SIG.formHot)} form or better.`);
-  /* wave 4: Sell comes from the one engine (the same rule as the Sell icon):
-     your players whose best affordable replacement adds 2+ to the XI over the
-     next H. The chips say why he may be struggling. */
-  const firstMove=new Map();
-  engineMoves({squad:S.squad||[],bank:planBank(),g:G,h:H}).forEach(m=>{if(!firstMove.has(m.out.id))firstMove.set(m.out.id,m);});
-  const weak=[...firstMove.values()].filter(m=>m.gain>=2).sort((a,b)=>b.gain-a.gain).slice(0,5).map(m=>{
-    const p=m.out,why=[],nx=hPts(p,G,H);
-    if(p.form<SIG.replaceForm)why.push(`Form ${sgF1(p.form)}`);
-    if(nx<posAvg[p.pos]*SIG.replaceShare)why.push(`Next ${H} ${sgF1(nx)}`);
-    if(p.status!=="a")why.push(p.status==="d"?`${Math.round((p.avail??0.75)*100)}% fit${p.availAssumed?" (assumed)":""}`:"Unavailable");
-    if((p.xMins||0)<SIG.replaceMins)why.push(`${p.xMins||0}′ expected`);
-    return {p,why,m};});
-  const replace=weak.map(({p,why,m})=>{
-    const sub=m.inn,gain=m.gain;
-    return `<div class="sgrep">
-      <div class="sgreph" onclick="act('card',${p.id})"><b>${esc(p.web_name)}</b><em>${esc(p.teamName)} · ${posTag(p)} · £${sgF1(p.price)}</em>${pills(p,SIG.runWeeks,p.pos<=2?"def":"att")}</div>
-      ${why.length?`<div class="sgwhy">${why.map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>`:""}
-      <div class="sgswap" onclick="act('card',${sub.id})">${sgIcon("arrow-left-right")}<span>Swap to <b>${esc(sub.web_name)}</b> <em>${esc(sub.teamName)} · £${sgF1(sub.price)}</em></span><span class="sggain">${sgn1(gain)}<em>to your XI, next ${H}</em></span></div>
-      <button class="mini" style="margin-top:6px" onclick="act('doswap',${p.id},${sub.id})">Make this transfer</button>
-    </div>`;}).join("")||empty(`No player of yours has a replacement worth 2+ points to your XI over the next ${H}.`);
-  const flags=mine.filter(p=>p.status!=="a").map(p=>`<div class="sgrow" onclick="act('card',${p.id})">
-    <span class="sgrank">${sgIcon("triangle-alert",p.status==="d"?"warn":"bad")}</span>
-    <span class="sgwho"><b>${esc(p.web_name)}</b><em>${esc(p.news||(p.status==="d"?"Doubtful":"Unavailable"))}</em></span>
-    <span class="sgfig"><b>${p.status==="d"?Math.round((p.avail??0.75)*100)+"%":"Out"}</b><em>chance${p.status==="d"?availTag(p):""}</em></span></div>`).join("")
-    ||empty("Everyone in your squad is fit.");
-
-  /* ----- players ----- */
-  const byPos=(sortFn,fig,sub,filt)=>`<div class="sgcols${posF?" one":""}">${[1,2,3,4].filter(pos=>!posF||pos===posF).map(pos=>{
-    const top=pool.filter(p=>p.pos===pos&&(!filt||filt(p))).sort(sortFn).slice(0,posF?10:5);
-    return `<div class="sgcol"><div class="sgcolh">${POS[pos]}</div>${top.map((p,i)=>row(p,i+1,fig(p),sub(p),{spark:!!posF,owned:false})).join("")||empty("None yet.")}</div>`;}).join("")}</div>`;
-  const topScorers=byPos((a,b)=>b.total-a.total,p=>p.total,p=>`${sgF1(p.ppg)} ppg`);
-  const topPred=byPos((a,b)=>hPts(b,G,H)-hPts(a,G,H),p=>sgF1(hPts(p,G,H)),p=>`${p.xMins||0}′`,sgAvail);
-  const list=(arr,fig,sub)=>arr.map((p,i)=>row(p,i+1,fig(p),sub)).join("")||empty("No players match right now.");
-  const inForm=list(pool.filter(p=>p.minutes>=180&&sgAvail(p)&&posOk(p)).sort((a,b)=>b.form-a.form).slice(0,6),p=>sgF1(p.form),"form");
-  const diffs=list(pool.filter(p=>p.owned<SIG.diffOwned&&(p.xMins||0)>=SIG.diffMins&&sgAvail(p)&&posOk(p))
-    .sort((a,b)=>hPts(b,G,H)-hPts(a,G,H)).slice(0,6),p=>sgF1(hPts(p,G,H)),`next ${H}`);
-  const sells=list(pool.filter(p=>p.owned>=SIG.sellOwned&&p.form<=SIG.sellForm&&posOk(p)).sort((a,b)=>b.owned-a.owned).slice(0,6),p=>sgF1(p.form),"form");
-  const threat=list(pool.filter(p=>p.minutes>=SIG.threatMins&&p.pos>=2&&posOk(p))
-    .sort((a,b)=>((b.xg90||0)+(b.xa90||0))-((a.xg90||0)+(a.xa90||0))).slice(0,6),p=>sgF1((p.xg90||0)+(p.xa90||0)),"xGI per 90");
-
-  const seg=(items,cur,k)=>`<div class="sgseg" role="group">${items.map(([v,l])=>
-    `<button class="${cur===v?"on":""}" aria-pressed="${cur===v}" onclick="act('${k}',${v})">${l}</button>`).join("")}</div>`;
-  const ds=S.status&&S.status.dataset;
-  const X=statsCards(card,empty,G);
-  return `<div class="sgpage">
-    <div class="sghead"><div><h2>Signals</h2><p>Gameweek ${G} · players and teams worth a look, ranked from the model and this season's data${ds&&ds.committedAt?` · stats ${esc(ukWhen(ds.committedAt))}`:""}</p></div>
-      <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}<button class="btnlink" onclick="act('tab','squad');act('pop','move')">Plan transfers →</button></div></div>
-    ${signalBoardHTML(G,H,posF)}
-    <h4 class="sgsec">Your Squad</h4>
-    <div class="sggrid g3">
-      ${card("sqform","flame","good","In Form",`Your players on ${sgF1(SIG.formHot)} form or better (average points per game over the last 30 days). Bars: points in each of the last six gameweeks.`,keep)}
-      ${card("sqrep","trending-down","warn","Sell",`Your players whose best affordable replacement adds 2 or more points to your best XI plus captain over the next ${H} (the same rule as the Sell icon). The chips show form, fixtures, fitness or minutes concerns where they apply.`,replace)}
-      ${card("sqflag","triangle-alert","bad","Availability","Your players with an injury, suspension or doubt flag from FPL.",flags)}
-    </div>
-    <h4 class="sgsec">Your Season</h4>
-    <div class="sggrid g3">${X.vsGame}${X.capt}${X.bank}</div>
-    <h4 class="sgsec">Your League</h4>
-    <div class="sggrid g2">${X.gaps}${X.chips}</div>
-    <h4 class="sgsec">Players</h4>
-    <div class="sggrid g1">${card("scorers","trophy","","Top Scorers By Position","Season total points, with points per game.",topScorers)}</div>
-    <div class="sggrid g1">${card("pred","sparkles","","Top Predicted By Position",`Model points over the next ${H} gameweek${H>1?"s":""}, with expected minutes. Available and doubtful players only.`,topPred)}</div>
-    <div class="sggrid g3">
-      ${card("form","flame","good","In Form","Highest form (average points per game over the last 30 days), 180 minutes or more this season.",inForm)}
-      ${card("diff","gem","accent","Differentials",`Under ${SIG.diffOwned}% owned, ${SIG.diffMins} or more expected minutes, ranked by model points over the next ${H}.`,diffs)}
-      ${card("sell","trending-down","bad","Sell Signals",`Owned by ${SIG.sellOwned}% or more with form at ${SIG.sellForm} or under: template players who have gone cold.`,sells)}
-    </div>
-    <div class="sggrid g1">${card("threat","crosshair","","Underlying Threat",`Expected goals plus expected assists per 90 minutes, outfield players with ${SIG.threatMins} minutes or more.`,`<div class="sgsplit">${threat}</div>`)}</div>
-    <div class="sggrid g3">${X.dream}${X.xgHot}${X.xgCold}</div>
-    <h4 class="sgsec">Teams</h4>
-    <div class="sggrid g1">${X.form}</div>
-    <p class="note">Attacks and defences to own, opponents to target and fixture runs are on <a href="${routeFor("fixtures")}" onclick="S.fixMode='clubs';return go(event,'fixtures')" style="color:var(--cyan)">Teams → Clubs</a>.</p>
-    <h4 class="sgsec">The Game</h4>
-    <div class="sggrid g2">${X.popular}${X.chipPlays}</div>
-  </div>`;
-}
 
 /* ============================================================
    REDESIGN WAVE 2 (20 Oct 2026, mock 2-3): the Planner's This Week strip
@@ -1828,7 +1682,7 @@ function playerCompareHTML(){
 
 /* Signals board (redesign wave 4): one card per signal, in Andy's order,
    listing who carries it now (yours first), over the page's horizon. */
-function signalBoardHTML(G,H,posF){
+function signalBoardHTML(G,H,posF,bare){
   const mine=new Set(S.squad||[]);
   const by={};SIG_ORDER.forEach(k=>by[k]=[]);
   S.model.players.forEach(p=>{if(posF&&p.pos!==posF)return;
@@ -1842,6 +1696,7 @@ function signalBoardHTML(G,H,posF){
       <span class="sbv">${hPts(p,G,H).toFixed(1)}</span></div>`).join("");
     return `<section class="sbcard"><header>${sigTile(k,SIG_RULE[k](H))}<h3>${SIGNAL[k][2]}</h3><span class="sbc">${list.length}</span></header>
       ${rows||'<p class="sgempty">Nobody right now.</p>'}${list.length>6?`<div class="sbmore">+${list.length-6} more · <a href="${routeFor("table")}" onclick="S.iconF=['${k}'];S.pView='stats';return go(event,'table')">see all</a></div>`:""}</section>`;}).join("");
+  if(bare)return `<div class="sbgrid">${cards}</div>`;
   return `<h4 class="sgsec">Signal Board <span class="mu" style="font-weight:400;font-size:12px">points over the next ${H}</span></h4><div class="sbgrid">${cards}</div>`;
 }
 
@@ -2155,92 +2010,314 @@ function signalHitsHTML(){
 }
 
 /* ============================================================
-   STATS LIST (25 Oct 2026): the twelve stats from the 12 Oct list the app
-   did not show, as Signals cards. Your season: score against the game
-   (2, 38), captain against the best in your XI (6), bank and value (9).
-   Your league: gaps (12), everyone's chips (15). Players: Dream Team
-   (33), above and below their xG (29). Teams: last-five form (36). The
-   game: most captained / selected / bought (39), chip plays (40).
+   SIGNALS IN FOUR TABS (25 Oct 2026, Andy): Transfers, My Squad, Teams,
+   Players. Each report is a card drawn the Fintel Reports way: icon and
+   title, (i) for the explanation, fold; key figures in a row; charts with
+   faint gridlines and a hover card (data-tip "title|figure|note"); ranked
+   bars for leaderboards, split bars for plus and minus, columns for weeks.
    ============================================================ */
-Object.assign(SIG_ICONS,{crown:LUCIDE.crown,wallet:LUCIDE.wallet,users:LUCIDE.users,star:LUCIDE.star,
-  gauge:LUCIDE.gauge,activity:LUCIDE.activity,calendar:LUCIDE.calendar});
-const sgLine=(rank,title,sub,fig,figSub,o)=>`<div class="sgrow${o&&o.me?" sgme":""}"${o&&o.pid?` onclick="act('card',${o.pid})"`:""}><span class="sgrank">${rank}</span>
-  <span class="sgwho"><b>${title}</b>${sub?`<em>${sub}</em>`:""}</span><span></span>
-  <span class="sgfig"><b>${fig}</b>${figSub?`<em>${figSub}</em>`:""}</span></div>`;
-const pNameOf=id=>{const p=S.model&&S.model.players.find(x=>x.id===+id);return p?p.web_name:"#"+id;};
-function statsCards(card,empty,G){
-  const T=(S.tracker&&S.tracker.gw)||[],rows=T.slice().sort((a,b)=>a.event-b.event);
+LUCIDE["chevron-up"]='<path d="m18 15-6-6-6 6"/>';
+const SG_TABS=[["transfers","Transfers"],["squad","My Squad"],["teams","Teams"],["players","Players"]];
+const SG_TONE={mint:"#3DDC97",red:"#FF5A6E",amber:"#FFB020",grey:"#8A8A8A",ice:"#BAE6FD",purple:"#B388FF",cyan:"#22D3EE"};
+function rep(key,icon,title,info,body,o){
+  o=o||{};const shut=(S.sigFold||[]).includes(key);
+  return `<section class="rep sgcard${o.wide?" wide":""}${o.bare?" bare":""}${shut?" shut":""}" id="r-${key}">
+    <header class="rh"><span class="rhi">${lic(icon,16)}</span><h3>${title}</h3>${o.badge!=null?`<span class="rbadge">${o.badge}</span>`:""}
+      ${info?`<button class="fci" data-tip="${esc(info)}" aria-label="About ${esc(title)}">i</button>`:""}
+      <button class="rfold sgfold" onclick="act('sigfold','${key}')" aria-expanded="${!shut}" aria-label="${shut?"Open":"Fold"} ${esc(title)}">${lic(shut?"chevron-down":"chevron-up",14)}</button></header>
+    ${shut?"":`<div class="rb">${body}</div>`}</section>`;
+}
+const sgEmpty=t=>`<p class="sgempty">${t}</p>`;
+/* key figures: [{label, value, sub, tone}] */
+const rkv=figs=>`<div class="rkv">${figs.map(f=>`<div><span>${f.label}</span><b class="${f.tone||""}">${f.value}</b>${f.sub?`<em>${f.sub}</em>`:""}</div>`).join("")}</div>`;
+/* ranked bars: rows [{label, sub, value, show, tone, pid, mine, extra}] */
+function hbars(rows,o){
+  o=o||{};if(!rows.length)return sgEmpty(o.empty||"Nobody right now.");
+  const mx=Math.max(...rows.map(r=>Math.abs(r.value)),1e-9),lo=o.from!=null?o.from:0;
+  return `<div class="hb${o.diverge?" dv":""}">${rows.map((r,i)=>{
+    const w=o.diverge?Math.abs(r.value)/mx*50:Math.max(2,(r.value-lo)/((mx-lo)||1)*100);
+    const tone=r.tone||(o.diverge?(r.value>=0?SG_TONE.mint:SG_TONE.red):SG_TONE.mint);
+    return `<div class="hbr${r.mine?" me":""}"${r.pid?` onclick="act('card',${r.pid})"`:""}>
+      ${o.rank?`<span class="hbn">${i+1}</span>`:""}<span class="hbl"><b>${r.label}</b>${r.sub?`<em>${r.sub}</em>`:""}</span>
+      <span class="hbt"><i class="${o.diverge?(r.value<0?"neg":"pos"):""}" style="width:${w.toFixed(1)}%;background:${tone}"></i></span>
+      <span class="hbv">${r.show!=null?r.show:r.value}</span>${r.extra||""}</div>`;}).join("")}</div>`;
+}
+/* week columns with optional line series:
+   cats [labels], bars [{name, values, color}], lines [{name, values, color, dots}], stacked */
+function colChart(cats,bars,lines,o){
+  o=o||{};lines=lines||[];if(!cats.length)return sgEmpty(o.empty||"Nothing to draw yet.");
+  const W=o.w||640,H=o.h||210,pl=38,pr=8,pt=10,pb=24,pw=W-pl-pr,ph=H-pt-pb;
+  const all=[...(o.stacked?cats.map((c,i)=>bars.reduce((s,b)=>s+(b.values[i]||0),0)):bars.flatMap(b=>b.values)),...lines.flatMap(l=>l.values)].filter(v=>v!=null);
+  const lo=o.min!=null?o.min:Math.min(0,...all);let hi=Math.max(...all,1);
+  const step=(()=>{const r=(hi-lo)/4,m=Math.pow(10,Math.floor(Math.log10(r||1)));return [1,2,2.5,5,10].map(x=>x*m).find(x=>x>=r)||r;})();
+  hi=lo+Math.ceil((hi-lo)/step)*step;
+  const y=v=>pt+ph-(v-lo)/((hi-lo)||1)*ph,slot=pw/cats.length;
+  const fmt=o.fmt||(v=>Math.round(v));
+  let g="";
+  for(let v=lo;v<=hi+1e-9;v+=step)g+=`<line class="${Math.abs(v)<1e-9?"czero":"cgrid"}" x1="${pl}" x2="${W-pr}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="cax" x="${pl-6}" y="${(y(v)+4).toFixed(1)}" text-anchor="end">${fmt(v)}</text>`;
+  cats.forEach((c,i)=>{
+    const x0=pl+slot*i;
+    if(o.stacked){let acc=0;const bw=Math.min(34,slot*.62);
+      bars.forEach(b=>{const v=b.values[i]||0;if(!v)return;const y1=y(acc+v),y0=y(acc);acc+=v;
+        g+=`<rect class="cbar" x="${(x0+(slot-bw)/2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(.5,y0-y1).toFixed(1)}" rx="3" fill="${b.color}" data-tip="${esc(c)}|${esc(b.name)} ${fmt(v)}|"/>`;});}
+    else{const n=bars.length||1,bw=Math.min(26,(slot*.7)/n);
+      bars.forEach((b,k)=>{const v=b.values[i];if(v==null)return;const yt=y(Math.max(v,0)),yb=y(Math.min(v,0));
+        g+=`<rect class="cbar" x="${(x0+(slot-bw*n)/2+bw*k).toFixed(1)}" y="${yt.toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${Math.max(.5,yb-yt).toFixed(1)}" rx="4" fill="${b.color}" data-tip="${esc(c)}|${esc(b.name)} ${fmt(v)}|${esc((b.notes||[])[i]||"")}"/>`;});}
+    g+=`<text class="cax" x="${(x0+slot/2).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(c)}</text>`;
+  });
+  lines.forEach(l=>{const pts=l.values.map((v,i)=>v==null?null:[pl+slot*i+slot/2,y(v)]);
+    const seg=pts.filter(Boolean).map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+    if(!l.dotsOnly)g+=`<polyline points="${seg}" fill="none" stroke="${l.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${l.dash?' stroke-dasharray="4 4"':""}/>`;
+    pts.forEach((p,i)=>{if(p)g+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${l.dotsOnly?4:3}" fill="${l.color}" data-tip="${esc(cats[i])}|${esc(l.name)} ${fmt(l.values[i])}|"/>`;});});
+  const legend=[...bars.map(b=>[b.name,b.color,"sq"]),...lines.map(l=>[l.name,l.color,l.dotsOnly?"dot":"ln"])];
+  return `<div class="chartbox"><svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label||"Chart")}">${g}</svg>
+    ${legend.length>1||o.legend?`<div class="clegend">${legend.map(([n,c,k])=>`<span><i class="${k}" style="background:${c}"></i>${esc(n)}</span>`).join("")}</div>`:""}</div>`;
+}
+/* chance of playing as a ring */
+function ringSVG(p,size,color){const r=size/2-3,c=2*Math.PI*r;
+  return `<svg class="ring" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true"><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#262626" stroke-width="4"/>
+  <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c*p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size/2} ${size/2})"/></svg>`;}
+const sgPos=p=>`<span class="sgpos p${p.pos}">${POS[p.pos]}</span>`;
+function sgSpark(p,G){const pa=S.playerActuals||{},a=pa[p.id]||pa[String(p.id)]||{},vals=[];
+  for(let e=G-6;e<G;e++)if(e>=1)vals.push(a[e]??a[String(e)]??null);
+  const max=Math.max(8,...vals.map(v=>v||0)),bw=5,gap=2,h=18,wd=Math.max(1,vals.length*(bw+gap)-gap);
+  return `<svg class="sgspark" width="${wd}" height="${h}" viewBox="0 0 ${wd} ${h}" aria-hidden="true">${vals.map((v,i)=>{const bh=v==null?2:Math.max(2,Math.round(Math.max(v,0)/max*h));
+    return `<rect x="${i*(bw+gap)}" y="${h-bh}" width="${bw}" height="${bh}" rx="1.5" fill="${v==null?"#262626":v>=8?"#3DDC97":v>=4?"#7FA8C9":"#55606F"}"/>`;}).join("")}</svg>`;}
+
+/* the page: header, tabs, position and horizon, then the tab's reports */
+function signalsHTML(){
+  if(!S.model)return "";
+  const G=VG(),H=S.sigH||3,posF=S.sigPos||0,tab=SG_TABS.some(([k])=>k===S.sgTab)?S.sgTab:"transfers";
+  const seg=(items,cur,k)=>`<span class="hz">${items.map(([v,l])=>`<button class="${cur===v?"on":""}" aria-pressed="${cur===v}" onclick="act('${k}',${typeof v==="string"?`'${v}'`:v})">${l}</button>`).join("")}</span>`;
+  const usesPos=tab==="transfers"||tab==="players";
+  const body={transfers:sgTransfers,squad:sgSquad,teams:sgTeams,players:sgPlayers}[tab](G,H,posF);
+  return `<div class="sgpage" data-tab="${tab}">
+    <div class="pagetabs"><h1>Signals</h1><span class="pseg sgtabs">${SG_TABS.map(([k,n])=>`<button class="${tab===k?"on":""}" onclick="act('sgtab','${k}')">${n}</button>`).join("")}</span></div>
+    <div class="hubctl">${usesPos?seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos"):""}
+      ${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}
+      <span class="note">Gameweek ${G}${tab==="transfers"?` · bank £${planBank().toFixed(1)} · ${freeWeek(G)?"free week":freeLeft(G)+" free transfer"+(freeLeft(G)===1?"":"s")}`:""}</span></div>
+    ${body}</div>`;
+}
+const sgOk=(p,posF)=>!posF||p.pos===posF;
+const hzL=H=>H>1?`next ${H}`:"next GW";
+
+/* ---------------- Transfers ---------------- */
+function sgTransfers(G,H,posF){
+  const mine=new Set(S.squad||[]),M=S.model;
+  const moves=bestSwaps(40,H).filter(m=>sgOk(m.out,posF));
+  const first=new Map();engineMoves({squad:S.squad||[],bank:planBank(),g:G,h:H}).forEach(m=>{if(!first.has(m.out.id))first.set(m.out.id,m);});
+  const sells=[...first.values()].filter(m=>m.gain>=2&&sgOk(m.out,posF)).sort((a,b)=>b.gain-a.gain);
+  const L=p=>fplLive(p)||{};
+  const rising=M.players.filter(p=>mine.has(p.id)&&L(p).pcp>=70);
+  const top=moves[0];
+  const figs=rkv([
+    {label:"Best Move",value:top?`<span class="up">${sgn1(top.gain)}</span>`:"Hold",sub:top?`${esc(top.out.web_name)} → ${esc(top.inn.web_name)}`:"no move adds to your XI"},
+    {label:"Sell Flags",value:String(sells.length),sub:`yours, ${hzL(H)}`,tone:sells.length?"bad":""},
+    {label:"Your Players Rising",value:String(rising.length),sub:"FPL predictor 70%+",tone:rising.length?"good":""},
+    {label:"Bank",value:`£${planBank().toFixed(1)}`,sub:`squad £${squadBudget().toFixed(1)} to spend`},
+    {label:"Free Transfers",value:freeWeek(G)?"Unlimited":String(freeTransfers()),sub:hitCost(G)?`<span class="dn">−${hitCost(G)} hit planned</span>`:"no hit planned"}]);
+  const mkBtn=m=>`<button class="mini" onclick="event.stopPropagation();act('doswap',${m.out.id},${m.inn.id})">Make</button>`;
+  const moveRow=m=>({label:`${esc(m.out.web_name)} → ${esc(m.inn.web_name)}`,sub:`${esc(m.inn.teamName)} · ${POS[m.inn.pos]} · £${m.inn.price.toFixed(1)}`,value:m.gain,show:sgn1(m.gain),pid:m.inn.id,extra:mkBtn(m)});
+  const why=p=>{const w=[];if(p.form<3)w.push(`form ${p.form.toFixed(1)}`);if(p.avail<1)w.push(`${Math.round(p.avail*100)}% fit`);if((p.xMins||0)<45)w.push(`${Math.round(p.xMins||0)}′ expected`);return w;};
+  const sellBody=sells.length?`<div class="mvgrid">${sells.map(m=>`<div class="mv">
+      <div class="mvh"><span class="dn">${esc(m.out.web_name)}</span><span class="arr">→</span><span class="up">${esc(m.inn.web_name)}</span><b class="up">${sgn1(m.gain)}</b></div>
+      <div class="mvs">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · to your XI, ${hzL(H)}</div>
+      ${why(m.out).length?`<div class="sgwhy">${why(m.out).map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>`:""}
+      <button class="mini" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button></div>`).join("")}</div>`
+    :sgEmpty(`No player of yours has a replacement worth 2+ points to your XI over the ${hzL(H)}.`);
+  const pc=M.players.filter(p=>L(p).pcp!=null&&sgOk(p,posF));
+  const pcRow=p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · £${p.price.toFixed(1)}${mine.has(p.id)?" · yours":""}`,value:Math.max(-150,Math.min(150,L(p).pcp)),show:`${Math.round(L(p).pcp)}%`,pid:p.id,mine:mine.has(p.id)});
+  const up=pc.filter(p=>L(p).pcp>0).sort((a,b)=>L(b).pcp-L(a).pcp).slice(0,8),dn=pc.filter(p=>L(p).pcp<0).sort((a,b)=>L(a).pcp-L(b).pcp).slice(0,8);
+  const stats=new Map((S.players||[]).map(p=>[p.id,p.stats||{}]));
+  const net=p=>{const s=stats.get(p.id)||{};return num(s.transfers_in_event)-num(s.transfers_out_event);};
+  const k=n=>(n>=0?"+":"−")+Math.abs(Math.round(n/1000))+"k";
+  const tr=M.players.filter(p=>sgOk(p,posF));
+  const bought=tr.slice().sort((a,b)=>net(b)-net(a)).slice(0,8),sold=tr.slice().sort((a,b)=>net(a)-net(b)).slice(0,8);
+  const netRow=p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · ${p.owned}% owned`,value:net(p),show:k(net(p)),pid:p.id,mine:mine.has(p.id)});
+  const diffs=M.players.filter(p=>p.owned<5&&(p.xMins||0)>=60&&p.avail>0&&sgOk(p,posF)).sort((a,b)=>hPts(b,G,H)-hPts(a,G,H)).slice(0,8);
+  const cold=M.players.filter(p=>p.owned>=10&&p.form<=3&&sgOk(p,posF)).sort((a,b)=>b.owned-a.owned).slice(0,8);
+  return figs+`<div class="sggrid1">${rep("board","sparkles","Signal Board",`Every player carrying each signal now, yours first, points over the ${hzL(H)}. Hover a tile for its rule.`,signalBoardHTML(G,H,posF,true),{wide:true})}</div>
+  <div class="repgrid">
+    ${rep("topmoves","circle-arrow-up","Top Moves",`The best single transfers, each scored by what it adds to your best XI plus captain over the ${hzL(H)} (later weeks count a little less). Make does the transfer in the Planner.`,hbars(moves.slice(0,10).map(moveRow),{empty:"No single move adds to your XI."}))}
+    ${rep("sqrep","circle-arrow-down","Sell",`Your players whose best affordable replacement adds 2 or more points to your XI over the ${hzL(H)} (the Sell icon's rule). Chips show why he may be struggling.`,sellBody)}
+  </div>
+  <div class="repgrid">
+    ${rep("funding","wallet","Funding","A downgrade that pays for an upgrade your bank could not cover alone, both scored on your XI.",(S.fundOn?fundingHTML():`<p class="rnote" style="margin:0 0 10px">Checks every pair of your players sold together (takes a second).</p><button onclick="act('fundon')">Work out funding moves</button>`)||sgEmpty("Funding works from the live gameweek."),{bare:true})}
+    ${rep("plan5","calendar","Five-Week Plan","Week by week, the best move if it beats rolling the transfer, otherwise roll.",planPanelHTML()||sgEmpty("The plan starts from the live gameweek."),{bare:true})}
+  </div>
+  ${rep("bypos","target","Best Moves by Position","Up to four moves per position, each worth a transfer on its own.",transfersHTML("bypos"),{wide:true})}
+  ${rep("several","arrow-right-left","Plan Several Transfers","Pick the players to sell; the best combination for the money they free.",transfersHTML("picker"),{wide:true,bare:true})}
+  <div class="repgrid">
+    ${rep("pricewatch","trending-up","Price Watch","FPL's own predictor: progress towards tonight's change (100% = it changes). Risers right, fallers left; yours highlighted.",
+      up.length||dn.length?`<div class="split2"><div><h4 class="rsub">Closest to a rise</h4>${hbars(up.map(pcRow),{diverge:true})}</div><div><h4 class="rsub">Closest to a fall</h4>${hbars(dn.map(pcRow),{diverge:true})}</div></div>`:sgEmpty("FPL's price predictor did not load."))}
+    ${rep("netmoves","users","Most Bought and Sold","Net transfers this gameweek (in minus out), FPL's own counts.",
+      `<div class="split2"><div><h4 class="rsub">Most bought</h4>${hbars(bought.map(netRow),{diverge:true})}</div><div><h4 class="rsub">Most sold</h4>${hbars(sold.map(netRow),{diverge:true})}</div></div>`)}
+  </div>
+  <div class="repgrid">
+    ${rep("diff","gem","Differentials",`Under 5% owned, 60+ expected minutes, ranked by points over the ${hzL(H)}.`,hbars(diffs.map(p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · ${POS[p.pos]} · ${p.owned}% owned`,value:hPts(p,G,H),show:hPts(p,G,H).toFixed(1),pid:p.id,tone:SG_TONE.ice})),{rank:true}))}
+    ${rep("sell","trending-down","Sell Signals","Owned by 10% or more with form at 3 or under: template players gone cold.",hbars(cold.map(p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · form ${p.form.toFixed(1)}`,value:p.owned,show:p.owned.toFixed(1)+"%",pid:p.id,tone:SG_TONE.red,mine:mine.has(p.id)})),{rank:true}))}
+  </div>
+  ${(S.ignored||[]).length?rep("ignored","ban","Not Suggesting","Players taken off the suggestions; tap one to bring him back.",transfersHTML("ignored"),{bare:true,wide:true}):""}`;
+}
+
+/* ---------------- My Squad ---------------- */
+function sgSquad(G,H){
+  const M=S.model,mine=new Set(S.squad||[]),sq=M.players.filter(p=>mine.has(p.id));
+  const T=((S.tracker&&S.tracker.gw)||[]).slice().sort((a,b)=>a.event-b.event);
   const evs=(S.events||[]).filter(e=>e.finished).sort((a,b)=>a.id-b.id);
   const A=S.playerActuals||{},act=(id,e)=>{const a=A[id]||A[String(id)];const v=a?(a[e]??a[String(e)]):null;return v==null?null:+v;};
-  const out={};
-  /* 2 + 38: your score against the game */
-  const vsGame=evs.slice(-6).reverse().map(e=>{const r=rows.find(x=>x.event===e.id),you=r?r.points:null;
-    const d=you!=null&&e.avg?you-e.avg:null;
-    return sgLine("GW"+e.id,you!=null?`You ${you}`:"You —",`average ${e.avg||"—"} · highest ${e.high||"—"}`,
-      d==null?"—":`<span class="${d>=0?"up":"dn"}">${d>0?"+":""}${d}</span>`,"vs average");}).join("");
-  const seasonD=rows.reduce((s,r)=>{const e=evs.find(x=>x.id===r.event);return e&&e.avg?s+(r.points-e.avg):s;},0);
-  out.vsGame=card("vsgame","gauge","good","Your Score vs The Game",`Your points each finished gameweek against the game-wide average and the highest score that week (FPL's own figures). Season: ${seasonD>=0?"+":""}${seasonD} against the average.`,
-    vsGame?`<p class="sgnote">Season ${seasonD>=0?"+":""}${seasonD} points against the average</p>`+vsGame:empty("No finished gameweeks yet."));
-  /* 6: captain against the best captain in your XI, with hindsight */
-  let lost=0;
-  const capRows=rows.filter(r=>Array.isArray(r.picks)&&r.picks.length).slice().reverse().map(r=>{
-    const xi=r.picks.filter(p=>p.multiplier>0),c=r.picks.find(p=>p.isC)||r.picks.find(p=>p.multiplier>=2);
-    let best=null;xi.forEach(p=>{const v=act(p.id,r.event);if(v!=null&&(!best||v>best.v))best={id:p.id,v};});
-    const cv=c?act(c.id,r.event):null;if(best&&cv!=null)lost+=best.v-cv;
-    return {r,c,cv,best};});
-  out.capt=card("captbest","crown","warn","Captain vs Best Pick",`Your captain's points each week against the highest scorer in your starting XI that week (hindsight). The difference is what the armband missed (it doubles one player).`,
-    capRows.length?`<p class="sgnote">${sgF1(lost)} points missed by the armband this season</p>`+capRows.slice(0,6).map(x=>sgLine("GW"+x.r.event,x.c?esc(pNameOf(x.c.id))+` ${x.cv??"—"}`:"—",x.best?`best ${esc(pNameOf(x.best.id))} ${x.best.v}`:"",
-      x.best&&x.cv!=null?(x.best.v-x.cv?`<span class="dn">−${x.best.v-x.cv}</span>`:`<span class="up">best</span>`):"—","")).join(""):empty("Waiting on your official picks."));
-  /* 9: bank and value by week */
-  const bv=rows.filter(r=>r.value!=null).slice(-6).reverse();
-  out.bank=card("bankval","wallet","","Bank and Team Value","Your bank and team value (bank included, FPL's figure) after each gameweek.",
-    bv.length?bv.map((r,i)=>{const prev=bv[i+1],dv=prev?r.value-prev.value:null;
-      return sgLine("GW"+r.event,`£${(+r.value).toFixed(1)} value`,`bank £${(+(r.bank||0)).toFixed(1)}`,dv==null?"—":`<span class="${dv>=0?"up":"dn"}">${dv>=0?"+":""}${dv.toFixed(1)}</span>`,"value change");}).join(""):empty("Waiting on your team feed."));
-  /* 12: league gaps */
+  const fin=T.filter(r=>evs.some(e=>e.id===r.event));
+  /* score against the game */
+  const vs=fin.map(r=>({r,e:evs.find(x=>x.id===r.event)}));
+  const seasonD=vs.reduce((s,x)=>s+(x.e.avg?r0(x.r.points-x.e.avg):0),0);
+  function r0(v){return Math.round(v);}
+  const last=vs[vs.length-1];
+  /* captain against the best in the XI */
+  const cap=T.filter(r=>Array.isArray(r.picks)&&r.picks.length).map(r=>{
+    const c=r.picks.find(p=>p.isC)||r.picks.find(p=>p.multiplier>=2);let best=null;
+    r.picks.filter(p=>p.multiplier>0).forEach(p=>{const v=act(p.id,r.event);if(v!=null&&(!best||v>best.v))best={id:p.id,v};});
+    return{e:r.event,c:c&&{id:c.id,v:act(c.id,r.event)},best};}).filter(x=>x.c&&x.c.v!=null&&x.best);
+  const lost=cap.reduce((s,x)=>s+(x.best.v-x.c.v),0);
+  const nm=id=>{const p=M.players.find(x=>x.id===+id);return p?p.web_name:"#"+id;};
+  /* league */
   const st=((S.rivalsFeed&&S.rivalsFeed.standings)||[]).slice().sort((a,b)=>a.rank-b.rank);
-  const lead=st[0];
-  out.gaps=card("gaps","users","","League Gaps",`Your mini-league table with each manager's gap to the leader and to the manager just above.`,
-    st.length?st.map((s,i)=>sgLine(s.rank,esc(s.entryName||s.manager||""),esc(s.manager||""),String(s.totalPoints),
-      i===0?"leader":`−${lead.totalPoints-s.totalPoints} lead · −${st[i-1].totalPoints-s.totalPoints} above`,{me:String(s.entryId)===String(TEAM_ID)})).join(""):empty("League feed not loaded."));
-  /* 15: chips used and left, this half */
-  const half=(S.model&&S.model.next.id>=20)?2:1,KIND=[["wildcard","WC"],["freehit","FH"],["bboost","BB"],["3xc","TC"]];
-  const inHalf=e=>half===1?e<=19:e>=20;
-  const chipLine=(name,used,me)=>{const u=used.filter(c=>inHalf(c.event));
-    const left=KIND.filter(([k])=>!u.some(c=>c.name===k)).map(([,l])=>l);
-    return sgLine("",esc(name),u.length?"used "+u.map(c=>`${(KIND.find(([k])=>k===c.name)||[,c.name])[1]} GW${c.event}`).join(", "):"none used",left.join(" ")||"—",`left (half ${half})`,{me});};
-  const ents=S.rivalsFeed&&S.rivalsFeed.entries||{};
+  const meRow=st.find(s=>String(s.entryId)===String(TEAM_ID));
+  const figs=rkv([
+    {label:"Season Points",value:T.length?String(T[T.length-1].totalPoints??T.reduce((s,r)=>s+(r.points||0),0)):"—",sub:last?`GW${last.r.event}: ${last.r.points}`:""},
+    {label:"Overall Rank",value:S.entryRank?S.entryRank.toLocaleString():"—",sub:S.entryRankGw?`after GW${S.entryRankGw}`:""},
+    {label:"Against The Average",value:`<span class="${seasonD>=0?"up":"dn"}">${seasonD>=0?"+":""}${seasonD}</span>`,sub:`over ${vs.length} finished weeks`},
+    {label:"Armband Missed",value:String(lost),sub:"points, with hindsight",tone:lost?"bad":""},
+    {label:"League Position",value:meRow?`${meRow.rank} of ${st.length}`:"—",sub:meRow&&st[0]&&meRow!==st[0]?`${st[0].totalPoints-meRow.totalPoints} behind the leader`:meRow?"leading":""}]);
+  const vsChart=colChart(vs.map(x=>"GW"+x.r.event),[{name:"You",values:vs.map(x=>x.r.points),color:SG_TONE.mint}],
+    [{name:"Average",values:vs.map(x=>x.e.avg),color:SG_TONE.grey},{name:"Highest",values:vs.map(x=>x.e.high),color:SG_TONE.amber,dotsOnly:true}],{label:"Your points against the game's average and highest each week"});
+  const vsNote=last?`<p class="rnote rlatest">GW${last.r.event}: you ${last.r.points} · average ${last.e.avg??"—"} · highest ${last.e.high??"—"}</p>`:"";
+  const capChart=colChart(cap.map(x=>"GW"+x.e),[{name:"Captain",values:cap.map(x=>x.c.v),color:SG_TONE.amber,notes:cap.map(x=>nm(x.c.id))},
+    {name:"Best in XI",values:cap.map(x=>x.best.v),color:"#5A5A5A",notes:cap.map(x=>nm(x.best.id))}],[],{label:"Captain's points against the best scorer in your XI"});
+  const capList=cap.slice().reverse().filter(x=>x.best.v>x.c.v).slice(0,4).map(x=>`<span class="sgchip">GW${x.e}: ${esc(nm(x.c.id))} ${x.c.v} vs ${esc(nm(x.best.id))} ${x.best.v}</span>`).join("");
+  const vb=T.filter(r=>r.value!=null);
+  const valChart=colChart(vb.map(r=>"GW"+r.event),[],[{name:"Team value",values:vb.map(r=>+r.value),color:SG_TONE.mint}],{min:Math.floor(Math.min(...vb.map(r=>+r.value),100)-1),fmt:v=>"£"+v.toFixed(1),w:340,h:190,label:"Team value by week"});
+  const bankChart=colChart(vb.map(r=>"GW"+r.event),[{name:"Bank",values:vb.map(r=>+(r.bank||0)),color:SG_TONE.cyan}],[],{fmt:v=>"£"+v.toFixed(1),w:340,h:190,label:"Bank by week"});
+  const form=sq.slice().sort((a,b)=>b.form-a.form);
+  const flags=sq.filter(p=>p.status!=="a"||p.avail<1);
+  const ents=(S.rivalsFeed&&S.rivalsFeed.entries)||{};
+  const half=M.next.id>=20?2:1,KIND=[["wildcard","Wildcard"],["freehit","Free Hit"],["bboost","Bench Boost"],["3xc","Triple Captain"]],inHalf=e=>half===1?e<=19:e>=20;
   const meChips=[];KIND.forEach(([k])=>{const e=chipPlayed(k+half);if(e!=null)meChips.push({name:k,event:e});});
-  out.chips=card("rchips","calendar","accent","Chips Used and Left",`Which chips each manager in your league has played this half (GW${half===1?"1-19":"20-38"}) and which are left. WC Wildcard, FH Free Hit, BB Bench Boost, TC Triple Captain.`,
-    Object.keys(ents).length?chipLine("You",meChips,true)+Object.entries(ents).filter(([id])=>String(id)!==String(TEAM_ID)).map(([id,e])=>chipLine(e.name||id,e.chips||[],false)).join(""):empty("League feed not loaded."));
-  /* 33: Dream Team appearances: FPL's live count (the dataset mirror carries 0 for everyone) */
-  const dtv=p=>{const L=fplLive(p);return L&&L.dt!=null?L.dt:(p.dreamteam||0);};
-  const dt=(S.model?S.model.players:[]).filter(p=>dtv(p)>0).sort((a,b)=>dtv(b)-dtv(a)||b.total-a.total).slice(0,6);
-  out.dream=card("dream","star","good","Dream Team Appearances","How many times each player has made FPL's Dream Team (the week's best XI) this season.",
-    dt.length?dt.map((p,i)=>sgLine(i+1,esc(p.web_name),`${esc(p.teamName)} · ${POS[p.pos]} · £${sgF1(p.price)}`,String(dtv(p)),"times",{pid:p.id})).join(""):empty("No Dream Teams yet."));
-  /* 29: goals against expected goals, this season */
-  const gx=(S.model?S.model.players:[]).filter(p=>p.pos>=2).map(p=>{const rs=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now");
-    const g=rs.reduce((s,r)=>s+(r.g||0),0),xg=rs.reduce((s,r)=>s+(r.xg||0),0);return{p,g,xg,d:g-xg};}).filter(x=>x.xg>=1||x.g>=2);
-  const gxRow=(x,i)=>sgLine(i+1,esc(x.p.web_name),`${esc(x.p.teamName)} · ${x.g} goals from ${sgF1(x.xg)} xG`,`<span class="${x.d>=0?"up":"dn"}">${x.d>=0?"+":""}${sgF1(x.d)}</span>`,"goals − xG",{pid:x.p.id});
-  out.xgHot=card("xghot","flame","good","Scoring Above xG","Goals this season minus expected goals: finishing better than the chances suggest. The research found this does not last, so treat it as luck, not form.",
-    gx.length?gx.slice().sort((a,b)=>b.d-a.d).slice(0,6).map(gxRow).join(""):empty("Waiting on this season's matches."));
-  out.xgCold=card("xgcold","crosshair","warn","Scoring Below xG","Expected goals minus goals this season: getting the chances but not scoring yet.",
-    gx.length?gx.slice().sort((a,b)=>a.d-b.d).slice(0,6).map(gxRow).join(""):empty("Waiting on this season's matches."));
-  /* 36: team form, last five results */
+  const chipRows=[["You",meChips,true],...Object.entries(ents).filter(([id])=>String(id)!==String(TEAM_ID)).map(([id,e])=>[e.name||id,e.chips||[],false])];
+  const chipGrid=Object.keys(ents).length?`<div class="scroll"><table class="cgridt"><thead><tr><th style="text-align:left">Manager</th>${KIND.map(([,n])=>`<th>${n}</th>`).join("")}<th>Left</th></tr></thead><tbody>
+    ${chipRows.map(([n,used,me])=>{const u=used.filter(c=>inHalf(c.event));let left=0;
+      return `<tr class="${me?"me":""}"><td style="text-align:left">${esc(n)}</td>${KIND.map(([k])=>{const c=u.find(x=>x.name===k);if(!c)left++;
+        return c?`<td><span class="cused">GW${c.event}</span></td>`:`<td><span class="cleft" title="Still to play">●</span></td>`;}).join("")}<td><b>${left}</b></td></tr>`;}).join("")}</tbody></table></div>`:sgEmpty("League feed not loaded.");
+  const ge=evs.filter(e=>(e.chips||[]).length);
+  const CH=[["wildcard","Wildcard",SG_TONE.purple],["freehit","Free Hit",SG_TONE.cyan],["bboost","Bench Boost",SG_TONE.mint],["3xc","Triple Captain",SG_TONE.amber]];
+  const chipPlays=colChart(ge.map(e=>"GW"+e.id),CH.map(([k,n,c])=>({name:n,color:c,values:ge.map(e=>{const x=(e.chips||[]).find(y=>y.name===k);return x?Math.round(x.n/1000):0;})})),[],
+    {stacked:true,fmt:v=>v>=1000?(v/1000).toFixed(1)+"m":Math.round(v)+"k",legend:true,label:"Chip plays across the game each week"});
+  const lead=st[0];
+  const gaps=hbars(st.map(s=>({label:esc(s.entryName||""),sub:`${esc(s.manager||"")}${s===lead?" · leader":` · −${lead.totalPoints-s.totalPoints} lead`}`,value:s.totalPoints,show:String(s.totalPoints),mine:String(s.entryId)===String(TEAM_ID),tone:String(s.entryId)===String(TEAM_ID)?SG_TONE.mint:"#5A5A5A"})),
+    {rank:true,from:st.length?Math.min(...st.map(s=>s.totalPoints))-25:0,empty:"League feed not loaded."});
+  return figs+`<div class="repgrid">
+    ${rep("vsgame","gauge","Your Score vs The Game","Your points each finished gameweek (bars) against the game's average (line) and the highest score (dots), FPL's own figures.",vsChart+vsNote)}
+    ${rep("captbest","crown","Captain vs Best Pick","Your captain's points each week against the best scorer in your starting XI, with hindsight. The gap is what the armband missed.",capChart+(capList?`<div class="sgwhy" style="margin-top:8px">${capList}</div>`:""))}
+  </div>
+  <div class="repgrid">
+    ${rep("bankval","wallet","Bank and Team Value","Team value (bank included, FPL's figure) and money in the bank after each gameweek.",`<div class="split2"><div><h4 class="rsub">Team value</h4>${valChart}</div><div><h4 class="rsub">Bank</h4>${bankChart}</div></div>`)}
+    ${rep("sqform","flame","In Form","Your players by form (average points per game, last 30 days); bars are points in each of the last six gameweeks.",
+      hbars(form.map(p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · ${POS[p.pos]}`,value:p.form,show:p.form.toFixed(1),pid:p.id,tone:p.form>=5?SG_TONE.mint:p.form>=3?"#7FA8C9":"#55606F",extra:sgSpark(p,G)}))))}
+  </div>
+  <div class="repgrid">
+    ${rep("sqflag","clock-alert","Availability","Your players with an injury, suspension or doubt flag, and the chance of playing.",
+      flags.length?`<div class="avl">${flags.map(p=>`<div class="sgrow" onclick="act('card',${p.id})">${ringSVG(p.avail,34,p.avail>=.75?SG_TONE.amber:SG_TONE.red)}
+        <span class="sgwho"><b>${esc(p.web_name)}</b><em>${esc(p.news||(p.avail>0?"Doubtful":"Unavailable"))}</em></span><span></span>
+        <span class="sgfig"><b>${p.avail>0?Math.round(p.avail*100)+"%":"Out"}</b><em>chance</em></span></div>`).join("")}</div>`:sgEmpty("Everyone in your squad is fit."))}
+    ${rep("captaincy","crown","Captaincy","Your captain options this week: predicted points, the gap to the best option, chance of playing, the bookmakers' chance he scores, haul chance and how many rivals captained him last week.",captaincyHTML()||sgEmpty("Captaincy is for the next deadline."),{bare:true})}
+  </div>
+  <div class="repgrid">
+    ${rep("gaps","users","League Gaps","Total points in your mini-league, with each manager's gap to the leader.",gaps)}
+    ${rep("rchips","calendar","Chips Used and Left",`Which chips each manager has played this half (GW${half===1?"1-19":"20-38"}); a dot is still to play.`,chipGrid)}
+  </div>
+  ${rep("chipplays","activity","Chip Plays Across The Game","How many managers played each chip in each finished gameweek, in thousands (FPL's own counts).",chipPlays,{wide:true})}`;
+}
+
+/* ---------------- Teams ---------------- */
+function sgTeams(G,H){
+  const M=S.model,ts=S.curTeamStats||{};
+  const tm=(S.teams||[]).map(t=>{const c=ts[t.short]||{},n=c.n||0,mt=M.teams.find(x=>x.short===t.short);
+    return{t,mt,n,gf:c.gf||0,ga:c.ga||0,xg:n?c.xg/n:0,xga:n?c.xga/n:0};}).filter(x=>x.n>0&&x.mt);
+  const row=(x,v,show,sub,tone)=>({label:esc(x.t.name),sub,value:v,show,tone});
   const fin=(S.fixtures||[]).filter(f=>f.finished&&f.hs!=null&&f.as!=null&&f.ht&&f.at).sort((a,b)=>(a.event-b.event)||String(a.kickoff).localeCompare(String(b.kickoff)));
-  const form=(S.model?S.model.teams:[]).map(t=>{const l5=fin.filter(f=>f.ht===t||f.at===t).slice(-5).map(f=>{const us=f.ht===t?f.hs:f.as,them=f.ht===t?f.as:f.hs;
+  const form=M.teams.map(t=>{const l5=fin.filter(f=>f.ht===t||f.at===t).slice(-5).map(f=>{const us=f.ht===t?f.hs:f.as,them=f.ht===t?f.as:f.hs;
       return{r:us>them?"W":us<them?"L":"D",s:`${us}-${them}`,opp:(f.ht===t?f.at:f.ht).short};});
     return{t,l5,pts:l5.reduce((s,x)=>s+(x.r==="W"?3:x.r==="D"?1:0),0)};}).filter(x=>x.l5.length).sort((a,b)=>b.pts-a.pts);
-  out.form=card("tform","activity","","Team Form, Last Five","Each club's last five league results, newest on the right, ranked by points from them.",
-    form.length?`<div class="sgsplit">${form.map((x,i)=>`<div class="sgrow"><span class="sgrank">${i+1}</span><span class="sgwho"><b>${esc(x.t.name||x.t.short)}</b></span>
-      <span class="wdl">${x.l5.map(r=>`<i class="${r.r}" title="${esc(r.opp)} ${r.s}">${r.r}</i>`).join("")}</span><span class="sgfig"><b>${x.pts}</b><em>pts</em></span></div>`).join("")}</div>`:empty("Waiting on this season's matches."),true);
-  /* 39 + 40: the whole game, week by week */
-  const ge=evs.slice(-6).reverse();
-  out.popular=card("popular","users","","Most Captained, Selected and Bought","FPL's own figures for each finished gameweek: the most captained player, the most selected and the most transferred in.",
-    ge.length?ge.map(e=>sgLine("GW"+e.id,`C ${esc(pNameOf(e.mostCapt))}`,`selected ${esc(pNameOf(e.mostSel))} · bought ${esc(pNameOf(e.mostIn))}`,
-      e.topEl?esc(pNameOf(e.topEl)):"—",e.topPts?`top scorer ${e.topPts}`:"")).join(""):empty("No finished gameweeks yet."));
-  const CH={bboost:"BB",freehit:"FH",wildcard:"WC","3xc":"TC",manager:"AM"};
-  out.chipPlays=card("chipplays","calendar","","Chip Plays Across The Game","How many managers played each chip in each finished gameweek (FPL's own counts).",
-    ge.length?ge.map(e=>{const c=(e.chips||[]).slice().sort((a,b)=>b.n-a.n);const tot=c.reduce((s,x)=>s+x.n,0);
-      return sgLine("GW"+e.id,c.length?c.map(x=>`${CH[x.name]||x.name} ${(x.n/1000).toFixed(0)}k`).join(" · "):"none","",tot?(tot/1e6).toFixed(2)+"m":"—","chips played");}).join(""):empty("No finished gameweeks yet."));
-  return out;
+  const formBody=form.length?`<div class="tform">${form.map((x,i)=>`<div class="hbr"><span class="hbn">${i+1}</span><span class="hbl"><b>${esc(x.t.name||x.t.short)}</b></span>
+      <span class="wdl">${x.l5.map(r=>`<i class="${r.r}" title="${esc(r.opp)} ${r.s}">${r.r}</i>`).join("")}</span>
+      <span class="hbt"><i style="width:${(x.pts/15*100).toFixed(0)}%;background:${x.pts>=10?SG_TONE.mint:x.pts>=6?"#7FA8C9":SG_TONE.red}"></i></span><span class="hbv">${x.pts} pts</span></div>`).join("")}</div>`:sgEmpty("Waiting on this season's matches.");
+  const sorted=(k,dir)=>tm.slice().sort((a,b)=>dir*(a[k]-b[k])).slice(0,6);
+  const runs=M.teams.map(t=>{const out=[];let s=0,n=0;
+    for(let e=G;e<G+5&&e<=38;e++)(M.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{const home=f.ht===t,opp=home?f.at:f.ht,d=fdrOf(opp,home,t,"att");s+=d;n++;out.push(fdrPill(opp.short,home,d,{short:true,tiny:true}));});
+    return{t,avg:n?s/n:9,pills:out.join("")};});
+  const runList=list=>`<div class="runs">${list.map((x,i)=>`<div class="hbr"><span class="hbn">${i+1}</span><span class="hbl"><b>${esc(x.t.name||x.t.short)}</b><em>avg difficulty ${x.avg.toFixed(1)}</em></span><span class="fxrow">${x.pills}</span></div>`).join("")}</div>`;
+  const opp=M.teams.map(t=>{let c=0;const by=[];for(let e=G;e<G+H&&e<=38;e++)(M.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{const home=f.ht===t,o=home?f.at:f.ht;c+=fdrCalc(o,t,!home,"xgf");by.push(o.short);});
+    return{t,c,by};}).sort((a,b)=>b.c-a.c).slice(0,8);
+  return `<div class="repgrid">
+    ${rep("tform","activity","Team Form, Last Five","Each club's last five league results, newest on the right, ranked by points from them.",formBody)}
+    ${rep("opp","target","Opponents to Target",`The defences expected to concede most over the ${hzL(H)} (from the model's fixture ratings), with the clubs that face them.`,
+      hbars(opp.map(x=>({label:esc(x.t.name),sub:"faced by "+x.by.join(", "),value:x.c,show:x.c.toFixed(1),tone:SG_TONE.red})),{rank:true}))}
+  </div>
+  <div class="repgrid">
+    ${rep("att","target","Attacks","Expected goals created per game this season (with goals scored): the best and the weakest.",
+      `<div class="split2"><div><h4 class="rsub">Best</h4>${hbars(sorted("xg",-1).map(x=>row(x,x.xg,x.xg.toFixed(2),`${x.gf} scored`,SG_TONE.mint)),{rank:true})}</div>
+       <div><h4 class="rsub">Weakest</h4>${hbars(sorted("xg",1).map(x=>row(x,x.xg,x.xg.toFixed(2),`${x.gf} scored`,SG_TONE.red)),{rank:true})}</div></div>`)}
+    ${rep("def","shield","Defences","Expected goals conceded per game this season, and the leakiest by goals conceded.",
+      `<div class="split2"><div><h4 class="rsub">Best</h4>${hbars(sorted("xga",1).map(x=>row(x,x.xga,x.xga.toFixed(2),`${x.ga} conceded`,SG_TONE.cyan)),{rank:true})}</div>
+       <div><h4 class="rsub">Leakiest</h4>${hbars(tm.slice().sort((a,b)=>b.ga-a.ga||b.xga-a.xga).slice(0,6).map(x=>row(x,x.ga,String(x.ga),`${x.xga.toFixed(2)} xGA a game`,SG_TONE.red)),{rank:true})}</div></div>`)}
+  </div>
+  <div class="repgrid">
+    ${rep("easy","calendar","Easiest Fixture Runs","The next five for attackers, from the model's own ratings (1 easiest, 5 hardest).",runList(runs.slice().sort((a,b)=>a.avg-b.avg).slice(0,6)))}
+    ${rep("hard","calendar","Toughest Fixture Runs","The hardest next five for attackers.",runList(runs.slice().sort((a,b)=>b.avg-a.avg).slice(0,6)))}
+  </div>
+  <p class="note">Every club, every column and the fixtures by week are on <a href="${routeFor("fixtures")}" onclick="S.fixMode='clubs';return go(event,'fixtures')" style="color:var(--cyan)">Teams</a>.</p>`;
+}
+
+/* ---------------- Players ---------------- */
+function sgPlayers(G,H,posF){
+  const M=S.model,mine=new Set(S.squad||[]),pool=M.players.filter(p=>p.minutes>0&&sgOk(p,posF));
+  const lr=(p,v,show,sub,tone)=>({label:esc(p.web_name),sub:sub||`${esc(p.teamName)} · ${POS[p.pos]}`,value:v,show,pid:p.id,tone,mine:mine.has(p.id)});
+  const byPos=(sortFn,val,show,sub,filt,tone)=>posF
+    ?hbars(pool.filter(p=>!filt||filt(p)).sort(sortFn).slice(0,10).map(p=>lr(p,val(p),show(p),sub&&sub(p),tone)),{rank:true})
+    :`<div class="sgcols">${[1,2,3,4].map(pos=>`<div class="sgcol hbcol"><div class="sgcolh">${POS[pos]}</div>${hbars(M.players.filter(p=>p.minutes>0&&p.pos===pos&&(!filt||filt(p))).sort(sortFn).slice(0,5).map(p=>lr(p,val(p),show(p),sub?sub(p):esc(p.teamName),tone)),{rank:true})}</div>`).join("")}</div>`;
+  const avail=p=>p.status==="a"||p.status==="d";
+  const gx=pool.filter(p=>p.pos>=2).map(p=>{const rs=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now");
+    const g=rs.reduce((s,r)=>s+(r.g||0),0),xg=rs.reduce((s,r)=>s+(r.xg||0),0);return{p,g,xg,d:g-xg};}).filter(x=>x.xg>=1||x.g>=2);
+  const gxRows=[...gx.slice().sort((a,b)=>b.d-a.d).slice(0,6),...gx.slice().sort((a,b)=>a.d-b.d).slice(0,6).reverse()]
+    .map(x=>lr(x.p,x.d,(x.d>=0?"+":"")+x.d.toFixed(1),`${esc(x.p.teamName)} · ${x.g} goals from ${x.xg.toFixed(1)} xG`));
+  const dtv=p=>{const L=fplLive(p);return L&&L.dt!=null?L.dt:(p.dreamteam||0);};
+  const dt=pool.filter(p=>dtv(p)>0).sort((a,b)=>dtv(b)-dtv(a)||b.total-a.total).slice(0,10);
+  const clubs=(S.teams||[]).map(t=>{const ps=M.players.filter(p=>p.teamName===t.short);const sp=ps.map(p=>({p,s:setPieces(p)}));
+    const pen=sp.find(x=>x.s.pen),c1=sp.find(x=>x.s.cor===1),c2=sp.find(x=>x.s.cor===2),f1=sp.find(x=>x.s.dfk===1),f2=sp.find(x=>x.s.dfk===2);
+    return{t,pen,c:[c1,c2].filter(Boolean),f:[f1,f2].filter(Boolean)};});
+  const nmB=x=>x?`<button class="pn" onclick="act('card',${x.p.id})">${esc(x.p.web_name)}</button>`:'<span class="mu">—</span>';
+  const evs=(S.events||[]).filter(e=>e.finished).sort((a,b)=>b.id-a.id).slice(0,8);
+  const nm=id=>{const p=M.players.find(x=>x.id===+id);return p?`<button class="pn" onclick="act('card',${p.id})">${esc(p.web_name)}</button>`:"—";};
+  const threat=pool.filter(p=>p.minutes>=270&&p.pos>=2).sort((a,b)=>((b.xg90||0)+(b.xa90||0))-((a.xg90||0)+(a.xa90||0))).slice(0,10);
+  return `${rep("scorers","trophy","Top Scorers By Position","Season total points, with points per game.",byPos((a,b)=>b.total-a.total,p=>p.total,p=>String(p.total),p=>`${esc(p.teamName)} · ${p.ppg.toFixed(1)} ppg`),{wide:true})}
+  ${rep("pred","sparkles","Top Predicted By Position",`Model points over the ${hzL(H)}, available and doubtful players only.`,byPos((a,b)=>hPts(b,G,H)-hPts(a,G,H),p=>hPts(p,G,H),p=>hPts(p,G,H).toFixed(1),p=>`${esc(p.teamName)} · ${Math.round(p.xMins||0)}′`,avail),{wide:true})}
+  <div class="repgrid">
+    ${rep("form","flame","In Form","Highest form (average points per game, last 30 days), 180 minutes or more this season.",
+      hbars(pool.filter(p=>p.minutes>=180&&avail(p)).sort((a,b)=>b.form-a.form).slice(0,10).map(p=>({...lr(p,p.form,p.form.toFixed(1)),sub:`${esc(p.teamName)} · ${sgPos(p)}`})),{rank:true}))}
+    ${rep("threat","crosshair","Underlying Threat","Expected goals plus expected assists per 90 minutes, outfield players with 270 minutes or more.",
+      hbars(threat.map(p=>lr(p,(p.xg90||0)+(p.xa90||0),((p.xg90||0)+(p.xa90||0)).toFixed(2),`${esc(p.teamName)} · ${POS[p.pos]} · xG ${(p.xg90||0).toFixed(2)} xA ${(p.xa90||0).toFixed(2)}`,SG_TONE.purple)),{rank:true}))}
+  </div>
+  <div class="repgrid">
+    ${rep("xg","target","Goals Against xG","Goals this season minus expected goals. Right: finishing above the chances (the research found this does not last). Left: getting chances but not yet scoring.",
+      hbars(gxRows,{diverge:true,empty:"Waiting on this season's matches."}))}
+    ${rep("dream","star","Dream Team Appearances","How many times each player has made FPL's Dream Team (the week's best XI) this season.",
+      hbars(dt.map(p=>lr(p,dtv(p),dtv(p)+"×",null,SG_TONE.amber)),{rank:true,empty:"No Dream Teams yet."}))}
+  </div>
+  <div class="repgrid">
+    ${rep("takers","flag-triangle-right","Penalty and Set-Piece Takers","FPL's own live orders: first-choice penalty taker, then the first two on corners and direct free kicks. Penalty overrides for Coventry, Newcastle and Sunderland.",
+      `<div class="scroll"><table class="cgridt"><thead><tr><th style="text-align:left">Club</th><th>Penalties</th><th>Corners</th><th>Free kicks</th></tr></thead><tbody>
+      ${clubs.map(x=>`<tr><td style="text-align:left">${esc(x.t.name)}</td><td>${nmB(x.pen)}</td><td>${x.c.map(nmB).join(", ")||"—"}</td><td>${x.f.map(nmB).join(", ")||"—"}</td></tr>`).join("")}</tbody></table></div>`)}
+    ${rep("popular","users","Most Captained, Selected and Bought","FPL's own figures for each finished gameweek, with that week's top scorer.",
+      evs.length?`<div class="scroll"><table class="cgridt"><thead><tr><th>Week</th><th>Captained</th><th>Selected</th><th>Bought</th><th>Top scorer</th></tr></thead><tbody>
+      ${evs.map(e=>`<tr><td>GW${e.id}</td><td>${nm(e.mostCapt)}</td><td>${nm(e.mostSel)}</td><td>${nm(e.mostIn)}</td><td>${nm(e.topEl)}${e.topPts?` <span class="mu">${e.topPts}</span>`:""}</td></tr>`).join("")}</tbody></table></div>`:sgEmpty("No finished gameweeks yet."))}
+  </div>`;
 }
