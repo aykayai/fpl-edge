@@ -151,7 +151,8 @@ export async function fplPlayersPayload() {
       pen: e.penalties_order ?? null,
       cor: e.corners_and_indirect_freekicks_order ?? null,
       dfk: e.direct_freekicks_order ?? null,
-      ep: e.ep_next == null ? null : +e.ep_next
+      ep: e.ep_next == null ? null : +e.ep_next,
+      dt: e.dreamteam_count ?? null
     };
   }
   const body = { fetchedAt: state.fetchedAt, players };

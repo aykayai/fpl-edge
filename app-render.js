@@ -1450,6 +1450,7 @@ function signalsHTML(){
   const seg=(items,cur,k)=>`<div class="sgseg" role="group">${items.map(([v,l])=>
     `<button class="${cur===v?"on":""}" aria-pressed="${cur===v}" onclick="act('${k}',${v})">${l}</button>`).join("")}</div>`;
   const ds=S.status&&S.status.dataset;
+  const X=statsCards(card,empty,G);
   return `<div class="sgpage">
     <div class="sghead"><div><h2>Signals</h2><p>Gameweek ${G} · players and teams worth a look, ranked from the model and this season's data${ds&&ds.committedAt?` · stats ${esc(ukWhen(ds.committedAt))}`:""}</p></div>
       <div class="sgctl">${seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos")}${seg([[1,"Next GW"],[3,"Next 3"],[5,"Next 5"]],H,"sigh")}<button class="btnlink" onclick="act('tab','squad');act('pop','move')">Plan transfers →</button></div></div>
@@ -1460,6 +1461,10 @@ function signalsHTML(){
       ${card("sqrep","trending-down","warn","Sell",`Your players whose best affordable replacement adds 2 or more points to your best XI plus captain over the next ${H} (the same rule as the Sell icon). The chips show form, fixtures, fitness or minutes concerns where they apply.`,replace)}
       ${card("sqflag","triangle-alert","bad","Availability","Your players with an injury, suspension or doubt flag from FPL.",flags)}
     </div>
+    <h4 class="sgsec">Your Season</h4>
+    <div class="sggrid g3">${X.vsGame}${X.capt}${X.bank}</div>
+    <h4 class="sgsec">Your League</h4>
+    <div class="sggrid g2">${X.gaps}${X.chips}</div>
     <h4 class="sgsec">Players</h4>
     <div class="sggrid g1">${card("scorers","trophy","","Top Scorers By Position","Season total points, with points per game.",topScorers)}</div>
     <div class="sggrid g1">${card("pred","sparkles","","Top Predicted By Position",`Model points over the next ${H} gameweek${H>1?"s":""}, with expected minutes. Available and doubtful players only.`,topPred)}</div>
@@ -1469,8 +1474,12 @@ function signalsHTML(){
       ${card("sell","trending-down","bad","Sell Signals",`Owned by ${SIG.sellOwned}% or more with form at ${SIG.sellForm} or under: template players who have gone cold.`,sells)}
     </div>
     <div class="sggrid g1">${card("threat","crosshair","","Underlying Threat",`Expected goals plus expected assists per 90 minutes, outfield players with ${SIG.threatMins} minutes or more.`,`<div class="sgsplit">${threat}</div>`)}</div>
+    <div class="sggrid g3">${X.dream}${X.xgHot}${X.xgCold}</div>
     <h4 class="sgsec">Teams</h4>
+    <div class="sggrid g1">${X.form}</div>
     <p class="note">Attacks and defences to own, opponents to target and fixture runs are on <a href="${routeFor("fixtures")}" onclick="S.fixMode='clubs';return go(event,'fixtures')" style="color:var(--cyan)">Teams → Clubs</a>.</p>
+    <h4 class="sgsec">The Game</h4>
+    <div class="sggrid g2">${X.popular}${X.chipPlays}</div>
   </div>`;
 }
 
@@ -2143,4 +2152,95 @@ function signalHitsHTML(){
     ${line(SIGNAL.heat[2],acc.heat,acc.baseAtt,"midfielders and forwards with steady chances")}
     ${line(SIGNAL.cool[2],acc.cool,acc.baseAtt,"midfielders and forwards with steady chances")}
     </tbody></table><p class="note" style="margin:8px 0 0">Over ${weeks} finished gameweeks with a saved pre-deadline prediction (players predicted 1 point or more). "Beat prediction" above zero means the signal knew something the prediction did not. Sell, Price Rise/Fall, Minutes Risk, Rival Threat and Differential are not graded: they depend on that week's squad, prices and ownership, which were not saved.</p></div>`;
+}
+
+/* ============================================================
+   STATS LIST (25 Oct 2026): the twelve stats from the 12 Oct list the app
+   did not show, as Signals cards. Your season: score against the game
+   (2, 38), captain against the best in your XI (6), bank and value (9).
+   Your league: gaps (12), everyone's chips (15). Players: Dream Team
+   (33), above and below their xG (29). Teams: last-five form (36). The
+   game: most captained / selected / bought (39), chip plays (40).
+   ============================================================ */
+Object.assign(SIG_ICONS,{crown:LUCIDE.crown,wallet:LUCIDE.wallet,users:LUCIDE.users,star:LUCIDE.star,
+  gauge:LUCIDE.gauge,activity:LUCIDE.activity,calendar:LUCIDE.calendar});
+const sgLine=(rank,title,sub,fig,figSub,o)=>`<div class="sgrow${o&&o.me?" sgme":""}"${o&&o.pid?` onclick="act('card',${o.pid})"`:""}><span class="sgrank">${rank}</span>
+  <span class="sgwho"><b>${title}</b>${sub?`<em>${sub}</em>`:""}</span><span></span>
+  <span class="sgfig"><b>${fig}</b>${figSub?`<em>${figSub}</em>`:""}</span></div>`;
+const pNameOf=id=>{const p=S.model&&S.model.players.find(x=>x.id===+id);return p?p.web_name:"#"+id;};
+function statsCards(card,empty,G){
+  const T=(S.tracker&&S.tracker.gw)||[],rows=T.slice().sort((a,b)=>a.event-b.event);
+  const evs=(S.events||[]).filter(e=>e.finished).sort((a,b)=>a.id-b.id);
+  const A=S.playerActuals||{},act=(id,e)=>{const a=A[id]||A[String(id)];const v=a?(a[e]??a[String(e)]):null;return v==null?null:+v;};
+  const out={};
+  /* 2 + 38: your score against the game */
+  const vsGame=evs.slice(-6).reverse().map(e=>{const r=rows.find(x=>x.event===e.id),you=r?r.points:null;
+    const d=you!=null&&e.avg?you-e.avg:null;
+    return sgLine("GW"+e.id,you!=null?`You ${you}`:"You —",`average ${e.avg||"—"} · highest ${e.high||"—"}`,
+      d==null?"—":`<span class="${d>=0?"up":"dn"}">${d>0?"+":""}${d}</span>`,"vs average");}).join("");
+  const seasonD=rows.reduce((s,r)=>{const e=evs.find(x=>x.id===r.event);return e&&e.avg?s+(r.points-e.avg):s;},0);
+  out.vsGame=card("vsgame","gauge","good","Your Score vs The Game",`Your points each finished gameweek against the game-wide average and the highest score that week (FPL's own figures). Season: ${seasonD>=0?"+":""}${seasonD} against the average.`,
+    vsGame?`<p class="sgnote">Season ${seasonD>=0?"+":""}${seasonD} points against the average</p>`+vsGame:empty("No finished gameweeks yet."));
+  /* 6: captain against the best captain in your XI, with hindsight */
+  let lost=0;
+  const capRows=rows.filter(r=>Array.isArray(r.picks)&&r.picks.length).slice().reverse().map(r=>{
+    const xi=r.picks.filter(p=>p.multiplier>0),c=r.picks.find(p=>p.isC)||r.picks.find(p=>p.multiplier>=2);
+    let best=null;xi.forEach(p=>{const v=act(p.id,r.event);if(v!=null&&(!best||v>best.v))best={id:p.id,v};});
+    const cv=c?act(c.id,r.event):null;if(best&&cv!=null)lost+=best.v-cv;
+    return {r,c,cv,best};});
+  out.capt=card("captbest","crown","warn","Captain vs Best Pick",`Your captain's points each week against the highest scorer in your starting XI that week (hindsight). The difference is what the armband missed (it doubles one player).`,
+    capRows.length?`<p class="sgnote">${sgF1(lost)} points missed by the armband this season</p>`+capRows.slice(0,6).map(x=>sgLine("GW"+x.r.event,x.c?esc(pNameOf(x.c.id))+` ${x.cv??"—"}`:"—",x.best?`best ${esc(pNameOf(x.best.id))} ${x.best.v}`:"",
+      x.best&&x.cv!=null?(x.best.v-x.cv?`<span class="dn">−${x.best.v-x.cv}</span>`:`<span class="up">best</span>`):"—","")).join(""):empty("Waiting on your official picks."));
+  /* 9: bank and value by week */
+  const bv=rows.filter(r=>r.value!=null).slice(-6).reverse();
+  out.bank=card("bankval","wallet","","Bank and Team Value","Your bank and team value (bank included, FPL's figure) after each gameweek.",
+    bv.length?bv.map((r,i)=>{const prev=bv[i+1],dv=prev?r.value-prev.value:null;
+      return sgLine("GW"+r.event,`£${(+r.value).toFixed(1)} value`,`bank £${(+(r.bank||0)).toFixed(1)}`,dv==null?"—":`<span class="${dv>=0?"up":"dn"}">${dv>=0?"+":""}${dv.toFixed(1)}</span>`,"value change");}).join(""):empty("Waiting on your team feed."));
+  /* 12: league gaps */
+  const st=((S.rivalsFeed&&S.rivalsFeed.standings)||[]).slice().sort((a,b)=>a.rank-b.rank);
+  const lead=st[0];
+  out.gaps=card("gaps","users","","League Gaps",`Your mini-league table with each manager's gap to the leader and to the manager just above.`,
+    st.length?st.map((s,i)=>sgLine(s.rank,esc(s.entryName||s.manager||""),esc(s.manager||""),String(s.totalPoints),
+      i===0?"leader":`−${lead.totalPoints-s.totalPoints} lead · −${st[i-1].totalPoints-s.totalPoints} above`,{me:String(s.entryId)===String(TEAM_ID)})).join(""):empty("League feed not loaded."));
+  /* 15: chips used and left, this half */
+  const half=(S.model&&S.model.next.id>=20)?2:1,KIND=[["wildcard","WC"],["freehit","FH"],["bboost","BB"],["3xc","TC"]];
+  const inHalf=e=>half===1?e<=19:e>=20;
+  const chipLine=(name,used,me)=>{const u=used.filter(c=>inHalf(c.event));
+    const left=KIND.filter(([k])=>!u.some(c=>c.name===k)).map(([,l])=>l);
+    return sgLine("",esc(name),u.length?"used "+u.map(c=>`${(KIND.find(([k])=>k===c.name)||[,c.name])[1]} GW${c.event}`).join(", "):"none used",left.join(" ")||"—",`left (half ${half})`,{me});};
+  const ents=S.rivalsFeed&&S.rivalsFeed.entries||{};
+  const meChips=[];KIND.forEach(([k])=>{const e=chipPlayed(k+half);if(e!=null)meChips.push({name:k,event:e});});
+  out.chips=card("rchips","calendar","accent","Chips Used and Left",`Which chips each manager in your league has played this half (GW${half===1?"1-19":"20-38"}) and which are left. WC Wildcard, FH Free Hit, BB Bench Boost, TC Triple Captain.`,
+    Object.keys(ents).length?chipLine("You",meChips,true)+Object.entries(ents).filter(([id])=>String(id)!==String(TEAM_ID)).map(([id,e])=>chipLine(e.name||id,e.chips||[],false)).join(""):empty("League feed not loaded."));
+  /* 33: Dream Team appearances: FPL's live count (the dataset mirror carries 0 for everyone) */
+  const dtv=p=>{const L=fplLive(p);return L&&L.dt!=null?L.dt:(p.dreamteam||0);};
+  const dt=(S.model?S.model.players:[]).filter(p=>dtv(p)>0).sort((a,b)=>dtv(b)-dtv(a)||b.total-a.total).slice(0,6);
+  out.dream=card("dream","star","good","Dream Team Appearances","How many times each player has made FPL's Dream Team (the week's best XI) this season.",
+    dt.length?dt.map((p,i)=>sgLine(i+1,esc(p.web_name),`${esc(p.teamName)} · ${POS[p.pos]} · £${sgF1(p.price)}`,String(dtv(p)),"times",{pid:p.id})).join(""):empty("No Dream Teams yet."));
+  /* 29: goals against expected goals, this season */
+  const gx=(S.model?S.model.players:[]).filter(p=>p.pos>=2).map(p=>{const rs=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now");
+    const g=rs.reduce((s,r)=>s+(r.g||0),0),xg=rs.reduce((s,r)=>s+(r.xg||0),0);return{p,g,xg,d:g-xg};}).filter(x=>x.xg>=1||x.g>=2);
+  const gxRow=(x,i)=>sgLine(i+1,esc(x.p.web_name),`${esc(x.p.teamName)} · ${x.g} goals from ${sgF1(x.xg)} xG`,`<span class="${x.d>=0?"up":"dn"}">${x.d>=0?"+":""}${sgF1(x.d)}</span>`,"goals − xG",{pid:x.p.id});
+  out.xgHot=card("xghot","flame","good","Scoring Above xG","Goals this season minus expected goals: finishing better than the chances suggest. The research found this does not last, so treat it as luck, not form.",
+    gx.length?gx.slice().sort((a,b)=>b.d-a.d).slice(0,6).map(gxRow).join(""):empty("Waiting on this season's matches."));
+  out.xgCold=card("xgcold","crosshair","warn","Scoring Below xG","Expected goals minus goals this season: getting the chances but not scoring yet.",
+    gx.length?gx.slice().sort((a,b)=>a.d-b.d).slice(0,6).map(gxRow).join(""):empty("Waiting on this season's matches."));
+  /* 36: team form, last five results */
+  const fin=(S.fixtures||[]).filter(f=>f.finished&&f.hs!=null&&f.as!=null&&f.ht&&f.at).sort((a,b)=>(a.event-b.event)||String(a.kickoff).localeCompare(String(b.kickoff)));
+  const form=(S.model?S.model.teams:[]).map(t=>{const l5=fin.filter(f=>f.ht===t||f.at===t).slice(-5).map(f=>{const us=f.ht===t?f.hs:f.as,them=f.ht===t?f.as:f.hs;
+      return{r:us>them?"W":us<them?"L":"D",s:`${us}-${them}`,opp:(f.ht===t?f.at:f.ht).short};});
+    return{t,l5,pts:l5.reduce((s,x)=>s+(x.r==="W"?3:x.r==="D"?1:0),0)};}).filter(x=>x.l5.length).sort((a,b)=>b.pts-a.pts);
+  out.form=card("tform","activity","","Team Form, Last Five","Each club's last five league results, newest on the right, ranked by points from them.",
+    form.length?`<div class="sgsplit">${form.map((x,i)=>`<div class="sgrow"><span class="sgrank">${i+1}</span><span class="sgwho"><b>${esc(x.t.name||x.t.short)}</b></span>
+      <span class="wdl">${x.l5.map(r=>`<i class="${r.r}" title="${esc(r.opp)} ${r.s}">${r.r}</i>`).join("")}</span><span class="sgfig"><b>${x.pts}</b><em>pts</em></span></div>`).join("")}</div>`:empty("Waiting on this season's matches."),true);
+  /* 39 + 40: the whole game, week by week */
+  const ge=evs.slice(-6).reverse();
+  out.popular=card("popular","users","","Most Captained, Selected and Bought","FPL's own figures for each finished gameweek: the most captained player, the most selected and the most transferred in.",
+    ge.length?ge.map(e=>sgLine("GW"+e.id,`C ${esc(pNameOf(e.mostCapt))}`,`selected ${esc(pNameOf(e.mostSel))} · bought ${esc(pNameOf(e.mostIn))}`,
+      e.topEl?esc(pNameOf(e.topEl)):"—",e.topPts?`top scorer ${e.topPts}`:"")).join(""):empty("No finished gameweeks yet."));
+  const CH={bboost:"BB",freehit:"FH",wildcard:"WC","3xc":"TC",manager:"AM"};
+  out.chipPlays=card("chipplays","calendar","","Chip Plays Across The Game","How many managers played each chip in each finished gameweek (FPL's own counts).",
+    ge.length?ge.map(e=>{const c=(e.chips||[]).slice().sort((a,b)=>b.n-a.n);const tot=c.reduce((s,x)=>s+x.n,0);
+      return sgLine("GW"+e.id,c.length?c.map(x=>`${CH[x.name]||x.name} ${(x.n/1000).toFixed(0)}k`).join(" · "):"none","",tot?(tot/1e6).toFixed(2)+"m":"—","chips played");}).join(""):empty("No finished gameweeks yet."));
+  return out;
 }
