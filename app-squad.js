@@ -31,9 +31,9 @@ const SETPIECE={
  SUN:{P:["Le Fée"],          F:["Xhaka","Le Fée"],         C:["Xhaka","Le Fée"]},
  TOT:{P:["Richarlison"],     F:["Porro","Tonali"],         C:["Porro","Tonali"]}
 };
-/* SETPIECE above still feeds the model's penalty and set-piece points
-   (app-core.js); changing it moves projections, so it waits for Andy. The
-   icons below read FPL's live orders instead. */
+/* SETPIECE above is now only the fallback for the model's penalty and
+   set-piece points when FPL's live orders did not load (20 Oct 2026, Andy:
+   the model and the icons both read FPL's live orders). */
 /* ---------- signal icons (redesign wave 1, 19 Oct 2026) ----------
    Andy's set, in this order, as Lucide line icons in round tinted tiles
    (Fintel's .tile: background = tone at 22% over #171717). One rule each;
@@ -73,9 +73,6 @@ function sigTile(k,tip){
    set-piece orders. Missing on the Pages backup, where the dataset's
    penalty order stands in and set pieces are not shown. */
 function fplLive(p){return (S.fplLive&&S.fplLive.players&&S.fplLive.players[p.id])||null;}
-/* Penalties: FPL's order, except where this season's kicks and a published
-   source agree on someone else (research/setpieces.md, 19 Oct 2026). */
-const PEN_OVERRIDE={COV:"Torp",NEW:"Wissa",SUN:"Le Fée"};
 function setPieces(p){
   const L=fplLive(p),club=(p.teamName||"").toUpperCase();
   let pen;
@@ -586,9 +583,9 @@ function planWeeks(H){
 /* wave 4: several outs at once, filled one by one through the engine (the
    dearest slot first, keeping enough back for the cheapest replacement of
    each slot still to fill), each scored on the XI over the horizon. */
-function bestCombo(outIds){
+function bestCombo(outIds,hh,per){
   if(!S.model||!outIds.length)return null;
-  const g=S.model.next.id,h=S.horizon||1;
+  const g=S.model.next.id,h=hh||S.horizon||1;
   const byId=new Map(S.model.players.map(p=>[p.id,p]));
   const outs=outIds.map(i=>byId.get(i)).filter(Boolean);
   const freed=planBank()+outs.reduce((a,p)=>a+sellPrice(p),0);
@@ -601,7 +598,7 @@ function bestCombo(outIds){
     const rest=order.slice(ix+1);
     const reserve=rest.reduce((a,x)=>a+minFor(x.pos)-sellPrice(x),0);
     /* F60: the players being sold are not candidates for their own slots */
-    const best=engineMoves({squad,bank:bank-Math.max(0,reserve),g,h,outs:[o.id],exclude:outIds,byId})[0];
+    const best=engineMoves({squad,bank:bank-Math.max(0,reserve),g,h,outs:[o.id],exclude:outIds,byId,per})[0];
     /* F60: a move that gains nothing is not a move; that player stays */
     if(best&&best.gain>0.05){picks.push(best);squad=squad.map(i=>i===o.id?best.inn.id:i);bank=+(bank+best.sell-best.inn.price).toFixed(1);}
   });
