@@ -1985,16 +1985,9 @@ function signalHitsHTML(){
       if(!p||pts==null||pred<1)return;rows.push({p,pred,pts});});
     if(!rows.length)continue;weeks++;
     [1,2,3,4].forEach(pos=>rows.filter(r=>r.p.pos===pos).sort((x,y)=>y.pred-x.pred).forEach((r,i)=>{(i<6?acc.buy:acc.base).push(r);}));
-    rows.filter(r=>r.p.pos>=3).forEach(r=>{
-      const hs=((S.hist&&S.hist[r.p.code])||[]).filter(x=>x.tag==="now"&&x.mins>0&&x.gw<g);
-      const per=rs=>{const m=rs.reduce((a,x)=>a+x.mins,0);return m>0?rs.reduce((a,x)=>a+(x.xg||0)+(x.xa||0),0)*90/m:null;};
-      const l4=hs.slice(-4);
-      if(hs.length>=6&&hs.reduce((a,x)=>a+x.mins,0)>=450&&l4.reduce((a,x)=>a+x.mins,0)>=180){
-        const sea=per(hs),last=per(l4);
-        if(last>=1.5*sea&&last-sea>=0.15)acc.heat.push(r);
-        else if(last<=0.6*sea&&sea-last>=0.15)acc.cool.push(r);
-        else acc.baseAtt.push(r);}
-    });
+    /* the same rules as the icons, from the matches before that week */
+    rows.filter(r=>r.p.pos!==4).forEach(r=>{const mo=momentum(r.p,g);if(!mo)return;
+      if(mo.heat)acc.heat.push(r);else if(mo.cool)acc.cool.push(r);else acc.baseAtt.push(r);});
   }
   if(!weeks)return "";
   const avg=(a,f)=>a.length?a.reduce((s,r)=>s+f(r),0)/a.length:null;
@@ -2004,8 +1997,8 @@ function signalHitsHTML(){
       <td>${d==null?"—":`<b class="${d>=0?"up":"dn"}">${sgn1(d)}</b>`}</td><td>${bp==null?"—":bp.toFixed(2)}</td><td>${bd==null?"—":sgn1(bd)}</td><td style="text-align:left;white-space:normal" class="mu">${note}</td></tr>`;};
   return `<div class="scroll" style="padding:0 14px 14px"><table class="mkt"><thead><tr><th style="text-align:left">Signal</th><th>Flags</th><th>Points</th><th>Predicted</th><th>Beat prediction</th><th>Others' points</th><th>Others vs prediction</th><th style="text-align:left">Compared with</th></tr></thead><tbody>
     ${line(SIGNAL.buy[2],acc.buy,acc.base,"the rest of the players at the same positions")}
-    ${line(SIGNAL.heat[2],acc.heat,acc.baseAtt,"midfielders and forwards with steady chances")}
-    ${line(SIGNAL.cool[2],acc.cool,acc.baseAtt,"midfielders and forwards with steady chances")}
+    ${line(SIGNAL.heat[2],acc.heat,acc.baseAtt,"keepers, defenders and midfielders with no trend")}
+    ${line(SIGNAL.cool[2],acc.cool,acc.baseAtt,"keepers, defenders and midfielders with no trend")}
     </tbody></table><p class="note" style="margin:8px 0 0">Over ${weeks} finished gameweeks with a saved pre-deadline prediction (players predicted 1 point or more). "Beat prediction" above zero means the signal knew something the prediction did not. Sell, Price Rise/Fall, Minutes Risk, Rival Threat and Differential are not graded: they depend on that week's squad, prices and ownership, which were not saved.</p></div>`;
 }
 
