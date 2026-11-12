@@ -1102,7 +1102,7 @@ function renderPage(){
       figCard("Team Rating",`Your XI and captain against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week.`,
         rating?rating.pct:"—",rating?`best XI for £${rating.budget.toFixed(1)}: ${rating.best.toFixed(1)}`:"out of 100",
         null,"#8A8A8A","",`color:${rateCol}`),
-      figCard("Budget",`Bank to spend in this week's plan, after planned transfers and any sales, and free transfers into this week (maximum 5${ftSource()==="feed"?", official from FPL":""}). Squad is today's buy prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included; the line is that value by gameweek.`:""}`,
+      figCard("Budget",`Bank to spend in this week's plan, after planned transfers and any sales, and free transfers into this week (maximum 5${ftSource()==="feed"?", worked out from your FPL history: FPL does not publish the count":""}). Squad is today's buy prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included; the line is that value by gameweek.`:""}`,
         `<span${bank<0?' style="color:var(--red)"':""}>£${bank.toFixed(1)}</span><span class="fsub"> · ${ftTxt} FT</span>`,
         (chipForWeek(gv)==="freehit"?"Free Hit this week · ":chipForWeek(gv)==="wildcard"?"Wildcard this week · ":"")
           +`Squad £${sv.toFixed(1)}`+(raised>0?` · £${raised.toFixed(1)} from sales`:(prevRow&&lastRow&&prevRow.value!=null?" "+chg(lastRow.value-prevRow.value,x=>x.toFixed(1),true):"")),
