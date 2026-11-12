@@ -26,15 +26,20 @@
  --d5:#5C0011;--d4:#E01E37;--d3:#F0A02A;--d2:#3FBF63;--d1:#7DFB9E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--ink);color:var(--cream);font-family:'Geist',system-ui,sans-serif;font-size:14px}
-/* Redesign wave 1 (19 Oct 2026): every page uses the full screen width
-   (Andy's 1536px laptop and wider monitors), 24px gutters, 16px on a phone. */
-.wrap{max-width:none;margin:0;padding:0 24px 24px;width:100%}
+/* Redesign wave 1 (19 Oct 2026): every page uses the full screen width.
+   12 Nov 2026 (Andy): more room at the sides, like the official site: the
+   gutter grows with the screen, about 60px on his 1536px laptop, at most
+   64px, and 16px on a phone. */
+:root{--gut:clamp(24px,4vw,64px)}
+@media(max-width:520px){:root{--gut:16px}}
+.wrap{max-width:none;margin:0;padding:0 var(--gut) 24px;width:100%}
 .wrap>*{max-width:100%}
-@media(max-width:520px){.wrap{padding:0 16px 16px}}
 /* one sticky bar: logo, eight pages, GW switcher, deadline, live dot;
    Predicted, Bank and FT join it once the page scrolls (body.scrolled) */
 .tb{position:sticky;top:0;z-index:60;background:rgba(10,10,10,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
- border-bottom:1px solid rgba(255,255,255,.07);margin:0 -24px 22px;padding:0 24px}
+ border-bottom:1px solid rgba(255,255,255,.07);margin:0 calc(-1*var(--gut)) 22px;padding:0 var(--gut)}
+/* the bar runs edge to edge: .wrap>* would cap it at the content width */
+.wrap>.tb{max-width:none}
 .tbin{height:62px;display:flex;align-items:center;gap:24px}
 .brand{display:flex;align-items:center;gap:10px;font:600 16px 'Geist',sans-serif;color:#fff;text-decoration:none;flex:none}
 .brand .bl svg{width:30px;height:30px;display:block}
@@ -61,7 +66,7 @@ body.scrolled .tbfig{display:flex}
 .live.live i{animation:sigpulse 1.6s ease-in-out infinite}
 @media(max-width:1100px){.dl{display:none}body.scrolled .tbfig{display:none}}
 @media(max-width:720px){.tbin{gap:12px}.brand .bw{display:none}.tn .navlink{padding:7px 10px;font-size:13px}}
-@media(max-width:520px){.tb{margin:0 -16px 16px;padding:0 16px}.tbin{height:54px}.gwsw b{min-width:34px}.gwsw button{padding:5px 7px}}
+@media(max-width:520px){.tb{margin-bottom:16px}.tbin{height:54px}.gwsw b{min-width:34px}.gwsw button{padding:5px 7px}}
 /* Planner hero: team name + four figure cards */
 .hero{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:end;margin-bottom:14px}
 .hk{font-size:12px;color:#7A7A7A}
@@ -878,12 +883,12 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.44.1"></script>
-<script src="./app-squad.js?v=12.44.1"></script>
-<script src="./app-render.js?v=12.44.1"></script>
-<script src="./app-odds.js?v=12.44.1"></script>
-<script src="./app-tracker.js?v=12.44.1"></script>
-<script src="./app-main.js?v=12.44.1"></script>
+<script src="./app-core.js?v=12.45.0"></script>
+<script src="./app-squad.js?v=12.45.0"></script>
+<script src="./app-render.js?v=12.45.0"></script>
+<script src="./app-odds.js?v=12.45.0"></script>
+<script src="./app-tracker.js?v=12.45.0"></script>
+<script src="./app-main.js?v=12.45.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
