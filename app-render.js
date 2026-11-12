@@ -173,7 +173,6 @@ function replHTML(){
         :`<div class="pbody"><p class="note">No affordable option at this position.</p></div>`}</div>`;
   }).join("");
 }
-const backTag=p=>p.back?`<span class="src" style="background:#4A1220;color:#FFC9D2" title="${esc(p.news)}">${p.back==="unknown"?"no date":esc(p.back)}</span>`:"";
 const INJ=p=>p.avail===0?`<span title="${esc(p.news||"Unavailable")}" style="color:var(--red);font-size:11px">✚</span>`
   :(p.avail<1?`<span title="${esc(p.news||"Doubt")}" style="color:var(--amber);font-size:11px">✚</span>`:"");
 const PD_PAGE=100;
@@ -264,140 +263,6 @@ function filtersHTML(compact,scope){
     <select ${compact?"":'style="width:auto"'} onchange="act('${A('team')}',this.value)"><option value="0">All clubs</option>
       ${S.model.teams.map(t=>`<option value="${t.id}" ${team===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
   </div>`;
-}
-function tableHTML(){
-  const g=VG();
-  const a=sortList(filtered("list"),S.sortKey,S.sortDir,g);
-  const W=S.lWin||38;
-  const w=p=>ws(String(p.code||""),p.pos,W,p.price,teamMaxPrice(p.team));
-  const gwr=lGwRange();
-  const cols=[["name","Player"],["price","Price"],["signals","Signals"],["next","Next 3"],["form","Form"],["pred","xFPL"],
-    ["prxfpl",gwr.from===gwr.to?`Pr xFPL (GW${gwr.from})`:`Pr xFPL (GW${gwr.from}-${gwr.to})`],["owned","Own %"],["startpct","Start %"],
-    ["xmins","xMins"],["xgi","xGI/90"],["npxg","npxG/90"],["xa","xA/90"],["dchit","DefCon %"],
-    ["csp","CS %"],["cc","CC/90"],["box","Box/90"],["bonus","Bonus"],["bps","BPS/90"],
-    ["tin","TI"],["total","Pts"]];
-  const KEY={pred:1,prxfpl:1,form:1,xg:1,xa:1,dc:1,next:1,xmins:1};
-  /* Filtering by position swaps in the stats that matter for that position */
-  /* position-specific stats appended to the right, ordered by importance */
-  const POSCOLS={
-    1:[["sv90","Saves/90"],["oppatt","Opp att"],["xgot","xGoT/90"],["gprev","G prev"],
-       ["gc90","GC/90"],["pensv","Pen sv"],["og","OG"]],
-    2:[["oppatt","Opp att"],["teamdef","Team def"],["cbit","CBIT/90"],["spthreat","SP threat"],
-       ["aer","Aerial/90"],["xg","xG/90"],["gc90","GC/90"]],
-    3:[["penord","Pen ord"],["spthreat","SP threat"],["shbox","Sh box/90"],["sh90","Shots/90"],
-       ["f3","F3 pass/90"],["drb","Dribbles/90"],["bcm","BC missed"]],
-    4:[["penord","Pen ord"],["shbox","Sh box/90"],["bcm","BC missed"],["sot","SoT/90"],
-       ["conv","Conversion"],["aer","Aerial/90"]]
-  };
-  const POSKEY=new Set();
-  if(S.lPos&&POSCOLS[S.lPos]){
-    /* Every orange column for this position — the position-specific stats AND the
-       highlighted general ones (CS %, DefCon %, Start %, …) — sits together right
-       after xMins, position-specific first. */
-    const genOrange=({1:["startpct","csp"],2:["dchit","csp","startpct"],
-      3:["xgi","npxg","xa","cc"],4:["npxg","xgi","box"]}[S.lPos]||[]);
-    const pulled=[];
-    genOrange.forEach(k=>{const i=cols.findIndex(c=>c[0]===k);if(i>-1)pulled.push(cols.splice(i,1)[0]);});
-    const at=cols.findIndex(c=>c[0]==="xmins")+1;
-    cols.splice(at,0,...POSCOLS[S.lPos],...pulled);
-    POSCOLS[S.lPos].forEach(c=>POSKEY.add(c[0]));
-    genOrange.forEach(k=>POSKEY.add(k));POSKEY.add("xmins");
-  }
-  const TDESC={name:"Player name, club and position",price:"Current price",
-    signals:"Signals: differential, hot streak, attack/defence threat, nailed starter, caution",
-    next:"Next 3 fixtures — colour shows difficulty",form:"Average points over recent gameweeks",
-    pred:"Projected points, next gameweek (xFPL)",pred3:"Projected points, next 3 GWs",
-    pred5:"Projected points, next 5 GWs",prxfpl:"Projected points over the selected gameweek window",
-    owned:"% of managers who own him",
-    startpct:"Estimated chance of starting",xmins:"Expected minutes next GW",
-    xgi:"Expected goal involvements per 90",npxg:"Non-penalty xG per 90",xa:"Expected assists per 90",
-    dchit:"% of games hitting the defensive-contribution points threshold",
-    csp:"Clean-sheet probability",cc:"Chances created per 90",box:"Touches in the box per 90",
-    bonus:"Bonus points so far",bps:"Bonus-point-system score per 90",tin:"Transfers in this GW",
-    total:"Total points so far",oppatt:"Opponent attack strength (next fixture)",
-    teamdef:"His team's defensive rating",cbit:"Clearances, blocks, interceptions, tackles per 90",
-    spthreat:"Set-piece goal threat",aer:"Aerial duels won per 90",xg:"Expected goals per 90",
-    gc90:"Goals conceded per 90",penord:"Penalty-taker order (1 = first)",shbox:"Shots in the box per 90",
-    sh90:"Shots per 90",f3:"Final-third passes per 90",drb:"Successful dribbles per 90",
-    bcm:"Big chances missed",conv:"Goal conversion vs xG",sot:"Shots on target per 90",
-    sv90:"Saves per 90",xgot:"xG on target faced per 90",gprev:"Goals prevented vs xGoT",
-    pensv:"Penalties saved",og:"Own goals"};
-  const head=cols.map(([k,n])=>{
-    if(k==="signals")return `<th style="text-align:center" title="${TDESC.signals}">Signals</th>`;
-    const hl=POSKEY.has(k)?"color:var(--amber)"          // relevant to the filtered position
-      :(KEY[k]&&S.sortKey!==k?"color:var(--cyan)":"");
-    return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')" title="${TDESC[k]||n}"
-      style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("");
-  const iconCell=p=>{
-    const all=signals(p,g).map(([k,t])=>sigTile(k,t)).join("");
-    return all?`<span class="sigcell">${all}</span>`:`<span style="color:var(--ink3)">·</span>`;};
-  const pct=v=>(v*100).toFixed(0)+"%";
-  const CELL={
-    pred3:p=>hPts(p,g,3).toFixed(1),
-    startpct:p=>{const q=w(p);return q?(q.estimated?"~":"")+pct(q.startPct):"—";},
-    xgi:p=>{const q=w(p);return q?(q.xg90+q.xa90).toFixed(2):"—";},
-    npxg:p=>{const q=w(p);return q?q.npxg90.toFixed(2):"—";},
-    dchit:p=>{const q=w(p);return q?pct(q.dcHit):"—";},
-    csp:p=>{const v=csProbNext(p,g);return v!=null?pct(v):"—";},
-    cc:p=>{const q=w(p);return q?q.cc90.toFixed(2):"—";},
-    box:p=>{const q=w(p);return q?q.box90.toFixed(1):"—";},
-    bps:p=>{const v=bpsPer90(p,w(p));return v!=null?v.toFixed(1):"—";},
-    sv90:p=>{const q=w(p);return q?q.sv90.toFixed(2):"—";},
-    xgot:p=>{const q=w(p);return q?q.xgot90.toFixed(2):"—";},
-    gprev:p=>{const q=w(p);return q?q.gp.toFixed(1):"—";},
-    gc90:p=>{const q=w(p);return q?q.gc90.toFixed(2):"—";},
-    pensv:p=>p.pensSaved||0, og:p=>p.ownGoals||0,
-    oppatt:p=>{const f=p.gw[g]?.fixtures?.[0];return f?(f.oppAtt??3).toFixed(0):"—";},
-    teamdef:p=>{const t=S.model.teams.find(t2=>t2.id===p.team);return t?t.def.toFixed(2):"—";},
-    cbit:p=>{const q=w(p);return q?q.cbit90.toFixed(1):"—";},
-    spthreat:p=>(p.spThreat||0).toFixed(1),
-    aer:p=>{const q=w(p);return q?q.aer90.toFixed(1):"—";},
-    penord:p=>p.penOrder&&p.penOrder<99?p.penOrder:"—",
-    shbox:p=>{const q=w(p);return q?(q.sh90*0.62).toFixed(2):"—";},
-    sh90:p=>{const q=w(p);return q?q.sh90.toFixed(2):"—";},
-    sot:p=>{const q=w(p);return q?q.sot90.toFixed(2):"—";},
-    f3:p=>{const q=w(p);return q?q.f390.toFixed(1):"—";},
-    drb:p=>{const q=w(p);return q?q.drb90.toFixed(2):"—";},
-    bcm:p=>{const q=w(p);return q?q.bcm:"—";},
-    conv:p=>{const q=w(p);return q&&q.xg90>0?((q.g/Math.max(.1,q.xg90*q.mins/90))).toFixed(2):"—";},
-    price:p=>`£${p.price.toFixed(1)}${arw(p.priceChange)}`,
-    form:p=>p.form.toFixed(1)+formTag(p), lastform:p=>p.lastForm?p.lastForm.toFixed(1):"—",
-    pred:p=>hPts(p,g,1).toFixed(1),prxfpl:p=>{const r=lGwRange();return hPts(p,r.from,r.count).toFixed(1);},
-    pred5:p=>hPts(p,g,5).toFixed(1), avg:p=>avgFP(p,g,S.horizon).toFixed(1),
-    ppg:p=>p.ppg.toFixed(1), total:p=>p.total, owned:p=>p.owned.toFixed(1),
-    xg:p=>p.xg90.toFixed(2), xa:p=>p.xa90.toFixed(2), dc:p=>p.dc90.toFixed(1),
-    xmins:p=>p.xMins+"′"+minsTag(p), saves:p=>(p.sv90||0).toFixed(1), cs:p=>(p.csRate||0).toFixed(2),
-    bonus:p=>p.bonus, ict:p=>p.ict.toFixed(0),
-    tin:p=>p.tIn>999?(p.tIn/1000).toFixed(0)+"k":p.tIn};
-  /* F77 (bundle 9): 100 rows at a time; laying out 320 took most of a
-     redraw (about 70 ms on a laptop, several times that on a phone) */
-  const lim=S.pdLimit||PD_PAGE;
-  const rows=a.slice(0,lim).map(p=>{
-    const q=p.gw[g]||{fixtures:[]};
-    const nx=q.fixtures.length?q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f))).join(" ")
-      :`<span style="color:var(--mute);font-size:10px">BLANK</span>`;
-    const own=(S.squad||[]).includes(p.id);
-    let tds=`<td class="nm"><span style="display:flex;align-items:center;gap:6px">
-        <button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="${S.stars.includes(p.id)?"Remove from shortlist":"Shortlist"}" aria-label="${S.stars.includes(p.id)?"Remove "+esc(p.web_name)+" from shortlist":"Shortlist "+esc(p.web_name)}" aria-pressed="${S.stars.includes(p.id)}">★</button>
-        ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
-      <span style="min-width:0"><span style="display:flex;align-items:center;gap:5px">
-        <span style="font-weight:600;font-size:12px">${esc(p.web_name)}</span>${INJ(p)}
-        ${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to Team Planner" aria-label="Add ${esc(p.web_name)} to Team Planner">+</button>`}</span>
-      <span style="display:flex;gap:4px;align-items:center;font-size:10px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]} ${backTag(p)}</span></span></span></td>`;
-    cols.slice(1).forEach(([k])=>{
-      if(k==="signals"){tds+=`<td style="text-align:center">${iconCell(p)}</td>`;return;}
-      if(k==="next"){tds+=`<td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>`;return;}
-      const hot=(k==="pred"||k==="pred5"||k==="pred3"||k==="prxfpl")?"color:var(--mint);font-weight:700;"
-        :(POSKEY.has(k)?"color:var(--amber);":(KEY[k]?"color:var(--cyan);":""));
-      tds+=`<td style="text-align:right;${hot}">${CELL[k]?CELL[k](p):""}</td>`;});
-    return `<tr style="${p.avail===0?"opacity:.4;":""}${own?"opacity:.45":""}" title="${own?"Already in your squad":""}">${tds}</tr>`;}).join("");
-  /* F5: the table used to stop at 320 with no way to reach the rest */
-  const more=a.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${a.length} players</span>
-    <button onclick="act('pdmore')">Show ${Math.min(PD_PAGE,a.length-lim)} more</button><button onclick="act('pdall')">Show all ${a.length}</button></div>`:
-    (lim>PD_PAGE&&a.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
-  /* F92 (bundle 8): an empty shortlist says why, instead of a bare header row */
-  if(S.starOnly&&!S.stars.length)return `<div class="pbody"><p class="note" style="margin:0">No shortlisted players yet. Tap ★ on any row to add one.</p></div>`;
-  return `<div class="scroll tallscroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${more}`;
 }
 
 /* F45: the two accuracy tiles compare next week's projection with each
@@ -695,8 +560,8 @@ function readPill(t,opp,home,lens){
 const TEAM_TILE=k=>`<span class="tile" style="--tc:${k==="def"?"#22D3EE":"#3DDC97"}" title="${k==="def"?"Kind defensive run":"Kind attacking run"}">${lic(k==="def"?"shield":"target")}</span>`;
 function fixturesHTML(){
   const m=["clubs","team","gw","odds"].includes(S.fixMode)?S.fixMode:"clubs";
-  const tabs=`<div class="pagetabs"><h1>Teams</h1><span class="pseg">${[["clubs","Clubs"],["team","Fixture Grid"],["gw","By Gameweek"],["odds","Odds"]].map(([k,n])=>`<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')">${n}</button>`).join("")}</span></div>`;
-  return tabs+(m==="clubs"?clubsHTML():m==="odds"?oddsHTML():fixtureGridHTML());
+  const tabs=`<div class="pagetabs"><h1>Teams</h1><span class="pseg">${[["clubs","Clubs"],["team","Fixture Grid"],["gw","By Gameweek"],["odds","Match Odds"]].map(([k,n])=>`<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')">${n}</button>`).join("")}</span></div>`;
+  return tabs+(m==="clubs"?clubsHTML():m==="odds"?oddsHTML("match"):fixtureGridHTML());
 }
 function fixtureGridHTML(){
   const g=VG(), teams=S.model.teams;
@@ -1546,13 +1411,9 @@ function compareModalHTML(){
    table stays as the Stats view, so no Player Data feature loses its home.
    ============================================================ */
 const pName=(p,cls)=>`<button class="pn${cls?" "+cls:""}" onclick="act('card',${p.id})" title="Open ${esc(p.web_name)}'s card">${esc(p.web_name)}</button>`;
-function keyStat(p,g){
-  if(p.pos>=3){const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));
-    return w?{v:(w.xg90||0)+(w.xa90||0),txt:((w.xg90||0)+(w.xa90||0)).toFixed(2),unit:"xGI/90",est:!!w.estimated}:null;}
-  const c=csProbNext(p,g);return c!=null?{v:c,txt:Math.round(c*100)+"%",unit:"CS",est:false}:null;
-}
-function aroundOwn(p){
-  if(S.pAround==="rank"){const N=S.neighbours;return N&&N.n?{k:N.own[p.id]||0,n:N.n}:null;}
+function aroundOwn(p,mode){
+  mode=mode||"league";
+  if(mode==="rank"){const N=S.neighbours;return N&&N.n?{k:N.own[p.id]||0,n:N.n}:null;}
   const R=rivalOwn();return R&&R.n?{k:R.own[p.id]||0,n:R.n}:null;
 }
 function fixPills(p,g,n){
@@ -1562,94 +1423,7 @@ function fixPills(p,g,n){
     h+=q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f),{short:true,tiny:true})).join("");}
   return `<span class="fxrow">${h}</span>`;
 }
-const HUB_SORT={
-  pts:(p,g,h)=>hPts(p,g,h),mins:p=>p.xMins||0,key:(p,g)=>{const k=keyStat(p,g);return k?k.v:-1;},
-  fix:(p,g,h)=>{let s=0,n=0;for(let e=g;e<g+Math.max(h,3)&&e<=38;e++)(p.gw[e]?.fixtures||[]).forEach(f=>{s+=posDiff(p,f);n++;});return n?-s/n:-9;},
-  price:p=>p.price,pcp:p=>{const l=fplLive(p);return l&&l.pcp!=null?l.pcp:-999;},owned:p=>p.owned,
-  around:p=>{const a=aroundOwn(p);return a?a.k/a.n:-1;},name:p=>p.web_name};
-function hubRows(){
-  const g=VG(),h=S.pH||1,view=S.pView||"all",mine=new Set(effectiveSquadIds(g).ids);
-  let a=filtered("list");
-  if(view==="mine")a=S.model.players.filter(p=>mine.has(p.id)&&(!S.lPos||p.pos===S.lPos));
-  if(view==="buy")a=a.filter(p=>!mine.has(p.id)&&p.avail>0&&(p.xMins||0)>=45);
-  const k=HUB_SORT[S.hubSort]?S.hubSort:"pts",dir=S.hubDir||"desc";
-  const f=HUB_SORT[k];
-  a=a.slice().sort((x,y)=>{const A=f(x,g,h),B=f(y,g,h);
-    if(typeof A==="string")return dir==="asc"?A.localeCompare(B):B.localeCompare(A);
-    return dir==="asc"?A-B:B-A;});
-  return{g,h,view,mine,a};
-}
-function playersHubHTML(){
-  if(!S.model)return "";
-  const{g,h,view,mine,a}=hubRows();
-  if(view==="stats")return hubHeadHTML(g,h,view)+statsViewHTML();
-  if(view==="value")return hubHeadHTML(g,h,view)+squadShapeHTML(g,h);
-  const ticks=S.pTicks||[];
-  const lim=S.pdLimit||PD_PAGE;
-  const th=(k,n,tip,al)=>`<th class="${S.hubSort===k||(!S.hubSort&&k==="pts")?"act":""}" onclick="act('hubsort','${k}')" title="${esc(tip)}" style="text-align:${al||"right"}">${n}${(S.hubSort||"pts")===k?((S.hubDir||"desc")==="desc"?" ↓":" ↑"):""}</th>`;
-  const aroundLbl=S.pAround==="rank"?"Near Rank":"Rivals";
-  const head=`<tr><th style="width:34px"></th>${th("name","Player","Name, club, position and signals","left")}
-    ${th("pts",`Predicted ${h>1?h+" GW":"GW"+g}`,"Model points over the horizon")}${th("mins","Minutes","Expected minutes next gameweek")}
-    ${th("key",S.lPos===1||S.lPos===2?"CS %":S.lPos>=3?"xGI/90 L6":"Key Stat","MID/FWD: expected goal involvements per 90 over the last six matches. GK/DEF: chance of a clean sheet next match.")}
-    ${th("fix",`Fixtures`,"Next fixtures, coloured by difficulty for his position (green easy, red hard). Italic = away.","left")}
-    ${th("price","Price","Price, with FPL's price predictor progress (100% = changes tonight)")}${th("owned","Owned","Overall ownership")}
-    ${th("around",aroundLbl,S.pAround==="rank"?"How many of the 50 managers ranked around you own him":"How many of your mini-league rivals own him")}<th></th></tr>`;
-  const rows=a.slice(0,lim).map(p=>{
-    const ks=keyStat(p,g),ar=aroundOwn(p),l=fplLive(p),on=ticks.includes(p.id),own=mine.has(p.id);
-    const pc=l&&l.pcp!=null&&Math.abs(l.pcp)>=50?`<span class="pcp ${l.pcp>0?"up":"dn"}">${l.pcp>0?"+":""}${Math.round(l.pcp)}%</span>`:"";
-    return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
-      <td><input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></td>
-      <td class="nm"><span class="pcell">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}<span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${own?'<span class="mu" style="font-size:11px">yours</span>':""}</span>
-        <span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}${sigHTML(p,g)}</span></span></span></td>
-      <td class="fig mint">${hPts(p,g,h).toFixed(1)}</td>
-      <td class="fig">${Math.round(p.xMins||0)}′</td>
-      <td class="fig">${ks?ks.txt+(ks.est?'<span class="srctag">est</span>':""):"—"}</td>
-      <td style="text-align:left">${fixPills(p,g,Math.max(h,3))}</td>
-      <td class="fig">£${p.price.toFixed(1)}${arw(p.priceChange)} ${pc}</td>
-      <td class="fig">${p.owned.toFixed(1)}%</td>
-      <td class="fig">${ar?`${ar.k}/${ar.n}`:"—"}</td>
-      <td style="white-space:nowrap"><button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="Shortlist" aria-pressed="${S.stars.includes(p.id)}">★</button>${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to the Planner" aria-label="Add ${esc(p.web_name)} to the Planner">+</button>`}</td></tr>`;}).join("");
-  const more=a.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${a.length} players</span>
-    <button onclick="act('pdmore')">Show ${Math.min(PD_PAGE,a.length-lim)} more</button><button onclick="act('pdall')">Show all ${a.length}</button></div>`:
-    (lim>PD_PAGE&&a.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${a.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
-  return hubHeadHTML(g,h,view)+`<div class="panel"><div class="scroll tallscroll hub"><table><thead>${head}</thead><tbody>${rows||`<tr><td colspan="10" class="note" style="padding:14px">No players match.</td></tr>`}</tbody></table></div>${more}</div>`;
-}
-function hubHeadHTML(g,h,view){
-  const ticks=S.pTicks||[];
-  const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
-  const a=hubRows().a.length;
-  return `<div class="pagetabs"><h1>Players</h1>
-      <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        ${ticks.length?`<button class="pri" onclick="act('pcmp')">Compare ${ticks.length}</button><button onclick="act('tickclear')">Clear ticks</button>`:`<span class="note">Tick up to 5 players to compare</span>`}
-        <a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Odds →</a></span></div>
-    <div class="hubctl">
-      ${seg(view,[["buy","Buy"],["mine","My Squad"],["all","All"],["value","Value"],["stats","Stats"]],"pview")}
-      ${view==="stats"?"":hzHTML(h,"ph")}
-      <span class="hz">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]].map(([v,n])=>`<button class="${(S.lPos||0)===v?"on":""}" onclick="act('lpos',${v})">${n}</button>`).join("")}</span>
-      ${view==="stats"||view==="mine"?"":`<input id="srch-l" placeholder="Search" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" style="width:170px">
-      <select onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
-      <span class="note">Max £</span><input type="number" min="3.5" max="16" step="0.1" value="${(S.lMax||16).toFixed(1)}" onchange="act('lmax',this.value)" style="width:70px" aria-label="Max price">`}
-      ${view==="stats"?"":`<span class="note" style="margin-left:auto">Around you</span>${seg(S.pAround||"league",[["league","Rivals"],["rank","Near rank"]],"paround")}`}
-      ${view==="stats"?"":`<span class="note">${a} players</span>`}
-    </div>`;
-}
 /* the old Player Data table, kept whole as the Stats view */
-function statsViewHTML(){
-  return `<div class="panel"><div class="phead"><h2>All Stats</h2><span class="note">${filtered("list").length} players · tap any column to sort</span></div>
-    ${filtersHTML(false,'list')}
-    <div class="pbody" style="display:flex;gap:5px;flex-wrap:nowrap;overflow-x:auto;align-items:center;border-bottom:1px solid var(--ink3)">
-      <span style="font-size:11px;color:var(--mute);flex:none">Show only</span>
-      ${SIG_ORDER.map(k=>`<button class="fbtn fbtn-icon ${S.iconF.includes(k)?"on":""}" onclick="act('iconf','${k}')" title="${esc(SIGNAL[k][2]+": "+SIG_RULE[k](S.horizon||1))}">${sigTile(k,SIGNAL[k][2])}</button>`).join("")}
-      <button class="fbtn fbtn-icon ${S.starOnly?"on":""}" onclick="act('staronly')" title="Shortlist${S.stars.length?" ("+S.stars.length+")":""}" style="--fc:#FFB020">
-        <span class="sig" style="color:#FFB020;font-size:14px">★</span>${S.stars.length?`<span class="fbtn-badge">${S.stars.length}</span>`:""}</button></div>
-    <div class="pbody" style="display:flex;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--ink3)">
-      <span style="flex:1;min-width:200px"><span style="font-size:11px;color:var(--mute)">Budget</span>
-        <span style="margin:4px 0;display:block">${stepperInput("lmax",S.lMax,{min:3.5,max:16,step:0.1,big:1,dp:1,w:56})}</span></span>
-      <span style="flex:1;min-width:230px"><span style="font-size:11px;color:var(--mute)">Past stats window</span>
-        <span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
-          ${[1,3,5,10,38].map(n=>`<button class="chipbtn ${(S.lWin||38)===n?"on":""}" onclick="act('lwin',${n})">${n===38?"Season":"Last "+n}</button>`).join("")}</span></span></div>
-    ${tableHTML()}</div>`;
-}
 /* tick-to-compare: up to five players side by side as figure cards */
 function playerCompareHTML(){
   const ids=S.pTicks||[];if(!S.pCmp||!ids.length||!S.model)return "";
@@ -1695,7 +1469,7 @@ function signalBoardHTML(G,H,posF,bare){
       <span class="sbm">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)}</span>
       <span class="sbv">${hPts(p,G,H).toFixed(1)}</span></div>`).join("");
     return `<section class="sbcard"><header>${sigTile(k,SIG_RULE[k](H))}<h3>${SIGNAL[k][2]}</h3><span class="sbc">${list.length}</span></header>
-      ${rows||'<p class="sgempty">Nobody right now.</p>'}${list.length>6?`<div class="sbmore">+${list.length-6} more · <a href="${routeFor("table")}" onclick="S.iconF=['${k}'];S.pView='stats';return go(event,'table')">see all</a></div>`:""}</section>`;}).join("");
+      ${rows||'<p class="sgempty">Nobody right now.</p>'}${list.length>6?`<div class="sbmore">+${list.length-6} more · <a href="${routeFor("table")}" onclick="S.iconF=['${k}'];S.pdMore=true;return go(event,'table')">see all</a></div>`:""}</section>`;}).join("");
   if(bare)return `<div class="sbgrid">${cards}</div>`;
   return `<h4 class="sgsec">Signal Board <span class="mu" style="font-weight:400;font-size:12px">points over the next ${H}</span></h4><div class="sbgrid">${cards}</div>`;
 }
@@ -1909,10 +1683,10 @@ function fundingHTML(){
    own players marked: where the money works hardest.
    ============================================================ */
 const PRICE_BANDS={1:[0,4.5,5,99],2:[0,4.5,5,5.5,6.5,99],3:[0,5.5,7,8.5,10,99],4:[0,6,7.5,9,99]};
-function squadShapeHTML(g,h){
+function squadShapeHTML(g,h,posF){
   const mine=new Set(effectiveSquadIds(g).ids);
   const lbl=(a,b)=>a===0?`under £${b.toFixed(1)}`:b===99?`£${a.toFixed(1)}+`:`£${a.toFixed(1)}–${(b-0.1).toFixed(1)}`;
-  const cards=[1,2,3,4].filter(pos=>!S.lPos||S.lPos===pos).map(pos=>{
+  const cards=[1,2,3,4].filter(pos=>!posF||posF===pos).map(pos=>{
     const B=PRICE_BANDS[pos],rows=[];
     for(let i=0;i<B.length-1;i++){
       const ps=S.model.players.filter(p=>p.pos===pos&&p.price>=B[i]-1e-9&&p.price<B[i+1]-1e-9&&p.avail>0&&(p.xMins||0)>=60);
@@ -2291,6 +2065,10 @@ function sgPlayers(G,H,posF){
   const evs=(S.events||[]).filter(e=>e.finished).sort((a,b)=>b.id-a.id).slice(0,8);
   const nm=id=>{const p=M.players.find(x=>x.id===+id);return p?`<button class="pn" onclick="act('card',${p.id})">${esc(p.web_name)}</button>`:"—";};
   const threat=pool.filter(p=>p.minutes>=270&&p.pos>=2).sort((a,b)=>((b.xg90||0)+(b.xa90||0))-((a.xg90||0)+(a.xa90||0))).slice(0,10);
+  const moreReps=`<div class="repgrid">
+    ${rep("pvalue","wallet","Value by Price Band",`Points per £1m over the ${hzL(H)} by position and price band, regular starters only; the best value and top scorer in each band, with your players marked.`,squadShapeHTML(G,H,posF),{bare:true})}
+    ${rep("minwatch","clock-alert","Minutes Watch","Players the bookmakers rate likely to score who are not expected to play the full match: worth a check before the deadline.",S.oddsState==="ok"?minutesWatchHTML():sgEmpty("Needs the bookmakers' prices."),{bare:true})}
+  </div>`;
   return `${rep("scorers","trophy","Top Scorers By Position","Season total points, with points per game.",byPos((a,b)=>b.total-a.total,p=>p.total,p=>String(p.total),p=>`${esc(p.teamName)} · ${p.ppg.toFixed(1)} ppg`),{wide:true})}
   ${rep("pred","sparkles","Top Predicted By Position",`Model points over the ${hzL(H)}, available and doubtful players only.`,byPos((a,b)=>hPts(b,G,H)-hPts(a,G,H),p=>hPts(p,G,H),p=>hPts(p,G,H).toFixed(1),p=>`${esc(p.teamName)} · ${Math.round(p.xMins||0)}′`,avail),{wide:true})}
   <div class="repgrid">
@@ -2312,5 +2090,167 @@ function sgPlayers(G,H,posF){
     ${rep("popular","users","Most Captained, Selected and Bought","FPL's own figures for each finished gameweek, with that week's top scorer.",
       evs.length?`<div class="scroll"><table class="cgridt"><thead><tr><th>Week</th><th>Captained</th><th>Selected</th><th>Bought</th><th>Top scorer</th></tr></thead><tbody>
       ${evs.map(e=>`<tr><td>GW${e.id}</td><td>${nm(e.mostCapt)}</td><td>${nm(e.mostSel)}</td><td>${nm(e.mostIn)}</td><td>${nm(e.topEl)}${e.topPts?` <span class="mu">${e.topPts}</span>`:""}</td></tr>`).join("")}</tbody></table></div>`:sgEmpty("No finished gameweeks yet."))}
-  </div>`;
+  </div>${moreReps}`;
+}
+
+/* ============================================================
+   PLAYER DATA (12 Nov 2026, Andy): one table instead of the Buy / My
+   Squad / All / Value / Stats views. Show (All / Not yours / Yours) and
+   the filters replace the views; every position shares the base columns
+   (Player, Price, Signals, Next 5, Form, xFPL, xPts for the window, Value,
+   Own, xMins) and the stats that matter for the filtered position sit to
+   the right, chosen from the 19 Oct predictor study (research/predictors):
+     GK  clean-sheet chance and the market's, goals conceded, saves, goals
+         prevented, bonus (keepers: team strength and fixtures lead)
+     DEF clean-sheet chance and the market's, xGI/90 last 6 (attacking
+         full-backs rank top), DefCon %, BPS/90, bonus
+     MID xGI/90 last 6 (top over 5 GW), the market's goal chance, npxG/90,
+         xA/90, ICT, DefCon %, bonus
+     FWD xGI/90 last 6, the market's goal chance, npxG/90, xA/90 (ranks
+         12th), ICT (ranks 1st over 5 GW), shots on target/90, bonus
+   Colour no longer marks column types: the strongest values in each
+   column are tinted green (top quarter of the players listed), so the eye
+   goes to the good numbers in any column. Market columns show only when
+   the odds are in; the model's own figure is in the hover.
+   ============================================================ */
+const PD_POS_COLS={0:["xgi6","cs","dchit","bonus","total"],1:["cs","csmk","gc90","sv90","gprev","bonus"],
+  2:["cs","csmk","xgi6","dchit","bps","bonus"],3:["xgi6","goalmk","npxg","xa","ict","dchit","bonus"],
+  4:["xgi6","goalmk","npxg","xa","ict","sot","bonus"]};
+function pdCols(){
+  const g=VG(),r=lGwRange(),W=p=>ws(String(p.code||""),p.pos,S.lWin||38,p.price,teamMaxPrice(p.team))||{};
+  const L6=p=>{const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));return w?(w.xg90||0)+(w.xa90||0):null;};
+  const mk=S.oddsState==="ok"?(()=>{const m={};try{Object.values(oddsPlayers(g)||{}).forEach(x=>{if(x&&x.p)m[x.p.id]=x;});}catch(e){}return m;})():null;
+  const mcs=S.oddsState==="ok"?(()=>{try{return marketCS(g)||{};}catch(e){return {};}})():null;
+  const pct=v=>v==null?"—":Math.round(v*100)+"%",f1=v=>v==null?"—":v.toFixed(1),f2=v=>v==null?"—":v.toFixed(2);
+  const ownMode=S.pOwn||"all";
+  const own=p=>{if(ownMode==="all")return p.owned;const a=aroundOwn(p,ownMode);return a?a.k/a.n:null;};
+  const C={
+    price:{label:"Price",tip:"Price now, with tonight's predicted change (FPL's predictor, 100% = it changes)",val:p=>p.price,heat:0,
+      cell:p=>{const l=fplLive(p),c=l&&l.pcp!=null&&Math.abs(l.pcp)>=50?`<em class="${l.pcp>0?"up":"dn"}">${l.pcp>0?"▲":"▼"}${Math.round(Math.abs(l.pcp))}%</em>`:"";return `£${p.price.toFixed(1)}${c}`;}},
+    form:{label:"Form",tip:"Average points per game over the last 30 days",val:p=>p.form,cell:p=>p.form.toFixed(1),heat:1},
+    xfpl:{label:"xFPL",tip:`Model points, GW${g}`,val:p=>hPts(p,g,1),cell:p=>hPts(p,g,1).toFixed(1),heat:1,strong:1},
+    proj:{label:`xPts ${r.from===r.to?"GW"+r.from:r.from+"–"+r.to}`,tip:`Model points over GW${r.from}${r.to>r.from?" to GW"+r.to:""} (set the window in Filters)`,val:p=>hPts(p,r.from,r.count),cell:p=>hPts(p,r.from,r.count).toFixed(1),heat:1,strong:1},
+    value:{label:"Pts/£m",tip:"Model points over the window per £1m of price: where the money works hardest",val:p=>hPts(p,r.from,r.count)/p.price,cell:p=>(hPts(p,r.from,r.count)/p.price).toFixed(2),heat:1},
+    own:{label:ownMode==="all"?"Own %":ownMode==="league"?"Rivals":"Near rank",tip:ownMode==="all"?"Owned by all managers":ownMode==="league"?"Owned by your mini-league rivals":"Owned by the 50 managers ranked around you",
+      val:own,cell:p=>{if(ownMode==="all")return p.owned.toFixed(1)+"%";const a=aroundOwn(p,ownMode);return a?`${a.k}/${a.n}`:"—";},heat:0},
+    xmins:{label:"xMins",tip:"Expected minutes next gameweek",val:p=>p.xMins||0,cell:p=>Math.round(p.xMins||0)+"′"+minsTag(p),heat:1},
+    xgi6:{label:"xGI/90 L6",tip:"Expected goals plus assists per 90, last 6 matches (the study's best underlying number for midfielders and forwards)",val:L6,cell:p=>f2(L6(p)),heat:1},
+    cs:{label:"CS %",tip:"Model chance of a clean sheet next match",val:p=>csProbNext(p,g),cell:p=>pct(csProbNext(p,g)),heat:1},
+    csmk:{label:"CS mkt",tip:"Bookmakers' clean-sheet chance next match (margin removed)",val:p=>mcs?mcs[p.team]??null:null,cell:p=>pct(mcs?mcs[p.team]:null),heat:1,market:1},
+    goalmk:{label:"Goal mkt",tip:"Bookmakers' chance he scores next match, if he plays (the model's figure in the hover)",val:p=>mk&&mk[p.id]?mk[p.id].goal:null,
+      cell:p=>{const x=mk&&mk[p.id];return x&&x.goal!=null?`<span title="Model ${pct(modelChance(p,p.xg90||0))}">${pct(x.goal)}</span>`:"—";},heat:1,market:1},
+    npxg:{label:"npxG/90",tip:"Non-penalty expected goals per 90 (stats window)",val:p=>W(p).npxg90??null,cell:p=>f2(W(p).npxg90),heat:1},
+    xa:{label:"xA/90",tip:"Expected assists per 90 (stats window)",val:p=>W(p).xa90??null,cell:p=>f2(W(p).xa90),heat:1},
+    ict:{label:"ICT",tip:"FPL's ICT index, season total (ranks first for forwards over 5 gameweeks)",val:p=>p.ict||0,cell:p=>(p.ict||0).toFixed(0),heat:1},
+    sot:{label:"SoT/90",tip:"Shots on target per 90 (stats window)",val:p=>W(p).sot90??null,cell:p=>f2(W(p).sot90),heat:1},
+    dchit:{label:"DefCon %",tip:"Share of 60-minute games reaching the DefCon threshold (2 points)",val:p=>W(p).dcHit??null,cell:p=>pct(W(p).dcHit),heat:1},
+    bps:{label:"BPS/90",tip:"Bonus-point-system score per 90",val:p=>bpsPer90(p,W(p)),cell:p=>f1(bpsPer90(p,W(p))),heat:1},
+    bonus:{label:"Bonus",tip:"Bonus points this season",val:p=>p.bonus||0,cell:p=>p.bonus||0,heat:1},
+    total:{label:"Pts",tip:"Total points this season",val:p=>p.total,cell:p=>p.total,heat:1},
+    gc90:{label:"GC/90",tip:"Goals conceded per 90 (stats window); lower is better",val:p=>W(p).gc90??null,cell:p=>f2(W(p).gc90),heat:-1},
+    sv90:{label:"Saves/90",tip:"Saves per 90 (stats window)",val:p=>W(p).sv90??null,cell:p=>f2(W(p).sv90),heat:1},
+    gprev:{label:"G prev",tip:"Goals prevented against the xG on target he faced (stats window)",val:p=>W(p).gp??null,cell:p=>f1(W(p).gp),heat:1}
+  };
+  const pos=S.lPos||0;
+  const extra=PD_POS_COLS[pos].filter(k=>!C[k].market||S.oddsState==="ok");
+  return{C,base:["price","form","xfpl","proj","value","own","xmins"],extra,pos};
+}
+
+/* compact next-five fixtures: home in capitals, away in lower case */
+function fix5(p,g){
+  let h="";
+  for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];
+    if(!q||q.blank||!q.fixtures.length){h+=`<i class="fx5 bl" title="GW${e}: no fixture">–</i>`;continue;}
+    h+=`<span class="fx5s">${q.fixtures.map(f=>{const d=posDiff(p,f),[b,c]=fdrCol(d),o=String(f.opp).slice(0,3);
+      return `<i class="fx5" style="background:${b};color:${c}" title="GW${e}: ${esc(f.oppName||f.opp)} ${f.home?"home":"away"} · difficulty ${d}">${esc(f.home?o.toUpperCase():o.toLowerCase())}</i>`;}).join("")}</span>`;}
+  return `<span class="fx5r">${h}</span>`;
+}
+function pdRows(){
+  const g=VG(),mine=new Set(effectiveSquadIds(g).ids),q=(S.lSearch||"").toLowerCase();
+  let a=S.model.players.filter(p=>(!S.lPos||p.pos===S.lPos)&&(!S.lTeam||p.team===S.lTeam)&&p.price<=(S.lMax||16)+.001
+    &&(!q||(p.web_name+" "+p.first+" "+p.last).toLowerCase().includes(q)));
+  const show=S.pShow||"all";
+  if(show==="mine")a=a.filter(p=>mine.has(p.id));
+  if(show==="out")a=a.filter(p=>!mine.has(p.id));
+  if(S.pStarters)a=a.filter(p=>p.avail>0&&(p.xMins||0)>=60);
+  if(S.starOnly)a=a.filter(p=>S.stars.includes(p.id));
+  if(S.iconF.length)a=a.filter(p=>{const ic=signals(p,g).map(x=>x[0]);return S.iconF.every(k=>ic.includes(k));});
+  return{g,mine,a};
+}
+function playerDataHTML(){
+  if(!S.model)return "";
+  const{g,mine,a}=pdRows(),D=pdCols(),r=lGwRange();
+  const cols=[...D.base,...D.extra];
+  /* sort: any column; name sorts A-Z */
+  const key=S.sortKey==="name"||D.C[S.sortKey]?S.sortKey:"proj",dir=S.sortDir||"desc";
+  const sv=p=>key==="name"?p.web_name:(D.C[key].val(p)??-1e9);
+  const rows=a.slice().sort((x,y)=>{const A=sv(x),B=sv(y);if(typeof A==="string")return dir==="asc"?A.localeCompare(B):B.localeCompare(A);return dir==="asc"?A-B:B-A;});
+  /* the strongest quarter of each column, over every player listed */
+  const heat={};cols.forEach(k=>{const c=D.C[k];if(!c.heat)return;
+    const vs=rows.map(c.val).filter(v=>v!=null&&isFinite(v)).sort((x,y)=>x-y);if(vs.length<8)return;
+    heat[k]={vs,dir:c.heat};});
+  const tint=(k,v)=>{const h=heat[k];if(!h||v==null||!isFinite(v))return "";
+    let lo=0,hi=h.vs.length;while(lo<hi){const m=(lo+hi)>>1;if(h.vs[m]<v)lo=m+1;else hi=m;}
+    let pc=lo/h.vs.length;if(h.dir<0)pc=1-pc;
+    /* top quarter tinted, the top tenth more strongly */
+    return pc>=0.9?` style="background:rgba(61,220,151,.20);color:#fff"`:pc>=0.75?` style="background:rgba(61,220,151,.08)"`:"";};
+  const lim=S.pdLimit||PD_PAGE,ticks=S.pTicks||[];
+  const th=(k,label,tip,cls)=>`<th class="${cls||""}${key===k?" act":""}" onclick="act('sort','${k}')" title="${esc(tip||label)}">${label}${key===k?(dir==="desc"?" ↓":" ↑"):""}</th>`;
+  const posName={0:"Key stats",1:"Keeper stats",2:"Defender stats",3:"Midfielder stats",4:"Forward stats"}[D.pos];
+  const head=`<tr class="grp"><th colspan="5" class="gl">Player</th><th colspan="3">Model</th><th colspan="3">Value and minutes</th><th colspan="${D.extra.length}" class="gpos">${posName}</th><th></th></tr>
+    <tr><th class="tk"></th>${th("name","Player","Name, club and position","nm")}${th("price",D.C.price.label,D.C.price.tip)}<th title="Signals now: hover each for its rule">Signals</th><th title="Next five fixtures for his position: green easy, red hard; capitals home, lower case away">Next 5</th>
+    ${["form","xfpl","proj","value","own","xmins"].map(k=>th(k,D.C[k].label,D.C[k].tip,D.C[k].strong?"strong":"")).join("")}
+    ${D.extra.map(k=>th(k,D.C[k].label,D.C[k].tip,"pos")).join("")}<th></th></tr>`;
+  const body=rows.slice(0,lim).map(p=>{const on=ticks.includes(p.id),own=mine.has(p.id),sg=signals(p,g);
+    return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
+      <td class="tk"><input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></td>
+      <td class="nm"><span class="pcell">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}<span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${own?'<span class="ytag">yours</span>':""}</span>
+        <span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}</span></span></span></td>
+      <td class="fig">${D.C.price.cell(p)}</td>
+      <td class="sgc">${sg.length?`<span class="sigcell">${sg.map(([k,t])=>sigTile(k,t)).join("")}</span>`:""}</td>
+      <td>${fix5(p,g)}</td>
+      ${["form","xfpl","proj","value","own","xmins"].map(k=>`<td class="fig${D.C[k].strong?" strong":""}"${tint(k,D.C[k].val(p))}>${D.C[k].cell(p)}</td>`).join("")}
+      ${D.extra.map(k=>`<td class="fig"${tint(k,D.C[k].val(p))}>${D.C[k].cell(p)}</td>`).join("")}
+      <td class="acts"><button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="Shortlist" aria-pressed="${S.stars.includes(p.id)}">★</button>${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to the Planner" aria-label="Add ${esc(p.web_name)} to the Planner">+</button>`}</td></tr>`;}).join("");
+  const more=rows.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${rows.length} players</span>
+    <button onclick="act('pdmore')">Show ${Math.min(PD_PAGE,rows.length-lim)} more</button><button onclick="act('pdall')">Show all ${rows.length}</button></div>`:
+    (lim>PD_PAGE&&rows.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${rows.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
+  return pdHeadHTML(rows.length,r)+(S.starOnly&&!S.stars.length?`<div class="panel"><div class="pbody"><p class="note" style="margin:0">No shortlisted players yet. Tap ★ on any row to add one.</p></div></div>`:
+    `<div class="panel pdpanel"><div class="scroll tallscroll pdt"><table><thead>${head}</thead><tbody>${body||`<tr><td colspan="${12+D.extra.length}" class="note" style="padding:14px">No players match these filters.</td></tr>`}</tbody></table></div>${more}</div>`)
+    +`<p class="note pdkey">Green marks the strongest quarter of each column among the players listed (brighter: the top tenth). Fixtures: capitals at home, lower case away.${S.oddsState==="ok"?" Market columns are the bookmakers' figures with the margin removed.":""}</p>`;
+}
+function pdHeadHTML(n,r){
+  const seg=(cur,list,action,q)=>`<span class="hz">${list.map(([k,l])=>`<button class="${cur===k?"on":""}" aria-pressed="${cur===k}" onclick="act('${action}',${q?`'${k}'`:k})">${l}</button>`).join("")}</span>`;
+  const ticks=S.pTicks||[],g=S.model.next.id;
+  const win=r.count===1&&r.from===g?1:r.count===3&&r.from===g?3:r.count===5&&r.from===g?5:0;
+  const team=S.lTeam?S.model.teams.find(t=>t.id===S.lTeam):null;
+  const chips=[];
+  if(S.lSearch)chips.push([`“${esc(S.lSearch)}”`,`act('lsearch','')`]);
+  if(team)chips.push([`Club: ${esc(team.name)}`,`act('lteam',0)`]);
+  if((S.lMax||16)<16)chips.push([`Up to £${(+S.lMax).toFixed(1)}`,`act('lmax',16)`]);
+  if(S.pStarters)chips.push([`Available starters`,`act('pstart')`]);
+  if(S.starOnly)chips.push([`Shortlist`,`act('staronly')`]);
+  S.iconF.forEach(k=>chips.push([`${SIGNAL[k][2]}`,`act('iconf','${k}')`]));
+  if(!win)chips.push([`xPts GW${r.from}–${r.to}`,`act('pwin',5)`]);
+  if((S.lWin||38)!==38)chips.push([`Stats: last ${S.lWin}`,`act('lwin',38)`]);
+  const nf=chips.length;
+  return `<div class="pagetabs"><h1>Player Data <span class="pdcount">${n} players</span></h1>
+      <span style="display:flex;gap:8px;align-items:center">${ticks.length?`<button class="pri" onclick="act('pcmp')">Compare ${ticks.length}</button><button onclick="act('tickclear')">Clear</button>`:`<span class="note">Tick up to 5 to compare</span>`}</span></div>
+    <div class="pdbar">
+      <label class="pdsearch">${lic("search",15)}<input id="srch-l" placeholder="Search players" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" aria-label="Search players"></label>
+      ${seg(S.pShow||"all",[["all","All"],["out","Not yours"],["mine","Yours"]],"pshow",true)}
+      ${seg(S.lPos||0,[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],"lpos")}
+      ${seg(win,[[1,"1 GW"],[3,"3 GW"],[5,"5 GW"]],"pwin")}
+      <button class="pdfbtn${S.pdMore?" on":""}" onclick="act('pdmorefilters')" aria-expanded="${!!S.pdMore}">${lic("chevron-down",14)} Filters${nf?` <b>${nf}</b>`:""}</button>
+    </div>
+    ${S.pdMore?`<div class="pdmorebox">
+      <div><span class="pdl">Club</span><select onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.slice().sort((x,y)=>String(x.name).localeCompare(y.name)).map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select></div>
+      <div><span class="pdl">Max price</span>${stepperInput("lmax",S.lMax||16,{min:3.5,max:16,step:0.1,big:1,dp:1,w:56})}</div>
+      <div><span class="pdl">Projection window</span><span style="display:flex;align-items:center;gap:5px">${stepperInput("lgwfrom",r.from,{min:1,max:38,step:1,big:5,w:40})}<span class="note">to</span>${stepperInput("lgwto",r.to,{min:r.from,max:38,step:1,big:5,w:40})}</span></div>
+      <div><span class="pdl">Stats from</span>${seg(S.lWin||38,[[6,"Last 6"],[10,"Last 10"],[38,"Season"]],"lwin")}</div>
+      <div><span class="pdl">Own column</span>${seg(S.pOwn||"all",[["all","Everyone"],["league","Rivals"],["rank","Near rank"]],"pown",true)}</div>
+      <div><span class="pdl">Only</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="${S.pStarters?"on":""} chipbtn" onclick="act('pstart')">Available starters</button><button class="${S.starOnly?"on":""} chipbtn" onclick="act('staronly')">★ Shortlist${S.stars.length?" ("+S.stars.length+")":""}</button></span></div>
+      <div class="wide"><span class="pdl">Carrying signal</span><span class="pdsig">${SIG_ORDER.map(k=>`<button class="fbtn fbtn-icon ${S.iconF.includes(k)?"on":""}" onclick="act('iconf','${k}')" title="${esc(SIGNAL[k][2]+": "+SIG_RULE[k](S.horizon||1))}" aria-pressed="${S.iconF.includes(k)}">${sigTile(k,SIGNAL[k][2])}</button>`).join("")}</span></div>
+    </div>`:""}
+    ${nf?`<div class="pdchips">${chips.map(([l,a])=>`<button class="pdchip" onclick="${a}">${l} ${lic("x",12)}</button>`).join("")}<button class="pdclear" onclick="act('pdreset')">Clear all</button></div>`:""}`;
 }

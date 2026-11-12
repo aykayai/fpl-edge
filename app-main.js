@@ -45,10 +45,14 @@ function act(k,a,b){
     case"dofund":{const c=bestCombo([a,b],Math.max(3,S.weekH||1),6);if(!c||c.picks.length<2)break;
       let ok=true;c.picks.forEach(m=>{if(ok&&!applySwap(m.out.id,m.inn.id))ok=false;});
       if(ok)toast("Both transfers made");break;}
-    case"pview":S.pView=a;S.pdLimit=PD_PAGE;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
-    case"ph":S.pH=[1,3,5].includes(+a)?+a:1;LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
-    case"paround":S.pAround=a==="rank"?"rank":"league";LS.set("hub",{v:S.pView,h:S.pH,ar:S.pAround});break;
-    case"hubsort":if((S.hubSort||"pts")===a)S.hubDir=(S.hubDir||"desc")==="desc"?"asc":"desc";else{S.hubSort=a;S.hubDir=a==="name"?"asc":"desc";}break;
+    /* Player Data (12 Nov 2026) */
+    case"pshow":S.pShow=["all","out","mine"].includes(a)?a:"all";S.pdLimit=PD_PAGE;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
+    case"pown":S.pOwn=["all","league","rank"].includes(a)?a:"all";LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
+    case"pstart":S.pStarters=!S.pStarters;break;
+    case"pdmorefilters":S.pdMore=!S.pdMore;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
+    case"pwin":{const n=[1,3,5].includes(+a)?+a:5,g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=Math.min(38,g0+n-1);break;}
+    case"pdreset":S.lSearch="";S.lTeam=0;S.lMax=16;S.pStarters=false;S.starOnly=false;S.iconF=[];S.lWin=38;
+      {const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=Math.min(38,g0+4);}break;
     case"tick":{const t=S.pTicks||[];S.pTicks=t.includes(a)?t.filter(x=>x!==a):(t.length>=5?t:[...t,a]);
       if(t.length>=5&&!t.includes(a))toast("Up to five players at a time");if(!S.pTicks.length)S.pCmp=false;break;}
     case"tickclear":S.pTicks=[];S.pCmp=false;break;
@@ -350,7 +354,8 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   S.rivals=LS.get("rivals")||[];
   S.leagueId=LS.get("leagueId")||"391690";
   S.weekH=LS.get("weekh")||1;
-  {const hb=LS.get("hub")||{};S.pView=hb.v||"all";S.pH=hb.h||1;S.pAround=hb.ar||"league";S.pTicks=[];}
+  {const pd=LS.get("pd")||{};S.pShow=pd.show||"all";S.pOwn=pd.own||"all";S.pdMore=!!pd.more;}
+  S.pTicks=[];
   {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];S.sgTab=sg.tab||"transfers";}
   /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
      quota on some browsers; the server is close now) and everything odds,

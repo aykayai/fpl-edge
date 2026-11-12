@@ -106,7 +106,8 @@ try {
   const doc = w.document;
   /* 25 Oct 2026: Signals has four tabs (Transfers, My Squad, Teams, Players) */
   const showTab = t => { S.tab = "signals"; g.act("sgtab", t); };
-  const WANT = { transfers: 11, squad: 9, teams: 6, players: 8 };
+  /* 12 Nov 2026: Value by Price Band and Minutes Watch moved to Players */
+  const WANT = { transfers: 11, squad: 9, teams: 6, players: 10 };
   let allText = "";
   for (const [t, n] of Object.entries(WANT)) {
     showTab(t);
