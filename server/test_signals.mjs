@@ -184,7 +184,6 @@ try {
   /* ---------- 1d. Heating Up / Cooling Off by position (12 Nov 2026) ---------- */
   const G0 = S.model.next.id;
   const flags = S.model.players.map(p => ({ p, k: g.signals(p, G0).map(x => x[0]) }));
-  check(!flags.some(x => x.p.pos === 4 && x.k.includes("heat")), "no forward carries Heating Up");
   /* independent: rebuild each club's xG against per match from the raw match files */
   const teamsRaw = csv(await get(`/data/insights/${season}/teams.csv`));
   const shortByCode = {}; teamsRaw.forEach(t => { shortByCode[String(Math.round(Number(t.code)))] = t.short_name; });
@@ -200,6 +199,18 @@ try {
   }
   const tight = short => { const v = (xga[short] || []).sort((x, y) => x[0] - y[0]).map(x => x[1]); if (v.length < 6) return false;
     const sAvg = v.reduce((a, b) => a + b, 0) / v.length, l = v.slice(-4).reduce((a, b) => a + b, 0) / 4; return l <= 0.7 * sAvg && sAvg - l >= 0.3; };
+  const xgf = {};
+  for (let gw = 1; gw <= 38; gw++) {
+    let ms; try { ms = csv(await get(`/data/insights/${season}/By%20Gameweek/GW${gw}/matches.csv`)); } catch { continue; }
+    ms.filter(m => seenM.has(m.match_id)).forEach(m => {
+      const h = shortByCode[String(Math.round(+m.home_team))], a = shortByCode[String(Math.round(+m.away_team))];
+      if (h && !(xgf[h] = xgf[h] || []).some(x => x[2] === m.match_id)) xgf[h].push([gw, +m.home_expected_goals_xg, m.match_id]);
+      if (a && !(xgf[a] = xgf[a] || []).some(x => x[2] === m.match_id)) xgf[a].push([gw, +m.away_expected_goals_xg, m.match_id]); });
+  }
+  const firing = short => { const v = (xgf[short] || []).sort((x, y) => x[0] - y[0]).map(x => x[1]); if (v.length < 6) return false;
+    const sAvg = v.reduce((a, b) => a + b, 0) / v.length, l = v.slice(-4).reduce((a, b) => a + b, 0) / 4; return l >= 1.3 * sAvg && l - sAvg >= 0.3; };
+  const hotFwds = flags.filter(x => x.p.pos === 4 && x.k.includes("heat")), wrongFwd = hotFwds.filter(x => !firing(x.p.teamName));
+  check(wrongFwd.length === 0, `forwards flagged Heating Up all play for a team whose xG rose (${hotFwds.length} flagged)`, wrongFwd.slice(0, 5).map(x => x.p.web_name + " " + x.p.teamName).join(", "));
   const hotDefs = flags.filter(x => (x.p.pos === 1 || x.p.pos === 2) && x.k.includes("heat"));
   const wrongHot = hotDefs.filter(x => !tight(x.p.teamName));
   check(wrongHot.length === 0, `keepers and defenders flagged Heating Up all play for a tightening defence (${hotDefs.length} flagged)`, wrongHot.slice(0, 5).map(x => x.p.web_name + " " + x.p.teamName).join(", "));
