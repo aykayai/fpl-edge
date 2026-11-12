@@ -59,8 +59,8 @@ const SIG_RULE={
   rise:()=>"FPL's predictor: 100%+ progress to a rise tonight",
   fall:()=>"FPL's predictor: 100%+ progress to a fall tonight",
   mins:()=>"Doubt, out, or under 60 expected minutes",
-  heat:()=>"Chances rising: last-4 xGI/90 at least 1.5x his season rate (and +0.15)",
-  cool:()=>"Chances falling: last-4 xGI/90 at most 0.6x his season rate (and -0.15)",
+  heat:()=>"Heating Up. Midfielders: last-4 xGI/90 at least 1.5x his season rate. Keepers and defenders: his team's xG against over the last 4 at most 0.7x its season rate",
+  cool:()=>"Cooling Off. Midfielders: last-4 xGI/90 at most 0.6x his season rate, or his DefCon hit rate down 30 points. Keepers: goals prevented over the last 4 at least 0.3 per 90 below his season rate",
   rival:()=>"Owned by managers around you, not by you",
   diff:()=>"Under 8% owned and predicted 3.5+ pts",
   pen:()=>"First-choice penalty taker",
@@ -101,19 +101,56 @@ function sellMap(h){
   try{const m=new Map();bestSwaps(60,h).forEach(x=>{if(x.gain>=2&&!m.has(x.out.id))m.set(x.out.id,x);});return m;}
   finally{_sellBusy=false;}
 }
-/* Momentum: this season's matches only, raw per-90s, as in the study */
+/* Momentum (Heating Up / Cooling Off), every position, 12 Nov 2026
+   (Andy). Rules kept only where the 2025-26 backtest held in both halves
+   of the season (next-5 points against a fit on season points per game and
+   fixtures; scratchpad momentum_all.py):
+     GK, DEF  Heating Up: his team's xG against per match over its last 4
+              at most 0.7x its season rate and 0.3 lower (+2.1, n=125 DEF;
+              +2.2 GK). No Cooling Off for defenders (nothing held).
+     GK       Cooling Off: his goals prevented per 90 over the last 4 at
+              least 0.3 below his season rate (-1.5, n=88).
+     MID      Heating Up: xGI/90 last 4 >= 1.5x season and +0.15 (+1.6).
+              Cooling Off: xGI/90 last 4 <= 0.6x season and -0.15 (-2.1),
+              or his DefCon hit rate in the last 4 at least 0.30 below his
+              season rate (-2.2, n=47).
+     FWD      none: Heating Up was noise (+0.8 +/-1.3) and Cooling Off went
+              the wrong way (+2.4).
+   This season's matches only; at least 6 appearances and 450 minutes, and
+   180 minutes in the last 4. `before` limits the matches to earlier
+   gameweeks (the Status page grades past weeks with it). */
 const _momCache=new Map();
-function momentum(p){
-  if(p.pos<3)return null;
-  if(_momCache.has(p.code)&&_momCache.get(p.code).h===S.hist)return _momCache.get(p.code).v;
-  const rows=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now"&&r.mins>0);
-  const per=rs=>{const m=rs.reduce((a,r)=>a+r.mins,0);return m>0?rs.reduce((a,r)=>a+(r.xg||0)+(r.xa||0),0)*90/m:null;};
+function teamXgaSeries(short,before){
+  const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
+  return Object.values(S.teamMatch||{}).filter(m=>m.tag==="now"&&(!before||m.gw<before)&&(key[m.h]===short||key[m.a]===short)
+      &&(m.hxg>0||m.axg>0)).sort((a,b)=>a.gw-b.gw).map(m=>key[m.h]===short?m.axg:m.hxg);
+}
+function momentum(p,before){
+  if(p.pos===4)return null;
+  const ck=p.code+"|"+(before||0);
+  const hit=_momCache.get(ck);if(hit&&hit.h===S.hist&&hit.m===S.teamMatch)return hit.v;
+  const rows=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now"&&r.mins>0&&(!before||r.gw<before));
+  const l4=rows.slice(-4),mins=rs=>rs.reduce((a,r)=>a+r.mins,0);
+  const per=(rs,f)=>{const m=mins(rs);return m>0?rs.reduce((a,r)=>a+f(r),0)*90/m:null;};
   let v=null;
-  const l4=rows.slice(-4);
-  if(rows.length>=6&&rows.reduce((a,r)=>a+r.mins,0)>=450&&l4.reduce((a,r)=>a+r.mins,0)>=180){
-    const sea=per(rows),last=per(l4);
-    v={sea,last,heat:last>=1.5*sea&&last-sea>=0.15,cool:last<=0.6*sea&&sea-last>=0.15};}
-  _momCache.set(p.code,{h:S.hist,v});return v;
+  if(rows.length>=6&&mins(rows)>=450&&mins(l4)>=180){
+    v={heat:false,cool:false,why:""};
+    if(p.pos===3){
+      const sea=per(rows,r=>(r.xg||0)+(r.xa||0)),last=per(l4,r=>(r.xg||0)+(r.xa||0));
+      const full=rs=>rs.filter(r=>r.mins>=60),hr=rs=>full(rs).length?full(rs).filter(r=>(r.dc||0)>=12).length/full(rs).length:null;
+      const dS=hr(rows),d4=hr(l4);
+      if(last>=1.5*sea&&last-sea>=0.15){v.heat=true;v.why=`last-4 xGI/90 ${last.toFixed(2)} vs season ${sea.toFixed(2)}`;}
+      else if(last<=0.6*sea&&sea-last>=0.15){v.cool=true;v.why=`last-4 xGI/90 ${last.toFixed(2)} vs season ${sea.toFixed(2)}`;}
+      else if(dS!=null&&d4!=null&&dS-d4>=0.30){v.cool=true;v.why=`DefCon in ${Math.round(d4*100)}% of the last 4 vs ${Math.round(dS*100)}% this season`;}
+    }else{
+      const tx=teamXgaSeries(p.teamName,before);
+      if(tx.length>=6){const s=tx.reduce((a,x)=>a+x,0)/tx.length,l=tx.slice(-4).reduce((a,x)=>a+x,0)/4;
+        if(l<=0.7*s&&s-l>=0.3){v.heat=true;v.why=`${p.teamName} xG against ${l.toFixed(2)} a match over the last 4 vs ${s.toFixed(2)} this season`;}}
+      if(p.pos===1&&!v.heat){const gs=per(rows,r=>r.gp||0),g4=per(l4,r=>r.gp||0);
+        if(gs!=null&&g4!=null&&gs-g4>=0.3){v.cool=true;v.why=`goals prevented ${sgn1(g4)} per 90 over the last 4 vs ${sgn1(gs)} this season`;}}
+    }
+  }
+  _momCache.set(ck,{h:S.hist,m:S.teamMatch,v});return v;
 }
 /* Rival Threat: how many of the mini-league rivals own each player */
 let _rivCache=null;
@@ -141,8 +178,8 @@ function signals(p,g,noSell,hh){
   if(p.status!=="u"&&((p.avail<1&&(mine||(p.roleMins||0)>=60))||((p.roleMins||0)>=60&&(p.xMins||0)<60)))
     out.push(["mins",p.avail<1?`${p.avail>0?Math.round(p.avail*100)+"% chance":"Out"}${p.news?" · "+p.news:""}`:`${Math.round(p.xMins||0)} expected minutes`]);
   const mo=momentum(p);
-  if(mo&&mo.heat)out.push(["heat",`Heating Up: last-4 xGI/90 ${mo.last.toFixed(2)} vs season ${mo.sea.toFixed(2)}`]);
-  if(mo&&mo.cool)out.push(["cool",`Cooling Off: last-4 xGI/90 ${mo.last.toFixed(2)} vs season ${mo.sea.toFixed(2)}`]);
+  if(mo&&mo.heat)out.push(["heat",`Heating Up: ${mo.why}`]);
+  if(mo&&mo.cool)out.push(["cool",`Cooling Off: ${mo.why}`]);
   const R=rivalOwn();
   if(R&&R.n&&!mine){const k=R.own[p.id]||0;
     if(k>=Math.max(2,Math.ceil(R.n*0.3)))out.push(["rival",`Owned by ${k} of ${R.n} rivals, not you`]);}

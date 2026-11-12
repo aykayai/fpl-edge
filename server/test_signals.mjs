@@ -90,7 +90,7 @@ async function runApp() {
   w.setInterval = () => 0;
   w.console = { log() {}, warn() {}, error() {} };
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
-  vm.runInContext(`window.__g={get S(){return S},render,act}`, ctx);
+  vm.runInContext(`window.__g={get S(){return S},render,act,signals}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
   while (Date.now() < until && !(S.model && !S.loading)) await new Promise(r => setTimeout(r, 250));
@@ -179,6 +179,30 @@ try {
   const m = latest2 ? /GW(\d+): you \d+ · average (\d+)/.exec(latest2.textContent) : null;
   check(!!lastFin && !!m && +m[1] === Math.round(+lastFin.id) && +m[2] === Math.round(+lastFin.average_entry_score),
     "score vs game: latest finished week's average matches gameweek_summaries", `page ${latest2 ? latest2.textContent : "none"} vs raw GW${lastFin && lastFin.id} ${lastFin && lastFin.average_entry_score}`);
+
+  /* ---------- 1d. Heating Up / Cooling Off by position (12 Nov 2026) ---------- */
+  const G0 = S.model.next.id;
+  const flags = S.model.players.map(p => ({ p, k: g.signals(p, G0).map(x => x[0]) }));
+  check(!flags.some(x => x.p.pos === 4 && (x.k.includes("heat") || x.k.includes("cool"))), "no forward carries Heating Up or Cooling Off");
+  check(!flags.some(x => x.p.pos === 2 && x.k.includes("cool")), "no defender carries Cooling Off");
+  /* independent: rebuild each club's xG against per match from the raw match files */
+  const teamsRaw = csv(await get(`/data/insights/${season}/teams.csv`));
+  const shortByCode = {}; teamsRaw.forEach(t => { shortByCode[String(Math.round(Number(t.code)))] = t.short_name; });
+  /* every league match already played this season (it has xG), each once */
+  const xga = {}, seenM = new Set();
+  for (let gw = 1; gw <= 38; gw++) {
+    let ms; try { ms = csv(await get(`/data/insights/${season}/By%20Gameweek/GW${gw}/matches.csv`)); } catch { continue; }
+    ms.filter(m => /-prem-/.test(m.match_id) && (+m.home_expected_goals_xg > 0 || +m.away_expected_goals_xg > 0) && !seenM.has(m.match_id)).forEach(m => {
+      seenM.add(m.match_id);
+      const h = shortByCode[String(Math.round(+m.home_team))], a = shortByCode[String(Math.round(+m.away_team))];
+      if (h) (xga[h] = xga[h] || []).push([gw, +m.away_expected_goals_xg]);
+      if (a) (xga[a] = xga[a] || []).push([gw, +m.home_expected_goals_xg]); });
+  }
+  const tight = short => { const v = (xga[short] || []).sort((x, y) => x[0] - y[0]).map(x => x[1]); if (v.length < 6) return false;
+    const sAvg = v.reduce((a, b) => a + b, 0) / v.length, l = v.slice(-4).reduce((a, b) => a + b, 0) / 4; return l <= 0.7 * sAvg && sAvg - l >= 0.3; };
+  const hotDefs = flags.filter(x => (x.p.pos === 1 || x.p.pos === 2) && x.k.includes("heat"));
+  const wrongHot = hotDefs.filter(x => !tight(x.p.teamName));
+  check(wrongHot.length === 0, `keepers and defenders flagged Heating Up all play for a tightening defence (${hotDefs.length} flagged)`, wrongHot.slice(0, 5).map(x => x.p.web_name + " " + x.p.teamName).join(", "));
 
   /* ---------- 2. behaviour ---------- */
   const squadNames = new Set(S.model.players.filter(p => (S.squad || []).includes(p.id)).map(p => p.web_name));
