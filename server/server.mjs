@@ -20,6 +20,7 @@
 import { createServer } from "node:http";
 import { gzipSync } from "node:zlib";
 import { readFile, stat, mkdir, writeFile, rename } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, dirname, resolve, sep, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG } from "./lib/config.mjs";
@@ -236,7 +237,7 @@ async function handle(req, res) {
       const name = path.slice("/data/feeds/".length);
       /* predictions.json (live pre-deadline snapshots) and backtest.json (the
          labelled GW1-6 backtest series) live in the snapshot dir */
-      if (!/^(actuals|rivals|predictions|backtest|neighbours)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
+      if (!/^(actuals|rivals|predictions|backtest|neighbours|dc-doubles)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
       const full = join(/^(predictions|backtest)/.test(name) ? SNAP_DIR() : FEEDS_DIR(), name);
       let mtime = "";
       try { mtime = (await stat(full)).mtime.toISOString(); } catch { /* 404s below */ }
@@ -331,6 +332,14 @@ async function main() {
      include the start-up pass too, or a new upstream commit can be pulled into
      the state dir mid-test (seen 12 Oct 2026). */
   const frozen = CONFIG.TICK_MS >= 3600000;
+  /* A state dir holding a .frozen file is a test fixture: no server, however
+     started, may refresh it. On 12 Nov 2026 a server started on the shared
+     test state without SIGNALS_TICK_MS replaced its dataset, bootstrap and
+     feeds with live data, and test_rules began failing on unchanged code. */
+  if (existsSync(join(CONFIG.STATE_DIR, ".frozen"))) {
+    log("server", "state dir is marked .frozen: no upstream fetches");
+    return;
+  }
   setTimeout(() => {
     if (!frozen) tick();
     setInterval(tick, CONFIG.TICK_MS);
