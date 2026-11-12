@@ -89,9 +89,29 @@ try {
   const clean = snapshot();
 
   /* ---------- F26 selling price ---------- */
+  /* The rule itself, on the estimate path (no recorded purchase prices): the
+     app then takes the purchase price as today's price less the season's
+     change. With the tracker feed loaded the app reads each owned player's
+     recorded price instead, so the feed is hidden for these four. */
+  const tracker0 = S.tracker;
+  if (tracker0) S.tracker = { ...tracker0, purchase: null };
   for (const [bought, now, want] of [[5.0, 5.5, 5.2], [5.0, 5.1, 5.0], [5.0, 4.8, 4.8], [7.0, 7.4, 7.2]]) {
     const got = g.sellPrice({ price: now, seasonChange: r1(now - bought) });
     check(got === want && officialSell(bought, now) === want, `F26 bought ${bought} now ${now} sells ${want}`, `app ${got}`);
+  }
+  S.tracker = tracker0;
+  /* the purchase price the feed records for a player (FPL's own transfer
+     history), else the estimate: data the app reads, not its arithmetic */
+  const paidOf = p => {
+    const pm = S.tracker && S.tracker.purchase && S.tracker.purchase.players;
+    const r = pm && (pm[p.id] || pm[String(p.id)]);
+    return r ? r.paid : (pm ? p.price : r1(p.price - (p.seasonChange || 0)));
+  };
+  {
+    const pm = S.tracker && S.tracker.purchase && S.tracker.purchase.players;
+    const owned = pm && S.model.players.find(p => pm[p.id] || pm[String(p.id)]);
+    if (owned) check(g.sellPrice(owned) === officialSell(paidOf(owned), owned.price),
+      `F26 a squad player sells from his recorded purchase price (${owned.web_name}: paid ${paidOf(owned)}, now ${owned.price})`, `app ${g.sellPrice(owned)}`);
   }
   const sq = g.squadPlayers();
   const P = S.model.players;
@@ -105,7 +125,7 @@ try {
   const i1 = cheapSwap(o1);
   const bank0 = g.planBank();
   const ok1 = g.applySwap(o1.id, i1.id);
-  const wantBank = r1(bank0 + officialSell(r1(o1.price - (o1.seasonChange || 0)), o1.price) - i1.price);
+  const wantBank = r1(bank0 + officialSell(paidOf(o1), o1.price) - i1.price);
   check(ok1 === true && Math.abs(g.planBank() - wantBank) < 0.001, "F26 the bank after a sale uses the selling price", `bank ${g.planBank()} want ${wantBank}`);
   restore(clean); g.render();
 
@@ -147,10 +167,14 @@ try {
   check(g.planFT(Math.min(38, NEXT + 9)) === 5, "F19 free transfers stop at 5", `planFT ${g.planFT(NEXT + 9)}`);
 
   /* ---------- F61 + F19: a Wildcard week is free and unlimited ---------- */
-  const half = NEXT >= 20 ? "2" : "1";
-  const wcWeek = NEXT;
+  /* the next week if a Wildcard is still available for it, else the first
+     week of the second half (the first-half Wildcard may already be played,
+     as Andy's was in GW8) */
+  let half = NEXT >= 20 ? "2" : "1", wcWeek = NEXT;
+  if (g.chipRuleBreak("wildcard" + half, wcWeek) && half === "1") { half = "2"; wcWeek = Math.max(NEXT, 20); }
   if (!g.chipRuleBreak("wildcard" + half, wcWeek)) {
     S.chips = { ...S.chips, ["wildcard" + half]: wcWeek };
+    S.startGW = wcWeek;
     const used3 = [];
     for (const o of sq.filter(p => p.pos >= 2).slice(0, 4)) { const i = cheapSwap(o, used3); if (!i) continue; used3.push(i.id); g.applySwap(o.id, i.id); }
     check(g.hitCost(wcWeek) === 0, "F19 a Wildcard week costs nothing however many transfers", `transfers ${g.transfersIn(wcWeek)} hit ${g.hitCost(wcWeek)}`);
@@ -158,7 +182,7 @@ try {
     /* since the redesign (wave 1) free transfers sit on the Budget card */
     const ftStat = [...doc.querySelectorAll(".fc")].find(s => /Budget/i.test(s.textContent));
     check(ftStat && /Unlimited FT/.test(ftStat.textContent) && /Wildcard this week/.test(ftStat.textContent), "F61 a Wildcard week shows Unlimited", ftStat && ftStat.textContent.replace(/\s+/g, " "));
-  } else check(false, "F61 setup: Wildcard could be planned for the next week", g.chipRuleBreak("wildcard" + half, wcWeek));
+  } else check(false, `F61 setup: a Wildcard could be planned for GW${wcWeek}`, g.chipRuleBreak("wildcard" + half, wcWeek));
   restore(clean); g.render();
 
   /* ---------- F47 chip rules ---------- */
