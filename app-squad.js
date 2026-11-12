@@ -48,6 +48,7 @@ const SIGNAL={
   mins:["clock-alert","#FFB020","Minutes Risk"],
   heat:["flame","#4ADE80","Heating Up"],
   cool:["snowflake","#FF5A6E","Cooling Off"],
+  defcon:["shield-check","#E8743B","DefCon Monster"],
   rival:["swords","#B388FF","Rival Threat"],
   diff:["gem","#BAE6FD","Differential"],
   pen:["circle-dot","NAVY","Penalty"],
@@ -61,13 +62,14 @@ const SIG_RULE={
   mins:()=>"Doubt, out, or under 60 expected minutes",
   heat:()=>"Heating Up. Midfielders: last-4 xGI/90 at least 1.5x his season rate. Keepers and defenders: his team's xG against over the last 4 at most 0.7x its season rate",
   cool:()=>"Cooling Off. Midfielders: last-4 xGI/90 at most 0.6x his season rate, or his DefCon hit rate down 30 points. Keepers: goals prevented over the last 4 at least 0.3 per 90 below his season rate",
+  defcon:()=>`DefCon Monster: reached the DefCon target in at least 2 of every 3 matches this season, with ${DCM_HITS}+ hits. Solid when the next match is strong too: model chance ${Math.round(DCM_CHANCE*100)}%+ against a side whose opponents reach DefCon ${DCM_GIVEN}+ times a match`,
   rival:()=>"Owned by managers around you, not by you",
   diff:()=>"Under 8% owned and predicted 3.5+ pts",
   pen:()=>"First-choice penalty taker",
   set:()=>"First choice on corners or free kicks"};
-function sigTile(k,tip){
+function sigTile(k,tip,bright){
   const[ic,tone,label]=SIGNAL[k];
-  return `<span class="tile${tone==="NAVY"?" navy":""}"${tone==="NAVY"?"":` style="--tc:${tone}"`} title="${esc(tip||label)}" data-sig="${k}">${lic(ic)}</span>`;
+  return `<span class="tile${tone==="NAVY"?" navy":""}${bright?" bright":""}"${tone==="NAVY"?"":` style="--tc:${tone}"`} title="${esc(tip||label)}" data-sig="${k}">${lic(ic)}</span>`;
 }
 /* FPL's own live fields (server /api/fpl-players): price predictor and
    set-piece orders. Missing on the Pages backup, where the dataset's
@@ -152,6 +154,24 @@ function momentum(p,before){
   }
   _momCache.set(ck,{h:S.hist,m:S.teamMatch,v});return v;
 }
+/* DefCon Monster (12 Nov 2026, Andy: options 1 and 2, kept exclusive).
+   This season's DefCon hits out of matches played, at least 2 in 3 and 5+
+   hits: 9 players after GW10 (Richards, Muharemovic, Murillo, Silva 7/10,
+   Mainoo 6/8, Pinnock, Palacios 6/9, Botman, Mendy 5/7). A share above 50%
+   predicted the next match no better than 50% did (hit 54-56% in GW6-10),
+   so this marks the proven elite rather than a sharper forecast. Solid
+   (strong next match): the model's per-match chance (p.dcChance) at least
+   45% and the opponent's DefCon given (Teams page) at least 1.9 a match,
+   the top quarter of clubs. */
+const DCM_HITS=5,DCM_CHANCE=0.45,DCM_GIVEN=1.9;
+function defconMonster(p,g){
+  if(!(p.pos>=2)||!(p.dcHits>=DCM_HITS)||!p.dcApps||p.dcHits*3<p.dcApps*2)return null;
+  const q=p.gw&&p.gw[g],DG=typeof dcGiven==="function"?dcGiven():{};
+  const opp=((q&&q.fixtures)||[]).map(f=>f.oppT||{}).find(o=>o.short&&(DG[o.short]||{}).per>=DCM_GIVEN);
+  const strong=!!opp&&(p.dcChance||0)>=DCM_CHANCE;
+  return{strong,tip:`DefCon Monster: ${p.dcHits}/${p.dcApps} this season`+(strong
+    ?` · strong next match: ${Math.round(p.dcChance*100)}% chance v ${opp.short}, whose opponents reach DefCon ${DG[opp.short].per.toFixed(1)} times a match`:"")};
+}
 /* Rival Threat: how many of the mini-league rivals own each player */
 let _rivCache=null;
 function rivalOwn(){
@@ -180,6 +200,8 @@ function signals(p,g,noSell,hh){
   const mo=momentum(p);
   if(mo&&mo.heat)out.push(["heat",`Heating Up: ${mo.why}`]);
   if(mo&&mo.cool)out.push(["cool",`Cooling Off: ${mo.why}`]);
+  const dm=defconMonster(p,g);
+  if(dm)out.push(["defcon",dm.tip,dm.strong]);
   const R=rivalOwn();
   if(R&&R.n&&!mine){const k=R.own[p.id]||0;
     if(k>=Math.max(2,Math.ceil(R.n*0.3)))out.push(["rival",`Owned by ${k} of ${R.n} rivals, not you`]);}
@@ -193,7 +215,7 @@ function legendHTML(){
   const h=S.horizon||1;
   return `<div class="legend">${SIG_ORDER.map(k=>`<span class="lgi">${sigTile(k,SIG_RULE[k](h))}<span>${SIGNAL[k][2]}</span></span>`).join("")}</div>`;
 }
-const sigHTML=(p,g)=>{const s=signals(p,g);return s.length?`<span class="sigs">${s.map(([k,t])=>sigTile(k,t)).join("")}</span>`:"";};
+const sigHTML=(p,g)=>{const s=signals(p,g);return s.length?`<span class="sigs">${s.map(([k,t,b])=>sigTile(k,t,b)).join("")}</span>`:"";};
 /* the set-piece line on the player card */
 function setPieceText(p){
   const sp=setPieces(p),bits=[];

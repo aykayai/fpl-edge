@@ -17,9 +17,14 @@ function posStats(p){
   const pc=v=>v==null||!isFinite(v)?"—":Math.round(v*100)+"%";
   if(p.pos===1)return[["CS %",csPct],["Saves/90",n(p.sv90)],
     ["Goals prev",n(w?w.gp:null,1)],["GC/90",n(p.gc90)]];
-  if(p.pos===2)return[["CS %",csPct],["DefCon %",pc(p.dcHitRate)],
+  /* DefCon: his hit share (both seasons, recent weighted) and this season's
+     hits out of matches played */
+  const dcTile=["DefCon",`${pc(p.dcHitRate)}${p.dcApps?` · ${p.dcHits}/${p.dcApps}`:""}`];
+  if(p.pos===2)return[["CS %",csPct],dcTile,
     ["Aerial/90",n(w?w.aer90:null,1)],["GC/90",n(p.gc90)]];
-  if(p.pos===3)return[["F3 pass/90",n(w?w.f390:null,1)],["xA/90",n(p.xa90)],
+  /* a midfielder who has reached DefCon twice or more shows it in place of
+     final-third passes */
+  if(p.pos===3)return[(p.dcHits||0)>=2?dcTile:["F3 pass/90",n(w?w.f390:null,1)],["xA/90",n(p.xa90)],
     ["Shots/90",n(w?w.sh90:null,1)],["xGI/90",n(p.xg90+p.xa90)]];
   /* conversion is goals against shots; big chances missed comes straight from
      the match records rather than being derived */
@@ -133,7 +138,7 @@ const SORTVAL=(p,k,g)=>{
   total:p.total,owned:p.owned,ppg:p.ppg,xg:p.xg90,xa:p.xa90,dc:p.dc90,
   mins:p.minutes,xmins:p.xMins,bonus:p.bonus,tin:p.tIn,
   startpct:W.startPct||0,xgi:(W.xg90||0)+(W.xa90||0),
-  npxg:W.npxg90||0,dchit:W.dcHit||0,cc:W.cc90||0,box:W.box90||0,
+  npxg:W.npxg90||0,dchit:W.dcHit||0,dchits:W.estimated||p.pos<2?-1:(W.dcHits||0)-(W.dcApps||0)/1000,cc:W.cc90||0,box:W.box90||0,
   bps:bpsPer90(p,W)??-1,csp:csProbNext(p,g)??-1,sv90:W.sv90||0,
   spthreat:p.spThreat||0,penord:p.penOrder||99,
   /* position-specific columns — previously missing, so their headers did not sort */
@@ -1498,8 +1503,34 @@ function teamForm(){
     v[k]={n:a.length,xg:avg(a,"xg"),xga:avg(a,"xga"),xg4:avg(l4,"xg"),xga4:avg(l4,"xga")};});
   _tfCache={m:S.teamMatch,v};return v;
 }
+/* DefCon given (12 Nov 2026): this season, how many opposing players reached
+   the DefCon target per match against each club. A side that keeps the ball
+   and attacks makes its opponents defend, so their defenders and holding
+   midfielders hit DefCon more (players hit it at 0.97x their usual share
+   against the strongest attacks, 0.72x against the weakest, GW1-10). */
+let _dcgCache=null;
+function dcGiven(){
+  if(_dcgCache&&_dcgCache.m===S.teamMatch&&_dcgCache.h===S.hist)return _dcgCache.v;
+  const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
+  const sh=v=>key[v]||key["id"+v];
+  const byCode={};((S.model&&S.model.players)||[]).forEach(p=>byCode[String(p.code)]=p);
+  const hits={},games={};
+  /* matches played: the calendar lists the whole season, so count only those
+     with appearances recorded */
+  const played=new Set();Object.values(S.hist||{}).forEach(rows=>rows.forEach(r=>{if(r.tag==="now"&&r.mins>0)played.add(r.mid);}));
+  played.forEach(mid=>{const m=(S.teamMatch||{})[mid];if(!m)return;
+    [sh(m.h),sh(m.a)].forEach(t=>{if(t)(games[t]=games[t]||new Set()).add(mid);});});
+  Object.entries(S.hist||{}).forEach(([code,rows])=>{const p=byCode[code];if(!p||p.pos<2)return;
+    const mine=key["id"+p.team];if(!mine)return;
+    rows.forEach(r=>{if(r.tag!=="now"||!(r.mins>0)||!(r.dc>=(DC_THRESH[p.pos]||99)))return;
+      const m=S.teamMatch[r.mid];if(!m)return;
+      const h=sh(m.h),a=sh(m.a),opp=h===mine?a:a===mine?h:null;if(!opp)return;
+      hits[opp]=(hits[opp]||0)+1;});});
+  const v={};Object.entries(games).forEach(([t,set])=>{v[t]={n:set.size,hits:hits[t]||0,per:set.size?(hits[t]||0)/set.size:null};});
+  _dcgCache={m:S.teamMatch,h:S.hist,v};return v;
+}
 function clubsHTML(){
-  const g=VG(),h=S.tH||3,view=S.tView||"att",teams=S.model.teams,TF=teamForm();
+  const g=VG(),h=S.tH||3,view=S.tView||"att",teams=S.model.teams,TF=teamForm(),DG=dcGiven();
   const fx=(t,e)=>(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).map(f=>({opp:f.ht===t?f.at:f.ht,home:f.ht===t}));
   const run=t=>{const out=[];for(let e=g;e<g+h&&e<=38;e++)fx(t,e).forEach(x=>out.push({e,...x}));return out;};
   const rows=teams.map(t=>{
@@ -1508,18 +1539,18 @@ function clubsHTML(){
     const cs=r.length?r.reduce((s,x)=>s+Math.exp(-fdrCalc(t,x.opp,x.home,"xgc")),0)/r.length:0;
     const conceded=r.reduce((s,x)=>s+fdrCalc(t,x.opp,x.home,"xgc"),0);
     const nx=fx(t,g)[0],mk=nx&&S.oddsTeams?S.oddsTeams[t.short+"|"+nx.opp.short+"|"+(nx.home?"H":"A")]:null;
-    const f=TF[t.short]||{},ct=(S.curTeamStats||{})[t.short]||{};
+    const f=TF[t.short]||{},ct=(S.curTeamStats||{})[t.short]||{},dg=(DG[t.short]||{}).per;
     /* who plays them next: for the Opponents view, the attackers facing them */
     const facing=r.map(x=>x.opp.id);
     const players=S.model.players.filter(p=>p.avail>0&&(view==="opp"?facing.includes(p.team)&&p.pos>=3:p.team===t.id&&(view==="def"?p.pos<=2:p.pos>=3)));
     const top=players.sort((a,b)=>hPts(b,g,h)-hPts(a,g,h)).slice(0,2);
-    return{t,r,goals,cs,conceded,mk,f,top,facing,gf:ct.gf||0,ga:ct.ga||0};});
+    return{t,r,goals,cs,conceded,mk,f,top,facing,dg,gf:ct.gf||0,ga:ct.ga||0};});
   const sorters={att:(a,b)=>b.goals-a.goals,def:(a,b)=>b.cs-a.cs,opp:(a,b)=>((b.f.xga||0)+(b.f.xga4||0))-((a.f.xga||0)+(a.f.xga4||0))};
   rows.sort(sorters[view]||sorters.att);
   /* tidy (20 Oct 2026): the Signals page's team cards moved here, so every
      column sorts (tap again to reverse): best or weakest attacks, best or
      leakiest defences, easiest runs */
-  const SK={gf:x=>x.gf,ga:x=>x.ga,xg:x=>x.f.xg||0,xg4:x=>x.f.xg4||0,xga:x=>x.f.xga||0,xga4:x=>x.f.xga4||0,goals:x=>view==="opp"?x.conceded:x.goals,cs:x=>x.cs,mk:x=>x.mk?x.mk.xg:-1};
+  const SK={gf:x=>x.gf,ga:x=>x.ga,xg:x=>x.f.xg||0,xg4:x=>x.f.xg4||0,xga:x=>x.f.xga||0,xga4:x=>x.f.xga4||0,goals:x=>view==="opp"?x.conceded:x.goals,cs:x=>x.cs,mk:x=>x.mk?x.mk.xg:-1,dg:x=>x.dg??-1};
   if(S.tSort&&SK[S.tSort]){const f=SK[S.tSort],d=S.tDir==="asc"?1:-1;rows.sort((a,b)=>d*(f(a)-f(b)));}
   const sth=(k,n,tip)=>`<th class="${S.tSort===k?"act":""}" style="cursor:pointer" onclick="act('tsort','${k}')" title="${esc(tip)}">${n}${S.tSort===k?(S.tDir==="asc"?" ↑":" ↓"):""}</th>`;
   const lens=view==="def"?"def":"att";
@@ -1537,6 +1568,7 @@ function clubsHTML(){
         :fdrPill(r.opp.short,r.home,fdrOf(r.opp,r.home,x.t,lens),{short:true,tiny:true})).join("")||'<span class="mu">blank</span>'}</span></td>
     <td class="fig ${view==="att"?"mint":""}">${view==="opp"?x.conceded.toFixed(1):x.goals.toFixed(1)}</td>
     <td class="fig ${view==="def"?"mint":""}">${Math.round(x.cs*100)}%</td>
+    <td class="fig">${x.dg==null?"—":x.dg.toFixed(1)}</td>
     <td class="fig">${x.mk?`${x.mk.xg.toFixed(1)} · ${Math.round(Math.exp(-x.mk.xgc)*100)}%`:"—"}</td>
     <td style="text-align:left">${x.top.map(p=>`${pName(p)} <span class="mu">${hPts(p,g,h).toFixed(1)}</span>`).join('<span class="mu"> · </span>')}</td></tr>`).join("");
   const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
@@ -1549,7 +1581,7 @@ function clubsHTML(){
       ${sth("gf","Scored","Goals scored this season")}${sth("ga","Conceded","Goals conceded this season")}
       ${sth("xg","xG/g","Expected goals per match this season")}${sth("xg4","Last 4","Expected goals per match, last four")}
       ${sth("xga","xGA/g","Expected goals conceded per match this season")}${sth("xga4","Last 4","Expected goals conceded per match, last four")}
-      <th style="text-align:left">${view==="opp"?"Faced next by":"Next "+h}</th>${sth("goals",view==="opp"?"Proj. conceded":"Proj. goals","Over the window")}${sth("cs","CS %","Average clean-sheet chance over the window")}
+      <th style="text-align:left">${view==="opp"?"Faced next by":"Next "+h}</th>${sth("goals",view==="opp"?"Proj. conceded":"Proj. goals","Over the window")}${sth("cs","CS %","Average clean-sheet chance over the window")}${sth("dg","DefCon given","Opposing players who reached the DefCon target per match against this club, this season. High = their opponents' defenders and holding midfielders hit DefCon often")}
       ${sth("mk","Market","Bookmakers, next match: expected goals and clean-sheet chance")}<th style="text-align:left">${view==="def"?"Top defenders":view==="opp"?"Attackers facing them":"Top attackers"}</th></tr></thead>
       <tbody>${body}</tbody></table></div></div>`;
 }
@@ -2113,8 +2145,8 @@ function sgPlayers(G,H,posF){
    goes to the good numbers in any column. Market columns show only when
    the odds are in; the model's own figure is in the hover.
    ============================================================ */
-const PD_POS_COLS={0:["xgi6","cs","dchit","bonus","total"],1:["cs","csmk","gc90","sv90","gprev","bonus"],
-  2:["cs","csmk","xgi6","dchit","bps","bonus"],3:["xgi6","goalmk","npxg","xa","ict","dchit","bonus"],
+const PD_POS_COLS={0:["xgi6","cs","dchit","dchits","bonus","total"],1:["cs","csmk","gc90","sv90","gprev","bonus"],
+  2:["cs","csmk","xgi6","dchit","dchits","bps","bonus"],3:["xgi6","goalmk","npxg","xa","ict","dchit","dchits","bonus"],
   4:["xgi6","goalmk","npxg","xa","ict","sot","bonus"]};
 function pdCols(){
   const g=VG(),r=lGwRange(),W=p=>ws(String(p.code||""),p.pos,S.lWin||38,p.price,teamMaxPrice(p.team))||{};
@@ -2143,6 +2175,9 @@ function pdCols(){
     xa:{label:"xA/90",tip:"Expected assists per 90 (stats window)",val:p=>W(p).xa90??null,cell:p=>f2(W(p).xa90),heat:1},
     ict:{label:"ICT",tip:"FPL's ICT index, season total (ranks first for forwards over 5 gameweeks)",val:p=>p.ict||0,cell:p=>(p.ict||0).toFixed(0),heat:1},
     sot:{label:"SoT/90",tip:"Shots on target per 90 (stats window)",val:p=>W(p).sot90??null,cell:p=>f2(W(p).sot90),heat:1},
+    dchits:{label:"DefCon Hits",tip:"Matches this season reaching the DefCon target (10 for defenders, 12 for midfielders and forwards), out of the matches he played",
+      val:p=>{const q=W(p);return q.estimated||p.pos<2||!q.dcApps?null:(q.dcHits||0)-(q.dcApps||0)/1000;},
+      cell:p=>{const q=W(p);return !q.estimated&&p.pos>1&&q.dcApps?`${q.dcHits}<span class="mu">/${q.dcApps}</span>`:"—";},heat:1},
     dchit:{label:"DefCon %",tip:"Share of 60-minute games reaching the DefCon threshold (2 points)",val:p=>W(p).dcHit??null,cell:p=>pct(W(p).dcHit),heat:1},
     bps:{label:"BPS/90",tip:"Bonus-point-system score per 90",val:p=>bpsPer90(p,W(p)),cell:p=>f1(bpsPer90(p,W(p))),heat:1},
     bonus:{label:"Bonus",tip:"Bonus points this season",val:p=>p.bonus||0,cell:p=>p.bonus||0,heat:1},
