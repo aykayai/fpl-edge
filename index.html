@@ -179,53 +179,113 @@ body.scrolled .tbfig{display:flex}
 @media(max-width:720px){.g2{grid-template-columns:1fr}}
 .wdl{display:inline-flex;gap:3px}.wdl i{font:700 10px 'Geist Mono',monospace;font-style:normal;width:17px;height:17px;border-radius:4px;display:inline-grid;place-items:center}
 .wdl i.W{background:rgba(61,220,151,.22);color:#3DDC97}.wdl i.D{background:rgba(255,255,255,.08);color:var(--mute)}.wdl i.L{background:rgba(255,90,110,.2);color:#FF8FA3}
-/* Player Data (12 Nov 2026): one table, one toolbar, filters behind a
-   button with removable chips; values neutral, the strongest quarter of
-   each column tinted green; column groups in a header row. */
-.pdcount{font:500 14px 'Geist',sans-serif;color:var(--mute);margin-left:8px;letter-spacing:0}
-.pdbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 10px}
-.pdsearch{display:flex;align-items:center;gap:7px;background:#171717;border-radius:999px;padding:0 12px;box-shadow:0 0 0 1px rgba(255,255,255,.08);color:var(--mute);flex:1;min-width:180px;max-width:300px}
-.pdsearch input{background:none;border:0;padding:8px 0;min-height:0;width:100%;font-size:13px;color:var(--cream);outline:none}
-.pdfbtn{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 14px;font-size:12.5px;background:#171717;box-shadow:0 0 0 1px rgba(255,255,255,.08);border:0;color:var(--cream);min-height:0}
-.pdfbtn b{background:var(--mint);color:#0A0A0A;border-radius:999px;font-size:11px;padding:0 6px;line-height:16px}
-.pdfbtn.on svg{transform:rotate(180deg)}
-.pdmorebox{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px 18px;background:#141414;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ring);padding:14px 16px;margin:0 0 10px}
-.pdmorebox>div{display:flex;flex-direction:column;gap:6px;min-width:0}.pdmorebox>div.wide{grid-column:1/-1}
-.pdmorebox select{width:auto;min-height:0;padding:6px 9px;font-size:13px}
-.pdl{font-size:12px;color:var(--mute)}
-.pdsig{display:flex;gap:6px;flex-wrap:wrap}
-.pdchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
-.pdchip{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:999px;padding:4px 10px;font-size:12px;background:rgba(61,220,151,.12);color:var(--mint);min-height:0}
-.pdchip:hover{background:rgba(61,220,151,.2)}
-.pdclear{background:none;border:0;color:var(--mute);font-size:12px;text-decoration:underline;min-height:0;padding:4px}
-.pdpanel{overflow:visible}
-.pdt table{width:100%;border-collapse:separate;border-spacing:0}
-.pdt th{font:500 12px 'Geist',sans-serif;color:var(--mute);padding:8px 8px;text-align:right;white-space:nowrap;background:var(--ink2);cursor:pointer}
-.pdt th.nm{text-align:left}.pdt th.act{color:var(--cream);box-shadow:inset 0 -2px 0 var(--mint)}
-.pdt th.strong{color:var(--cream)}
-.pdt tr.grp th{font-size:11px;color:#6A6A6A;cursor:default;padding:7px 8px 2px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06)}
-.pdt tr.grp th.gpos{color:var(--mint)}
+/* Player Data (redesign 12 Nov 2026): one filter card (bar + the twelve
+   signals), a quiet table where colour means something: green edge = his
+   squad, green figure = top tenth, white = top quarter, grey = the rest. */
+.pdcount{font:500 14px 'Geist',sans-serif;color:var(--mute);margin-left:10px;letter-spacing:0}.pdcount b{color:var(--mint);font-weight:600}
+.pdcard{background:#111;border-radius:14px;box-shadow:inset 0 0 0 1px var(--ring);margin:-2px 0 14px}
+.pdbar{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:14px 16px}
+.pdctl{display:flex;flex-direction:column;gap:6px;min-width:0}
+.pdl{font-size:11.5px;color:var(--mute);font-weight:500}.pdl b{color:var(--cream);font:600 11.5px 'Geist Mono',monospace;margin-left:6px}.pdl .mu{color:#5E5E5E;font-weight:400;margin-left:6px}
+.pdsearch{display:flex;align-items:center;gap:8px;background:#0A0A0A;border-radius:10px;height:38px;padding:0 12px;box-shadow:inset 0 0 0 1px #262626;color:var(--mute);width:250px;box-sizing:border-box}
+.pdsearch input{background:none;border:0;padding:0;min-height:0;width:100%;font-size:14px;color:var(--cream);outline:none}
+.pdcard .hz{background:#0A0A0A;border-radius:10px;padding:3px;height:38px;box-sizing:border-box;box-shadow:inset 0 0 0 1px #262626}
+.pdcard .hz button{font-size:13px;padding:0 13px;border-radius:7px;white-space:nowrap;min-height:0}
+.pdsel{height:38px;min-height:0;width:170px;background:#0A0A0A;border-radius:10px;border:0;box-shadow:inset 0 0 0 1px #262626;padding:0 10px;font-size:13.5px;color:var(--cream)}
+.pdpricectl{width:210px}
+.pdrange{position:relative;display:block;height:38px}
+.pdrange .tr,.pdrange .fl{position:absolute;top:18px;height:3px;border-radius:2px}
+.pdrange .tr{left:0;right:0;background:#2A2A2A}.pdrange .fl{background:var(--mint)}
+.pdrange input{position:absolute;left:-8px;right:-8px;width:calc(100% + 16px);top:9px;height:20px;margin:0;padding:0;min-height:0;background:none;border:0;box-shadow:none;pointer-events:none;-webkit-appearance:none;appearance:none}
+.pdrange input::-webkit-slider-runnable-track{background:none;height:20px}
+.pdrange input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:17px;height:17px;margin-top:1.5px;border-radius:50%;background:var(--cream);border:3px solid #0A0A0A;box-shadow:0 0 0 1px #555;cursor:pointer}
+.pdrange input::-moz-range-thumb{pointer-events:auto;width:11px;height:11px;border-radius:50%;background:var(--cream);border:3px solid #0A0A0A;box-shadow:0 0 0 1px #555;cursor:pointer}
+.pdrange input::-moz-range-track{background:none}
+.pdrange input:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 2px var(--cyan)}
+.pdsp{flex:1}
+.pdfbtn{display:inline-flex;align-items:center;gap:7px;height:38px;border-radius:10px;padding:0 14px;font-size:13.5px;background:#1A1A1A;box-shadow:inset 0 0 0 1px #262626;border:0;color:var(--cream);min-height:0;white-space:nowrap}
+.pdfbtn b{background:var(--mint);color:#04140C;border-radius:9px;font-size:11px;padding:0 7px;line-height:17px}
+.pdfbtn.on{background:#262626;color:var(--cream);box-shadow:inset 0 0 0 1px #8A8A8A}.pdfbtn.on svg{transform:rotate(180deg)}
+.pdreset{background:none;border:0;box-shadow:none;color:var(--mute);font-size:13px;min-height:0;padding:0 8px;height:38px}
+.pdreset:hover{color:var(--cream)}
+.pdpop{position:absolute;right:0;top:calc(100% + 8px);width:410px;background:#161616;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.7),inset 0 0 0 1px #333;z-index:20;padding:6px 0 0}
+.pdpoph{font-size:13px;font-weight:600;padding:10px 16px 6px}
+.pdpr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 16px;font-size:13px;color:#BDBDBD}
+.pdpop .hz{height:32px}.pdpop .hz button{font-size:12.5px;padding:0 10px}
+.pdgwin{display:flex;align-items:center;gap:6px;font-size:12.5px}
+.pdgwin input{width:52px;min-height:0;height:30px;padding:0 8px;font:500 12.5px 'Geist Mono',monospace;background:#0A0A0A;border-radius:8px}
+.pdchks{display:flex;gap:14px}.pdchk{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--cream);cursor:pointer}
+.pdchk input{width:16px;height:16px;min-height:0;margin:0;accent-color:var(--mint)}
+.pdpopf{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #262626;margin-top:6px;padding:10px 16px}
+.pdpopf .pdreset{height:auto;padding:0}.pdpopf .pri{padding:7px 16px}
+.pdsigs{display:flex;flex-direction:column;gap:8px;padding:12px 16px 14px;border-top:1px solid #1C1C1C}
+.pdchips{display:flex;gap:3px;justify-content:space-between;flex-wrap:wrap}
+.pdsigchip{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 8px 0 4px;border-radius:10px;border:0;box-shadow:inset 0 0 0 1px #262626;background:#0D0D0D;color:#D4D4D4;font-size:12.5px;font-weight:500;min-height:0;white-space:nowrap}
+.pdsigchip b{font:500 11.5px 'Geist Mono',monospace;color:var(--mute);margin-left:1px}
+.pdsigchip:hover{background:#171717}
+.pdsigchip.on{background:color-mix(in srgb,var(--tc) 14%,#0D0D0D);box-shadow:inset 0 0 0 1px var(--tc);color:#fff}.pdsigchip.on b{color:#fff}
+.pdsigchip .tile,.pdt .tile{border-radius:8px;width:22px;height:22px;background:color-mix(in srgb,var(--tc) 15%,transparent);color:var(--tc);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc) 28%,transparent)}
+.pdt .sigcell .tile{width:26px;height:26px;cursor:default}.pdt .tile svg{width:58%;height:58%}
+.pdt .tile:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.pdpanel{overflow:visible;background:#0F0F0F}
+.pdt table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px}
+.pdt th{font:500 12px 'Geist',sans-serif;color:var(--mute);padding:6px 10px 10px;text-align:right;white-space:nowrap;vertical-align:bottom;background:#0F0F0F;cursor:pointer;border-bottom:1px solid #262626}
+.pdt th small{display:block;font-size:10.5px;color:#5E5E5E;margin-top:1px}
+.pdt th.nm,.pdt th.l{text-align:left}.pdt th.nm{padding-left:18px}
+.pdt th.act{color:var(--cream)}.pdt th.act small{color:var(--mute)}
+.pdt th small.pdgw{display:flex;gap:4px;margin-top:4px}.pdt th small.pdgw i{width:38px;text-align:center;font:500 10.5px 'Geist Mono',monospace;font-style:normal}
+.pdt tr.grp th{font-size:11px;color:#6B6B6B;cursor:default;padding:12px 10px 4px;text-align:left;border-bottom:0}
+.pdt .gs{border-left:1px solid #1C1C1C}
 .pdt thead tr:first-child th{position:sticky;top:0;z-index:3}
-.pdt thead tr:nth-child(2) th{position:sticky;top:25px;z-index:3}
-.pdt td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-family:'Geist',sans-serif;vertical-align:middle}
-.pdt td.fig{text-align:right;font:500 13px 'Geist Mono',monospace;white-space:nowrap;border-radius:4px}
-.pdt td.fig.strong{font-weight:600;color:#fff}
-.pdt td.fig em{display:block;font-style:normal;font-size:10.5px;line-height:1.1}
-.pdt td.tk,.pdt th.tk{width:30px;padding-right:0}
+.pdt thead tr:nth-child(2) th{position:sticky;top:31px;z-index:3}
+.pdt td{background:#0F0F0F;padding:0 10px;height:52px;border-bottom:1px solid #1C1C1C;font-family:'Geist',sans-serif;vertical-align:middle;white-space:nowrap}
+.pdt tbody tr:last-child td{border-bottom:0}
+.pdt td.fig{text-align:right;font:500 13.5px 'Geist Mono',monospace;color:#9A9A9A;font-variant-numeric:tabular-nums}
+.pdt td.fig.t25{color:var(--cream)}.pdt td.fig.t10{color:var(--mint);font-weight:600}.pdt td.fig.warn{color:var(--amber)}
+.pdt td.fig em{display:block;font-style:normal;font-size:10.5px;line-height:1.1;margin-top:1px}
+.pdt td.pdprice{color:#D4D4D4}
+.pdt td.pdproj{min-width:86px}.pdt td.pdproj b{color:#fff;font-weight:700;font-size:14.5px}
+.pdpbar{display:block;height:4px;border-radius:2px;background:#1E1E1E;margin-top:5px;overflow:hidden}.pdpbar i{display:block;height:100%;margin-left:auto;border-radius:2px;background:linear-gradient(90deg,#1F7A4C,var(--mint))}
 .pdt td.sgc{text-align:left}
-.pdt td.acts{white-space:nowrap;text-align:right}
-.pdt tr.mine td{background:rgba(61,220,151,.035)}
-.pdt tr.ticked td{background:rgba(255,255,255,.05)}
-.pdt tr:hover td{background:rgba(255,255,255,.03)}
-.pdt tbody td.nm,.pdt thead th.nm{position:sticky;left:0;z-index:2;background:var(--ink2)}
-.ytag{font-size:10.5px;color:var(--mint);background:rgba(61,220,151,.12);border-radius:4px;padding:0 5px}
-.fx5r{display:inline-flex;gap:2px;align-items:center}
-.fx5s{display:inline-flex;flex-direction:column;gap:1px}
-.fx5{display:inline-grid;place-items:center;width:30px;height:18px;border-radius:4px;font:700 9.5px 'Geist Mono',monospace;font-style:normal;letter-spacing:.02em}
-.fx5s .fx5{height:9px;font-size:7.5px}
-.fx5.bl{background:#222;color:#5A5A5A}
-.pdkey{margin:8px 2px 0}
-@media(max-width:620px){.pdsearch{max-width:none;flex-basis:100%}.pdt td.sgc,.pdt th:nth-child(4){display:none}}
+.pdt .sigcell{display:inline-flex;gap:5px;align-items:center}
+.sgmore{font-size:11px;color:var(--mute);margin-left:2px}
+.pdt td.acts{text-align:right;width:64px}
+.pdt td.acts .pdstar:not(.on),.pdt td.acts .pdadd{opacity:0}
+.pdt tr:hover td.acts button,.pdt td.acts button:focus-visible{opacity:1}
+.pdt tr.mine td{background:#111815}
+.pdt tr.mine td.nm{box-shadow:inset 3px 0 0 var(--mint)}
+.pdt tr.ticked td{background:#181818}
+.pdt tbody tr:hover td{background:#171717}
+.pdt tbody td.nm,.pdt thead th.nm{position:sticky;left:0;z-index:2;background:#0F0F0F}
+.pdt tbody td.nm{padding-left:18px}
+.pdt tr.mine td.nm{background:#111815}
+.pdt tbody tr:hover td.nm{background:#171717}
+.pdt .pcell{display:flex;align-items:center;gap:11px}
+.pdshirt{position:relative;width:26px;height:26px;flex:none;display:grid;place-items:center}
+.pdshirt .tick{position:absolute;inset:4px;width:18px;height:18px;margin:0;min-height:0;opacity:0;accent-color:var(--mint);cursor:pointer}
+.pdt tr:hover .pdshirt svg,.pdt.ticking .pdshirt svg,.pdshirt:focus-within svg{opacity:0}
+.pdt tr:hover .pdshirt .tick,.pdt.ticking .pdshirt .tick,.pdshirt .tick:focus-visible{opacity:1}
+.pdt .pmeta{display:flex;flex-direction:column;gap:2px}
+.pdt .prow1{display:flex;align-items:center;gap:7px;font-weight:600;font-size:14px}.pdt .prow2{font-size:12px;color:var(--mute)}
+.pdt tr.mine .prow1{color:#fff}
+.pdrole{display:inline-grid;place-items:center;height:17px;min-width:17px;padding:0 5px;border-radius:9px;font:700 10px 'Geist',sans-serif;box-sizing:border-box}
+.pdrole.c{background:var(--mint);color:#04140C}.pdrole.v{background:rgba(61,220,151,.18);color:var(--mint)}
+.pdrole.xi{background:rgba(61,220,151,.12);color:var(--mint)}.pdrole.bn{background:#232323;color:#A3A3A3}
+.fx5r{display:inline-flex;gap:4px;align-items:center}
+.fx5s{display:inline-flex;flex-direction:column;gap:2px}
+.fx5{display:inline-grid;place-items:center;width:38px;height:22px;border-radius:6px;font:600 11px 'Geist Mono',monospace;font-style:normal;letter-spacing:.02em}
+.fx5s.dbl .fx5{height:10px;font-size:8px;border-radius:3px}
+.fx5.bl{background:#1A1A1A;color:#555}
+.pdkey{display:flex;align-items:center;gap:16px;flex-wrap:wrap;color:var(--mute);font-size:12px;margin:12px 4px 0}
+.pdkey>span{display:flex;align-items:center;gap:6px}.pdkey .sep{width:1px;height:14px;background:#333}
+.pdkey .kmine{width:14px;height:14px;border-radius:3px;background:rgba(61,220,151,.12);box-shadow:inset 3px 0 0 var(--mint)}
+.pdkey b{font:600 12px 'Geist Mono',monospace}.pdkey b.t10{color:var(--mint)}.pdkey b.t25{color:var(--cream)}
+.pdkey .fx5{width:20px;height:18px;font-size:10px}
+/* the signal hover card (app-main): tile, name, one short line */
+.ctip.sigtip{display:flex;align-items:center;gap:11px;padding:10px 14px 10px 10px;border-radius:12px;background:#1C1C1C;box-shadow:0 12px 32px rgba(0,0,0,.6),inset 0 0 0 1px #3A3A3A;min-width:0;max-width:340px}
+.ctip.sigtip .tile{width:32px;height:32px;border-radius:9px;background:color-mix(in srgb,var(--tc) 15%,transparent);color:var(--tc);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc) 28%,transparent)}
+.ctip.sigtip b{margin:0;font-size:13.5px}.ctip.sigtip em{font-size:12.5px;color:#BDBDBD;margin-top:2px}
+@media(max-width:620px){.pdsearch{width:100%}.pdbar{gap:12px}.pdpricectl,.pdsel{width:100%}.pdctl{flex:1 1 100%}.pdsp{display:none}.pdpop{width:min(410px,calc(100vw - 32px))}.pdchips{justify-content:flex-start;gap:6px}.pdt td.sgc,.pdt th:nth-child(3){display:none}}
 .foot{text-align:center;padding:18px 0 4px;font-size:11px;color:#5A5A5A}
 .prov{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 18px;padding:14px;font-size:12.5px;color:var(--mute)}
 .prov b{color:var(--cream);font-weight:600}
@@ -808,12 +868,12 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.39.0"></script>
-<script src="./app-squad.js?v=12.39.0"></script>
-<script src="./app-render.js?v=12.39.0"></script>
-<script src="./app-odds.js?v=12.39.0"></script>
-<script src="./app-tracker.js?v=12.39.0"></script>
-<script src="./app-main.js?v=12.39.0"></script>
+<script src="./app-core.js?v=12.40.0"></script>
+<script src="./app-squad.js?v=12.40.0"></script>
+<script src="./app-render.js?v=12.40.0"></script>
+<script src="./app-odds.js?v=12.40.0"></script>
+<script src="./app-tracker.js?v=12.40.0"></script>
+<script src="./app-main.js?v=12.40.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

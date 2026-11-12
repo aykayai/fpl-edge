@@ -50,8 +50,8 @@ function act(k,a,b){
     case"pown":S.pOwn=["all","league","rank"].includes(a)?a:"all";LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
     case"pstart":S.pStarters=!S.pStarters;break;
     case"pdmorefilters":S.pdMore=!S.pdMore;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
-    case"pwin":{const n=[1,3,5].includes(+a)?+a:5,g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=Math.min(38,g0+n-1);break;}
-    case"pdreset":S.lSearch="";S.lTeam=0;S.lMax=16;S.pStarters=false;S.starOnly=false;S.iconF=[];S.lWin=38;
+    case"pwin":{const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=a==="ros"?38:Math.min(38,g0+([3,5].includes(+a)?+a:5)-1);break;}
+    case"pdreset":S.lSearch="";S.lTeam=0;S.lMax=16;S.lMin=0;S.lPos=0;S.pShow="all";S.pOwn="all";S.pStarters=false;S.starOnly=false;S.iconF=[];S.lWin=38;
       {const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=Math.min(38,g0+4);}break;
     case"tick":{const t=S.pTicks||[];S.pTicks=t.includes(a)?t.filter(x=>x!==a):(t.length>=5?t:[...t,a]);
       if(t.length>=5&&!t.includes(a))toast("Up to five players at a time");if(!S.pTicks.length)S.pCmp=false;break;}
@@ -140,7 +140,8 @@ function act(k,a,b){
     case"lpos":S.lPos=+a;break;
     case"lteam":S.lTeam=+a;break;
     case"lsearch":S.lSearch=a;break;
-    case"lmax":S.lMax=clamp(+a||16,3.5,16);break;
+    case"lmax":S.lMax=clamp(+a||16,Math.max(3.5,S.lMin||0),16);break;
+    case"lmin":S.lMin=clamp(+a||0,0,S.lMax||16);if(S.lMin<=3.5)S.lMin=0;break;
     case"lhorizon":S.lHorizon=clamp(Math.round(+a)||1,1,8);break;
     case"lgwfrom":{const v=clamp(Math.round(+a)||1,1,38);S.lGwFrom=v;
       if(S.lGwTo&&S.lGwTo<v)S.lGwTo=v;break;}
@@ -332,13 +333,26 @@ document.addEventListener("keydown",e=>{
 });
 window.addEventListener("popstate",()=>{if(applyHash())render();});
 /* Signals charts: the hover card reads data-tip "title|figure|note" */
+/* Player Data signal tiles: a card above the tile with the signal's name
+   and one short line (data-tt), on hover or keyboard focus */
+function sigTipShow(tip,el){const k=el.getAttribute("data-sig"),S9=SIGNAL[k];if(!S9)return false;
+  const tone=S9[1]==="NAVY"?"#7AA2FF":S9[1];
+  tip.className="ctip sigtip";tip.innerHTML=`<span class="tile" style="--tc:${tone}">${lic(S9[0])}</span><span><b>${esc(S9[2])}</b><em>${esc(el.getAttribute("data-tt")||"")}</em></span>`;
+  tip.hidden=false;const r=el.getBoundingClientRect();
+  tip.style.left=Math.max(8,Math.min(window.innerWidth-tip.offsetWidth-8,r.left-10))+"px";
+  tip.style.top=Math.max(8,r.top-tip.offsetHeight-10)+"px";return true;}
+document.addEventListener("focusin",e=>{const tip=document.getElementById("ctip"),s=e.target&&e.target.closest&&e.target.closest("[data-sig][data-tt]");
+  if(tip&&s)sigTipShow(tip,s);});
+document.addEventListener("focusout",e=>{const tip=document.getElementById("ctip");if(tip&&tip.classList.contains("sigtip"))tip.hidden=true;});
 document.addEventListener("mouseover",e=>{const tip=document.getElementById("ctip");if(!tip)return;
+  const s=e.target&&e.target.closest?e.target.closest("[data-sig][data-tt]"):null;
+  if(s){sigTipShow(tip,s);return;}
   const t=e.target&&e.target.closest?e.target.closest("svg.chart [data-tip]"):null;
   if(!t){tip.hidden=true;return;}
   const [a,b,c]=String(t.getAttribute("data-tip")).split("|");
-  tip.innerHTML=`<span>${esc(a||"")}</span><b>${esc(b||"")}</b>${c?`<em>${esc(c)}</em>`:""}`;tip.hidden=false;});
+  tip.className="ctip";tip.innerHTML=`<span>${esc(a||"")}</span><b>${esc(b||"")}</b>${c?`<em>${esc(c)}</em>`:""}`;tip.hidden=false;});
 document.addEventListener("mousemove",e=>{const tip=document.getElementById("ctip");
-  if(tip&&!tip.hidden){tip.style.left=Math.min(window.innerWidth-190,e.clientX+14)+"px";tip.style.top=(e.clientY+16)+"px";}});
+  if(tip&&!tip.hidden&&!tip.classList.contains("sigtip")){tip.style.left=Math.min(window.innerWidth-190,e.clientX+14)+"px";tip.style.top=(e.clientY+16)+"px";}});
 /* wave 1: Predicted, Bank and FT join the sticky bar once the hero is gone */
 window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   if(document.body.classList.contains("scrolled")!==on)document.body.classList.toggle("scrolled",on);},{passive:true});
@@ -354,7 +368,7 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   S.rivals=LS.get("rivals")||[];
   S.leagueId=LS.get("leagueId")||"391690";
   S.weekH=LS.get("weekh")||1;
-  {const pd=LS.get("pd")||{};S.pShow=pd.show||"all";S.pOwn=pd.own||"all";S.pdMore=!!pd.more;}
+  {const pd=LS.get("pd")||{};S.pShow=pd.show||"all";S.pOwn=pd.own||"all";S.pdMore=false;}
   S.pTicks=[];
   {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];S.sgTab=sg.tab||"transfers";}
   /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over

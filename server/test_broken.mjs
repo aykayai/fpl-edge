@@ -100,14 +100,32 @@ try {
   g.act("pdless");
   check(doc.querySelectorAll(".tallscroll tbody tr").length === 100, "F5 Show fewer returns to 100");
   /* Player Data (12 Nov 2026): shared columns for every position, then the position's own */
-  const heads = () => [...doc.querySelectorAll(".pdt thead tr:nth-child(2) th")].map(t => t.textContent.replace(/[↓↑]/g, "").trim());
+  /* redesign (12 Nov 2026): sub-labels (GW numbers, "5 GW", "last 6") sit in <small> under the name */
+  const heads = () => [...doc.querySelectorAll(".pdt thead tr:nth-child(2) th")].map(t => { const c = t.cloneNode(true); c.querySelectorAll("small").forEach(s => s.remove()); return c.textContent.replace(/[↓↑]/g, "").trim(); });
   const WANTPOS = { 0: ["Pts"], 1: ["Saves/90", "G prev", "GC/90"], 2: ["DefCon %", "BPS/90"], 3: ["npxG/90", "xA/90", "ICT"], 4: ["SoT/90", "ICT"] };
   for (const [pos, want] of Object.entries(WANTPOS)) {
     S.lPos = +pos; show("table"); const h = heads();
-    const base = ["Player", "Price", "Signals", "Next 5", "Form", "xFPL", "Pts/£m", "xMins"].every(x => h.includes(x)) && h.some(x => /^xPts /.test(x));
+    const base = ["Player", "Price", "Signals", "Next 5", "Form", "xFPL", "Pts/£m", "xMins"].every(x => h.includes(x)) && h.includes("xPts");
     check(base && want.every(x => h.includes(x)), `Player Data position ${pos}: shared columns plus ${want.join(", ")}`, h.join(" | "));
   }
   S.lPos = 0; show("table");
+  /* redesign (12 Nov 2026): signals always on show, no Yours tabs, his players marked in place */
+  check(doc.querySelectorAll(".pdsigchip").length === 12 && !S.pdMore, "Player Data shows all 12 signal chips with More filters closed", doc.querySelectorAll(".pdsigchip").length);
+  check(![...doc.querySelectorAll(".pdbar button")].some(b => /^(Not yours|Yours)$/.test(b.textContent.trim())), "Player Data has no Yours / Not yours tabs");
+  g.act("pdall");
+  const mineRows = doc.querySelectorAll(".pdt tbody tr.mine").length, sq = (S.squad || []).length;
+  check(sq > 0 && mineRows === sq && doc.querySelectorAll(".pdt tbody tr.mine .pdrole").length === sq, "every squad player is marked in the list with a role", `${mineRows} marked of ${sq}`);
+  check(doc.querySelectorAll(".pdt tbody .pdrole.c").length === 1, "exactly one captain mark");
+  g.act("pdless");
+  g.act("pwin", "ros");
+  check(vm.runInContext("lGwRange().to", ctx) === 38 && /ROS/.test(doc.querySelector(".pdt th.act")?.textContent || ""), "ROS projects to GW38", doc.querySelector(".pdt th.act")?.textContent);
+  g.act("pwin", "5");
+  g.act("lmin", "10"); show("table");
+  const cheap = vm.runInContext("pdRows().a.filter(p=>p.price<10).length", ctx);
+  check(cheap === 0, "the price range's low end filters", cheap);
+  g.act("pdreset"); show("table");
+  const sig = doc.querySelector(".pdt .tile[data-sig][data-tt]");
+  check(!!sig && sig.getAttribute("data-tt").length > 0 && sig.getAttribute("data-tt").length <= 90, "signal tiles carry a short hover line", sig && sig.getAttribute("data-tt"));
 
   /* F8: independent read of the feed */
   const feed = await (await fetch(BASE + "/data/feeds/actuals.json")).json();
