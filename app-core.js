@@ -235,7 +235,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.42.0";
+const APP_VERSION="12.42.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1344,12 +1344,6 @@ const GK_START=89, GK_BACKUP=15;
    xG engine now supplying genuine fixture swing this only needs to be a light
    touch, not the heavy correction it was before that engine existed. */
 const FIXTURE_AMP=1.45;
-/* how much of the fixture view comes from the new xG ratings */
-/* The fixture view now comes wholly from the xG engine. The older
-   strength-difference calculation was blended in at 35% as a hedge while the
-   ratings were unproven; refitting across 440 per-gameweek observations shows
-   it no longer adds anything (MAE 0.467 blended vs 0.455 pure), so it is gone. */
-const FDR_MIX=1.00;
 /* Pecking order isn't derivable from minutes alone (a settled keeper is rested
    in pre-season). Taken from the published projections — one per club. */
 const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kelleher","Leno",
@@ -1968,19 +1962,17 @@ function buildModel(){
       let tot=0;const csPs=[];
       fx.forEach(f=>{
         const opp=f.oppT||{};
-        /* Fixture swing. The +/-30% used by most public component models is
-           too tight — it is the main reason projections look flat week to week.
-           Widened to +/-60% on attack and +/-55% on defence, which is what the
-           spread between the best and worst matchups actually justifies. */
-        /* difficulty is now position-aware: attackers are judged against the
-           opponent's defence, keepers and defenders against their attack */
+        /* Fixture factors: atk scales goals and assists, def feeds the DefCon
+           fixture factor and the clean-sheet fallback (CS_FROM_FIXTURE uses the
+           fixture's own xGC). They come from the xG ratings, or the odds when
+           priced. The strength-difference view below is only the fallback for
+           when the ratings have not loaded; it was blended in at 35% once, and a
+           refit across 440 per-gameweek observations dropped it (MAE 0.467
+           blended vs 0.455 pure; FDR_MIX removed 12 Nov 2026, it was 1.00). */
         const rawA=(((f.home?team.sah:team.saa)||1150)-((f.home?opp.sda:opp.sdh)||1150))/1000;
         const rawD=(((f.home?team.sdh:team.sda)||1150)-((f.home?opp.saa:opp.sah)||1150))/1000;
         let atk=clamp(1+rawA*2.0,.40,1.60);
         let def=clamp(1+rawD*1.85,.45,1.55);
-        /* Blend the strength-rating view with the xG-based, position-aware one.
-           The new ratings carry the extra spread; the old view keeps us anchored
-           to the published projections we calibrated against. */
         if(S.ratingsReady&&f.xgf!=null){
           /* straight from expected goals, so elite sides still separate a weak
              opponent from a merely average one */
@@ -1989,8 +1981,7 @@ function buildModel(){
              the old stretch it cannot reorder two players in the same match. */
           const nA=clamp(Math.pow(f.xgf/PL_GF,1.9),.30,2.40);
           const nD=clamp(Math.pow(PL_GF/Math.max(.35,f.xgc),1.9),.35,2.30);
-          atk=atk*(1-FDR_MIX)+nA*FDR_MIX;
-          def=def*(1-FDR_MIX)+nD*FDR_MIX;
+          atk=nA;def=nD;
         }
         const od=oddsFor(team,opp,f.home);
         /* D10 (13 Oct 2026): odds override the ratings when available, through
