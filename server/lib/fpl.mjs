@@ -152,7 +152,24 @@ export async function fplPlayersPayload() {
       cor: e.corners_and_indirect_freekicks_order ?? null,
       dfk: e.direct_freekicks_order ?? null,
       ep: e.ep_next == null ? null : +e.ep_next,
-      dt: e.dreamteam_count ?? null
+      dt: e.dreamteam_count ?? null,
+      /* 12 Nov 2026 audit: availability, news, price, ownership and transfers
+         from this 15-minute fetch, so the page need not wait for the dataset
+         mirror (hours behind). now_cost and cost changes in tenths, as FPL. */
+      st: e.status ?? null,
+      cn: e.chance_of_playing_next_round ?? null,
+      ct: e.chance_of_playing_this_round ?? null,
+      news: e.news ?? null,
+      na: e.news_added ?? null,
+      cost: e.now_cost ?? null,
+      cce: e.cost_change_event ?? null,
+      ccs: e.cost_change_start ?? null,
+      sel: e.selected_by_percent ?? null,
+      tie: e.transfers_in_event ?? null,
+      toe: e.transfers_out_event ?? null,
+      form: e.form ?? null,
+      tp: e.total_points ?? null,
+      ppg: e.points_per_game ?? null
     };
   }
   const body = { fetchedAt: state.fetchedAt, players };

@@ -235,7 +235,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.38.0";
+const APP_VERSION="12.39.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1545,6 +1545,7 @@ function appearFactor(xMins){
   return band[1]/.985;
 }
 function buildModel(){
+  applyLiveStats();
   clearModelCaches();
   const teams={};S.teams.forEach(t=>teams[t.id]=t);
   const byCode={};S.teams.forEach(t=>byCode[t.code]=t);
@@ -1830,8 +1831,14 @@ function buildModel(){
         const ord=k==="F"?LV.dfk:LV.cor;return ord===1||ord===2;}
       return !!(duty&&(duty[k]||[]).some(nm=>{const t=norm(nm);
         return t&&(me===t||me.includes(t)||t.includes(me));}));};
-    const penRate=isNamed("P")?0.45:(penOrder===1?0.30:(penOrder===2?0.08:0));
-    const setBoost=(isNamed("F")||isNamed("C"))?0.30:(setOrder===1?0.22:(setOrder===2?0.08:0));
+    /* Audit fix (12 Nov 2026): with FPL's live orders loaded, the dataset's
+       orders no longer add credit. They lag transfers, and at clubs where the
+       live order (or PEN_OVERRIDE) names someone else they gave a second
+       player the taker's share (Rudoni at Coventry, Diarra at Sunderland). */
+    const livePen2=liveOn&&!PEN_OVERRIDE[club]&&LV&&LV.pen===2;
+    const penRate=isNamed("P")?0.45:liveOn?(livePen2?0.08:0):(penOrder===1?0.30:(penOrder===2?0.08:0));
+    const setBoost=(isNamed("F")||isNamed("C"))?0.30:liveOn?0:(setOrder===1?0.22:(setOrder===2?0.08:0));
+    const penShown=liveOn?(isNamed("P")?1:livePen2?2:(LV&&LV.pen)||99):penOrder;
     const epNext=num(s.ep_next);
 
     return{id:p.id,code:String(p.code||""),web_name:p.web_name,first:p.first,last:p.last,pos:p.pos,
@@ -1850,7 +1857,7 @@ function buildModel(){
         xgi90:num(s.expected_goal_involvements_per_90),sv90:num(s.saves_per_90),
         gc90:num(s.goals_conceded_per_90),xgc90:num(s.expected_goals_conceded_per_90),
         dc90:num(s.defensive_contribution_per_90),starts:num(s.starts)}:null,
-      spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
+      spThreat:num(s.set_piece_threat),penOrder:penShown,tIn:num(s.transfers_in_event),gw:{},_team:team};
   });
 
   /* D9 (12 Oct 2026): when each absent player is due back (0 = available
@@ -2137,8 +2144,31 @@ function buildModel(){
   render();
 }
 /* "Expected back 30 Aug" → 30-Aug */
+/* Audit fix (12 Nov 2026): availability, news, price, ownership, transfers,
+   form and points come from FPL's own feed, which the server fetches every
+   15 minutes (5 near a deadline), instead of the dataset mirror, which runs
+   hours behind. Laid over each player's dataset row before every model
+   build; the dataset row is kept (p._ds) so a later feed replaces, never
+   stacks. No feed (the Pages backup, an older server): the dataset stands. */
+const LIVE_STATS=[["st","status"],["cn","chance_of_playing_next_round"],["ct","chance_of_playing_this_round"],
+  ["news","news"],["na","news_added"],["cost","now_cost",v=>v/10],["cce","cost_change_event"],["ccs","cost_change_start"],
+  ["sel","selected_by_percent"],["tie","transfers_in_event"],["toe","transfers_out_event"],["form","form"],
+  ["tp","total_points"],["ppg","points_per_game"]];
+function applyLiveStats(){
+  const L=S.fplLive&&S.fplLive.players;
+  (S.players||[]).forEach(p=>{
+    if(!p.stats)return;
+    if(!p._ds)p._ds=p.stats;
+    const lv=L&&L[p.id];
+    if(!lv||lv.st==null){p.stats=p._ds;return;}
+    const o={...p._ds};
+    LIVE_STATS.forEach(([k,f,fn])=>{if(!(k in lv))return;const v=lv[k];
+      o[f]=v==null?"":(fn?fn(+v):v);});
+    p.stats=o;
+  });
+}
 function parseReturn(news){
-  const m=/expected back\s+(\d{1,2})\s+([A-Za-z]{3})/i.exec(news||"");
+  const m=/(?:expected back|suspended until)\s+(\d{1,2})\s+([A-Za-z]{3})/i.exec(news||"");
   if(m)return `${m[1].padStart(2,"0")}-${m[2][0].toUpperCase()+m[2].slice(1,3).toLowerCase()}`;
   if(/unknown return/i.test(news||""))return "unknown";
   return "";
