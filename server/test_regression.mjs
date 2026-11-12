@@ -199,6 +199,12 @@ function normalise(text, isNew) {
   t = t.replace(/All Players →/g, "Full Player Data →");
   /* PLANNED (12 Nov 2026): the Planner pool links to the renamed Player Data page */
   t = t.replace(/Player Pool Player Data →/g, "Player Pool Full Player Data →");
+  /* PLANNED (12 Nov 2026, Planner layout): one header row (title, Pitch/List,
+     the score with GWx under it, actions); the score is kept, its labels and
+     the control order are not compared. The FORM bar left the pitch cards. */
+  t = t.replace(/Planner ResetSave ← GW\d+ predicted ([\d.]+).*?→ Pitch List Compare Optimise /, "Planner $1 ");
+  t = t.replace(/Planner Pitch List ← ([\d.]+) GW\d+.*?→ Compare Optimise ResetSave /, "Planner $1 ");
+  t = t.replace(/FORM\d+\.\d(25\/26\+?|est\.)?/g, "");
   /* PLANNED (research list, 20 Oct 2026): the Chips page opens with a Chip Timing table */
   t = t.replace(/^Chip Timing.*?in each chip's row below\. ?/, "");
   /* PLANNED (wave 2): captaincy moved from the Planner into the This Week pop-up */

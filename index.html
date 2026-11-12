@@ -63,9 +63,9 @@ body.scrolled .tbfig{display:flex}
 @media(max-width:720px){.tbin{gap:12px}.brand .bw{display:none}.tn .navlink{padding:7px 10px;font-size:13px}}
 @media(max-width:520px){.tb{margin:0 -16px 16px;padding:0 16px}.tbin{height:54px}.gwsw b{min-width:34px}.gwsw button{padding:5px 7px}}
 /* Planner hero: team name + four figure cards */
-.hero{display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:end;margin-bottom:22px}
+.hero{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:end;margin-bottom:14px}
 .hk{font-size:12px;color:#7A7A7A}
-.hero h1{margin:4px 0 0;font:600 30px 'Geist',sans-serif;letter-spacing:-.02em}
+.hero h1{margin:4px 0 0;font:600 24px 'Geist',sans-serif;letter-spacing:-.02em}
 .hm{font-size:12px;color:#7A7A7A;margin-top:4px}
 @media(max-width:900px){.hero{grid-template-columns:1fr;gap:12px}}
 .pagetabs{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px}
@@ -76,24 +76,25 @@ body.scrolled .tbfig{display:flex}
 .btnlink{display:inline-flex;align-items:center;padding:6px 12px;border-radius:8px;background:var(--ink2);box-shadow:inset 0 0 0 1px var(--line);color:var(--cream);font-size:12.5px;font-weight:600;text-decoration:none;white-space:nowrap}
 .btnlink:hover{background:var(--ink3)}
 /* wave 2: This Week strip, pop-ups, Compare */
-.week{margin-bottom:22px}.weekh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.weekh h2{font:600 18px 'Geist',sans-serif;letter-spacing:0}
+.week{margin-bottom:14px}.weekh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.weekh h2{font:600 15px 'Geist',sans-serif;letter-spacing:0}
 .hz{display:inline-flex;background:#171717;border-radius:999px;padding:3px;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
 .hz button{background:none;border:0;color:#9A9A9A;font:500 12.5px 'Geist',sans-serif;padding:5px 12px;border-radius:999px;min-height:0}
 .hz button.on{background:#EDEDED;color:#0A0A0A}
-.wkrow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
-.wk{display:flex;flex-direction:column;align-items:stretch;text-align:left;background:#141414;border:0;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ring);padding:14px 16px;cursor:pointer;color:var(--cream);font:inherit;min-width:0}
+/* compact This Week cards (12 Nov 2026): icon left, title / figure / line */
+.wkrow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.wk{display:grid;grid-template-columns:28px minmax(0,1fr) auto;column-gap:10px;align-items:center;text-align:left;background:#141414;border:0;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ring);padding:10px 12px;cursor:pointer;color:var(--cream);font:inherit;min-width:0}
 .wk:hover{box-shadow:inset 0 0 0 1px var(--line)}
-.wkh{display:flex;align-items:center;gap:10px}.wkh .tile{width:30px;height:30px}
-.wkt{font-size:13px;color:#9A9A9A;font-weight:500}.chev{margin-left:auto;color:#5A5A5A;display:flex}
-.wkf{font:600 19px 'Geist',sans-serif;margin:10px 0 3px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wkf .arr{color:#5A5A5A;font-weight:400}.wkf .cx{font-family:'Geist Mono',monospace;color:#FFB020;font-size:17px;margin-left:4px}
-.wkl{font-size:13px;color:#BDBDBD;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wkl b{font-weight:600}
-.wkft{font-size:12px;color:#7A7A7A;margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.wkl+.wkft{margin-top:8px}
+.wk .wkh{display:contents}.wk .wkh .tile{grid-row:1/4;grid-column:1;width:28px;height:28px}
+.wkt{grid-row:1;grid-column:2;font-size:12px;line-height:16px;color:#9A9A9A;font-weight:500}
+.chev{grid-row:1/4;grid-column:3;color:#5A5A5A;display:flex}
+.wkf{grid-row:2;grid-column:2;font:600 15px/20px 'Geist',sans-serif;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wkf .arr{color:#5A5A5A;font-weight:400}.wkf .cx{font-family:'Geist Mono',monospace;color:#FFB020;font-size:14px;margin-left:4px}
+.wkl{grid-row:3;grid-column:2;font-size:12px;line-height:16px;color:#9A9A9A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wkl b{font-weight:600}
 @media(max-width:1100px){.wkrow{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:620px){.wkrow{grid-template-columns:1fr 1fr}}
-@media(max-width:520px){.wkrow{grid-template-columns:1fr}}
+/* phones: one row you swipe sideways */
+@media(max-width:620px){.wkrow{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding-bottom:2px}
+ .wkrow::-webkit-scrollbar{display:none}.wk{flex:0 0 74%;scroll-snap-align:start}}
 /* phone: the page menu gets its own full-width row under the logo and GW */
 @media(max-width:720px){.tbin{flex-wrap:wrap;height:auto;padding:8px 0 6px;row-gap:6px}.tn{order:3;width:100%;margin:0}.tr{margin-left:auto}}
 .up{color:var(--mint)}.dn{color:var(--red)}
@@ -300,7 +301,7 @@ body.scrolled .tbfig{display:flex}
 .sigcell .tile{width:18px;height:18px}
 /* F83 (bundle 8): figure cards - title with (i), figure, change line */
 .fcgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.fc{background:#141414;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ring);padding:14px 16px;min-width:0;position:relative}
+.fc{background:#141414;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ring);padding:10px 14px;min-width:0;position:relative}
 .fc.mint{box-shadow:inset 3px 0 0 var(--mint),inset 0 0 0 1px var(--ring)}
 .fcb{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:2px}
 .fcb .spk{flex:none}
@@ -310,7 +311,7 @@ body.scrolled .tbfig{display:flex}
  background:rgba(255,255,255,.08);border:0;color:var(--mute);cursor:help;flex:none}
 .fci:hover::after,.fci:focus::after{content:attr(data-tip);position:absolute;z-index:80;top:24px;left:-8px;width:240px;white-space:normal;text-align:left;
  background:#1F1F1F;color:var(--cream);font-size:12px;font-weight:400;line-height:1.45;padding:9px 11px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6),inset 0 0 0 1px var(--line)}
-.fcv{font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1.15;margin-top:4px;color:#fff;font-variant-numeric:tabular-nums}
+.fcv{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.15;margin-top:2px;color:#fff;font-variant-numeric:tabular-nums}
 .fc.mint .fcv{color:var(--mint)}
 .fcc{font-size:12.5px;min-width:0;color:var(--mute);line-height:1.3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fcc .up{color:var(--mint);font-weight:600}.fcc .dn{color:var(--red);font-weight:600}
@@ -343,7 +344,6 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{white-space:nowrap}
-.pitchctl{position:absolute;top:8px;left:8px;z-index:4;display:flex;gap:6px;flex-wrap:wrap}
 .pseg{display:inline-flex;border:1px solid rgba(0,0,0,.4);border-radius:9px;overflow:hidden;
  box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .pseg button{border:none;border-radius:0;padding:5px 11px;font-size:11px;font-weight:700;
@@ -351,12 +351,12 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .pseg button+button{border-left:1px solid rgba(255,255,255,.12)}
 .pseg button.on{background:var(--amber);color:#20130A}
 @media(max-width:520px){.pseg button{padding:4px 9px;font-size:10.5px}}
-.pitch{position:relative;background:repeating-linear-gradient(180deg,#14351F 0 42px,#123019 42px 84px);padding:12px 4px 4px}
-.row{display:flex;justify-content:center;gap:4px;margin-bottom:10px}
-.card{width:calc(20% - 4px);max-width:132px;position:relative}
+.pitch{position:relative;background:repeating-linear-gradient(180deg,#14351F 0 42px,#123019 42px 84px);padding:12px 4px 2px}
+.row{display:flex;justify-content:center;gap:6px;margin-bottom:8px}
+.card{width:calc(20% - 5px);max-width:118px;position:relative}
 .card.dim{opacity:.32}
 .kit{display:flex;justify-content:center;position:relative}
-@media(min-width:1000px){.pitch .kit svg,.benchbar .kit svg{width:48px!important;height:48px!important}}
+.pitch .kit svg,.benchbar .kit svg{width:36px!important;height:36px!important}
 .namebar{background:rgba(10,4,18,.92);border-radius:5px 5px 0 0;display:flex;align-items:center;
  justify-content:space-between;gap:3px;padding:2px 4px;margin-top:-2px;cursor:pointer}
 .namebar .nm{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
@@ -369,13 +369,9 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
  padding:1.5px 3px;border-radius:3px;line-height:1.3}
 .fxpill{margin-top:2px;border-radius:4px;padding:1.5px 3px;text-align:center;
  font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.formpill{display:flex;align-items:center;justify-content:center;gap:2.5px;padding:2px 3px}
-.formpill svg{flex:none;opacity:.85}
-.formlbl{font-size:10px;font-weight:800;opacity:.8}
-.formpill b{font-size:10px;font-weight:800;line-height:1}
 .ptsbar .fx{font-size:10px;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.next3{display:flex;gap:2px;margin-top:3px}
-.next3 span{flex:1;text-align:center;font-size:10px;line-height:14px;border-radius:3px;
+.next3{display:flex;gap:2px;margin-top:2px}
+.next3 span{flex:1;text-align:center;font-size:10px;line-height:13px;border-radius:3px;
  font-family:'Geist Mono',ui-monospace,monospace;font-weight:600;overflow:hidden}
 .badge{position:absolute;width:15px;height:15px;border-radius:50%;font-size:10px;font-weight:800;
  display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;padding:0;z-index:3}
@@ -431,11 +427,12 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 /* The set-piece and signal groups are separate spans, so nesting flex gaps
    made the join between the two groups wider than the gaps inside them.
    Flattening with `display:contents` puts every badge in one flex row. */
-.cardsigs{display:flex;justify-content:center;align-items:center;gap:4px;flex-wrap:wrap;
- padding:5px 2px 0;min-height:22px}
+.cardsigs{display:flex;justify-content:center;align-items:center;gap:3px;flex-wrap:wrap;
+ padding:3px 2px 0}
+.card .cardsigs .tile{width:16px;height:16px}.card .cardsigs .tile svg{width:10px;height:10px}
 .cardsigs .sigs,.cardsigs>span{display:contents}
 .cardsigs .sig{margin:0}
-.benchbar{background:var(--ink);padding:8px 4px 4px}
+.benchbar{background:var(--ink);padding:6px 4px 4px}
 .benchbar .lb{font-size:10px;color:var(--mute);
  font-weight:700;text-align:center;margin-bottom:6px}
 .plist{max-height:600px;overflow-y:auto}
@@ -534,8 +531,20 @@ td.nm{font-family:'Geist',system-ui,sans-serif}
 .dchev{color:var(--mute);font-size:10px}
 .dashbody{padding:10px 14px 14px;background:rgba(0,0,0,.22);border-top:1px solid var(--ink3)}
 .dline{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:4px 0;font-size:12px}
-.gwbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;
- padding:10px 12px;border-bottom:1px solid var(--ink3);background:var(--ink2)}
+/* Planner header (12 Nov 2026): title + Pitch/List | score with GWx under it | actions */
+.plpanel{container-type:inline-size}
+.plhead{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px}
+.plleft{display:flex;align-items:center;gap:12px}
+.placts{display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.gwbar{display:flex;align-items:center;gap:10px}
+.gwfig{display:flex;flex-direction:column;align-items:center;min-width:92px;text-align:center}
+.gwv{font:700 24px/1.05 'Geist',system-ui,sans-serif;color:var(--cream);font-variant-numeric:tabular-nums}
+.gwv.mint{color:var(--mint)}
+.gwl{font-size:11px;color:var(--mute);margin-top:2px;white-space:nowrap}
+.plhead .pseg{box-shadow:none;border:1px solid var(--line)}
+.plhead .pseg button{background:#1F1F1F;padding:6px 11px;font-size:12px}
+.plhead .pseg button.on{background:#EDEDED;color:#0A0A0A}
+@container (max-width:720px){.plhead{grid-template-columns:minmax(0,1fr)}.plhead .gwbar{justify-self:center}.placts{justify-content:center}}
 .chippanel{background:linear-gradient(180deg,#0C1119,#06090D);border-color:var(--line);
  box-shadow:0 8px 24px -14px rgba(0,0,0,.9)}
 .chippanel .chiprow{border-bottom:none;background:none;padding:14px}
@@ -802,8 +811,6 @@ svg.chart circle[data-tip]{cursor:pointer}
  font:700 10px/1.3 Geist,system-ui,sans-serif;vertical-align:2px;font-style:normal;cursor:help}
 .srctag{display:inline-block;margin-left:3px;padding:0 3px;border-radius:3px;background:rgba(132,148,168,.18);color:var(--mute);
  font:600 10px/1.4 Geist,system-ui,sans-serif;letter-spacing:.02em;vertical-align:1px;font-style:normal;text-transform:none;cursor:help;white-space:nowrap}
-.formpill.prior{filter:saturate(.3);opacity:.8}
-.formpill .srctag{background:rgba(0,0,0,.28);color:inherit;margin-left:2px}
 .infotip{margin:10px 0 0}
 .infotip>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--mute)}
 .infotip>summary::-webkit-details-marker{display:none}
@@ -815,6 +822,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 /* F87 (13 Oct 2026): labels read at 11px; nothing on the page under 10px */
 .stat .k,.ps .k,.pcs .k,.pclab,.benchbar .lb,/* F88: the controls used most get a 40px target */
 .phead button,.chipbtn,button.pri{min-height:40px}
+.benchbar .lb{min-height:0}
 .navlink{min-height:36px;display:inline-flex;align-items:center}
 /* F108: injury note under the name on a pitch card */
 .injline{font-size:11px;font-weight:600;color:#20130A;background:var(--amber);border-radius:0 0 6px 6px;padding:1px 5px;
@@ -866,12 +874,12 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.42.1"></script>
-<script src="./app-squad.js?v=12.42.1"></script>
-<script src="./app-render.js?v=12.42.1"></script>
-<script src="./app-odds.js?v=12.42.1"></script>
-<script src="./app-tracker.js?v=12.42.1"></script>
-<script src="./app-main.js?v=12.42.1"></script>
+<script src="./app-core.js?v=12.43.0"></script>
+<script src="./app-squad.js?v=12.43.0"></script>
+<script src="./app-render.js?v=12.43.0"></script>
+<script src="./app-odds.js?v=12.43.0"></script>
+<script src="./app-tracker.js?v=12.43.0"></script>
+<script src="./app-main.js?v=12.43.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
