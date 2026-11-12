@@ -2183,6 +2183,29 @@ function sgPlayers(G,H,posF){
 const PD_POS_COLS={0:["xgi6","cs","dchit","dchits","bonus","total"],1:["cs","csmk","gc90","sv90","gprev","bonus"],
   2:["cs","csmk","xgi6","dchit","dchits","bps","bonus"],3:["xgi6","goalmk","npxg","xa","ict","dchit","dchits","bonus"],
   4:["xgi6","goalmk","npxg","xa","ict","sot","bonus"]};
+/* Value (12 Nov 2026, Andy): "vs Budget" is a player's model points over
+   the xPts window minus those of an average budget starter in his position
+   (the regular starters, 60+ expected minutes, priced within £0.5 of the
+   cheapest); the tick marks the best points per £1m in each position and
+   price band (PRICE_BANDS, the old Value tab's bands). Pts/£m alone always
+   favours the cheapest players. */
+let _pdVal=null;
+function pdValue(r){
+  const k=r.from+"|"+r.count;
+  if(_pdVal&&_pdVal.m===S.model&&_pdVal.k===k)return _pdVal.v;
+  const P=p=>hPts(p,r.from,r.count);
+  const reg=S.model.players.filter(p=>p.avail>0&&(p.xMins||0)>=60);
+  const base={},best={};
+  [1,2,3,4].forEach(pos=>{const a=reg.filter(p=>p.pos===pos);if(!a.length)return;
+    const mn=Math.min(...a.map(p=>p.price)),b=a.filter(p=>p.price<=mn+0.5);
+    base[pos]={pts:b.reduce((s,p)=>s+P(p),0)/b.length,price:b.reduce((s,p)=>s+p.price,0)/b.length};
+    const B=PRICE_BANDS[pos];
+    for(let i=0;i<B.length-1;i++){const inb=a.filter(p=>p.price>=B[i]-1e-9&&p.price<B[i+1]-1e-9);if(!inb.length)continue;
+      const w=inb.reduce((x,y)=>P(y)/y.price>P(x)/x.price?y:x);
+      const band=B[i]===0?`under £${B[i+1].toFixed(1)}`:B[i+1]===99?`£${B[i].toFixed(1)}+`:`£${B[i].toFixed(1)}–${(B[i+1]-0.1).toFixed(1)}`;
+      best[w.id]=`Best value: ${POS[pos]} ${band}, ${(P(w)/w.price).toFixed(2)} pts per £1m over ${pdWinLabel(r)} (regular starters)`;}});
+  _pdVal={m:S.model,k,v:{base,best}};return _pdVal.v;
+}
 function pdCols(){
   const g=VG(),r=lGwRange(),W=p=>ws(String(p.code||""),p.pos,dispWin(),p.price,teamMaxPrice(p.team))||{};
   /* Season: FPL's own per-90 where FPL publishes one; Last N: match rows */
@@ -2199,6 +2222,12 @@ function pdCols(){
     form:{label:"Form",tip:"Average points per game over the last 30 days",val:p=>p.form,cell:p=>p.form.toFixed(1),heat:1},
     xfpl:{label:"xFPL",tip:`Model points, GW${g}`,val:p=>hPts(p,g,1),cell:p=>hPts(p,g,1).toFixed(1),heat:1,strong:1},
     proj:{label:`xPts ${r.from===r.to?"GW"+r.from:r.from+"–"+r.to}`,tip:`Model points over GW${r.from}${r.to>r.from?" to GW"+r.to:""} (set the window in Filters)`,val:p=>hPts(p,r.from,r.count),cell:p=>hPts(p,r.from,r.count).toFixed(1),heat:1,strong:1},
+    best:{label:"✓",tip:"Best points per £1m in his position and price band (regular starters). Hover a tick for the band",
+      val:p=>pdValue(r).best[p.id]?1:0,cell:p=>{const t=pdValue(r).best[p.id];return t?`<span class="pdbest" title="${esc(t)}" aria-label="${esc(t)}">✓</span>`:"";},heat:0},
+    vsb:{label:"vs Budget",tip:"Model points over the window above an average budget starter in his position (regular starters within £0.5 of the cheapest)",
+      val:p=>{const b=pdValue(r).base[p.pos];return b?hPts(p,r.from,r.count)-b.pts:null;},
+      cell:p=>{const b=pdValue(r).base[p.pos];if(!b)return "—";const v=hPts(p,r.from,r.count)-b.pts;
+        return `<span title="${hPts(p,r.from,r.count).toFixed(1)} pts against ${b.pts.toFixed(1)} for a budget ${POS[p.pos]} (about £${b.price.toFixed(1)})"${v<0?' class="dn"':""}>${v>=0?"+":""}${v.toFixed(1)}</span>`;},heat:1},
     value:{label:"Pts/£m",tip:"Model points over the window per £1m of price: where the money works hardest",val:p=>hPts(p,r.from,r.count)/p.price,cell:p=>(hPts(p,r.from,r.count)/p.price).toFixed(2),heat:1},
     own:{label:ownMode==="all"?"Own %":ownMode==="league"?"Rivals":"Near rank",tip:ownMode==="all"?"Owned by all managers":ownMode==="league"?"Owned by your mini-league rivals":"Owned by the 50 managers ranked around you",
       val:own,cell:p=>{if(ownMode==="all")return p.owned.toFixed(1)+"%";const a=aroundOwn(p,ownMode);return a?`${a.k}/${a.n}`:"—";},heat:0},
@@ -2225,7 +2254,7 @@ function pdCols(){
   };
   const pos=S.lPos||0;
   const extra=PD_POS_COLS[pos].filter(k=>!C[k].market||S.oddsState==="ok");
-  return{C,base:["price","form","xfpl","proj","value","own","xmins"],extra,pos};
+  return{C,base:["price","best","form","xfpl","proj","value","vsb","own","xmins"],extra,pos};
 }
 
 /* Player Data redesign (12 Nov 2026, from the approved mock-up): one filter
@@ -2296,22 +2325,24 @@ function playerDataHTML(){
   const HSUB={xgi6:["xGI/90","last 6"]};
   const posName={0:"Key stats",1:"Keeper stats",2:"Defender stats",3:"Midfielder stats",4:"Forward stats"}[D.pos];
   const gwh=Array.from({length:Math.min(5,39-g)},(_,i)=>`<i>${g+i}</i>`).join("");
-  const head=`<tr class="grp"><th colspan="4"></th><th colspan="3" class="gs">Model</th><th colspan="3" class="gs">Value and minutes</th><th colspan="${D.extra.length}" class="gs">${posName}</th><th></th></tr>
-    <tr>${th("name","Player","Name, club and position","nm")}${th("price",D.C.price.label,D.C.price.tip)}<th class="l" title="Signals now: hover each for why">Signals</th><th class="l" title="Next five fixtures for his position: green easy, red hard; capitals home, lower case away">Next 5 <small class="pdgw">${gwh}</small></th>
+  const head=`<tr class="grp"><th colspan="5"></th><th colspan="3" class="gs">Model</th><th colspan="4" class="gs">Value and minutes</th><th colspan="${D.extra.length}" class="gs">${posName}</th><th></th></tr>
+    <tr>${th("name","Player","Name, club and position","nm")}${th("price",D.C.price.label,D.C.price.tip)}${th("best","✓",D.C.best.tip,"pdbestc")}<th class="l sgh" title="Signals now: hover each for why">Signals</th><th class="l" title="Next five fixtures for his position: green easy, red hard; capitals home, lower case away">Next 5 <small class="pdgw">${gwh}</small></th>
     ${th("form",D.C.form.label,D.C.form.tip,"gs")}${th("xfpl","xFPL",D.C.xfpl.tip,"","GW"+g)}${th("proj","xPts",D.C.proj.tip,"",pdWinLabel(r))}
-    ${th("value",D.C.value.label,D.C.value.tip,"gs")}${th("own",D.C.own.label,D.C.own.tip)}${th("xmins",D.C.xmins.label,D.C.xmins.tip)}
+    ${th("value",D.C.value.label,D.C.value.tip,"gs")}${th("vsb",D.C.vsb.label,D.C.vsb.tip)}${th("own",D.C.own.label,D.C.own.tip)}${th("xmins",D.C.xmins.label,D.C.xmins.tip)}
     ${D.extra.map((k,j)=>{const[l,s]=HSUB[k]||[D.C[k].label,""];return th(k,l,D.C[k].tip,j?"":"gs",s);}).join("")}<th></th></tr>`;
   const body=rows.slice(0,lim).map(p=>{const on=ticks.includes(p.id),own=mine.has(p.id),sg=signals(p,g),proj=D.C.proj.val(p)||0;
     return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
       <td class="nm"><span class="pcell"><span class="pdshirt">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,26)}<input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></span>
         <span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${role(p)}</span><span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}</span></span></span></td>
       <td class="fig pdprice">${D.C.price.cell(p)}</td>
+      <td class="pdbestc">${D.C.best.cell(p)}</td>
       <td class="sgc">${sg.length?`<span class="sigcell">${sg.slice(0,4).map(([k,t])=>pdTile(k,t)).join("")}${sg.length>4?`<span class="sgmore" title="${esc(sg.slice(4).map(x=>SIGNAL[x[0]][2]).join(", "))}">+${sg.length-4}</span>`:""}</span>`:""}</td>
       <td>${fix5(p,g)}</td>
       <td class="fig gs${lvl("form",p.form)}">${D.C.form.cell(p)}</td>
       <td class="fig${lvl("xfpl",D.C.xfpl.val(p))}">${D.C.xfpl.cell(p)}</td>
       <td class="fig pdproj"><b>${D.C.proj.cell(p)}</b><span class="pdpbar"><i style="width:${Math.max(3,Math.min(100,proj/pmax*100)).toFixed(0)}%"></i></span></td>
       <td class="fig gs${lvl("value",D.C.value.val(p))}">${D.C.value.cell(p)}</td>
+      <td class="fig${lvl("vsb",D.C.vsb.val(p))}">${D.C.vsb.cell(p)}</td>
       <td class="fig">${D.C.own.cell(p)}</td>
       <td class="fig${(p.xMins||0)<60?" warn":lvl("xmins",D.C.xmins.val(p))}">${D.C.xmins.cell(p)}</td>
       ${D.extra.map((k,j)=>`<td class="fig${j?"":" gs"}${lvl(k,D.C[k].val(p))}">${D.C[k].cell(p)}</td>`).join("")}
@@ -2321,7 +2352,7 @@ function playerDataHTML(){
     (lim>PD_PAGE&&rows.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${rows.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
   const key5=[1,2,3,4,5].map(d=>{const[b,c]=pdFdr(d);return `<i class="fx5" style="background:${b};color:${c}">${d}</i>`;}).join("");
   return pdHeadHTML(rows,r)+(S.starOnly&&!S.stars.length?`<div class="panel"><div class="pbody"><p class="note" style="margin:0">No shortlisted players yet. Tap ★ on any row to add one.</p></div></div>`:
-    `<div class="panel pdpanel"><div class="scroll tallscroll pdt${ticks.length?" ticking":""}"><table><thead>${head}</thead><tbody>${body||`<tr><td colspan="${11+D.extra.length}" class="note" style="padding:14px">No players match these filters.</td></tr>`}</tbody></table></div>${more}</div>`)
+    `<div class="panel pdpanel"><div class="scroll tallscroll pdt${ticks.length?" ticking":""}"><table><thead>${head}</thead><tbody>${body||`<tr><td colspan="${13+D.extra.length}" class="note" style="padding:14px">No players match these filters.</td></tr>`}</tbody></table></div>${more}</div>`)
     +`<div class="pdkey"><span><i class="kmine"></i>Your squad</span><span><span class="pdrole c">C</span><span class="pdrole v">VC</span><span class="pdrole xi">XI</span><span class="pdrole bn">Bench</span></span><i class="sep"></i>
       <span><b class="t10">4.6</b> top 10% of the column</span><span><b class="t25">4.6</b> top 25%</span><i class="sep"></i>
       <span>Fixture difficulty <span class="fx5r">${key5}</span> · capitals home</span>${S.oddsState==="ok"?`<i class="sep"></i><span>Market columns: bookmakers' figures, margin removed</span>`:""}</div>`;
