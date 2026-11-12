@@ -128,6 +128,12 @@ the start is jittered.
   with OLD_REF, so it must pass in full for a change that should not move
   any figure, and fails by design when the model is changed on purpose.
 - test_broken.mjs uses port 8098: do not run anything else there.
+- Keep the test state frozen: put an empty `.frozen` file in it. A server
+  started on a state dir holding `.frozen` makes no upstream fetches at
+  all, whatever SIGNALS_TICK_MS says. Without it, any server started on the
+  test state without SIGNALS_TICK_MS refreshes its dataset, bootstrap and
+  feeds with live data (12 Nov 2026: test_rules then failed on unchanged
+  code).
 
 ## Model changes since the audit (12-13 Oct 2026)
 
