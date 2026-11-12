@@ -335,7 +335,7 @@ function tableHTML(){
     return `<th class="${S.sortKey===k?"act":""}" onclick="act('sort','${k}')" title="${TDESC[k]||n}"
       style="text-align:${k==="name"?"left":"right"};${hl}">${n}${S.sortKey===k?(S.sortDir==="desc"?" ↓":" ↑"):""}</th>`;}).join("");
   const iconCell=p=>{
-    const all=signals(p,g).map(([k,t])=>sigTile(k,t)).join("");
+    const all=signals(p,g).map(([k,t,b])=>sigTile(k,t,b)).join("");
     return all?`<span class="sigcell">${all}</span>`:`<span style="color:var(--ink3)">·</span>`;};
   const pct=v=>(v*100).toFixed(0)+"%";
   const CELL={
