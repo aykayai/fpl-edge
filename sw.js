@@ -15,6 +15,7 @@ const SHELL = [
   "./app-odds.js",
   "./app-tracker.js",
   "./app-main.js",
+  "./app-scout.js",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
