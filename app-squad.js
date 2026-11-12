@@ -60,7 +60,7 @@ const SIG_RULE={
   rise:()=>"FPL's predictor: 100%+ progress to a rise tonight",
   fall:()=>"FPL's predictor: 100%+ progress to a fall tonight",
   mins:()=>"Doubt, out, or under 60 expected minutes",
-  heat:()=>"Heating Up. Midfielders: last-4 xGI/90 at least 1.5x his season rate. Keepers and defenders: his team's xG against over the last 4 at most 0.7x its season rate",
+  heat:()=>"Heating Up. Midfielders: last-4 xGI/90 at least 1.5x his season rate. Keepers and defenders: his team's xG against over the last 4 at most 0.7x its season rate. Forwards: his team's xG over the last 4 at least 1.3x its season rate",
   cool:()=>"Cooling Off. Midfielders: last-4 xGI/90 at most 0.6x his season rate, or his DefCon hit rate down 30 points. Keepers, defenders and forwards: losing his place (his share of the team's minutes over its last 4 at most 0.75x his season share, or 2 or fewer starts in the last 4 after starting 75%+). Keepers also: goals prevented over the last 4 at least 0.3 per 90 below his season rate",
   defcon:()=>`DefCon Monster: reached the DefCon target in at least 2 of every 3 matches this season, with ${DCM_HITS}+ hits. Solid when the next match is strong too: model chance ${Math.round(DCM_CHANCE*100)}%+ against a side whose opponents reach DefCon ${DCM_GIVEN}+ times a match`,
   rival:()=>"Owned by managers around you, not by you",
@@ -135,11 +135,20 @@ function sellMap(h){
               Cooling Off: xGI/90 last 4 <= 0.6x season and -0.15 (-2.1),
               or his DefCon hit rate in the last 4 at least 0.30 below his
               season rate (-2.2, n=47).
-     FWD      no Heating Up: it was noise (+0.8 +/-1.3).
+     FWD      Heating Up (12 Nov 2026, scratchpad momentum_heat.py): his
+              team's xG per match over its last 4 at least 1.3x its season
+              rate and 0.3 higher (+3.5, n=46; GW6-19 +5.3, GW20-33 +2.0).
+              His own xG, xGI, shots and box touches rising did not hold.
    This season's matches only; at least 6 appearances and 450 minutes, and
    180 minutes in the last 4. `before` limits the matches to earlier
    gameweeks (the Status page grades past weeks with it). */
 const _momCache=new Map();
+/* his team's own xG per match, same matches as teamXgaSeries */
+function teamXgfSeries(short,before){
+  const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
+  return Object.values(S.teamMatch||{}).filter(m=>m.tag==="now"&&(!before||m.gw<before)&&(key[m.h]===short||key[m.a]===short)
+      &&(m.hxg>0||m.axg>0)).sort((a,b)=>a.gw-b.gw).map(m=>key[m.h]===short?m.hxg:m.axg);
+}
 function teamXgaSeries(short,before){
   const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
   return Object.values(S.teamMatch||{}).filter(m=>m.tag==="now"&&(!before||m.gw<before)&&(key[m.h]===short||key[m.a]===short)
@@ -180,6 +189,9 @@ function momentum(p,before){
       const tx=p.pos<=2?teamXgaSeries(p.teamName,before):[];
       if(tx.length>=6){const s=tx.reduce((a,x)=>a+x,0)/tx.length,l=tx.slice(-4).reduce((a,x)=>a+x,0)/4;
         if(l<=0.7*s&&s-l>=0.3){v.heat=true;v.why=`${p.teamName} xG against ${l.toFixed(2)} a match over the last 4 vs ${s.toFixed(2)} this season`;}}
+      if(p.pos===4){const tf=teamXgfSeries(p.teamName,before);
+        if(tf.length>=6){const s=tf.reduce((a,x)=>a+x,0)/tf.length,l=tf.slice(-4).reduce((a,x)=>a+x,0)/4;
+          if(l>=1.3*s&&l-s>=0.3){v.heat=true;v.why=`${p.teamName} xG ${l.toFixed(2)} a match over the last 4 vs ${s.toFixed(2)} this season`;}}}
       if(!v.heat){const lp=losingPlace(p,rows,before);if(lp){v.cool=true;v.why=lp;}}
       if(p.pos===1&&!v.heat&&!v.cool){const gs=per(rows,r=>r.gp||0),g4=per(l4,r=>r.gp||0);
         if(gs!=null&&g4!=null&&gs-g4>=0.3){v.cool=true;v.why=`goals prevented ${sgn1(g4)} per 90 over the last 4 vs ${sgn1(gs)} this season`;}}
