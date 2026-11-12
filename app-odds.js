@@ -990,49 +990,41 @@ function renderPage(){
           ${S.pendingOpt.map(m=>`<div><div style="font-size:10px;
             color:var(--cyan);font-weight:700;margin-bottom:4px">${POS[m.out.pos]}</div>${swapCardHTML(m,g)}</div>`).join("")}</div>
         <button style="margin-top:10px" onclick="act('cancelopt')">Cancel</button></div></div>`:"";
+    /* Planner layout (12 Nov 2026, Andy's pick A): one header row holds the
+       title, Pitch/List, the gameweek score with its label under it, and the
+       actions; the pitch follows straight on, the bench under it. */
+    const offRow=(g<first&&S.tracker&&Array.isArray(S.tracker.gw))
+      ?(S.tracker.gw.find(r=>r.event===g&&Array.isArray(r.picks)&&r.picks.length)||null):null;
+    let gwFig;
+    /* Finished week with the official history published: the real total,
+       the transfers and hit paid for it, and the chip. */
+    if(offRow)gwFig=`<b class="gwv">${(+offRow.points).toFixed(0)}</b>
+      <span class="gwl" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">GW${g} official · ${offRow.transfers||0} transfer${(offRow.transfers||0)===1?"":"s"}${offRow.transferCost>0?`, <span class="dn">-${offRow.transferCost} hit</span>`:""}${offRow.chipLabel?` · <span style="color:var(--amber)">${esc(offRow.chipLabel)}</span>`:""}</span>
+      <span class="gwl up">Official line-up · final</span>`;
+    /* F55: a week in play shows its score so far, tagged live */
+    else if(S.actuals&&S.actuals[g]!=null){const d=S.actuals[g]-weekPts();
+      gwFig=`<b class="gwv">${(+S.actuals[g]).toFixed(0)}</b>
+      <span class="gwl">GW${g} ${weekFinal(g)?"actual":"so far"+LIVE_TAG} · pred ${weekPts().toFixed(1)} <span class="${d>=0?"up":"dn"}">${d>=0?"+":""}${d.toFixed(1)}</span></span>`;}
+    else{const t=transfersIn(g),h=(t&&!freeWeek(g))?hitCost(g):0;
+      gwFig=`<b class="gwv mint">${weekPts().toFixed(1)}</b>
+      <span class="gwl">GW${g}${t&&!freeWeek(g)?` · ${t} transfer${t>1?"s":""} · ${h?`<span class="dn">-${h} hit</span>`:"free"}`:""}</span>`;}
     main=`<div class="grid2"><div>
-      <div class="panel"><div class="phead"><h2>Planner</h2>
-
-        <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="act('reset')">Reset</button><button class="pri" onclick="act('save')">Save</button></span></div>
+      <div class="panel plpanel"><div class="phead plhead">
+        <span class="plleft"><h2>Planner</h2>
+          <span class="pseg">
+            <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
+            <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span></span>
         <div class="gwbar">
-          <button onclick="act('startgw',${Math.max(1,VG()-1)})" title="Earlier gameweek">←</button>
-          <span style="text-align:center;min-width:130px">
-            ${(()=>{
-              /* Finished week with the official history published: the real
-                 total, the transfers and hit paid for it, and the chip. */
-              const offRow=(g<first&&S.tracker&&Array.isArray(S.tracker.gw))
-                ?(S.tracker.gw.find(r=>r.event===g&&Array.isArray(r.picks)&&r.picks.length)||null):null;
-              if(offRow)return `
-            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} official</span>
-            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+offRow.points).toFixed(0)}</span>
-            <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">${offRow.transfers||0} transfer${(offRow.transfers||0)===1?"":"s"}${offRow.transferCost>0?`, <span style="font-weight:700;color:var(--red)">-${offRow.transferCost} hit</span>`:""}${offRow.chipLabel?` · <span style="color:var(--amber)">${esc(offRow.chipLabel)}</span>`:""}</span>
-            <span style="display:block;font-size:10px;color:var(--mint);margin-top:1px" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">Official line-up · final</span>`;
-              /* F55: a week in play shows its score so far, tagged live */
-              if(S.actuals&&S.actuals[g]!=null)return `
-            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} ${weekFinal(g)?"actual":"so far"+LIVE_TAG}</span>
-            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--cream)">${(+S.actuals[g]).toFixed(0)}</span>
-            <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">pred ${weekPts().toFixed(1)} · <span style="font-weight:700;color:${S.actuals[g]-weekPts()>=0?"var(--mint)":"var(--red)"}">${S.actuals[g]-weekPts()>=0?"+":""}${(S.actuals[g]-weekPts()).toFixed(1)}</span></span>`;
-              return `
-            <span style="display:block;font-size:10px;color:var(--mute);font-weight:700">GW${g} predicted</span>
-            <span style="display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1.05;color:var(--mint)">${weekPts().toFixed(1)}</span>
-            ${(()=>{const t=transfersIn(g);if(!t||freeWeek(g))return "";const h=hitCost(g);
-              return `<span style="display:block;font-size:10px;color:${h?"var(--red)":"var(--mute)"};margin-top:1px">${t} transfer${t>1?"s":""} · ${h?`-${h} hit`:"free"}</span>`;})()}`;
-            })()}
-          </span>
-          <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek">→</button>
+          <button onclick="act('startgw',${Math.max(1,VG()-1)})" title="Earlier gameweek" aria-label="Earlier gameweek">←</button>
+          <span class="gwfig">${gwFig}</span>
+          <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek" aria-label="Later gameweek">→</button>
         </div>
-
-        <div style="position:relative">
-          <span class="pitchctl" style="left:8px;right:8px;justify-content:space-between">
-            <span class="pseg">
-              <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
-              <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
-            <span class="pseg">
-              <button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button>
-              <button onclick="act('opt')">Optimise</button></span></span>
-          ${S.sqView==="list"?`<div style="padding-top:34px">${squadListHTML()}</div>`:pitchHTML()}
-        </div>
+        <span class="placts">
+          <span class="pseg">
+            <button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button>
+            <button onclick="act('opt')">Optimise</button></span>
+          <button onclick="act('reset')">Reset</button><button class="pri" onclick="act('save')">Save</button></span></div>
+        ${S.sqView==="list"?squadListHTML():pitchHTML()}
         </div>
       <div class="panel chippanel">
         <div class="chiprow">

@@ -1280,35 +1280,33 @@ function weekData(){
 function weekStripHTML(){
   if(!S.model||VG()<S.model.next.id)return "";
   const D=weekData(),{g,h}=D;
-  const card=(k,icon,tone,title,fig,line,foot)=>`<button class="wk" onclick="act('pop','${k}')" aria-haspopup="dialog">
+  /* compact cards (12 Nov 2026): icon, title, figure, one line; the second
+     pick (next move, vice, ...) is in each card's pop-up */
+  const card=(k,icon,tone,title,fig,line)=>`<button class="wk" onclick="act('pop','${k}')" aria-haspopup="dialog">
     <span class="wkh"><span class="tile" style="--tc:${tone}">${lic(icon)}</span><span class="wkt">${title}</span><span class="chev">${lic("chevron-right",16)}</span></span>
-    <span class="wkf">${fig}</span><span class="wkl">${line}</span>${foot?`<span class="wkft">${foot}</span>`:""}</button>`;
-  const m=D.moves[0],m2=D.moves[1];
-  const c=D.caps[0],v=D.caps[1];
+    <span class="wkf">${fig}</span><span class="wkl">${line}</span></button>`;
+  const m=D.moves[0],c=D.caps[0];
   const opp=p=>{const f=((p.gw[g]||{}).fixtures||[])[0];return f?`${esc(f.opp)} (${f.home?"H":"A"})`:"no game";};
   const L=p=>fplLive(p)||{};
   const pct=p=>`<b class="${L(p).pcp>0?"up":"dn"}">${Math.round(L(p).pcp)}%</b>`;
-  const w=D.warn[0],t=D.threats[0],t2=D.threats[1];
+  const w=D.warn[0],t=D.threats[0];
   const cards=[
     m?card("move","circle-arrow-up","#3DDC97","Top Move",`${esc(m.out.web_name)} <span class="arr">→</span> ${esc(m.inn.web_name)}`,
-        `<b class="up">${sgn1(m.gain)} pts</b> ${wkSpan(g,h)} · £${m.inn.price.toFixed(1)} · ${esc(m.inn.teamName)}`,
-        m2?`Next: ${esc(m2.out.web_name)} → ${esc(m2.inn.web_name)} ${sgn1(m2.gain)}`:"")
-     :card("move","circle-arrow-up","#3DDC97","Top Move","Hold",`No single move improves your XI over ${wkSpan(g,h)}`,"Roll the free transfer"),
+        `<b class="up">${sgn1(m.gain)} pts</b> ${wkSpan(g,h)} · £${m.inn.price.toFixed(1)} · ${esc(m.inn.teamName)}`)
+     :card("move","circle-arrow-up","#3DDC97","Top Move","Hold",`No single move improves your XI over ${wkSpan(g,h)}`),
     c?card("cap","crown","#FFB020","Captain",`${esc(c.web_name)} <span class="cx">${(hPts(c,g,h)*2).toFixed(1)}</span>`,
-        `${hPts(c,g,h).toFixed(1)} × 2 · ${h>1?wkSpan(g,h):opp(c)}`,v?`Vice: ${esc(v.web_name)} ${hPts(v,g,h).toFixed(1)}`:"")
-     :card("cap","crown","#FFB020","Captain","—","No XI yet",""),
+        `${hPts(c,g,h).toFixed(1)} × 2 · ${h>1?wkSpan(g,h):opp(c)}`)
+     :card("cap","crown","#FFB020","Captain","—","No XI yet"),
     D.rising.length||D.falling.length
      ?card("price",D.falling.length&&!D.rising.length?"trending-down":"trending-up",D.falling.length&&!D.rising.length?"#FF5A6E":"#4ADE80","Price Watch",
         D.rising.length?`${D.rising.length} of yours rising`:`${D.falling.length} of yours falling`,
-        [...D.rising,...D.falling].slice(0,2).map(p=>`${esc(p.web_name)} ${pct(p)}`).join(" · ")+" progress",
-        D.rising.length&&D.falling.length?`${D.falling.length} falling too`:D.rising.length?"Selling keeps half of each rise":"Sell before it drops to keep the value")
-     :card("price","trending-up","#4ADE80","Price Watch",D.priced.length?"No changes due":"No predictor data",D.priced.length?"None of yours is near a rise or fall":"FPL's predictor did not load",""),
+        [...D.rising,...D.falling].slice(0,2).map(p=>`${esc(p.web_name)} ${pct(p)}`).join(" · ")+(D.rising.length&&D.falling.length?` · ${D.falling.length} falling`:" progress"))
+     :card("price","trending-up","#4ADE80","Price Watch",D.priced.length?"No changes due":"No predictor data",D.priced.length?"None of yours is near a rise or fall":"FPL's predictor did not load"),
     w?card("warn","clock-alert","#FFB020","Warnings",`${D.warn.length} ${D.warn.length===1?"doubt":"doubts"}`,
-        `${esc(w.p.web_name)} · ${w.p.avail<1?(w.p.avail>0?Math.round(w.p.avail*100)+"%":"out"):Math.round(w.p.xMins||0)+" mins"}${w.p.news?" · "+esc(String(w.p.news).split(/[-–(]/)[0].trim().slice(0,22)):""}`,
-        w.inXI?"In your XI: consider a change":"On your bench: no change needed")
-     :card("warn","clock-alert","#FFB020","Warnings","All clear","Every player fit and expected to start",""),
-    t?card("rival","swords","#B388FF","Rival Threat",esc(t.p.web_name),`Owned by ${t.k} of ${D.R.n} rivals, not you`,t2?`Next: ${esc(t2.p.web_name)} ${t2.k}/${D.R.n}`:"")
-     :card("rival","swords","#B388FF","Rival Threat","—",D.R?"No player most rivals own that you don't":"League feed not loaded","")
+        `${esc(w.p.web_name)} · ${w.p.avail<1?(w.p.avail>0?Math.round(w.p.avail*100)+"%":"out"):Math.round(w.p.xMins||0)+" mins"}${w.p.news?" · "+esc(String(w.p.news).split(/[-–(]/)[0].trim().slice(0,22)):""}${w.inXI?"":" · bench"}`)
+     :card("warn","clock-alert","#FFB020","Warnings","All clear","Every player fit and expected to start"),
+    t?card("rival","swords","#B388FF","Rival Threat",esc(t.p.web_name),`Owned by ${t.k} of ${D.R.n} rivals, not you`)
+     :card("rival","swords","#B388FF","Rival Threat","—",D.R?"No player most rivals own that you don't":"League feed not loaded")
   ].join("");
   return `<section class="week"><div class="weekh"><h2>This Week</h2>${hzHTML(h,"weekh")}</div><div class="wkrow">${cards}</div></section>`;
 }
