@@ -33,6 +33,9 @@ import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
 import { buildFeeds, feedsStatus, FEEDS_DIR, SNAP_DIR } from "./lib/feeds.mjs";
 import { snapshotTick, snapshotStatus } from "./lib/snapshot.mjs";
 import { finalRowsFile } from "./lib/trim.mjs";
+import { handleMcp, mcpAllowed, scoutModel } from "./lib/scout-mcp.mjs";
+import { ask as scoutAsk, history as scoutHistory, newThread as scoutNew, ready as scoutReady } from "./lib/scout-ask.mjs";
+import { recordInjuries } from "./lib/scout-news.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -124,8 +127,52 @@ function gzipFor(path, st, body) {
 
 /* ---------------- request handling ---------------- */
 
+/* The Scout (12 Nov 2026): the request body, capped */
+function readBody(req, max = 64 * 1024) {
+  return new Promise((ok, bad) => {
+    const parts = []; let n = 0;
+    req.on("data", c => { n += c.length; if (n > max) { bad(new Error("too long")); req.destroy(); } else parts.push(c); });
+    req.on("end", () => ok(Buffer.concat(parts).toString("utf8")));
+    req.on("error", bad);
+  });
+}
+/* the pop-up's own requests: same origin, and the header a cross-site form cannot send */
+function sameOrigin(req) {
+  if (req.headers["x-scout"] !== "1") return false;
+  const o = req.headers.origin;
+  if (!o) return true;
+  try { return new URL(o).host === String(req.headers.host || ""); } catch { return false; }
+}
+async function handleScout(req, res, path) {
+  const method = req.method;
+  if (path === "/mcp") {
+    if (method !== "POST" || !mcpAllowed(req)) { sendJson(res, "GET", 404, { error: "not found" }); return; }
+    let msg; try { msg = JSON.parse(await readBody(req, 64 * 1024)); } catch { sendJson(res, "GET", 400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Not JSON." } }); return; }
+    const out = await handleMcp(msg, log);
+    if (out === null) { send(res, "GET", 202, { "Content-Length": 0 }); return; }
+    sendJson(res, "GET", 200, out, { "Cache-Control": "no-store" });
+    return;
+  }
+  if (!sameOrigin(req)) { sendJson(res, "GET", 403, { ok: false, error: "Not from this page." }); return; }
+  if (path === "/api/scout/ask" && method === "POST") {
+    let body; try { body = JSON.parse(await readBody(req, 96 * 1024)); } catch { sendJson(res, "GET", 400, { ok: false, error: "Not JSON." }); return; }
+    sendJson(res, "GET", 200, await scoutAsk(body && typeof body === "object" ? body : {}, log), { "Cache-Control": "no-store" });
+    return;
+  }
+  if (path === "/api/scout/new" && method === "POST") { sendJson(res, "GET", 200, await scoutNew(), { "Cache-Control": "no-store" }); return; }
+  if (path === "/api/scout/history" && method === "GET") { sendJson(res, "GET", 200, await scoutHistory(), { "Cache-Control": "no-store" }); return; }
+  if (path === "/api/scout/status" && method === "GET") { sendJson(res, "GET", 200, { ok: true, connected: scoutReady() }, { "Cache-Control": "no-store" }); return; }
+  sendJson(res, "GET", 404, { error: "not found" });
+}
+
 async function handle(req, res) {
   const method = req.method;
+  const scoutPath = new URL(req.url, "http://localhost").pathname;
+  if (scoutPath === "/mcp" || scoutPath.startsWith("/api/scout/")) {
+    try { await handleScout(req, res, scoutPath); }
+    catch (e) { sendJson(res, "GET", 500, { ok: false, error: "server error" }); log("scout", "error " + e.message); }
+    return;
+  }
   if (method !== "GET" && method !== "HEAD") {
     sendJson(res, "GET", 405, { error: "method not allowed" }, { Allow: "GET, HEAD" });
     return;
@@ -286,6 +333,9 @@ job("news", refreshNews);
 job("odds", refreshOdds);
 job("feeds", buildFeeds);
 job("neighbours", () => buildNeighbours(currentGw()));
+/* The Scout: every change to a player's FPL injury note, so "how long has he
+   been out" has an answer (FPL keeps only the latest note) */
+job("injuries", async () => { const d = await fplPlayersPayload(); const n = await recordInjuries(d && d.players); if (n) log("scout", `injury log: ${n} changes`); });
 
 async function runJob(name, nextMs) {
   const j = jobs[name];
@@ -307,6 +357,7 @@ async function tick() {
   if (CONFIG.FEEDS_POLL_MS > 0 && jobs.feeds.due <= now) runJob("feeds", CONFIG.FEEDS_POLL_MS);
   /* once an hour it checks; it only fetches when the gameweek has moved on */
   if (CONFIG.FEEDS_POLL_MS > 0 && jobs.neighbours.due <= now && currentGw()) runJob("neighbours", 3600000);
+  if (jobs.injuries.due <= now) runJob("injuries", 15 * 60000);
   if (await anyFixtureLive().catch(() => false)) {
     if (!jobs.live) job("live", fetchLive);
     if (jobs.live.due <= now) runJob("live", CONFIG.FPL_LIVE_MS);
@@ -344,6 +395,9 @@ async function main() {
     if (!frozen) tick();
     setInterval(tick, CONFIG.TICK_MS);
   }, jitter);
+  /* The Scout: build the warm model once the server is up, so the first
+     question is not kept waiting (only where The Scout is switched on) */
+  if (!frozen && process.env.FPL_SCOUT_MCP_TOKEN) setTimeout(() => scoutModel(log).ready().catch(e => log("scout", "model " + e.message)), 90000);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

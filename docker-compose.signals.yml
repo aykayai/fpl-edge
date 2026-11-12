@@ -12,7 +12,17 @@ services:
       STATE_DIR: /state
     volumes:
       - signals-state:/state
+    # The Scout (12 Nov 2026): Jeevs reaches The Scout's tools as
+    # fpl-signals:8090 on this private network, and this server reaches
+    # Jeevs on it. Made once by hand: docker network create fpl-scout
+    networks:
+      - default
+      - fpl-scout
     restart: unless-stopped
 
 volumes:
   signals-state:
+
+networks:
+  fpl-scout:
+    external: true

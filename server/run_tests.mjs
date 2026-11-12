@@ -20,6 +20,7 @@ const SUITES = [
   { name: "signals", file: "test_signals.mjs", env: { PORT: "8097" } },
   { name: "broken items", file: "test_broken.mjs", env: { PORT: "8098" } },
   { name: "extra", file: "test_extra.mjs", env: { PORT: "8091" } },
+  { name: "the scout", file: "test_scout.mjs", env: {} },
   ...(process.env.EXTRA ? process.env.EXTRA.split(",").map((f, i) => ({ name: f, file: f, env: { PORT: String(8110 + i) } })) : []),
 ];
 
