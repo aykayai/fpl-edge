@@ -90,7 +90,7 @@ async function runApp() {
   w.setInterval = () => 0;
   w.console = { log() {}, warn() {}, error() {} };
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
-  vm.runInContext(`window.__g={get S(){return S},render,act,signals}`, ctx);
+  vm.runInContext(`window.__g={get S(){return S},render,act,signals,momentum}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
   while (Date.now() < until && !(S.model && !S.loading)) await new Promise(r => setTimeout(r, 250));
@@ -184,8 +184,7 @@ try {
   /* ---------- 1d. Heating Up / Cooling Off by position (12 Nov 2026) ---------- */
   const G0 = S.model.next.id;
   const flags = S.model.players.map(p => ({ p, k: g.signals(p, G0).map(x => x[0]) }));
-  check(!flags.some(x => x.p.pos === 4 && (x.k.includes("heat") || x.k.includes("cool"))), "no forward carries Heating Up or Cooling Off");
-  check(!flags.some(x => x.p.pos === 2 && x.k.includes("cool")), "no defender carries Cooling Off");
+  check(!flags.some(x => x.p.pos === 4 && x.k.includes("heat")), "no forward carries Heating Up");
   /* independent: rebuild each club's xG against per match from the raw match files */
   const teamsRaw = csv(await get(`/data/insights/${season}/teams.csv`));
   const shortByCode = {}; teamsRaw.forEach(t => { shortByCode[String(Math.round(Number(t.code)))] = t.short_name; });
@@ -204,6 +203,25 @@ try {
   const hotDefs = flags.filter(x => (x.p.pos === 1 || x.p.pos === 2) && x.k.includes("heat"));
   const wrongHot = hotDefs.filter(x => !tight(x.p.teamName));
   check(wrongHot.length === 0, `keepers and defenders flagged Heating Up all play for a tightening defence (${hotDefs.length} flagged)`, wrongHot.slice(0, 5).map(x => x.p.web_name + " " + x.p.teamName).join(", "));
+
+  /* independent: every keeper, defender and forward flagged Cooling Off for
+     losing his place really did, rebuilt from the raw player-match files */
+  const pmRows = {}, seenPM = new Set();
+  for (let gw = 1; gw <= 38; gw++) {
+    let rs; try { rs = csv(await get(`/data/insights/${season}/By%20Gameweek/GW${gw}/playermatchstats.csv`)); } catch { continue; }
+    rs.filter(r => seenM.has(r.match_id) && +r.minutes_played > 0).forEach(r => { const k = r.player_id + "|" + r.match_id; if (seenPM.has(k)) return; seenPM.add(k);
+      (pmRows[r.player_id] = pmRows[r.player_id] || {})[r.match_id] = { mins: +r.minutes_played, start: r.start_min !== "" && +r.start_min === 0 }; });
+  }
+  const teamIds = {}; for (let gw = 1; gw <= 38; gw++) { let ms; try { ms = csv(await get(`/data/insights/${season}/By%20Gameweek/GW${gw}/matches.csv`)); } catch { continue; }
+    ms.filter(m => seenM.has(m.match_id)).forEach(m => { [m.home_team, m.away_team].forEach(c => { const s = shortByCode[String(Math.round(+c))]; if (s) { teamIds[s] = teamIds[s] || []; if (!teamIds[s].some(x => x[1] === m.match_id)) teamIds[s].push([gw, m.match_id]); } }); }); }
+  const losing = p => { const ids = (teamIds[p.teamName] || []).sort((a, b) => a[0] - b[0]).map(x => x[1]); if (ids.length < 6) return false;
+    const by = pmRows[String(p.id)] || {}, l4 = ids.slice(-4), sh = xs => xs.reduce((a, id) => a + (by[id] ? by[id].mins : 0), 0) / (90 * xs.length);
+    const stc = xs => xs.filter(id => by[id] && by[id].start).length;
+    return (sh(ids) >= 0.6 && sh(l4) <= 0.75 * sh(ids)) || (stc(ids) / ids.length >= 0.75 && stc(l4) <= 2); };
+  const placeCool = S.model.players.filter(p => p.pos !== 3).map(p => ({ p, m: g.momentum(p) })).filter(x => x.m && x.m.cool && /losing his place/.test(x.m.why));
+  const wrongCool = placeCool.filter(x => !losing(x.p));
+  check(wrongCool.length === 0, `keepers, defenders and forwards flagged losing his place all lost minutes or starts (${placeCool.length} flagged)`, wrongCool.slice(0, 5).map(x => x.p.web_name + " " + x.m.why).join("; "));
+  check(!S.model.players.some(p => p.pos === 2 && (g.momentum(p) || {}).cool && !/losing his place/.test(g.momentum(p).why)), "defenders are only ever Cooling Off for losing their place");
 
   /* ---------- 2. behaviour ---------- */
   const squadNames = new Set(S.model.players.filter(p => (S.squad || []).includes(p.id)).map(p => p.web_name));

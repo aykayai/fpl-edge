@@ -61,7 +61,7 @@ const SIG_RULE={
   fall:()=>"FPL's predictor: 100%+ progress to a fall tonight",
   mins:()=>"Doubt, out, or under 60 expected minutes",
   heat:()=>"Heating Up. Midfielders: last-4 xGI/90 at least 1.5x his season rate. Keepers and defenders: his team's xG against over the last 4 at most 0.7x its season rate",
-  cool:()=>"Cooling Off. Midfielders: last-4 xGI/90 at most 0.6x his season rate, or his DefCon hit rate down 30 points. Keepers: goals prevented over the last 4 at least 0.3 per 90 below his season rate",
+  cool:()=>"Cooling Off. Midfielders: last-4 xGI/90 at most 0.6x his season rate, or his DefCon hit rate down 30 points. Keepers, defenders and forwards: losing his place (his share of the team's minutes over its last 4 at most 0.75x his season share, or 2 or fewer starts in the last 4 after starting 75%+). Keepers also: goals prevented over the last 4 at least 0.3 per 90 below his season rate",
   defcon:()=>`DefCon Monster: reached the DefCon target in at least 2 of every 3 matches this season, with ${DCM_HITS}+ hits. Solid when the next match is strong too: model chance ${Math.round(DCM_CHANCE*100)}%+ against a side whose opponents reach DefCon ${DCM_GIVEN}+ times a match`,
   rival:()=>"Owned by managers around you, not by you",
   diff:()=>"Under 8% owned and predicted 3.5+ pts",
@@ -121,15 +121,21 @@ function sellMap(h){
    fixtures; scratchpad momentum_all.py):
      GK, DEF  Heating Up: his team's xG against per match over its last 4
               at most 0.7x its season rate and 0.3 lower (+2.1, n=125 DEF;
-              +2.2 GK). No Cooling Off for defenders (nothing held).
-     GK       Cooling Off: his goals prevented per 90 over the last 4 at
-              least 0.3 below his season rate (-1.5, n=88).
+              +2.2 GK).
+     GK, DEF, FWD  Cooling Off, losing his place (12 Nov 2026, Andy: every
+              position covered; scratchpad momentum_cool.py): his share of
+              the team's minutes over its last 4 matches at most 0.75x his
+              season share (season share 60%+), or 2 or fewer starts in the
+              last 4 after starting 75%+ of the season. GK -5.6 (n=43), DEF
+              -1.7 (n=205), FWD -5.7 (n=27), both halves. Attacking-stat drops
+              for forwards (xG, shots, box touches) bounced back instead.
+     GK       Cooling Off also: his goals prevented per 90 over the last 4
+              at least 0.3 below his season rate (-1.5, n=88).
      MID      Heating Up: xGI/90 last 4 >= 1.5x season and +0.15 (+1.6).
               Cooling Off: xGI/90 last 4 <= 0.6x season and -0.15 (-2.1),
               or his DefCon hit rate in the last 4 at least 0.30 below his
               season rate (-2.2, n=47).
-     FWD      none: Heating Up was noise (+0.8 +/-1.3) and Cooling Off went
-              the wrong way (+2.4).
+     FWD      no Heating Up: it was noise (+0.8 +/-1.3).
    This season's matches only; at least 6 appearances and 450 minutes, and
    180 minutes in the last 4. `before` limits the matches to earlier
    gameweeks (the Status page grades past weeks with it). */
@@ -139,8 +145,22 @@ function teamXgaSeries(short,before){
   return Object.values(S.teamMatch||{}).filter(m=>m.tag==="now"&&(!before||m.gw<before)&&(key[m.h]===short||key[m.a]===short)
       &&(m.hxg>0||m.axg>0)).sort((a,b)=>a.gw-b.gw).map(m=>key[m.h]===short?m.axg:m.hxg);
 }
+/* losing his place: his league matches against his team's (played, this
+   season, before `before`), by match id; null when he is holding it */
+function losingPlace(p,rows,before){
+  const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
+  const ids=Object.entries(S.teamMatch||{}).filter(([,m])=>m.tag==="now"&&(!before||m.gw<before)
+      &&(key[m.h]===p.teamName||key[m.a]===p.teamName)&&(m.hxg>0||m.axg>0)).sort((a,b)=>a[1].gw-b[1].gw).map(([id])=>id);
+  if(ids.length<6)return null;
+  const by={};rows.forEach(r=>{by[r.mid]=r;});
+  const l4=ids.slice(-4),share=xs=>xs.reduce((a,id)=>a+(by[id]?by[id].mins:0),0)/(90*xs.length);
+  const starts=xs=>xs.filter(id=>by[id]&&by[id].start===0).length;
+  const sS=share(ids),s4=share(l4),stS=starts(ids)/ids.length,st4=starts(l4);
+  if(sS>=0.6&&s4<=0.75*sS)return`losing his place: ${Math.round(s4*100)}% of ${p.teamName}'s minutes over their last 4 vs ${Math.round(sS*100)}% this season`;
+  if(stS>=0.75&&st4<=2)return`losing his place: started ${st4} of ${p.teamName}'s last 4 after starting ${Math.round(stS*100)}% this season`;
+  return null;
+}
 function momentum(p,before){
-  if(p.pos===4)return null;
   const ck=p.code+"|"+(before||0);
   const hit=_momCache.get(ck);if(hit&&hit.h===S.hist&&hit.m===S.teamMatch)return hit.v;
   const rows=((S.hist&&S.hist[p.code])||[]).filter(r=>r.tag==="now"&&r.mins>0&&(!before||r.gw<before));
@@ -157,10 +177,11 @@ function momentum(p,before){
       else if(last<=0.6*sea&&sea-last>=0.15){v.cool=true;v.why=`last-4 xGI/90 ${last.toFixed(2)} vs season ${sea.toFixed(2)}`;}
       else if(dS!=null&&d4!=null&&dS-d4>=0.30){v.cool=true;v.why=`DefCon in ${Math.round(d4*100)}% of the last 4 vs ${Math.round(dS*100)}% this season`;}
     }else{
-      const tx=teamXgaSeries(p.teamName,before);
+      const tx=p.pos<=2?teamXgaSeries(p.teamName,before):[];
       if(tx.length>=6){const s=tx.reduce((a,x)=>a+x,0)/tx.length,l=tx.slice(-4).reduce((a,x)=>a+x,0)/4;
         if(l<=0.7*s&&s-l>=0.3){v.heat=true;v.why=`${p.teamName} xG against ${l.toFixed(2)} a match over the last 4 vs ${s.toFixed(2)} this season`;}}
-      if(p.pos===1&&!v.heat){const gs=per(rows,r=>r.gp||0),g4=per(l4,r=>r.gp||0);
+      if(!v.heat){const lp=losingPlace(p,rows,before);if(lp){v.cool=true;v.why=lp;}}
+      if(p.pos===1&&!v.heat&&!v.cool){const gs=per(rows,r=>r.gp||0),g4=per(l4,r=>r.gp||0);
         if(gs!=null&&g4!=null&&gs-g4>=0.3){v.cool=true;v.why=`goals prevented ${sgn1(g4)} per 90 over the last 4 vs ${sgn1(gs)} this season`;}}
     }
   }
