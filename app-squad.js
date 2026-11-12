@@ -1250,12 +1250,9 @@ function cardHTML(p,bench,ctx){
         <span style="font-weight:700;color:${diff>=0?"var(--mint)":"var(--red)"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`
      :(hasActual
        ?`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">no prediction stored</div>`
-       :(()=>{const[fb,ff]=ptsCol(p.form||0);
-        /* F56: form from last season, blended or estimated is muted and tagged */
-        const ft=formTag(p);
-        return `<div class="fxpill formpill${ft?" prior":""}" style="background:${fb};color:${ff}">
-          <svg viewBox="0 0 14 10" width="10" height="8" aria-hidden="true"><path d="M0.5 8.5 L4 4.5 L6.5 6.5 L13.5 1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span class="formlbl">FORM</span><b>${(p.form||0).toFixed(1)}</b>${ft}</div>`;})())}
+       /* the FORM bar left the pitch cards (12 Nov 2026): form is in the
+          Player Pool, Player Data and the player card */
+       :"")}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }
