@@ -244,6 +244,9 @@ try {
   const regulars = S.model.players.filter(p => p.xMins >= 60).length;
   const badD = dFlags.filter(({ p, s }) => !(p.owned < 5 || (p.owned < 15 && rivCount && !rivN[p.id])) || (!!s[2]) !== (rivCount > 0 && !rivN[p.id]));
   check(badD.length === 0, `Differential: under 5% owned, or under 15% with no rival owner; bright only when no rival owns him (${dFlags.length} flagged, ${dFlags.filter(x => x.s[2]).length} bright, ${rivCount} rivals)`, badD.slice(0, 5).map(x => x.p.web_name + " " + x.p.owned + "%").join(", "));
+  { S.tab = "table"; g.render();
+    const shown = [...doc.querySelectorAll('.pdt [data-sig="diff"]')], lit = shown.filter(t => t.classList.contains("bright")).length;
+    check(!dFlags.some(x => x.s[2]) || lit > 0, `Player Data draws the bright Differential gem (${lit} of ${shown.length} shown are bright)`); }
   check(dFlags.length <= Math.ceil(regulars * 0.1), `Differential stays exclusive: ${dFlags.length} flags, at most 10% of ${regulars} regular starters`);
 
   /* ---------- 2. behaviour ---------- */

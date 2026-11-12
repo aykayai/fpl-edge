@@ -2235,8 +2235,8 @@ function fix5(p,g){
   return `<span class="fx5r">${h}</span>`;
 }
 /* a signal tile whose hover card (app-main) shows the name and one short line */
-function pdTile(k,t){const[ic,tone,label]=SIGNAL[k],s=sigShort(k,t);
-  return `<span class="tile" style="--tc:${tone==="NAVY"?"#7AA2FF":tone}" data-sig="${k}" data-tt="${esc(s)}" tabindex="0" aria-label="${esc(label+": "+s)}">${lic(ic)}</span>`;}
+function pdTile(k,t,b){const[ic,tone,label]=SIGNAL[k],s=sigShort(k,t);
+  return `<span class="tile${b?" bright":""}" style="--tc:${tone==="NAVY"?"#7AA2FF":tone}" data-sig="${k}" data-tt="${esc(s)}" tabindex="0" aria-label="${esc(label+": "+s)}">${lic(ic)}</span>`;}
 function pdRows(){
   const g=VG(),mine=new Set(effectiveSquadIds(g).ids),q=(S.lSearch||"").toLowerCase();
   let a=S.model.players.filter(p=>(!S.lPos||p.pos===S.lPos)&&(!S.lTeam||p.team===S.lTeam)&&p.price<=(S.lMax||16)+.001&&p.price>=(S.lMin||0)-.001
@@ -2296,7 +2296,7 @@ function playerDataHTML(){
         <span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${role(p)}</span><span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}</span></span></span></td>
       <td class="fig pdprice">${D.C.price.cell(p)}</td>
       <td class="pdbestc">${D.C.best.cell(p)}</td>
-      <td class="sgc">${sg.length?`<span class="sigcell">${sg.slice(0,4).map(([k,t])=>pdTile(k,t)).join("")}${sg.length>4?`<span class="sgmore" title="${esc(sg.slice(4).map(x=>SIGNAL[x[0]][2]).join(", "))}">+${sg.length-4}</span>`:""}</span>`:""}</td>
+      <td class="sgc">${sg.length?`<span class="sigcell">${sg.slice(0,4).map(([k,t,b])=>pdTile(k,t,b)).join("")}${sg.length>4?`<span class="sgmore" title="${esc(sg.slice(4).map(x=>SIGNAL[x[0]][2]).join(", "))}">+${sg.length-4}</span>`:""}</span>`:""}</td>
       <td>${fix5(p,g)}</td>
       <td class="fig gs${lvl("form",p.form)}">${D.C.form.cell(p)}</td>
       <td class="fig${lvl("xfpl",D.C.xfpl.val(p))}">${D.C.xfpl.cell(p)}</td>
