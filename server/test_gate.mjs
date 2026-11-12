@@ -319,6 +319,17 @@ async function main() {
       check(`no key leak in ${path}`, !hay.includes(ODDS_KEY));
     }
 
+    /* TV channels: empty until the PC pushes, then served as pushed */
+    r = await get("/api/tv");
+    check("tv: none before the first push", r.status === 200 && JSON.parse(r.body).state === "none");
+    await writeFile(join(root, "tv.json"), JSON.stringify({ fetchedAt: "2026-11-12T21:00:00Z", country: "IE", from: 11, to: 11,
+      matches: [{ gw: 11, kickoff: "2026-11-21 12:30:00", home: { abbr: "MCI", name: "Man City" }, away: { abbr: "FUL", name: "Fulham" }, channels: [{ abbr: "tnt", name: "TNT Sports" }] }] }));
+    r = await get("/api/tv");
+    check("tv: pushed file served", r.status === 200 && JSON.parse(r.body).matches[0].channels[0].abbr === "tnt");
+    check("tv: status reports the push", (await status()).tv.withChannels === 1);
+    r = await get("/img/tv/..%2fx.png");
+    check("tv: logo path refuses anything but a short name", r.status === 404);
+
     /* methods, 404, traversal */
     r = await get("/", { method: "POST", body: "x" });
     check("POST / is 405", r.status === 405);

@@ -12,7 +12,10 @@
      /api/status            everything the header chip and footer need
      /api/news              merged sanitised items + per-source status
      /api/player-news       ?names=a,b  Google News per player
-     /api/odds              odds-api.io cache, { state:"nokey" } without a key */
+     /api/odds              odds-api.io cache, { state:"nokey" } without a key
+     /api/tv                TV channels per match, pushed weekly from Andy's PC
+                            (scripts/fetch-tv.mjs), { state:"none" } until then
+     /img/tv/<abbr>.png     broadcaster logos, fetched once and cached */
 
 import { createServer } from "node:http";
 import { gzipSync } from "node:zlib";
@@ -143,7 +146,8 @@ async function handle(req, res) {
         news: newsStatus(),
         odds: oddsStatus(),
         snapshots: snapshotStatus(),
-        neighbours: neighboursStatus()
+        neighbours: neighboursStatus(),
+        tv: await tvStatus()
       });
       return;
     }
@@ -154,6 +158,34 @@ async function handle(req, res) {
     }
     if (path === "/api/odds") { sendJson(res, method, 200, oddsPayload()); return; }
     if (path === "/api/fpl-players") { sendJson(res, method, 200, await fplPlayersPayload()); return; }
+    /* TV channels (12 Nov 2026): the Premier League lists them by the
+       caller's country and the server is in the Netherlands, so Andy's PC
+       fetches the Irish listings weekly and pushes them into STATE_DIR */
+    if (path === "/api/tv") {
+      const full = join(CONFIG.STATE_DIR, "tv.json");
+      let have = false;
+      try { have = (await stat(full)).isFile(); } catch { /* not pushed yet */ }
+      if (!have) { sendJson(res, method, 200, { state: "none", matches: [] }); return; }
+      await serveFile(res, method, full, { "Cache-Control": "no-cache" });
+      return;
+    }
+    const tvl = /^\/img\/tv\/([a-z0-9]{2,12})\.png$/.exec(path);
+    if (tvl) {
+      const dir = join(CONFIG.STATE_DIR, "img", "tv"), full = join(dir, tvl[1] + ".png");
+      let have = false;
+      try { have = (await stat(full)).isFile(); } catch { /* not cached yet */ }
+      if (!have) {
+        try {
+          const r = await fetch(`https://resources.premierleague.com/premierleague25/broadcasters/large/${tvl[1]}@x2.png`, { signal: AbortSignal.timeout(8000) });
+          if (!r.ok) { sendJson(res, method, 404, { error: "not found" }); return; }
+          await mkdir(dir, { recursive: true });
+          await writeFile(full + ".tmp", Buffer.from(await r.arrayBuffer()));
+          await rename(full + ".tmp", full);
+        } catch { sendJson(res, method, 502, { error: "image source unavailable" }); return; }
+      }
+      await serveFile(res, method, full, { "Cache-Control": "public, max-age=604800" });
+      return;
+    }
 
     if (path.startsWith("/data/insights/")) {
       const full = safeJoin(currentDir(), path.slice("/data/insights/".length));
@@ -230,6 +262,15 @@ async function handle(req, res) {
     sendJson(res, method, 500, { error: "server error" });
     log("http", "error " + e.message);
   }
+}
+
+/* when the weekly TV push last arrived, for the Status page */
+async function tvStatus() {
+  try {
+    const t = JSON.parse(await readFile(join(CONFIG.STATE_DIR, "tv.json"), "utf8"));
+    return { fetchedAt: t.fetchedAt || null, country: t.country || "", from: t.from || null, to: t.to || null,
+      matches: (t.matches || []).length, withChannels: (t.matches || []).filter(m => (m.channels || []).length).length };
+  } catch { return { fetchedAt: null, matches: 0 }; }
 }
 
 /* ---------------- scheduler ---------------- */
