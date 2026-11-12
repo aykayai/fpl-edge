@@ -413,7 +413,7 @@ function normaliseBooks(row){
   });
   return books;
 }
-function oddsHTML(){
+function oddsHTML(part){
   const g=VG();
   const head=`<div class="panel"><div class="phead"><h2>Odds</h2>
      <span style="display:flex;gap:6px"><button onclick="act('odds')">${S.oddsState==="loading"?"…":"↻ Fetch"}</button></span></div>
@@ -433,6 +433,10 @@ function oddsHTML(){
       <span style="display:flex;gap:6px;margin-top:10px">
         <button class="pri" onclick="act('odds')">↻ Fetch now</button></span></div></div>`;
 
+  /* 12 Nov 2026: player prices live in Player Data's market columns and
+     Minutes Watch on Signals > Players; Teams > Match Odds keeps the
+     fixture markets */
+  if(part==="match")return head+oddsFixturesHTML();
   return head+oddsPlayersHTML()+minutesWatchHTML()+oddsFixturesHTML();
 }
 /* ---- Odds page panels (19 Oct 2026, built from the approved mock) ----
@@ -1042,13 +1046,13 @@ function renderPage(){
         <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
       <div class="poolcol">
         <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
-        <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">All Players →</a></div>
+        <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">Player Data →</a></div>
         ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
           <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>`;
   }
-  else if(S.tab==="table")main=playersHubHTML();
+  else if(S.tab==="table")main=playerDataHTML();
   else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();
   else if(S.tab==="xfpl")main=statusPageHTML();
   else if(S.tab==="chips")main=chipsHTML();

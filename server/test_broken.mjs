@@ -99,6 +99,15 @@ try {
   check(m && rows === +m[2], "F5 Show all reaches every player", `${rows} rows of ${m && m[2]}`);
   g.act("pdless");
   check(doc.querySelectorAll(".tallscroll tbody tr").length === 100, "F5 Show fewer returns to 100");
+  /* Player Data (12 Nov 2026): shared columns for every position, then the position's own */
+  const heads = () => [...doc.querySelectorAll(".pdt thead tr:nth-child(2) th")].map(t => t.textContent.replace(/[↓↑]/g, "").trim());
+  const WANTPOS = { 0: ["Pts"], 1: ["Saves/90", "G prev", "GC/90"], 2: ["DefCon %", "BPS/90"], 3: ["npxG/90", "xA/90", "ICT"], 4: ["SoT/90", "ICT"] };
+  for (const [pos, want] of Object.entries(WANTPOS)) {
+    S.lPos = +pos; show("table"); const h = heads();
+    const base = ["Player", "Price", "Signals", "Next 5", "Form", "xFPL", "Pts/£m", "xMins"].every(x => h.includes(x)) && h.some(x => /^xPts /.test(x));
+    check(base && want.every(x => h.includes(x)), `Player Data position ${pos}: shared columns plus ${want.join(", ")}`, h.join(" | "));
+  }
+  S.lPos = 0; show("table");
 
   /* F8: independent read of the feed */
   const feed = await (await fetch(BASE + "/data/feeds/actuals.json")).json();

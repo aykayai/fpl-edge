@@ -179,6 +179,53 @@ body.scrolled .tbfig{display:flex}
 @media(max-width:720px){.g2{grid-template-columns:1fr}}
 .wdl{display:inline-flex;gap:3px}.wdl i{font:700 10px 'Geist Mono',monospace;font-style:normal;width:17px;height:17px;border-radius:4px;display:inline-grid;place-items:center}
 .wdl i.W{background:rgba(61,220,151,.22);color:#3DDC97}.wdl i.D{background:rgba(255,255,255,.08);color:var(--mute)}.wdl i.L{background:rgba(255,90,110,.2);color:#FF8FA3}
+/* Player Data (12 Nov 2026): one table, one toolbar, filters behind a
+   button with removable chips; values neutral, the strongest quarter of
+   each column tinted green; column groups in a header row. */
+.pdcount{font:500 14px 'Geist',sans-serif;color:var(--mute);margin-left:8px;letter-spacing:0}
+.pdbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 10px}
+.pdsearch{display:flex;align-items:center;gap:7px;background:#171717;border-radius:999px;padding:0 12px;box-shadow:0 0 0 1px rgba(255,255,255,.08);color:var(--mute);flex:1;min-width:180px;max-width:300px}
+.pdsearch input{background:none;border:0;padding:8px 0;min-height:0;width:100%;font-size:13px;color:var(--cream);outline:none}
+.pdfbtn{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 14px;font-size:12.5px;background:#171717;box-shadow:0 0 0 1px rgba(255,255,255,.08);border:0;color:var(--cream);min-height:0}
+.pdfbtn b{background:var(--mint);color:#0A0A0A;border-radius:999px;font-size:11px;padding:0 6px;line-height:16px}
+.pdfbtn.on svg{transform:rotate(180deg)}
+.pdmorebox{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px 18px;background:#141414;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ring);padding:14px 16px;margin:0 0 10px}
+.pdmorebox>div{display:flex;flex-direction:column;gap:6px;min-width:0}.pdmorebox>div.wide{grid-column:1/-1}
+.pdmorebox select{width:auto;min-height:0;padding:6px 9px;font-size:13px}
+.pdl{font-size:12px;color:var(--mute)}
+.pdsig{display:flex;gap:6px;flex-wrap:wrap}
+.pdchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.pdchip{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:999px;padding:4px 10px;font-size:12px;background:rgba(61,220,151,.12);color:var(--mint);min-height:0}
+.pdchip:hover{background:rgba(61,220,151,.2)}
+.pdclear{background:none;border:0;color:var(--mute);font-size:12px;text-decoration:underline;min-height:0;padding:4px}
+.pdpanel{overflow:visible}
+.pdt table{width:100%;border-collapse:separate;border-spacing:0}
+.pdt th{font:500 12px 'Geist',sans-serif;color:var(--mute);padding:8px 8px;text-align:right;white-space:nowrap;background:var(--ink2);cursor:pointer}
+.pdt th.nm{text-align:left}.pdt th.act{color:var(--cream);box-shadow:inset 0 -2px 0 var(--mint)}
+.pdt th.strong{color:var(--cream)}
+.pdt tr.grp th{font-size:11px;color:#6A6A6A;cursor:default;padding:7px 8px 2px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06)}
+.pdt tr.grp th.gpos{color:var(--mint)}
+.pdt thead tr:first-child th{position:sticky;top:0;z-index:3}
+.pdt thead tr:nth-child(2) th{position:sticky;top:25px;z-index:3}
+.pdt td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-family:'Geist',sans-serif;vertical-align:middle}
+.pdt td.fig{text-align:right;font:500 13px 'Geist Mono',monospace;white-space:nowrap;border-radius:4px}
+.pdt td.fig.strong{font-weight:600;color:#fff}
+.pdt td.fig em{display:block;font-style:normal;font-size:10.5px;line-height:1.1}
+.pdt td.tk,.pdt th.tk{width:30px;padding-right:0}
+.pdt td.sgc{text-align:left}
+.pdt td.acts{white-space:nowrap;text-align:right}
+.pdt tr.mine td{background:rgba(61,220,151,.035)}
+.pdt tr.ticked td{background:rgba(255,255,255,.05)}
+.pdt tr:hover td{background:rgba(255,255,255,.03)}
+.pdt tbody td.nm,.pdt thead th.nm{position:sticky;left:0;z-index:2;background:var(--ink2)}
+.ytag{font-size:10.5px;color:var(--mint);background:rgba(61,220,151,.12);border-radius:4px;padding:0 5px}
+.fx5r{display:inline-flex;gap:2px;align-items:center}
+.fx5s{display:inline-flex;flex-direction:column;gap:1px}
+.fx5{display:inline-grid;place-items:center;width:30px;height:18px;border-radius:4px;font:700 9.5px 'Geist Mono',monospace;font-style:normal;letter-spacing:.02em}
+.fx5s .fx5{height:9px;font-size:7.5px}
+.fx5.bl{background:#222;color:#5A5A5A}
+.pdkey{margin:8px 2px 0}
+@media(max-width:620px){.pdsearch{max-width:none;flex-basis:100%}.pdt td.sgc,.pdt th:nth-child(4){display:none}}
 .foot{text-align:center;padding:18px 0 4px;font-size:11px;color:#5A5A5A}
 .prov{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 18px;padding:14px;font-size:12.5px;color:var(--mute)}
 .prov b{color:var(--cream);font-weight:600}
@@ -494,8 +541,6 @@ td.nm{font-family:'Geist',system-ui,sans-serif}
 .fbtn:hover{border-color:var(--line)}
 .fbtn.on{border-color:var(--fc);background:color-mix(in srgb,var(--fc) 18%,var(--ink2));color:#fff}
 .fbtn-icon{position:relative;flex:none;padding:6px;gap:0;width:30px;height:30px;justify-content:center}
-.fbtn-badge{position:absolute;top:-4px;right:-4px;background:#FFB020;color:#20130A;font-size:10px;
- font-weight:800;border-radius:8px;padding:0 4px;line-height:14px;min-width:14px;text-align:center}
 @media(max-width:520px){.fbtn{padding:5px 10px 5px 7px;font-size:11px;gap:5px}}
 .chipbtn{font-size:10.5px;padding:5px 9px}
 .fixrow{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--ink3);font-size:11.5px}
@@ -763,12 +808,12 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.35.0"></script>
-<script src="./app-squad.js?v=12.35.0"></script>
-<script src="./app-render.js?v=12.35.0"></script>
-<script src="./app-odds.js?v=12.35.0"></script>
-<script src="./app-tracker.js?v=12.35.0"></script>
-<script src="./app-main.js?v=12.35.0"></script>
+<script src="./app-core.js?v=12.36.0"></script>
+<script src="./app-squad.js?v=12.36.0"></script>
+<script src="./app-render.js?v=12.36.0"></script>
+<script src="./app-odds.js?v=12.36.0"></script>
+<script src="./app-tracker.js?v=12.36.0"></script>
+<script src="./app-main.js?v=12.36.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

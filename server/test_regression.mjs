@@ -197,6 +197,8 @@ function normalise(text, isNew) {
   t = t.replace(/^League ?Tracker ?Rivals ?/, "");
   t = t.replace(/^Players (?=\d+ players)/, "Player Data ").replace(/ Odds →/, "");
   t = t.replace(/All Players →/g, "Full Player Data →");
+  /* PLANNED (12 Nov 2026): the Planner pool links to the renamed Player Data page */
+  t = t.replace(/Player Pool Player Data →/g, "Player Pool Full Player Data →");
   /* PLANNED (research list, 20 Oct 2026): the Chips page opens with a Chip Timing table */
   t = t.replace(/^Chip Timing.*?in each chip's row below\. ?/, "");
   /* PLANNED (wave 2): captaincy moved from the Planner into the This Week pop-up */
