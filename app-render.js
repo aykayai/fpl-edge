@@ -711,7 +711,7 @@ function teamGridHTML(){
       ${num("att")}${num("def")}${num("all")}${cells}</tr>`;
     if(open)tr+=`<tr class="tg-drawer"><td colspan="${ncol}">${tgDrawer(r.t,tb[r.t.id],g,nW,winLbl)}</td></tr>`;
     return tr;}).join("");
-  return card+`<div class="tg-panel"><div class="tg-scroll"><table class="tg-t"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>
+  return card+tgTargetsHTML()+`<div class="tg-panel"><div class="tg-scroll"><table class="tg-t"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>
     <div class="tg-foot">Click a club for its detail · click a fixture for the match · away fixtures in italics · faded gameweeks are outside the window
       <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>How the scores work</summary><div class="infobox">
       <p style="margin:0 0 6px">Attack is the goals the club is expected to score, Defence its chance of a clean sheet, from the same team ratings the projections use. Both include the club's own strength, so they say what the club should produce, not only how hard the opponent is.</p>
@@ -739,6 +739,52 @@ function tgDrawer(t,row,g,nW,winLbl){
     <section><h4>Defence</h4><div class="tg-bigs">${big(f.xga!=null?f.xga.toFixed(2):"—","xGA / match",trend(f.xga4,f.xga,false))}${big(dg==null?"—":dg.toFixed(1),"DefCon given","<small>opponents per match</small>")}</div>
       <h5>Top defenders · ${winLbl} pts</h5>${top(false)}</section>
     <section><h4>Next match</h4>${next}</section></div>`;
+}
+/* Teams to target (12 Nov 2026): four compact cards (the Planner's This
+   Week card) over the grid's window; each opens the top ten in a pop-up.
+   Best = the club's own numbers; "to target" turns it round: the clubs to
+   buy from are the ones that face it. */
+const TG_TARGETS={
+  tgBestAtt:{title:"Best Attacks",icon:"flame",tone:"#3DDC97",k:"gf",dir:1,unit:"xG / GW",f:r=>r.gf.toFixed(2),mode:"own-att",
+    why:"Most expected goals per gameweek: attackers to own."},
+  tgTgtAtt:{title:"Attacks to Target",icon:"shield-check",tone:"#22D3EE",k:"gf",dir:-1,unit:"xG / GW",f:r=>r.gf.toFixed(2),mode:"vs-att",
+    why:"Fewest expected goals per gameweek: own the defenders and keepers who face them."},
+  tgBestDef:{title:"Best Defences",icon:"shield",tone:"#22D3EE",k:"cs",dir:1,unit:"clean sheet",f:r=>Math.round(r.cs*100)+"%",mode:"own-def",
+    why:"Best clean-sheet chance per gameweek: defenders and keepers to own."},
+  tgTgtDef:{title:"Defences to Target",icon:"target",tone:"#3DDC97",k:"gc",dir:1,unit:"xGA / GW",f:r=>r.gc.toFixed(2),mode:"vs-def",
+    why:"Most expected goals conceded per gameweek: own the attackers who face them."}
+};
+function tgTargetRows(){
+  const g=S.model.next.id,win=tgWin(),g2=win==="ros"?38:Math.min(38,g+win-1),n=g2-g+1;
+  const rows=S.model.teams.map(t=>{let gf=0,gc=0,cs=0;const fx=[];
+    for(let e=g;e<=g2;e++)tgFx(t,e).forEach(x=>{const v=tgOne(t,x.opp,x.home);gf+=v.gf;gc+=v.gc;cs+=v.cs;fx.push({e,...x});});
+    return{t,gf:gf/n,gc:gc/n,cs:cs/n,fx};});
+  return{g,g2,win,rows};
+}
+const tgRanked=(rows,d)=>rows.slice().sort((a,b)=>d.dir*(b[d.k]-a[d.k])||String(a.t.name).localeCompare(b.t.name));
+const tgOpps=r=>[...new Set(r.fx.slice(0,3).map(x=>x.opp.short))].join(" · ");
+function tgTargetsHTML(){
+  const{win,rows}=tgTargetRows(),wl=win===1?"Next GW":win==="ros"?"ROS":win+" GW";
+  return `<div class="wkrow tg-row4">${Object.entries(TG_TARGETS).map(([key,d])=>{const L=tgRanked(rows,d),a=L[0];
+    const line=d.mode.startsWith("vs")?`Own ${d.mode==="vs-att"?"defenders":"attackers"} of <b>${esc(tgOpps(a))||"no one"}</b>`
+      :`${esc(L[1].t.name)} ${d.f(L[1])} · ${esc(L[2].t.name)} ${d.f(L[2])}`;
+    return `<button class="wk" onclick="act('pop','${key}')" aria-haspopup="dialog">
+      <span class="wkh"><span class="tile" style="--tc:${d.tone}">${lic(d.icon)}</span><span class="wkt">${d.title} · ${wl}</span><span class="chev">${lic("chevron-right",16)}</span></span>
+      <span class="wkf">${esc(a.t.name)} <span class="tgx">${d.f(a)}</span></span><span class="wkl">${line}</span></button>`;}).join("")}</div>`;
+}
+function tgTargetPopHTML(key){
+  const d=TG_TARGETS[key];if(!d)return "";
+  const{g,g2,win,rows}=tgTargetRows(),L=tgRanked(rows,d).slice(0,10),vs=d.mode.startsWith("vs");
+  const chips=r=>r.fx.slice(0,6).map(x=>{
+    const band=d.mode==="own-att"?tgBand(r.t,x,"att"):d.mode==="own-def"?tgBand(r.t,x,"def")
+      :tgBand(x.opp,{opp:r.t,home:!x.home},d.mode==="vs-att"?"def":"att");
+    const[b,c]=pdFdr(band),home=vs?!x.home:x.home;
+    return `<i class="${home?"":"aw"}" style="background:${b};color:${c}" title="GW${x.e}: ${esc(vs?x.opp.name+(home?" at home to ":" away at ")+r.t.name:(home?"v ":"at ")+x.opp.name)}">${esc(x.opp.short)}</i>`;}).join("")+(r.fx.length>6?`<em>+${r.fx.length-6}</em>`:"");
+  const ctl=`<span class="hz">${[[1,"Next GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS"]].map(([k,n])=>`<button class="${String(win)===String(k)?"on":""}" onclick="act('twin','${k}')">${n}</button>`).join("")}</span>`;
+  const body=`<p class="note" style="margin:0 0 10px">${d.why} ${vs?"Fixtures show the clubs that face them, coloured for those clubs' players.":"Fixtures are their own, coloured for their players."}</p>
+    <table class="tg-pt"><thead><tr><th></th><th class="l">Club</th><th>${d.unit}</th><th class="l">${vs?"Faced by":"Fixtures"}</th></tr></thead><tbody>
+    ${L.map((r,i)=>`<tr><td class="mu">${i+1}</td><td><span class="tg-pc">${badgeOrShirt(r.t,20)}<b>${esc(r.t.name)}</b></span></td><td class="tg-pn">${d.f(r)}</td><td><span class="tg-ch">${chips(r)||'<span class="mu">no match</span>'}</span></td></tr>`).join("")}</tbody></table>`;
+  return modalHTML(`${d.title} · ${g===g2?"GW"+g:`GW${g}–${g2}`}`,body,{ctl});
 }
 const ordinalN=n=>{const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);};
 
@@ -1329,6 +1375,7 @@ function weekStripHTML(){
 /* what each strip card opens */
 function popHTML(){
   const k=S.pop;if(!k||!S.model)return "";
+  if(TG_TARGETS[k])return tgTargetPopHTML(k);
   const D=weekData(),{g,h}=D;
   const L=p=>fplLive(p)||{};
   const ctl=hzHTML(h,"weekh");

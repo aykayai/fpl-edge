@@ -155,6 +155,16 @@ try {
   check(doc.querySelectorAll(".tg-m .tg-form").length === mrows * 2 && doc.querySelectorAll(".tg-m .tg-bar").length === mrows, "every match shows both clubs' form and a result bar");
   g.act("mgw", String(nextG + 1)); show("fixtures");
   check(/Gameweek \d+/.test(doc.querySelector(".tg-step b")?.textContent || "") && +doc.querySelector(".tg-step b").textContent.match(/\d+/)[0] === nextG + 1, "Matches steps to the next gameweek", doc.querySelector(".tg-step b")?.textContent);
+  /* teams to target: four compact cards, each opening its top ten */
+  S.fixMode = "grid"; S.tWin = 5; S.pop = null; show("fixtures");
+  const tcards = [...doc.querySelectorAll(".tg-row4 .wk")];
+  check(tcards.length === 4 && /Best Attacks/.test(tcards[0].textContent) && /Defences to Target/.test(tcards[3].textContent), "Teams shows the four target cards", tcards.map(c => c.querySelector(".wkt").textContent).join(" | "));
+  g.act("pop", "tgTgtAtt"); show("fixtures");
+  const prow = [...doc.querySelectorAll(".modal .tg-pt tbody tr")];
+  const weakest = vm.runInContext(`(()=>{const{rows}=tgTargetRows();return rows.slice().sort((a,b)=>a.gf-b.gf)[0].t.name;})()`, ctx);
+  check(prow.length === 10 && prow[0].querySelector(".tg-pc b").textContent === weakest, "Attacks to Target lists ten clubs, the weakest attack first", `${prow.length} rows, first ${prow[0] && prow[0].querySelector(".tg-pc b").textContent}, want ${weakest}`);
+  check(/GW\d+–\d+/.test(doc.querySelector(".modal h2")?.textContent || ""), "the target pop-up names its gameweeks", doc.querySelector(".modal h2")?.textContent);
+  g.act("popclose");
   S.fixMode = "grid"; S.tWin = 1; S.tOpen = null; S.mGw = null;
 
   /* F8: independent read of the feed */
