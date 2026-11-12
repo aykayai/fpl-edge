@@ -582,188 +582,204 @@ function priceMovesHTML(){
       <p style="margin:0">Net transfers this gameweek (in minus out) from FPL's own counts, refreshed with the player data. FPL does not publish the thresholds at which prices move, so this shows the pressure rather than a guessed rise or fall time. Your players are highlighted.</p></div></details>
     </div></div>`;
 }
-/* S8 (Stage 1, 19 Oct 2026): what a Fixtures cell shows. Difficulty is the
-   1-5 band; Clean Sheet % is the chance of keeping one, from the fixture's
-   expected goals against; Projected Goals is what the side should score.
-   The same five-step colours, best green to worst dark red. */
-function readPill(t,opp,home,lens){
-  const r=S.fixRead||"fdr";
-  if(r==="fdr"||!opp)return fdrPill(opp?.short||"?",home,fdrOf(opp,home,t,lens),{short:true});
-  const xgc=fdrCalc(t,opp,home,"xgc"),xgf=fdrCalc(t,opp,home,"xgf");
-  const band=r==="cs"?(v=>v>=45?1:v>=35?2:v>=25?3:v>=15?4:5)(Math.exp(-xgc)*100)
-                     :(v=>v>=2?1:v>=1.6?2:v>=1.2?3:v>=0.9?4:5)(xgf);
-  const [b,c]=fdrCol(band);
-  const val=r==="cs"?Math.round(Math.exp(-xgc)*100)+"%":xgf.toFixed(1);
-  return `<span class="fdrpill readpill" style="background:${b};color:${c};${home?"":"font-style:italic;"}">${esc(String(opp.short).slice(0,3))}<small>${val}</small></span>`;
+/* ============================================================
+   TEAMS (redesign 12 Nov 2026): two views, the Fixture Grid and Matches.
+
+   Scores. Every fixture gives the club's expected goals (xG) and its chance
+   of a clean sheet (CS), from the same ratings the projections use (both
+   include the club's own strength: they say what the club should produce,
+   not just how strong the opponent is). Overall is the FPL points those are
+   worth to the club's players: 9 per goal, 31 per clean sheet, the values
+   fitted to GW1-10 club points (backtest 12 Nov 2026: 0.41 rank correlation
+   with the next week's club points, 0.53 over three weeks, against 0.31 and
+   0.48 for the old averaged bands; goal difference and half-and-half tied).
+   A window's score is the total over its gameweeks divided by the number of
+   gameweeks, so a double counts twice and a blank counts zero.
+   ============================================================ */
+const TG_GOAL=9, TG_CS=31;
+function tgOne(t,opp,home){const gf=fdrCalc(t,opp,home,"xgf"),gc=fdrCalc(t,opp,home,"xgc"),cs=Math.exp(-gc);
+  return{gf,gc,cs,pts:TG_GOAL*gf+TG_CS*cs};}
+/* Overall fixture colour: where the points sit among the season's 760
+   fixture-sides, with the attack mix (6% red, 15% darkest green) */
+let _tgCuts=null;
+function tgCuts(){
+  if(_tgCuts&&_tgCuts.k===S.bandCuts)return _tgCuts.v;
+  const T=S.teams||[],all=[];
+  T.forEach(t=>T.forEach(o=>{if(t!==o){all.push(tgOne(t,o,true).pts);all.push(tgOne(t,o,false).pts);}}));
+  all.sort((a,b)=>a-b);let acc=0;const v=[];
+  for(let i=0;i<4;i++){acc+=BAND_MIX_ATT[i];v.push(all[Math.min(all.length-1,Math.floor(acc*all.length))]);}
+  _tgCuts={k:S.bandCuts,v};return v;
 }
-/* wave 5: Teams = Clubs + Fixture Grid + By Gameweek */
-const TEAM_TILE=k=>`<span class="tile" style="--tc:${k==="def"?"#22D3EE":"#3DDC97"}" title="${k==="def"?"Kind defensive run":"Kind attacking run"}">${lic(k==="def"?"shield":"target")}</span>`;
+function tgBand(t,x,lens){
+  if(lens==="att")return fdrOf(x.opp,x.home,t,"att");
+  if(lens==="def")return fdrOf(x.opp,x.home,t,"def");
+  const c=tgCuts(),p=tgOne(t,x.opp,x.home).pts;
+  for(let i=0;i<4;i++)if(p<c[i])return 5-i;
+  return 1;
+}
+const tgFx=(t,e)=>((S.model&&S.model.byEv[e])||[]).filter(f=>f.ht===t||f.at===t).map(f=>({f,opp:f.ht===t?f.at:f.ht,home:f.ht===t}));
+function tgScore(t,a,b){let gf=0,cs=0,pts=0;
+  for(let e=a;e<=b;e++)tgFx(t,e).forEach(x=>{const v=tgOne(t,x.opp,x.home);gf+=v.gf;cs+=v.cs;pts+=v.pts;});
+  const n=Math.max(1,b-a+1);return{gf:gf/n,cs:cs/n,pts:pts/n};}
+/* results so far, from the fixtures the app already loads */
+const tgPlayed=()=>(S.fixtures||[]).filter(f=>f.ht&&f.at&&f.hs!=null&&f.as!=null&&f.finished!==false);
+function tgResults(t,n){
+  return tgPlayed().filter(f=>f.ht===t||f.at===t).sort((a,b)=>a.event-b.event||String(a.kickoff).localeCompare(String(b.kickoff))).slice(-(n||5))
+    .map(f=>{const h=f.ht===t,us=h?f.hs:f.as,th=h?f.as:f.hs;
+      return{r:us>th?"W":us<th?"L":"D",us,th,opp:h?f.at:f.ht,h,e:f.event,f};});
+}
+/* the Premier League table: points, goal difference, goals scored */
+function tgTable(){
+  const tb={};(S.model.teams||[]).forEach(t=>tb[t.id]={t,p:0,gf:0,ga:0,cs:0,n:0});
+  tgPlayed().forEach(f=>{const H=tb[f.ht.id],A=tb[f.at.id];if(!H||!A)return;
+    H.n++;A.n++;H.gf+=f.hs;H.ga+=f.as;A.gf+=f.as;A.ga+=f.hs;if(!f.as)H.cs++;if(!f.hs)A.cs++;
+    if(f.hs>f.as)H.p+=3;else if(f.hs<f.as)A.p+=3;else{H.p++;A.p++;}});
+  const list=Object.values(tb).sort((a,b)=>b.p-a.p||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf);
+  list.forEach((x,i)=>x.pos=i+1);
+  return tb;
+}
+/* a W/D/L tile that shows the match and the score on hover or focus */
+function tgForm(list){
+  return `<span class="tg-form">${list.map(x=>{const f=x.f,line=`${f.ht.name} ${f.hs}–${f.as} ${f.at.name}`;
+    return `<i class="${x.r}" tabindex="0" data-tt="GW${x.e} · ${x.h?"Home":"Away"} · ${{W:"Won",D:"Drew",L:"Lost"}[x.r]}&#10;${esc(line)}" aria-label="GW${x.e}: ${esc(line)}">${x.r}</i>`;}).join("")}</span>`;
+}
+const tgWin=()=>[1,3,5,"ros"].includes(S.tWin)?S.tWin:1;
+const tgLens=()=>["att","def","all"].includes(S.tLens)?S.tLens:"all";
+const TG_KEY={att:"gf",def:"cs",all:"pts"};
+const tgFmt=(k,v)=>k==="cs"?Math.round(v*100)+"%":k==="gf"?v.toFixed(2):v.toFixed(1);
+function tgRate(t,opp,home){
+  return ["att","def","all"].map(k=>{const d=tgBand(t,{opp,home},k),[b,c]=pdFdr(d);
+    return `<span class="tg-rt"><span>${{att:"Att",def:"Def",all:"All"}[k]}</span><i style="background:${b};color:${c}">${d}</i></span>`;}).join("");
+}
+/* the market for a fixture (next gameweek only), margin removed */
+function tgMarket(h,a){
+  const m=(typeof oddsFixtures==="function"&&S.oddsState==="ok"?oddsFixtures():[]).find(x=>x.ht&&x.at&&x.ht.id===h.id&&x.at.id===a.id);
+  if(!m)return null;
+  let hda=null;const ml=(m.mk&&m.mk["h2h"]||[])[0];
+  if(ml){const H=ml.outcomes.find(x=>x.name==="home"),D=ml.outcomes.find(x=>x.name==="draw"),A=ml.outcomes.find(x=>x.name==="away");
+    if(H&&D&&A)hda=devig([H.price,D.price,A.price]);}
+  return{hda,gl:m.goals||null};
+}
+/* the model's own home / draw / away, from the two expected-goal figures */
+function tgModelHda(lh,la){
+  const pois=(l,k)=>{let p=Math.exp(-l);for(let i=1;i<=k;i++)p*=l/i;return p;};
+  let H=0,D=0,A=0;
+  for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const p=pois(lh,i)*pois(la,j);if(i>j)H+=p;else if(i<j)A+=p;else D+=p;}
+  const s=H+D+A;return[H/s,D/s,A/s];
+}
+
 function fixturesHTML(){
-  const m=["clubs","team","gw","odds"].includes(S.fixMode)?S.fixMode:"clubs";
-  const tabs=`<div class="pagetabs"><h1>Teams</h1><span class="pseg">${[["clubs","Clubs"],["team","Fixture Grid"],["gw","By Gameweek"],["odds","Match Odds"]].map(([k,n])=>`<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')">${n}</button>`).join("")}</span></div>`;
-  return tabs+(m==="clubs"?clubsHTML():m==="odds"?oddsHTML("match"):fixtureGridHTML());
+  const m=["matches","gw","odds"].includes(S.fixMode)?"matches":"grid";
+  const head=`<div class="tg-top"><h1>Teams</h1><span class="tg-views">${[["grid","Fixture Grid"],["matches","Matches"]].map(([k,n])=>
+    `<button class="${m===k?"on":""}" onclick="act('fixmode','${k}')" aria-pressed="${m===k}">${n}</button>`).join("")}</span></div>`;
+  return head+(m==="grid"?teamGridHTML():matchesHTML());
 }
-function fixtureGridHTML(){
-  const g=VG(), teams=S.model.teams;
-  const mode=S.fixMode||"team";
-  const lens=S.fdrLens||null;
-  const span=S.expand.allFix?39-g:10;
-  const start=Math.max(g,Math.min(S.fixGW||g,38));
 
-  /* ---- targets: clubs whose strength meets a weak opposite number ---- */
-  const targets=(kind)=>{
-    const out=[];
-    teams.forEach(t=>{
-      const runs=[];
-      for(let e=g;e<g+5&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{
-        const home=f.ht===t, opp=home?f.at:f.ht;
-        const d=fdrOf(opp,home,t,kind==="att"?"att":"def");
-        runs.push({e,opp:opp.short,home,d});});
-      const good=runs.filter(r=>r.d<=2).length;
-      if(good<4||runs.length<4)return;
-      const rating=kind==="att"?t.att:(2.6-t.def);      // higher is better either way
-      const avg=runs.reduce((a,r)=>a+r.d,0)/runs.length;
-      out.push({t,runs,good,rating,avg});
-    });
-    /* strong side meeting weak opposition — rank on both, cap at five */
-    return out.filter(x=>x.rating>=(kind==="att"?1.30:1.12))
-      .sort((a,b)=>(b.good-a.good)||(a.avg-b.avg)||(b.rating-a.rating)).slice(0,5);
-  };
-  const targetPanel=(kind,title,note)=>{
-    const list=targets(kind);
-    return `<div class="panel">
-      <div class="phead"><h2 style="color:${kind==="att"?"var(--mint)":"var(--cyan)"}">${title}</h2>
-        <span class="note">${list.length?list.length+" clubs":"none right now"}</span></div>
-      <div class="pbody" style="border-bottom:1px solid var(--ink3)"><p class="note" style="margin:0">${note}</p></div>
-      ${list.length?list.map(x=>`<div class="fixrow">
-        <span class="fixteam" style="flex:none;width:148px;gap:8px">${badgeOrShirt(x.t,20)}
-          <b>${esc(x.t.name||x.t.short)}</b></span>
-        <span class="note" style="flex:none;width:60px;text-align:right;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:14px;color:${kind==="att"?"var(--mint)":"var(--cyan)"}">${x.avg.toFixed(2)}</span>
-        <span class="note" style="flex:none;width:64px">${x.good} of ${x.runs.length}</span>
-        <span class="pillrow">${x.runs.map(r=>
-          fdrPill(r.opp,r.home,r.d,{short:true})).join("")}</span></div>`).join("")
-        :`<div class="pbody"><p class="note">No club has four kind fixtures in the next five on this measure.</p></div>`}
-    </div>`;
-  };
-
-  const head=`<div class="panel"><div class="phead"><h2>Fixtures</h2></div>
-    <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center">
-      <span class="pseg">
-        ${[["all","Overall"],["att","Attackers"],["def","Defenders"]].map(([k,n])=>
-          `<button class="${(lens||"all")===k?"on":""}" onclick="act('lens','${k}')">${n}</button>`).join("")}</span>
-      ${mode==="team"?`<span class="pseg" aria-label="What each cell shows">
-        ${[["fdr","Difficulty"],["cs","Clean Sheet %"],["gf","Projected Goals"]].map(([k,n])=>
-          `<button class="${(S.fixRead||"fdr")===k?"on":""}" onclick="act('fixread','${k}')">${n}</button>`).join("")}</span>`:""}
-    </div>
-    <div class="pbody" style="border-bottom:1px solid var(--ink3);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-      <span class="note" style="flex:1;min-width:220px">A defender's rating reads the opponent's attack; an attacker's reads their defence.</span>
-      <span style="display:flex;gap:4px;align-items:center">
-        ${[1,2,3,4,5].map(d=>{const[b,c]=fdrCol(d);
-          return `<span class="fdrpill" style="background:${b};color:${c};min-width:20px">${d}</span>`;}).join("")}</span>
-    </div></div>`;
-
-  if(mode==="team"){
-    const windowAvg=(t,n)=>{let s2=0,c=0;
-      for(let e=g;e<g+n&&e<=38;e++)(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t)
-        .forEach(f=>{s2+=fdrOf(f.ht===t?f.at:f.ht,f.ht===t,t,lens);c++;});
-      return c?s2/c:5;};
-    const scored=teams.map(t=>({t,d1:windowAvg(t,1),d3:windowAvg(t,3),d5:windowAvg(t,5)}));
-    const sk=S.fixSort||"d5", dir=S.fixDir||"asc";
-    scored.sort((a,b)=>dir==="asc"?a[sk]-b[sk]:b[sk]-a[sk]);
-    const best3=scored.slice(0,3).map(x=>x.t);
-    const arrow=k=>sk===k?(dir==="asc"?" ↑":" ↓"):"";
-    let th=`<th style="text-align:left">Club</th>`
-      +[["d1","1 GW"],["d3","3 GW"],["d5","5 GW"]].map(([k,n])=>
-        `<th class="${sk===k?"act":""}" style="text-align:right" onclick="act('fixsort','${k}')">${n}${arrow(k)}</th>`).join("");
-    for(let e=start;e<start+span&&e<=38;e++)th+=`<th style="text-align:center">GW${e}</th>`;
-    const rows=scored.map(({t,d1,d3,d5})=>{
-      let cells="";
-      for(let e=start;e<start+span&&e<=38;e++){
-        const fx=(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t);
-        if(!fx.length){cells+=`<td style="text-align:center"><span class="fdrpill" style="background:var(--ink3);color:var(--mute)">—</span></td>`;continue;}
-        cells+=`<td style="text-align:center;white-space:nowrap"><span class="pillrow" style="justify-content:center">${fx.map(f=>{
-          const home=f.ht===t, opp=home?f.at:f.ht;
-          return readPill(t,opp,home,lens);}).join("")}</span></td>`;}
-      const hot=best3.includes(t);
-      const col=v=>v<=2.2?"var(--mint)":v>=3.6?"var(--red)":"var(--cream)";
-      return `<tr style="${hot?"background:rgba(45,220,135,.07)":""}">
-        <td class="nm" style="white-space:nowrap"><span style="display:flex;align-items:center;gap:7px">
-          ${badgeOrShirt(t,20)}<b>${esc(t.name||t.short)}</b>
-          ${hot?TEAM_TILE(lens==="def"?"def":"att"):""}</span></td>
-        <td class="mono" style="text-align:right;color:${col(d1)}">${d1.toFixed(1)}</td>
-        <td class="mono" style="text-align:right;color:${col(d3)}">${d3.toFixed(2)}</td>
-        <td class="mono" style="text-align:right;font-weight:700;color:${col(d5)}">${d5.toFixed(2)}</td>${cells}</tr>`;});
-    return `<div class="trkrow2">${targetPanel("att","Attack",
-        "Clubs with a strong attack meeting weak defences in at least four of the next five.")}${targetPanel("def","Defence",
-        "Solid defences meeting weak attacks in at least four of the next five.")}</div>`
-      +head+`<div class="panel">${navFix(start,span,g)}
-        <div class="scroll"><table><thead><tr>${th}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
-        ${navFix(start,span,g)}</div>`;
-  }
-
-  /* ---- by gameweek ---- */
-  let out="";
-  for(let e=start;e<start+span&&e<=38;e++){
-    const fx=(S.model.byEv[e]||[]).slice().sort((a,b)=>String(a.kickoff).localeCompare(String(b.kickoff)));
-    if(!fx.length)continue;
-    const ev=(S.events||[]).find(x=>x.id===e);
-    /* UK time, always, with the GMT/BST label. The official FPL API's own
-       nextDeadline (via /api/status) wins for the upcoming gameweek. */
-    const dlIso=(e===g&&S.status&&S.status.fpl&&S.status.fpl.nextDeadline)
-      ?S.status.fpl.nextDeadline:(ev&&ev.deadline?ev.deadline:null);
-    const dl=dlIso?ukDeadline(dlIso):"";
-    out+=`<div class="gwband"><span>Gameweek ${e}${e===g?" · next":""}</span>
-      ${dl?`<span class="gwdl">Deadline ${esc(dl)}</span>`:""}</div>`;
-    fx.forEach(f=>{
-      const h=f.ht,a=f.at;if(!h||!a)return;
-      const hd=fdrOf(a,true,h,lens), ad=fdrOf(h,false,a,lens);
-      const dt=f.kickoff?new Date(f.kickoff):null;
-      const d=dt?ukFmt(dt,{weekday:"short",day:"numeric",month:"short"}):"";
-      const tm=dt?ukHHMM(dt):"";
-      const strongSide=t=>t.att>=1.30?TEAM_TILE("att"):(2.6-t.def)>=1.12?TEAM_TILE("def"):"";
-      out+=`<div class="fixrow" style="align-items:flex-start;flex-wrap:wrap">
-        <span class="fixteam" style="gap:8px">${badgeOrShirt(h,22)}
-          <span style="font-weight:600">${esc(h.name||h.short)}</span>${strongSide(h)}
-          ${fdrPill(a.short,true,hd,{short:true})}</span>
-        <span style="flex:none;width:112px;text-align:center;line-height:1.25">
-          <span style="display:block;color:var(--cream);font-size:11px;font-weight:600">${esc(tm)}</span>
-          <span style="display:block;color:var(--mute);font-size:10px">${esc(d)}</span></span>
-        <span class="fixteam away" style="gap:8px">${fdrPill(h.short,false,ad,{short:true})}
-          ${strongSide(a)}<span style="font-weight:600">${esc(a.name||a.short)}</span>
-          ${badgeOrShirt(a,22)}</span>
-        <span style="flex-basis:100%;display:flex;gap:14px;justify-content:center;margin-top:5px">
-          <span class="last3">${lastResults(h,g)}</span>
-          <span class="note" style="font-size:10px;align-self:center">vs</span>
-          <span class="last3">${lastResults(a,g)}</span></span></div>`;
-    });
-  }
-  return head+`<div class="panel">${navFix(start,span,g)}${out||'<div class="pbody"><p class="note">No fixtures in this range.</p></div>'}${navFix(start,span,g)}</div>`;
+function teamGridHTML(){
+  const g=S.model.next.id,T=S.model.teams,lens=tgLens(),win=tgWin();
+  const g2=win==="ros"?38:Math.min(38,g+win-1),nW=g2-g+1;
+  const winLbl=win===1?"GW"+g:win==="ros"?"ROS":win+" GW";
+  const tb=tgTable();
+  const rows=T.map(t=>({t,pos:tb[t.id].pos,gf:tb[t.id].gf,ga:tb[t.id].ga,w:tgScore(t,g,g2),form:tgResults(t,5)}));
+  /* sort: the colour lens's score by default; any column header re-sorts */
+  const SK={pos:r=>-r.pos,gf:r=>r.gf,ga:r=>r.ga,att:r=>r.w.gf,def:r=>r.w.cs,all:r=>r.w.pts};
+  const sk=SK[S.tSort]?S.tSort:lens,dir=SK[S.tSort]?(S.tDir==="asc"?1:-1):-1;
+  rows.sort((a,b)=>dir*(SK[sk](a)-SK[sk](b))||a.pos-b.pos);
+  const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${String(cur)===String(k)?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
+  const key=`<span class="tg-key"><span>Easy</span>${[1,2,3,4,5].map(d=>{const[b,c]=pdFdr(d);return `<i style="background:${b};color:${c}">${d}</i>`;}).join("")}<span>Hard</span></span>`;
+  const card=`<div class="pdcard"><div class="pdbar">
+    <div class="pdctl"><span class="pdl">Colour fixtures by</span>${seg(lens,[["att","Attack"],["def","Defence"],["all","Overall"]],"tlens")}</div>
+    <div class="pdctl"><span class="pdl">Scores for</span>${seg(win,[[1,"Next GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS"]],"twin")}</div>
+    <span class="pdsp"></span><div class="pdctl"><span class="pdl">Fixture rating</span>${key}</div></div></div>`;
+  const arrow=k=>sk===k?(dir<0?" ↓":" ↑"):"";
+  const sth=(k,n,sub,cls,tip)=>`<th class="${cls||""}${sk===k?" act":""}" onclick="act('tsort','${k}')" title="${esc(tip)}">${n}${arrow(k)}${sub?`<small>${sub}</small>`:""}</th>`;
+  let th=`<th class="tg-club">Club</th>${sth("pos","Pos","","r","League position")}${sth("gf","Scored","","r","Goals scored this season")}${sth("ga","Conc.","","r","Goals conceded this season")}<th class="tg-gap">Form</th>
+    ${sth("att","Attack","xG / GW","tg-s","Expected goals per gameweek over "+winLbl)}${sth("def","Defence","clean sheet","tg-s","Average chance of a clean sheet over "+winLbl)}${sth("all","Overall","pts / GW","tg-s tg-gap","FPL points from goals and clean sheets per gameweek over "+winLbl+" (9 a goal, 31 a clean sheet)")}`;
+  for(let e=g;e<=38;e++)th+=`<th class="tg-gw${e<=g2?" in":""}">GW${e}</th>`;
+  const ncol=8+(38-g+1);
+  const body=rows.map(r=>{
+    let cells="";
+    for(let e=g;e<=38;e++){const xs=tgFx(r.t,e);
+      cells+=`<td class="tg-gw${e<=g2?" in":""}">${xs.length?xs.map(x=>{const d=tgBand(r.t,x,lens),[b,c]=pdFdr(d);
+        return `<span class="tg-fx${x.home?"":" aw"}" style="background:${b};color:${c}" onclick="act('tmatch',${e})" title="GW${e}: ${esc(x.opp.name)} ${x.home?"(home)":"(away)"} · ${d}">${esc(x.opp.short)}</span>`;}).join("")
+        :'<span class="tg-fx bl" title="No match this gameweek">—</span>'}</td>`;}
+    const open=S.tOpen===r.t.short;
+    const num=k=>`<td class="tg-n${sk===k?" act":""}${k==="all"?" tg-gap":""}">${tgFmt(TG_KEY[k],r.w[TG_KEY[k]])}</td>`;
+    let tr=`<tr class="tg-r${open?" open":""}" data-club="${r.t.short}">
+      <td class="tg-club"><button class="tg-cb" onclick="act('topen','${r.t.short}')" aria-expanded="${open}">${badgeOrShirt(r.t,22)}<b>${esc(r.t.name||r.t.short)}</b><span class="tg-car" aria-hidden="true">${open?"▾":"▸"}</span></button></td>
+      <td class="r mono">${r.pos}</td><td class="r mono" data-k="gf">${r.gf}</td><td class="r mono" data-k="ga">${r.ga}</td><td class="tg-gap">${tgForm(r.form)}</td>
+      ${num("att")}${num("def")}${num("all")}${cells}</tr>`;
+    if(open)tr+=`<tr class="tg-drawer"><td colspan="${ncol}">${tgDrawer(r.t,tb[r.t.id],g,nW,winLbl)}</td></tr>`;
+    return tr;}).join("");
+  return card+`<div class="tg-panel"><div class="tg-scroll"><table class="tg-t"><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>
+    <div class="tg-foot">Click a club for its detail · click a fixture for the match · away fixtures in italics · faded gameweeks are outside the window
+      <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>How the scores work</summary><div class="infobox">
+      <p style="margin:0 0 6px">Attack is the goals the club is expected to score, Defence its chance of a clean sheet, from the same team ratings the projections use. Both include the club's own strength, so they say what the club should produce, not only how hard the opponent is.</p>
+      <p style="margin:0">Overall is what those are worth in FPL points to the club's players: 9 for each goal and 31 for each clean sheet, the values that fitted this season's club points. A window's score is per gameweek: a double gameweek counts twice and a blank counts zero.</p></div></details></div></div>`;
 }
-/* Last 3 completed results before a given gameweek — derived from fixture
-   scores the app already loads (S.fixtures[].hs/as populate once a match has
-   actually been played), so no new data source is needed.
-   F21: fixture rows carry club codes, not club ids, and four codes equal
-   another club's id, so matching f.h against team.id showed the wrong club's
-   results. buildModel() already resolves each row to its club (f.ht, f.at),
-   so the match is on that resolved club. */
-function lastResults(team,beforeGw){
-  const played=(S.fixtures||[]).filter(f=>(f.ht===team||f.at===team)&&f.hs!=null&&f.as!=null&&f.event<beforeGw)
-    .sort((a,b)=>b.event-a.event).slice(0,3).reverse();
-  if(!played.length)return `<span class="note" style="font-size:10px">no results yet</span>`;
-  return played.map(f=>{
-    const home=f.ht===team;
-    const gf=home?f.hs:f.as, ga=home?f.as:f.hs;
-    const res=gf>ga?"W":gf<ga?"L":"D";
-    const col=res==="W"?"var(--mint)":res==="L"?"var(--red)":"var(--mute)";
-    return `<span class="l3" style="background:${col}" title="GW${f.event} · ${gf}-${ga} (${home?"Home":"Away"})">${res}<sub>${home?"H":"A"}</sub></span>`;
-  }).join("");
+function tgDrawer(t,row,g,nW,winLbl){
+  const f=teamForm()[t.short]||{},dg=(dcGiven()[t.short]||{}).per,nx=tgFx(t,g)[0];
+  const top=a=>S.model.players.filter(p=>p.team===t.id&&p.avail>0&&(a?p.pos>=3:p.pos<=2)).sort((x,y)=>hPts(y,g,nW)-hPts(x,g,nW)).slice(0,3)
+    .map(p=>`<div class="tg-li"><button class="pn" onclick="act('card',${p.id})">${esc(p.web_name)}</button><b>${hPts(p,g,nW).toFixed(1)}</b></div>`).join("")||'<div class="tg-li mu">No one available</div>';
+  const trend=(now,s,up)=>now==null||s==null?"":`<small class="${(now>s)===up?"up":"dn"}">${now>s?"▲":"▼"} ${now.toFixed(2)} last 4</small>`;
+  const big=(v,l,sub)=>`<div class="tg-big"><b>${v}</b><span>${l}</span>${sub||""}</div>`;
+  const res=tgResults(t,5).reverse();
+  let next='<p class="mu" style="margin:0">No match next gameweek.</p>';
+  if(nx){const d=nx.f.kickoff?new Date(nx.f.kickoff):null,mk=nx.home?tgMarket(t,nx.opp):tgMarket(nx.opp,t),side=nx.home?0:2;
+    next=`<div class="tg-nm">${badgeOrShirt(nx.opp,28)}<div><b>${nx.home?"v":"at"} ${esc(nx.opp.name)}</b><span>${d?esc(ukFmt(d,{weekday:"short",day:"numeric",month:"short"})+" · "+ukHHMM(d)):""}</span></div></div>
+      <div class="tg-rts">${tgRate(t,nx.opp,nx.home)}</div>
+      ${mk&&mk.hda?`<div class="tg-li"><span>Win · draw · lose</span><b>${Math.round(mk.hda[side]*100)}% · ${Math.round(mk.hda[1]*100)}% · ${Math.round(mk.hda[2-side]*100)}%</b></div>`:""}
+      ${mk&&mk.gl?`<div class="tg-li"><span>Goals, market</span><b>${(nx.home?mk.gl.xgHome:mk.gl.xgAway).toFixed(1)}</b></div><div class="tg-li"><span>Clean sheet, market</span><b>${Math.round((nx.home?mk.gl.csHome:mk.gl.csAway)*100)}%</b></div>`
+        :`<div class="tg-li"><span>Goals, model</span><b>${fdrCalc(t,nx.opp,nx.home,"xgf").toFixed(1)}</b></div><div class="tg-li"><span>Clean sheet, model</span><b>${Math.round(Math.exp(-fdrCalc(t,nx.opp,nx.home,"xgc"))*100)}%</b></div>`}`;}
+  return `<div class="tg-dr">
+    <section><h4>Recent results</h4>${res.map(x=>`<div class="tg-li"><span class="tg-res ${x.r}">${x.r}</span><span class="tg-op">${badgeOrShirt(x.opp,16)}${esc(x.opp.name)} <em>${x.h?"H":"A"} · GW${x.e}</em></span><b>${x.us}–${x.th}</b></div>`).join("")||'<div class="tg-li mu">No results yet</div>'}
+      <div class="tg-li tg-sum"><span>${ordinalN(row.pos)} · ${row.p} pts</span><span>${row.cs} clean sheet${row.cs===1?"":"s"}</span></div></section>
+    <section><h4>Attack</h4><div class="tg-bigs">${big(f.xg!=null?f.xg.toFixed(2):"—","xG / match",trend(f.xg4,f.xg,true))}${big(String(row.gf),"goals scored","")}</div>
+      <h5>Top attackers · ${winLbl} pts</h5>${top(true)}</section>
+    <section><h4>Defence</h4><div class="tg-bigs">${big(f.xga!=null?f.xga.toFixed(2):"—","xGA / match",trend(f.xga4,f.xga,false))}${big(dg==null?"—":dg.toFixed(1),"DefCon given","<small>opponents per match</small>")}</div>
+      <h5>Top defenders · ${winLbl} pts</h5>${top(false)}</section>
+    <section><h4>Next match</h4>${next}</section></div>`;
 }
-function navFix(start,span,g){
-  return `<div class="pbody" style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
-    <button class="${S.expand.allFix?"on":""}" onclick="act('expand','allFix')">${S.expand.allFix?"Ten at a time":"Show all 38"}</button>
-    <button onclick="act('fixgw',${Math.max(g,start-10)})" ${start<=g?"disabled":""}>← earlier</button>
-    <span class="note">GW${start}–${Math.min(38,start+span-1)}</span>
-    <button onclick="act('fixgw',${Math.min(38,start+10)})" ${start+span>38?"disabled":""}>later →</button></div>`;
+const ordinalN=n=>{const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);};
+
+/* Matches: the official site's layout, one match per row, grouped by day,
+   badges either side of the kick-off, stats underneath, TV channel at the
+   side (Irish listings, pushed weekly from Andy's PC to /api/tv) */
+function matchesHTML(){
+  const g0=S.model.next.id,g=clamp(+S.mGw||g0,1,38);
+  const ms=(S.model.byEv[g]||[]).slice().sort((a,b)=>String(a.kickoff).localeCompare(String(b.kickoff)));
+  const ev=(S.events||[]).find(x=>x.id===g);
+  const dlIso=(g===g0&&S.status&&S.status.fpl&&S.status.fpl.nextDeadline)?S.status.fpl.nextDeadline:(ev&&ev.deadline?ev.deadline:null);
+  const day=f=>f.kickoff?ukFmt(new Date(f.kickoff),{weekday:"short",day:"numeric",month:"short"}):"Date to be confirmed";
+  const days=[];ms.forEach(f=>{const d=day(f);let b=days.find(x=>x.d===d);if(!b)days.push(b={d,ms:[]});b.ms.push(f);});
+  const tvs=(S.tv&&S.tv.matches)||[];
+  const pct=v=>Math.round(v*100)+"%";
+  const bar=(hda,model)=>`<span class="tg-bar${model?" model":""}" title="${model?"Model":"Market"}: home ${pct(hda[0])}, draw ${pct(hda[1])}, away ${pct(hda[2])}"><i class="h" style="flex:${hda[0]}">${pct(hda[0])}</i><i class="d" style="flex:${hda[1]}">${pct(hda[1])}</i><i class="a" style="flex:${hda[2]}">${pct(hda[2])}</i></span>`;
+  let anyMk=false;
+  const row=f=>{const h=f.ht,a=f.at;if(!h||!a)return "";
+    const d=f.kickoff?new Date(f.kickoff):null,mk=g===g0?tgMarket(h,a):null;if(mk)anyMk=true;
+    const mH=fdrCalc(h,a,true,"xgf"),mA=fdrCalc(a,h,false,"xgf"),cH=Math.exp(-fdrCalc(h,a,true,"xgc")),cA=Math.exp(-fdrCalc(a,h,false,"xgc"));
+    const done=f.hs!=null&&f.as!=null&&f.finished!==false;
+    const tm=tvs.find(m=>m.gw===g&&m.home&&m.away&&m.home.abbr===h.short&&m.away.abbr===a.short);
+    const tv=(tm?tm.channels:[]).map(c=>`<span class="tg-tv" title="${esc(c.name)}"><img src="/img/tv/${esc(c.abbr)}.png" alt="${esc(c.name)}" loading="lazy" onerror="this.parentNode.textContent='${esc(c.name).replace(/'/g,"")}'"></span>`).join("");
+    const goals=mk&&mk.gl?`<b>${mk.gl.xgHome.toFixed(1)} – ${mk.gl.xgAway.toFixed(1)}</b> <small>model ${mH.toFixed(1)} – ${mA.toFixed(1)}</small>`:`<b>${mH.toFixed(1)} – ${mA.toFixed(1)}</b> <small>model</small>`;
+    const cs=mk&&mk.gl?`<b>${pct(mk.gl.csHome)} · ${pct(mk.gl.csAway)}</b> <small>model ${pct(cH)} · ${pct(cA)}</small>`:`<b>${pct(cH)} · ${pct(cA)}</b> <small>model</small>`;
+    return `<div class="tg-m">
+      <div class="tg-mrow"><span class="tg-hn">${esc(h.name)}</span>${badgeOrShirt(h,34)}<span class="tg-kb${done?" ft":""}">${done?`${f.hs} – ${f.as}`:d?esc(ukHHMM(d)):"TBC"}</span>${badgeOrShirt(a,34)}<span class="tg-an">${esc(a.name)}</span></div>
+      ${tv?`<div class="tg-tvc">${tv}</div>`:""}
+      <div class="tg-mst">
+        <div class="tg-sd h">${tgForm(tgResults(h,5))}<span class="tg-rts">${tgRate(h,a,true)}</span></div>
+        <div class="tg-ctr">${mk&&mk.hda?bar(mk.hda):bar(tgModelHda(mH,mA),true)}
+          <div class="tg-kv"><span>Goals ${goals}</span><span>Clean sheet ${cs}</span></div></div>
+        <div class="tg-sd a">${tgForm(tgResults(a,5))}<span class="tg-rts">${tgRate(a,h,false)}</span></div>
+      </div></div>`;};
+  const body=days.map(d=>`<h3 class="tg-day">${esc(d.d)}</h3>${d.ms.map(row).join("")}`).join("");
+  const first=ms[0]?day(ms[0]):"",last=ms.length?day(ms[ms.length-1]):"";
+  return `<div class="tg-mp"><div class="tg-step"><button onclick="act('mgw',${g-1})" ${g<=1?"disabled":""} aria-label="Earlier gameweek">‹</button>
+      <div><b>Gameweek ${g}${g===g0?" · next":""}</b><span>${esc(first)}${last&&last!==first?" – "+esc(last):""}</span>${dlIso?`<em>Deadline ${esc(ukDeadline(dlIso))}</em>`:""}</div>
+      <button onclick="act('mgw',${g+1})" ${g>=38?"disabled":""} aria-label="Later gameweek">›</button></div>
+    <div class="tg-legend"><span>Result <i class="h"></i>home <i class="d"></i>draw <i class="a"></i>away</span><span>${anyMk?"Market odds, the model in grey":"The model's figures; bookmaker prices arrive for the next gameweek"}</span><span>Att · Def · All: fixture rating, 1 easy to 5 hard</span>${tvs.length?"":"<span>TV channels not loaded</span>"}</div>
+    ${body||'<p class="note" style="text-align:center;padding:20px">No matches this gameweek.</p>'}</div>`;
 }
 
 const FORMS=[[3,4,3],[3,5,2],[4,4,2],[4,3,3],[4,5,1],[5,3,2],[5,4,1],[5,2,3]];
@@ -1562,62 +1578,6 @@ function dcGiven(){
   const v={};Object.entries(games).forEach(([t,set])=>{v[t]={n:set.size,hits:hits[t]||0,per:set.size?(hits[t]||0)/set.size:null};});
   _dcgCache={m:S.teamMatch,h:S.hist,v};return v;
 }
-function clubsHTML(){
-  const g=VG(),h=S.tH||3,view=S.tView||"att",teams=S.model.teams,TF=teamForm(),DG=dcGiven();
-  const fx=(t,e)=>(S.model.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).map(f=>({opp:f.ht===t?f.at:f.ht,home:f.ht===t}));
-  const run=t=>{const out=[];for(let e=g;e<g+h&&e<=38;e++)fx(t,e).forEach(x=>out.push({e,...x}));return out;};
-  const rows=teams.map(t=>{
-    const r=run(t);
-    const goals=r.reduce((s,x)=>s+fdrCalc(t,x.opp,x.home,"xgf"),0);
-    const cs=r.length?r.reduce((s,x)=>s+Math.exp(-fdrCalc(t,x.opp,x.home,"xgc")),0)/r.length:0;
-    const conceded=r.reduce((s,x)=>s+fdrCalc(t,x.opp,x.home,"xgc"),0);
-    const nx=fx(t,g)[0],mk=nx&&S.oddsTeams?S.oddsTeams[t.short+"|"+nx.opp.short+"|"+(nx.home?"H":"A")]:null;
-    const f=TF[t.short]||{},ct=(S.curTeamStats||{})[t.short]||{},dg=(DG[t.short]||{}).per;
-    /* who plays them next: for the Opponents view, the attackers facing them */
-    const facing=r.map(x=>x.opp.id);
-    const players=S.model.players.filter(p=>p.avail>0&&(view==="opp"?facing.includes(p.team)&&p.pos>=3:p.team===t.id&&(view==="def"?p.pos<=2:p.pos>=3)));
-    const top=players.sort((a,b)=>hPts(b,g,h)-hPts(a,g,h)).slice(0,2);
-    return{t,r,goals,cs,conceded,mk,f,top,facing,dg,gf:ct.gf||0,ga:ct.ga||0};});
-  const sorters={att:(a,b)=>b.goals-a.goals,def:(a,b)=>b.cs-a.cs,opp:(a,b)=>((b.f.xga||0)+(b.f.xga4||0))-((a.f.xga||0)+(a.f.xga4||0))};
-  rows.sort(sorters[view]||sorters.att);
-  /* tidy (20 Oct 2026): the Signals page's team cards moved here, so every
-     column sorts (tap again to reverse): best or weakest attacks, best or
-     leakiest defences, easiest runs */
-  const SK={gf:x=>x.gf,ga:x=>x.ga,xg:x=>x.f.xg||0,xg4:x=>x.f.xg4||0,xga:x=>x.f.xga||0,xga4:x=>x.f.xga4||0,goals:x=>view==="opp"?x.conceded:x.goals,cs:x=>x.cs,mk:x=>x.mk?x.mk.xg:-1,dg:x=>x.dg??-1};
-  if(S.tSort&&SK[S.tSort]){const f=SK[S.tSort],d=S.tDir==="asc"?1:-1;rows.sort((a,b)=>d*(f(a)-f(b)));}
-  const sth=(k,n,tip)=>`<th class="${S.tSort===k?"act":""}" style="cursor:pointer" onclick="act('tsort','${k}')" title="${esc(tip)}">${n}${S.tSort===k?(S.tDir==="asc"?" ↑":" ↓"):""}</th>`;
-  const lens=view==="def"?"def":"att";
-  const n2=v=>v==null?"—":v.toFixed(2);
-  const trend=(now,season,goodUp)=>now==null||season==null?"":
-    `<span class="${(now>season)===goodUp?"up":"dn"}" title="Last four against the season">${now>season?"▲":"▼"}</span>`;
-  const body=rows.map((x,i)=>`<tr>
-    <td class="mu" style="text-align:right">${i+1}</td>
-    <td class="nm"><span style="display:flex;align-items:center;gap:8px">${badgeOrShirt(x.t,22)}<b>${esc(x.t.name||x.t.short)}</b></span></td>
-    <td class="fig" data-k="gf">${x.gf}</td><td class="fig" data-k="ga">${x.ga}</td>
-    <td class="fig">${n2(x.f.xg)}</td><td class="fig">${n2(x.f.xg4)} ${trend(x.f.xg4,x.f.xg,true)}</td>
-    <td class="fig">${n2(x.f.xga)}</td><td class="fig">${n2(x.f.xga4)} ${trend(x.f.xga4,x.f.xga,false)}</td>
-    <td style="text-align:left"><span class="fxrow">${x.r.map(r=>view==="opp"
-        ?fdrPill(r.opp.short,r.home,fdrOf(x.t,!r.home,r.opp,"att"),{short:true,tiny:true})
-        :fdrPill(r.opp.short,r.home,fdrOf(r.opp,r.home,x.t,lens),{short:true,tiny:true})).join("")||'<span class="mu">blank</span>'}</span></td>
-    <td class="fig ${view==="att"?"mint":""}">${view==="opp"?x.conceded.toFixed(1):x.goals.toFixed(1)}</td>
-    <td class="fig ${view==="def"?"mint":""}">${Math.round(x.cs*100)}%</td>
-    <td class="fig">${x.dg==null?"—":x.dg.toFixed(1)}</td>
-    <td class="fig">${x.mk?`${x.mk.xg.toFixed(1)} · ${Math.round(Math.exp(-x.mk.xgc)*100)}%`:"—"}</td>
-    <td style="text-align:left">${x.top.map(p=>`${pName(p)} <span class="mu">${hPts(p,g,h).toFixed(1)}</span>`).join('<span class="mu"> · </span>')}</td></tr>`).join("");
-  const seg=(cur,list,action)=>`<span class="hz">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${n}</button>`).join("")}</span>`;
-  const note={att:"Ranked by the goals the model expects them to score over the window: attackers to own.",
-    def:"Ranked by the average chance of a clean sheet over the window: defenders and keepers to own.",
-    opp:"Ranked by expected goals conceded this season plus the last four: the defences to attack. Pills show who plays them next, coloured for the attacker."}[view];
-  return `<div class="hubctl">${seg(view,[["att","Attacks to own"],["def","Defences to own"],["opp","Opponents to target"]],"tview")}${hzHTML(h,"th")}
-      <span class="note">${note}</span></div>
-    <div class="panel"><div class="scroll hub"><table><thead><tr><th></th><th style="text-align:left">Club</th>
-      ${sth("gf","Scored","Goals scored this season")}${sth("ga","Conceded","Goals conceded this season")}
-      ${sth("xg","xG/g","Expected goals per match this season")}${sth("xg4","Last 4","Expected goals per match, last four")}
-      ${sth("xga","xGA/g","Expected goals conceded per match this season")}${sth("xga4","Last 4","Expected goals conceded per match, last four")}
-      <th style="text-align:left">${view==="opp"?"Faced next by":"Next "+h}</th>${sth("goals",view==="opp"?"Proj. conceded":"Proj. goals","Over the window")}${sth("cs","CS %","Average clean-sheet chance over the window")}${sth("dg","DefCon given","Opposing players who reached the DefCon target per match against this club, this season. High = their opponents' defenders and holding midfielders hit DefCon often")}
-      ${sth("mk","Market","Bookmakers, next match: expected goals and clean-sheet chance")}<th style="text-align:left">${view==="def"?"Top defenders":view==="opp"?"Attackers facing them":"Top attackers"}</th></tr></thead>
-      <tbody>${body}</tbody></table></div></div>`;
-}
 
 /* ============================================================
    REDESIGN WAVE 7 (20 Oct 2026): the Status page. Data freshness (wave 1),
@@ -2106,7 +2066,7 @@ function sgTeams(G,H){
     ${rep("easy","calendar","Easiest Fixture Runs","The next five for attackers, from the model's own ratings (1 easiest, 5 hardest).",runList(runs.slice().sort((a,b)=>a.avg-b.avg).slice(0,6)))}
     ${rep("hard","calendar","Toughest Fixture Runs","The hardest next five for attackers.",runList(runs.slice().sort((a,b)=>b.avg-a.avg).slice(0,6)))}
   </div>
-  <p class="note">Every club, every column and the fixtures by week are on <a href="${routeFor("fixtures")}" onclick="S.fixMode='clubs';return go(event,'fixtures')" style="color:var(--cyan)">Teams</a>.</p>`;
+  <p class="note">Every club, its fixtures and each week's matches are on <a href="${routeFor("fixtures")}" onclick="S.fixMode='grid';return go(event,'fixtures')" style="color:var(--cyan)">Teams</a>.</p>`;
 }
 
 /* ---------------- Players ---------------- */
