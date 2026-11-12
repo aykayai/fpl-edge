@@ -244,6 +244,16 @@ body.scrolled .tbfig{display:flex}
 .tg-rt i{font:600 11px 'Geist Mono',monospace;font-style:normal;width:20px;height:20px;border-radius:6px;display:grid;place-items:center}
 .tg-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:11.5px;color:#5E5E5E;padding:10px 16px;border-top:1px solid #191919}
 .tg-foot .infotip{margin:0}
+/* teams to target: the Planner's This Week card, four in a row */
+.tg-row4{grid-template-columns:repeat(4,minmax(0,1fr));margin:0 0 14px}
+.tgx{font:600 14px 'Geist Mono',monospace;color:var(--cream);margin-left:4px}
+.tg-pt{width:100%;border-collapse:collapse;font:500 13px 'Geist',system-ui,sans-serif}
+.tg-pt th{font:500 11.5px 'Geist',sans-serif;color:var(--mute);padding:6px 8px;border-bottom:1px solid #222;text-align:center}.tg-pt th.l{text-align:left}
+.tg-pt td{padding:7px 8px;border-bottom:1px solid #1A1A1A}.tg-pt b{font-family:'Geist',system-ui,sans-serif;font-weight:600}
+.tg-pc{display:flex;align-items:center;gap:8px}.tg-pn{text-align:center;font:600 13.5px 'Geist Mono',monospace}
+.tg-ch{display:flex;gap:3px;align-items:center}.tg-ch i{font:700 10px 'Geist',sans-serif;font-style:normal;width:36px;padding:3px 0;border-radius:5px;text-align:center}
+.tg-ch i.aw{font-style:italic;font-weight:600}.tg-ch em{font-style:normal;font-size:11px;color:#6E6E6E;margin-left:3px}
+@media(max-width:1100px) and (min-width:621px){.tg-row4{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* Matches */
 .tg-mp{background:#0F0F0F;border-radius:14px;box-shadow:inset 0 0 0 1px var(--ring);padding:18px 0 8px}
 .tg-step{display:flex;align-items:center;justify-content:center;gap:28px}
@@ -1000,13 +1010,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.0.0"></script>
-<script src="./app-squad.js?v=13.0.0"></script>
-<script src="./app-render.js?v=13.0.0"></script>
-<script src="./app-odds.js?v=13.0.0"></script>
-<script src="./app-tracker.js?v=13.0.0"></script>
-<script src="./app-main.js?v=13.0.0"></script>
-<script src="./app-scout.js?v=13.0.0"></script>
+<script src="./app-core.js?v=13.0.1"></script>
+<script src="./app-squad.js?v=13.0.1"></script>
+<script src="./app-render.js?v=13.0.1"></script>
+<script src="./app-odds.js?v=13.0.1"></script>
+<script src="./app-tracker.js?v=13.0.1"></script>
+<script src="./app-main.js?v=13.0.1"></script>
+<script src="./app-scout.js?v=13.0.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
