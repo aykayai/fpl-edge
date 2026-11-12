@@ -787,6 +787,26 @@ details[open]>summary::after{content:" ▴"}
 .rfold{background:none;border:0;padding:0;width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--mute);min-height:0}
 .rfold:hover{background:#262626;color:var(--cream)}
 .rep.bare .rb>.panel{background:none;box-shadow:none;margin:0;border:0;overflow:visible}
+.repgrid>.rep.wide{grid-column:1/-1}
+.vt4{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 12px}
+.vt{flex:1 1 200px;background:#1b1b1b;border:1px solid #2a2a2a;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.vt>span{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.vt>b{font:600 20px 'Geist Mono',monospace;color:var(--mint)}.vt>b small{font:400 12px 'Geist',sans-serif;color:var(--mute)}
+.vt>em{font-style:normal;font-size:12px;color:#cfcfcf}
+.vcs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.vcs.one{grid-template-columns:1fr}
+.vc{background:#161616;border:1px solid #262626;border-radius:10px;padding:10px 10px 4px}
+.vch{display:flex;justify-content:space-between;align-items:baseline}.vch b{font-size:13px}.vch span{font-size:11px;color:var(--mute)}
+.vc svg{display:block}.vc .vg{stroke:#262626}.vc .va{font-size:10px;fill:#7a7a7a}
+.vc .vbase{stroke:#9a9a9a;stroke-dasharray:4 4}.vc .vf{fill:none;stroke:var(--mint);stroke-width:2;opacity:.55}
+.vc .vd{fill:#5c5c5c;stroke:#141414;stroke-width:1.5}.vc .vb{fill:var(--mint);stroke:#141414;stroke-width:1.5}.vc .vm{stroke:var(--cream);stroke-width:2}
+.vc .vl{font-size:10.5px;fill:#bdbdbd}.vc .vlm{font-size:10.5px;fill:var(--cream)}
+.vkey{display:flex;flex-wrap:wrap;gap:16px;font-size:11.5px;color:#9a9a9a;margin:8px 2px}.vkey i{display:inline-block;vertical-align:middle;margin-right:5px}
+.vkey .kb{width:9px;height:9px;border-radius:50%;background:var(--mint)}.vkey .km{width:8px;height:8px;border-radius:50%;background:#5c5c5c;box-shadow:0 0 0 2px var(--cream)}
+.vkey .kl{width:18px;border-top:1px dashed #9a9a9a}.vkey .kf{width:18px;border-top:2px solid var(--mint);opacity:.55}
+.vtab{width:100%;border-collapse:collapse;font-size:12.5px}.vtab th{font-size:11px;color:var(--mute);text-align:left;font-weight:500;padding:4px 6px}
+.vtab td{padding:5px 6px;border-top:1px solid #222}.vtab tr.vtop td{border-top-color:#333}.vtab .r{text-align:right;padding-right:10px}
+.vtab td.dn{color:#C98A93}.vtab td.vbest{color:var(--mint);font-weight:700}.vtab .pdbest{color:var(--mint);opacity:.75}
+@media(max-width:760px){.vcs{grid-template-columns:1fr}}
 .rep.bare .rb>.panel>.phead{display:none}
 .rep.bare .rb>.panel>.pbody{padding:0}
 .rep .rb .panel+.panel{margin-top:12px}
@@ -980,13 +1000,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=12.49.0"></script>
-<script src="./app-squad.js?v=12.49.0"></script>
-<script src="./app-render.js?v=12.49.0"></script>
-<script src="./app-odds.js?v=12.49.0"></script>
-<script src="./app-tracker.js?v=12.49.0"></script>
-<script src="./app-main.js?v=12.49.0"></script>
-<script src="./app-scout.js?v=12.49.0"></script>
+<script src="./app-core.js?v=13.0.0"></script>
+<script src="./app-squad.js?v=13.0.0"></script>
+<script src="./app-render.js?v=13.0.0"></script>
+<script src="./app-odds.js?v=13.0.0"></script>
+<script src="./app-tracker.js?v=13.0.0"></script>
+<script src="./app-main.js?v=13.0.0"></script>
+<script src="./app-scout.js?v=13.0.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
