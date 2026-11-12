@@ -71,6 +71,18 @@ function sigTile(k,tip,bright){
   const[ic,tone,label]=SIGNAL[k];
   return `<span class="tile${tone==="NAVY"?" navy":""}${bright?" bright":""}"${tone==="NAVY"?"":` style="--tc:${tone}"`} title="${esc(tip||label)}" data-sig="${k}">${lic(ic)}</span>`;
 }
+/* Player Data hover card: one short line per signal, from its tip */
+function sigShort(k,t){
+  t=String(t||"");
+  if(k==="buy"){const m=t.match(/([\d.]+) pts$/),h=t.match(/next (\d+) gameweeks/);return `Top pick for his position: ${m?m[1]:"?"} pts ${h?"over "+h[1]+" GW":"next GW"}`;}
+  if(k==="sell"){const m=t.match(/: (.+) \+([\d.]+)$/);return m?`Best swap: ${m[1]}, +${m[2]} pts`:t;}
+  if(k==="rise"||k==="fall"){const m=t.match(/(\d+)%/);return `${k==="rise"?"Rise":"Fall"} likely tonight (predictor ${m?m[1]:"100"}%)`;}
+  if(k==="heat"||k==="cool")return t.replace(/^(Heating Up|Cooling Off):\s*/,"").replace(/last-4 /,"last 4: ").replace(" vs season",", season");
+  if(k==="defcon")return t.replace(/^DefCon Monster:\s*/,"Hit the target ").replace(" · strong next match: "," · next: ").replace(/, whose opponents.*$/,"");
+  if(k==="set")return t.replace(/^Set pieces:\s*/,"");
+  if(k==="diff")return t.replace(", predicted"," · predicted");
+  return t;
+}
 /* FPL's own live fields (server /api/fpl-players): price predictor and
    set-piece orders. Missing on the Pages backup, where the dataset's
    penalty order stands in and set pieces are not shown. */
