@@ -90,7 +90,7 @@ async function runApp() {
   w.setInterval = () => 0;
   w.console = { log() {}, warn() {}, error() {} };
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
-  vm.runInContext(`window.__g={get S(){return S},render,act,signals,momentum}`, ctx);
+  vm.runInContext(`window.__g={get S(){return S},get TEAM_ID(){return TEAM_ID},render,act,signals,momentum}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
   while (Date.now() < until && !(S.model && !S.loading)) await new Promise(r => setTimeout(r, 250));
@@ -233,6 +233,18 @@ try {
   const wrongCool = placeCool.filter(x => !losing(x.p));
   check(wrongCool.length === 0, `keepers, defenders and forwards flagged losing his place all lost minutes or starts (${placeCool.length} flagged)`, wrongCool.slice(0, 5).map(x => x.p.web_name + " " + x.m.why).join("; "));
   check(!S.model.players.some(p => p.pos === 2 && (g.momentum(p) || {}).cool && !/losing his place/.test(g.momentum(p).why)), "defenders are only ever Cooling Off for losing their place");
+
+  /* Differential (12 Nov 2026): top 10% of his position, under 5% owned, or
+     under 15% and no rival owns him; bright exactly when no rival owns him */
+  const rivN = {}; let rivCount = 0;
+  const feed = S.rivalsFeed;
+  if (feed && feed.entries) Object.keys(feed.entries).filter(k => String(k) !== String(g.TEAM_ID)).forEach(k => {
+    const a = feed.entries[k].gw || [], r = a[a.length - 1]; if (!r || !r.picks) return; rivCount++; r.picks.forEach(pk => { const id = pk.id ?? pk; rivN[id] = (rivN[id] || 0) + 1; }); });
+  const dFlags = S.model.players.map(p => ({ p, s: g.signals(p, G0).find(x => x[0] === "diff") })).filter(x => x.s);
+  const regulars = S.model.players.filter(p => p.xMins >= 60).length;
+  const badD = dFlags.filter(({ p, s }) => !(p.owned < 5 || (p.owned < 15 && rivCount && !rivN[p.id])) || (!!s[2]) !== (rivCount > 0 && !rivN[p.id]));
+  check(badD.length === 0, `Differential: under 5% owned, or under 15% with no rival owner; bright only when no rival owns him (${dFlags.length} flagged, ${dFlags.filter(x => x.s[2]).length} bright, ${rivCount} rivals)`, badD.slice(0, 5).map(x => x.p.web_name + " " + x.p.owned + "%").join(", "));
+  check(dFlags.length <= Math.ceil(regulars * 0.1), `Differential stays exclusive: ${dFlags.length} flags, at most 10% of ${regulars} regular starters`);
 
   /* ---------- 2. behaviour ---------- */
   const squadNames = new Set(S.model.players.filter(p => (S.squad || []).includes(p.id)).map(p => p.web_name));

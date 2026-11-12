@@ -64,7 +64,7 @@ const SIG_RULE={
   cool:()=>"Cooling Off. Midfielders: last-4 xGI/90 at most 0.6x his season rate, or his DefCon hit rate down 30 points. Keepers, defenders and forwards: losing his place (his share of the team's minutes over its last 4 at most 0.75x his season share, or 2 or fewer starts in the last 4 after starting 75%+). Keepers also: goals prevented over the last 4 at least 0.3 per 90 below his season rate",
   defcon:()=>`DefCon Monster: reached the DefCon target in at least 2 of every 3 matches this season, with ${DCM_HITS}+ hits. Solid when the next match is strong too: model chance ${Math.round(DCM_CHANCE*100)}%+ against a side whose opponents reach DefCon ${DCM_GIVEN}+ times a match`,
   rival:()=>"Owned by managers around you, not by you",
-  diff:()=>"Under 8% owned and predicted 3.5+ pts",
+  diff:()=>"Differential: predicted in the top 10% of his position next gameweek (among players expected to play 60+ minutes) and under 5% owned. Bright when none of your league rivals own him, which also lets in players up to 15% owned",
   pen:()=>"First-choice penalty taker",
   set:()=>"First choice on corners or free kicks"};
 function sigTile(k,tip,bright){
@@ -217,6 +217,24 @@ function defconMonster(p,g){
   return{strong,tip:`DefCon Monster: ${p.dcHits}/${p.dcApps} this season`+(strong
     ?` · strong next match: ${Math.round(p.dcChance*100)}% chance v ${opp.short}, whose opponents reach DefCon ${DG[opp.short].per.toFixed(1)} times a match`:"")};
 }
+/* Differential (12 Nov 2026, Andy). Was "under 8% owned and 3.4+ pts", a
+   fixed bar that flagged 82 players once the D5 re-fit lifted every
+   prediction. Now relative to his position, so later re-fits cannot inflate
+   it: predicted next GW in the top 10% of his position among players
+   expected to play 60+ minutes, AND either under 5% owned overall, or owned
+   by none of his league rivals and under 15% overall. Bright (filled gem)
+   when none of the rivals own him. */
+let _diffCut=null;
+function differential(p,g){
+  const pts=x=>(x.gw[g]&&!x.gw[g].blank)?x.gw[g].pts:0;
+  if(!_diffCut||_diffCut.m!==S.model||_diffCut.g!==g){const c={};
+    [1,2,3,4].forEach(k=>{const v=S.model.players.filter(x=>x.pos===k&&x.xMins>=60).map(pts).sort((a,b)=>a-b);c[k]=v.length?v[Math.floor(0.9*(v.length-1))]:Infinity;});
+    _diffCut={m:S.model,g,c};}
+  const v=pts(p);if(!(p.owned>0)||v<_diffCut.c[p.pos])return null;
+  const R=rivalOwn(),k=R&&R.n?(R.own[p.id]||0):null,none=k===0;
+  if(!(p.owned<5||(none&&p.owned<15)))return null;
+  return{bright:none,tip:`${p.owned}% owned, ${k==null?"league not loaded":none?"no rival owns him":`${k} of ${R.n} rivals own him`}, predicted ${v.toFixed(1)} pts`};
+}
 /* Rival Threat: how many of the mini-league rivals own each player */
 let _rivCache=null;
 function rivalOwn(){
@@ -250,7 +268,8 @@ function signals(p,g,noSell,hh){
   const R=rivalOwn();
   if(R&&R.n&&!mine){const k=R.own[p.id]||0;
     if(k>=Math.max(2,Math.ceil(R.n*0.3)))out.push(["rival",`Owned by ${k} of ${R.n} rivals, not you`]);}
-  if(p.owned>0&&p.owned<8&&(p.gw[g]?.pts||0)>3.4)out.push(["diff",`${p.owned}% owned, predicted ${(p.gw[g]?.pts||0).toFixed(1)} pts`]);
+  const dv=differential(p,g);
+  if(dv)out.push(["diff",dv.tip,dv.bright]);
   const sp=setPieces(p);
   if(sp.pen)out.push(["pen","First-choice penalty taker"]);
   if(sp.cor===1||sp.dfk===1)out.push(["set","Set pieces: "+[sp.cor&&sp.cor<=2?"Corners "+ORD(sp.cor):"",sp.dfk&&sp.dfk<=2?"Free kicks "+ORD(sp.dfk):""].filter(Boolean).join(" · ")]);
