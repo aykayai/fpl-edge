@@ -42,6 +42,7 @@ const SEASON="2026-2027", LAST="2025-2026";
 const FEED_SEASON="2027";
 const ACTUALS_URL=BACKUP?"data/actuals.json":"/data/feeds/actuals.json";
 const RIVALS_URL=BACKUP?null:"/data/feeds/rivals.json";
+const DCD_URL=BACKUP?"data/dc-doubles.json":"/data/feeds/dc-doubles.json";
 /* badges and photos: our server's cache, or the Premier League directly on Pages */
 const imgSrc=(kind,code)=>BACKUP
   ?(kind==="badge"?`https://resources.premierleague.com/premierleague/badges/50/t${esc(String(code||""))}.png`
@@ -137,6 +138,12 @@ async function loadFplLive(){
   if(BACKUP){S.fplLive=null;return;}
   try{const d=JSON.parse(await dataText("/api/fpl-players"));if(d&&d.players)S.fplLive=d;}
   catch(e){loadWarn("FPL price predictor and set-piece orders");}
+}
+/* FPL's per-match DefCon for double gameweeks (scripts/build-actuals.mjs
+   writes it). Optional: without it a double keeps the rebuilt counts. */
+async function loadDcDoubles(){
+  try{const d=JSON.parse(await dataText(DCD_URL));S.dcDoubles=d&&d.gws?d:null;}
+  catch(e){S.dcDoubles=null;}
 }
 /* F53 (13 Oct 2026): every part of the load that fails is named here and
    listed under the footer, instead of the page quietly using a weaker model */
@@ -235,7 +242,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.44.0";
+const APP_VERSION="12.45.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -509,7 +516,7 @@ async function loadAll(force,opts){
     /* nothing new on the server (or the server is unreachable): keep the
        built model, refresh the light feeds, and re-render once */
     S.capture={};
-    await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours()]);
+    await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours(),loadDcDoubles()]);
     if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();
       if(st){_snap.status=st;_snap.statusAt=S.statusAt;}IDB.set("snap",_snap);}
     S.capture=null;
@@ -861,7 +868,7 @@ async function loadAll(force,opts){
        copy itself goes to IndexedDB below (localStorage had no room for it). */
     S.datasetCommit=commit;
     /* FPL's live set-piece orders feed the model, so they load first */
-    await loadFplLive();
+    await Promise.all([loadFplLive(),loadDcDoubles()]);
     buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadNeighbours()]);
     /* Bring the planner onto the latest official squad when a newer one has
        been published (this also upgrades a seed made before the feeds landed). */
@@ -1540,6 +1547,7 @@ function appearFactor(xMins){
 }
 function buildModel(){
   applyLiveStats();
+  applyDcDoubles();
   clearModelCaches();
   const teams={};S.teams.forEach(t=>teams[t.id]=t);
   const byCode={};S.teams.forEach(t=>byCode[t.code]=t);
@@ -2156,6 +2164,46 @@ function applyLiveStats(){
     LIVE_STATS.forEach(([k,f,fn])=>{if(!(k in lv))return;const v=lv[k];
       o[f]=v==null?"":(fn?fn(+v):v);});
     p.stats=o;
+  });
+}
+/* Double gameweeks (12 Nov 2026). The dataset leaves this season's DefCon
+   blank, so each match row carries a count rebuilt from its parts, and the
+   single-match weeks are then set to FPL's own count. A double had no exact
+   source until FPL's per-match figures (S.dcDoubles): a match that reached
+   the target is listed with its count; the gameweek total then fixes the
+   other match. If neither match scored, the rebuilt counts are scaled to
+   FPL's total and kept below the target. Each match is found by its
+   opponent. Re-run on every build from the rebuilt counts (r._dc0). */
+function applyDcDoubles(){
+  if(!S.hist)return;
+  /* back to the rebuilt counts first, so a feed that no longer covers a row
+     leaves no stale figure behind */
+  Object.values(S.hist).forEach(rows=>rows.forEach(r=>{if(r._dc0!=null){r.dc=r._dc0;r.dcSrc=r._src0;}}));
+  const F=S.dcDoubles&&S.dcDoubles.gws;if(!F)return;
+  const byId={},byCode={};(S.teams||[]).forEach(t=>{byId[t.id]=t.short;byCode[Math.round(num(t.code))]=t.short;});
+  /* the dataset's match rows name clubs by code, FPL's fixtures by id; the
+     two number ranges overlap, so each is looked up in its own table */
+  const pl={};(S.players||[]).forEach(p=>pl[p.id]=p);
+  Object.entries(F).forEach(([gw,G])=>{
+    Object.entries(G.players||{}).forEach(([id,d])=>{
+      const p=pl[id];if(!p||!(p.pos>=2))return;
+      const mine=byCode[Math.round(num(p.teamCode))];
+      const rows=((S.hist[String(p.code)])||[]).filter(r=>r.tag==="now"&&r.gw===+gw);
+      if(!mine||rows.length!==(d.f||[]).length||rows.length<2)return;
+      rows.forEach(r=>{if(r._dc0==null){r._dc0=r.dc;r._src0=r.dcSrc;}});
+      const oppOf=r=>{const m=(S.teamMatch||{})[r.mid];if(!m)return null;const h=byCode[m.h],a=byCode[m.a];return h===mine?a:a===mine?h:null;};
+      const used=new Set(),pairs=[];
+      d.f.forEach(([fid,val])=>{const tm=(G.fixtures||{})[fid];if(!tm)return;
+        const o=byId[tm[0]]===mine?byId[tm[1]]:byId[tm[0]];
+        const r=rows.find(x=>!used.has(x)&&oppOf(x)===o);if(r){used.add(r);pairs.push([r,val]);}});
+      if(pairs.length!==rows.length)return;
+      const thr=DC_THRESH[p.pos]||99,known=pairs.filter(x=>x[1]!=null),unk=pairs.filter(x=>x[1]==null);
+      const left=Math.max(0,(d.t||0)-known.reduce((s,x)=>s+x[1],0));
+      known.forEach(([r,v])=>{r.dc=v;r.dcSrc="fpl";});
+      if(unk.length===1){unk[0][0].dc=Math.min(thr-1,left);unk[0][0].dcSrc="fpl";}
+      else if(unk.length>1){const s0=unk.reduce((s,x)=>s+(x[0]._dc0||0),0);
+        unk.forEach(([r])=>{r.dc=Math.min(thr-1,Math.round(s0>0?(r._dc0||0)*left/s0:left/unk.length));r.dcSrc="fpl-split";});}
+    });
   });
 }
 function parseReturn(news){

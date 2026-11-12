@@ -22,13 +22,15 @@
    render a wrong number as fact. */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 const API = "https://fantasy.premierleague.com/api";
 const ENTRY_ID = String(process.env.FPL_ENTRY_ID || "301830");
 const SEASON = process.env.FPL_SEASON || "2027";
 const OUT = process.env.FPL_OUT || "data/actuals.json";
 const RIVALS_OUT = process.env.FPL_RIVALS_OUT || "data/rivals.json";
+/* per-match DefCon for players with two matches in a gameweek (12 Nov 2026) */
+const DC_OUT = process.env.FPL_DC_OUT || join(dirname(OUT), "dc-doubles.json");
 /* Written by scripts/snapshot-predictions.mjs before each round kicks off.
    Read-only here: this job never writes it. */
 const PRED_IN = process.env.FPL_PRED_OUT || "data/predictions.json";
@@ -426,6 +428,13 @@ async function main() {
   /* ---- shared live scores ------------------------------------------------ */
   const players = {};
   const gwPoints = new Map();
+  /* Double gameweeks (12 Nov 2026): FPL's live data gives each player's
+     DefCon count for the whole gameweek, and lists DefCon per match only
+     where it scored. For a player with two matches that is enough to say
+     which match reached the target (and usually both counts), which the
+     dataset's per-match rows cannot (their DefCon column is blank). Kept
+     only for players with more than one match in a gameweek. */
+  const dcDoubles = { updated: new Date().toISOString(), gws: {} };
   for (const gw of liveGws) {
     const live = await getJson(`/event/${gw}/live/`, { attempts: 3, quiet: true });
     if (!live?.elements) {
@@ -433,10 +442,29 @@ async function main() {
       continue;
     }
     const map = new Map();
+    const dgw = {};
     for (const el of live.elements) {
       const pts = el.stats?.total_points ?? 0;
       map.set(el.id, pts);
       (players[el.id] ||= {})[gw] = pts;
+      const ex = el.explain || [];
+      if (ex.length > 1 && (el.stats?.minutes ?? 0) > 0) {
+        dgw[el.id] = {
+          t: el.stats?.defensive_contribution ?? 0,
+          f: ex.map(f => {
+            const s = (f.stats || []).find(x => x.identifier === "defensive_contribution");
+            return [f.fixture, s ? s.value : null];
+          })
+        };
+      }
+    }
+    if (Object.keys(dgw).length) {
+      /* which clubs met in each fixture, so the app can match it to its own rows */
+      const fx = await getJson(`/fixtures/?event=${gw}`, { attempts: 3, quiet: true });
+      const fixtures = {};
+      for (const f of fx || []) fixtures[f.id] = [f.team_h, f.team_a];
+      dcDoubles.gws[gw] = { players: dgw, fixtures };
+      console.log(`  GW${gw}: ${Object.keys(dgw).length} players with two or more matches`);
     }
     gwPoints.set(gw, map);
     console.log(`  GW${gw}: ${live.elements.length} players`);
@@ -650,7 +678,8 @@ async function main() {
   /* ---- write ------------------------------------------------------------- */
   for (const [path, payload, note] of [
     [OUT, actuals, `${teamGw.length} gameweeks (${predCount} with predictions), ${Object.keys(players).length} players`],
-    [RIVALS_OUT, rivals, `${Object.keys(entries).length} managers, last GW ${lastEvent}`]
+    [RIVALS_OUT, rivals, `${Object.keys(entries).length} managers, last GW ${lastEvent}`],
+    [DC_OUT, dcDoubles, `${Object.keys(dcDoubles.gws).length} gameweeks with doubles`]
   ]) {
     const json = JSON.stringify(payload);
     await mkdir(dirname(path), { recursive: true });
