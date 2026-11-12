@@ -901,6 +901,7 @@ const RULES={
 };
 const GOAL_PTS=RULES.goal, CS_PTS=RULES.cs, DC_THRESH=RULES.dcThresh;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const SEASON_WIN=99;
 /* Chance of reaching the DefCon target in a full match, from his DefCon per
    90. Defenders: negative binomial (size 8), as their counts vary more than a
    Poisson allows; midfielders and forwards: Poisson. Both chosen on GW1-10
@@ -1224,7 +1225,9 @@ function windowStats(code,n,pos,price,teamMax){
       sv90:cs.sv90,gc90:cs.gc90,xgot90:0,gp:0,cs:0,
       csRate:Math.exp(-clamp(cs.gc90,0.3,3.2))};
   }
-  const take=n>=38?rows:rows.slice(-n);
+  /* SEASON_WIN: this season's matches only, unweighted (the Stats page's
+     "Season" button; 38 means every match on record, both seasons) */
+  const take=n===SEASON_WIN?rows.filter(r=>r.tag==="now"):n>=38?rows:rows.slice(-n);
   if(!take.length)return null;
   /* ---- recency and season weighting ----
      A window that treats a match from August 2025 as equal evidence to one
@@ -1251,7 +1254,7 @@ function windowStats(code,n,pos,price,teamMax){
   const lastW=1-(1-LAST_FLOOR)*clamp(nowApps/FADE_OVER,0,1);
   const nowIdx=new Map();
   nowRows.forEach((r,i)=>nowIdx.set(r,nowRows.length-1-i));   // 0 = most recent
-  const wt=r=>r.tag==="now"
+  const wt=n===SEASON_WIN?(()=>1):r=>r.tag==="now"
     ? SEASON_W*Math.pow(0.5,(nowIdx.get(r)||0)/HALF_LIFE)
     : lastW;
 
@@ -1280,7 +1283,8 @@ function windowStats(code,n,pos,price,teamMax){
     minsPerApp:wAll>0?wMins/wAll:0,
     g:sum("g"),a:sum("a"),
     xg90:per90("xg"),xa90:per90("xa"),
-    npxg90:wMins>0?(wsum("xg")-wsum("pens")*0.79)*90/wMins:0,
+    /* penalties taken, scored or missed, each worth 0.79 xG */
+    npxg90:wMins>0?(wsum("xg")-(wsum("pens")+wsum("penm"))*0.79)*90/wMins:0,
     sh90:per90("sh"),sot90:per90("sot"),
     cc90:per90("cc"),box90:per90("box"),f390:per90("f3"),drb90:per90("drb"),
     aer90:per90("aer"),bcm:sum("bcm"),
@@ -1290,7 +1294,10 @@ function windowStats(code,n,pos,price,teamMax){
     /* this season's matches in the window, and how many reached the target */
     dcHits:take.filter(r=>r.tag==="now"&&r.mins>0&&r.dc>=(S._dcThresh||10)).length,
     dcApps:take.filter(r=>r.tag==="now"&&r.mins>0).length,
-    sv90:per90("sv"),gc90:per90("gc"),xgot90:per90("xgot"),
+    sv90:per90("sv"),gc90:per90("gc"),
+    /* goals_conceded is only filled for keepers in the match rows; for
+       outfield players, his team's goals conceded per 90 on the pitch */
+    gcTeam90:wMins>0?take.reduce((a,r)=>a+wt(r)*(r.tgc||0)*Math.min(1,(r.mins||0)/90),0)*90/wMins:0,xgot90:per90("xgot"),
     gp:sum("gp"),gp90:per90("gp"),
     cs:take.filter(r=>r.mins>=60&&r.tgc===0).length,
     csRate:wShare(played60,r=>r.tgc===0)
@@ -1835,6 +1842,14 @@ function buildModel(){
       minsSrc,xg90,xa90,dc90,dcHitRate,dcChance,dcHits,dcApps,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,roleMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),
       pensSaved:num(s.penalties_saved),ownGoals:num(s.own_goals),
+      /* FPL's own season figures, for display (12 Nov 2026 audit): the cards
+         and Stats table showed the model's shrunk inputs above (xg90, xa90,
+         sv90 blend toward last season; gc90 is expected goals conceded) as if
+         they were the stats. The model keeps using its own. */
+      off:mins>0?{xg90:num(s.expected_goals_per_90),xa90:num(s.expected_assists_per_90),
+        xgi90:num(s.expected_goal_involvements_per_90),sv90:num(s.saves_per_90),
+        gc90:num(s.goals_conceded_per_90),xgc90:num(s.expected_goals_conceded_per_90),
+        dc90:num(s.defensive_contribution_per_90),starts:num(s.starts)}:null,
       spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
   });
 
@@ -1943,7 +1958,7 @@ function buildModel(){
       const pPlay=clamp(mE/17,0,.985);
       const p60=clamp((mE-22)/62,0,.985);
       const share=clamp(mE/90,0,1);
-      let tot=0;
+      let tot=0;const csPs=[];
       fx.forEach(f=>{
         const opp=f.oppT||{};
         /* Fixture swing. The +/-30% used by most public component models is
@@ -2016,7 +2031,7 @@ function buildModel(){
            few high-quality chances keeps more clean sheets than raw xGC implies. */
         let csP=Math.exp(-xGC);
         if(p.pos===1&&p.gpRate)csP=clamp(csP*(1+clamp(p.gpRate,-0.25,0.25)),0.02,0.75);
-        const cs=(CS_PTS[p.pos]||0)*csP*p60;
+        const cs=(CS_PTS[p.pos]||0)*csP*p60;csPs.push(csP);
         /* D11: -1 per two conceded is, in expectation, xGC/2 - (1 - e^-2xGC)/4 */
         const conc=p.pos<=2?-(xGC/2-(1-Math.exp(-2*xGC))/4)*p60:0;
         /* DefCon pays only when a player clears the threshold in that match.
@@ -2050,7 +2065,7 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false,
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false,csPs,
         pPlay:clamp(availE,0,1)*appearShare(mE)*Math.min(1,fx.length)};
     }
     /* --- fixture sensitivity ---
