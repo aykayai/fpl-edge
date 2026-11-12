@@ -235,7 +235,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.34.0";
+const APP_VERSION="12.35.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -695,11 +695,30 @@ async function loadAll(force,opts){
     /* player_id is re-issued every season — only player_code is stable, so the
        history is keyed by code and joined to this season's ids at the end. */
     const idToCode={};
+    /* position by season, for rebuilding the DefCon count below (FPL scored
+       last season by last season's position) */
+    const posByCode={};
     try{
       const lastPlayers=await getCSV(`${LAST}/players.csv`);
-      lastPlayers.forEach(r=>{idToCode["last|"+Math.round(num(r.player_id))]=String(r.player_code);});
+      lastPlayers.forEach(r=>{idToCode["last|"+Math.round(num(r.player_id))]=String(r.player_code);
+        posByCode["last|"+r.player_code]=posOf(r.position);});
     }catch(e){loadWarn("last season's player list");}
-    players.forEach(r=>{idToCode["now|"+Math.round(num(r.player_id))]=String(r.player_code);});
+    players.forEach(r=>{idToCode["now|"+Math.round(num(r.player_id))]=String(r.player_code);
+      posByCode["now|"+r.player_code]=posOf(r.position);});
+    /* DefCon count (12 Nov 2026). FPL-Core-Insights leaves defensive_contributions
+       and tackles blank in every 2026-27 match row (and in some late 2025-26
+       rows). Read as 0, every match this season counted as a DefCon miss, so a
+       defender who reached 10 in six of eight matches showed 12%. Rebuilt from
+       the parts FPL counts: clearances, blocks, interceptions and tackles
+       (tackles won where tackles is blank), plus recoveries for midfielders and
+       forwards. That matched FPL's own count exactly in 92% of 2026-27 rows; a
+       week with one league match is then set to FPL's own figure below. */
+    const blankV=v=>v==null||v==="";
+    const dcOf=(r,tag,code)=>{
+      if(!blankV(r.defensive_contributions))return{dc:num(r.defensive_contributions),src:"data"};
+      const tk=blankV(r.tackles)?num(r.tackles_won):num(r.tackles);
+      const cbit=num(r.clearances)+num(r.blocks)+num(r.interceptions)+tk;
+      return{dc:posByCode[tag+"|"+code]===2?cbit:cbit+num(r.recoveries),src:"rebuilt"};};
     const hist={};                       // player_code -> [match rows, oldest first]
     const teamMatch={};                  // match_id -> {h,a,gw}
     try{
@@ -726,6 +745,7 @@ async function loadAll(force,opts){
               if(!meta)return;                       // cup ties and non-league matches
               const pid=Math.round(num(r.player_id));if(!pid)return;
               const code=idToCode[tag+"|"+pid];if(!code)return;
+              const dcv=dcOf(r,tag,code);
               (hist[code]=hist[code]||[]).push({
                 gw,tag,mid,
                 mins:num(r.minutes_played),start:r.start_min===""?null:num(r.start_min),
@@ -734,8 +754,8 @@ async function loadAll(force,opts){
                 cc:num(r.chances_created),box:num(r.touches_opposition_box),
                 f3:num(r.final_third_passes),drb:num(r.successful_dribbles),
                 bcm:num(r.big_chances_missed),
-                dc:num(r.defensive_contributions),
-                cbit:num(r.clearances)+num(r.blocks)+num(r.interceptions)+num(r.tackles),
+                dc:dcv.dc,dcSrc:dcv.src,
+                cbit:num(r.clearances)+num(r.blocks)+num(r.interceptions)+num(blankV(r.tackles)?r.tackles_won:r.tackles),
                 aer:num(r.aerial_duels_won),
                 sv:num(r.saves),gc:num(r.goals_conceded),
                 xgot:num(r.xgot_faced),gp:num(r.goals_prevented),
@@ -750,6 +770,25 @@ async function loadAll(force,opts){
     Object.values(hist).forEach(rows=>rows.forEach(r=>{
       const m=teamMatch[r.mid];if(!m)return;r.mgw=m.gw;}));
     Object.keys(hist).forEach(k=>hist[k].sort((x,y)=>(x.tag===y.tag? x.gw-y.gw : (x.tag==="last"?-1:1))));
+    /* FPL's own DefCon count per gameweek: playerstats carries each player's
+       season total at every gameweek, so the step from one week to the next is
+       that week's count (it matched FPL's live figure for every player in GW7
+       and GW10). Used where he played one league match that week; a double
+       keeps the rebuilt per-match counts. */
+    try{
+      const cum={};
+      pstats.forEach(r=>{const id=Math.round(num(r.id)),gw=Math.round(num(r.gw));
+        if(!id||!gw||blankV(r.defensive_contribution))return;
+        (cum[id]=cum[id]||[]).push([gw,num(r.defensive_contribution)]);});
+      Object.entries(cum).forEach(([id,a])=>{
+        const code=idToCode["now|"+id],rows=code&&hist[code];if(!rows)return;
+        let prev=0;const wk={};
+        a.forEach(([gw,v])=>{wk[gw]=v-prev;prev=v;});
+        const byGw={};rows.forEach(r=>{if(r.tag==="now")(byGw[r.gw]=byGw[r.gw]||[]).push(r);});
+        Object.entries(byGw).forEach(([gw,rs])=>{
+          if(rs.length===1&&wk[gw]!=null&&wk[gw]>=0){rs[0].dc=wk[gw];rs[0].dcSrc="fpl";}});
+      });
+    }catch(e){loadWarn("official DefCon counts");}
     S.hist=hist;S.teamMatch=teamMatch;
 
     /* ---- cold start ----
@@ -862,6 +901,18 @@ const RULES={
 };
 const GOAL_PTS=RULES.goal, CS_PTS=RULES.cs, DC_THRESH=RULES.dcThresh;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+/* Chance of reaching the DefCon target in a full match, from his DefCon per
+   90. Defenders: negative binomial (size 8), as their counts vary more than a
+   Poisson allows; midfielders and forwards: Poisson. Both chosen on GW1-10
+   2026-27 by Brier score against the season-weighted hit share. */
+function dcChanceOf(mean,pos){
+  const k=DC_THRESH[pos]||99;if(!(mean>0)||k>50)return 0;
+  let below=0;
+  if(pos===2){const r=8,q=r/(r+mean);let t=Math.pow(q,r);
+    for(let i=0;i<k;i++){below+=t;t*=(i+r)/(i+1)*(1-q);}}
+  else{let t=Math.exp(-mean);for(let i=0;i<k;i++){below+=t;t*=mean/(i+1);}}
+  return clamp(1-below,0,0.95);
+}
 /* Fixture difficulty from FPL's own team strength ratings, banded into league
    quintiles. Elo alone put Newcastle near the top while they faced Liverpool. */
 /* ============================================================
@@ -1236,6 +1287,9 @@ function windowStats(code,n,pos,price,teamMax){
     dc90:per90("dc"),cbit90:per90("cbit"),
     /* how often he actually clears the DefCon threshold, not his average */
     dcHit:wShare(played60,r=>r.dc>=(S._dcThresh||10)),
+    /* this season's matches in the window, and how many reached the target */
+    dcHits:take.filter(r=>r.tag==="now"&&r.mins>0&&r.dc>=(S._dcThresh||10)).length,
+    dcApps:take.filter(r=>r.tag==="now"&&r.mins>0).length,
     sv90:per90("sv"),gc90:per90("gc"),xgot90:per90("xgot"),
     gp:sum("gp"),gp90:per90("gp"),
     cs:take.filter(r=>r.mins>=60&&r.tgc===0).length,
@@ -1735,9 +1789,10 @@ function buildModel(){
     /* shot-stopping above expectation, per 90 — separates the keeper from
        the defence in front of him */
     /* share of matches in which he actually cleared the DefCon threshold */
-    let dcHitRate=null;
+    let dcHitRate=null,dcChance=null,dcHits=null,dcApps=null;
     if(p.pos>1){const wd=ws(String(p.code||""),p.pos,38,price,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100);
-      if(wd&&!wd.estimated&&wd.apps>=8)dcHitRate=clamp(wd.dcHit,0,0.85);}
+      if(wd&&!wd.estimated){dcHits=wd.dcHits;dcApps=wd.dcApps;}
+      if(wd&&!wd.estimated&&wd.apps>=8){dcHitRate=clamp(wd.dcHit,0,0.85);dcChance=dcChanceOf(dc90,p.pos);}}
     let gpRate=0;
     if(p.pos===1){const wq=ws(String(p.code||""),1,38,price,(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||100);
       if(wq&&wq.mins>600)gpRate=clamp(wq.gp90*0.35,-0.3,0.3);}
@@ -1775,7 +1830,7 @@ function buildModel(){
       form,formSrc,availAssumed,preForm,preApps,lastForm:+lastPPG.toFixed(1),lastMins,lastStarts,preMinPerApp,
       priceChange:num(s.cost_change_event)/10,seasonChange:num(s.cost_change_start)/10,dreamteam:num(s.dreamteam_count),ppg:num(s.points_per_game),total:num(s.total_points),
       owned:num(s.selected_by_percent),minutes:mins,status:st,news:s.news||"",back,
-      minsSrc,xg90,xa90,dc90,dcHitRate,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,roleMins,
+      minsSrc,xg90,xa90,dc90,dcHitRate,dcChance,dcHits,dcApps,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,roleMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),
       pensSaved:num(s.penalties_saved),ownGoals:num(s.own_goals),
       spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
@@ -1967,8 +2022,15 @@ function buildModel(){
            9.8 actions, which the old curve scored as 1.29 points a game, when he
            actually clears 12 in one match in ten. The per-match hit rate from
            last season's records is the honest number. */
-        const defcon=p.dcHitRate!=null
-          ? 2*p.dcHitRate*p60*clamp(1/Math.max(.6,def),0.75,1.3)
+        /* 12 Nov 2026: the per-match chance now comes from the spread of DefCon
+           counts around his per-90 average (dcChanceOf), which predicted hits
+           better than his past hit share in GW1-10 (Brier: defenders 0.184 to
+           0.175, midfielders 0.108 to 0.104). The 8-match evidence gate stays.
+           The fixture factor tops out at 1.0, not 1.3: against the strongest
+           attacks players hit DefCon at 0.97x their usual share, against the
+           weakest at 0.72x, so the old top end overshot. */
+        const defcon=p.dcChance!=null
+          ? 2*p.dcChance*p60*clamp(1/Math.max(.6,def),0.75,1.0)
           : Math.min(2,2*Math.pow(clamp(p.dc90/(DC_THRESH[p.pos]||99),0,1.15),2.6))*p60*0.55;
         const bon=p.bonus90*share*clamp(atk,.8,1.2);
         /* penalties earned scale with how often the side attacks */
@@ -2117,6 +2179,7 @@ const LUCIDE={"circle-arrow-up":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\
  "check":"<path d=\"M20 6 9 17l-5-5\"/>",
  "users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><path d=\"M16 3.128a4 4 0 0 1 0 7.744\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/>",
  "shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/>",
+ "shield-check":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/><path d=\"m9 12 2 2 4-4\"/>",
  "target":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/>",
  "calendar":"<path d=\"M8 2v3\"/><path d=\"M16 2v3\"/><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M3 9h18\"/>",
  "search":"<path d=\"m21 21-4.34-4.34\"/><circle cx=\"11\" cy=\"11\" r=\"8\"/>",
