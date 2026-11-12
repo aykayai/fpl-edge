@@ -33,10 +33,13 @@ function act(k,a,b){
     case"pop":S.pop=a||null;break;
     case"popclose":S.pop=null;break;
     /* wave 3: Players hub */
-    /* wave 5: Teams > Clubs */
-    case"tview":S.tView=["att","def","opp"].includes(a)?a:"att";S.tSort=null;break;
+    /* Teams (redesign 12 Nov 2026): Fixture Grid and Matches */
     case"tsort":if(S.tSort===a)S.tDir=S.tDir==="asc"?"desc":"asc";else{S.tSort=a;S.tDir="desc";}break;
-    case"th":S.tH=[1,3,5].includes(+a)?+a:3;break;
+    case"tlens":S.tLens=["att","def","all"].includes(a)?a:"all";S.tSort=null;break;
+    case"twin":S.tWin=a==="ros"?"ros":[3,5].includes(+a)?+a:1;break;
+    case"topen":S.tOpen=S.tOpen===a?null:a;break;
+    case"mgw":S.mGw=clamp(+a||1,1,38);break;
+    case"tmatch":S.fixMode="matches";S.mGw=clamp(+a||1,1,38);window.scrollTo(0,0);break;
     /* wave 7: Status options */
     case"cleardrafts":LS.set("drafts",[]);toast("Drafts deleted");break;
     case"clearstars":S.stars=[];LS.set("stars",[]);break;
@@ -95,7 +98,6 @@ function act(k,a,b){
     case"card":S.cardId=a||null;break;
     case"pdmore":S.pdLimit=(S.pdLimit||PD_PAGE)+PD_PAGE;break;
     case"pdall":S.pdLimit=1000;break;
-    case"fixread":S.fixRead=a;break;
     case"poolmore":S.poolLimit=Math.min(150,(S.poolLimit||50)+50);break;
     case"pdless":S.pdLimit=PD_PAGE;break;
     case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});break;
@@ -276,11 +278,7 @@ function act(k,a,b){
       S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;}
     case"clearchip":{const c={...S.chips};delete c[a];S.chips=c;saveState();break;}
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
-    case"fixgw":S.fixGW=clamp(+a,1,38);break;
-    case"fixsort":if((S.fixSort||"d5")===a)S.fixDir=(S.fixDir||"asc")==="asc"?"desc":"asc";
-      else{S.fixSort=a;S.fixDir="asc";}break;
-    case"fixmode":S.fixMode=a;break;
-    case"lens":S.fdrLens=a==="all"?null:a;break;
+    case"fixmode":S.fixMode=a==="matches"?"matches":"grid";if(a==="matches")S.mGw=null;break;
     case"toggleout":S.outList=S.outList.includes(a)?S.outList.filter(x=>x!==a):[...S.outList,a];break;
     case"clearout":S.outList=[];break;
     case"ignore":S.ignored=[...(S.ignored||[]),a];LS.set("ignored",S.ignored);
@@ -344,6 +342,10 @@ function sigTipShow(tip,el){const k=el.getAttribute("data-sig"),S9=SIGNAL[k];if(
 document.addEventListener("focusin",e=>{const tip=document.getElementById("ctip"),s=e.target&&e.target.closest&&e.target.closest("[data-sig][data-tt]");
   if(tip&&s)sigTipShow(tip,s);});
 document.addEventListener("focusout",e=>{const tip=document.getElementById("ctip");if(tip&&tip.classList.contains("sigtip"))tip.hidden=true;});
+/* Teams grid: a click anywhere on a club's row (not on a fixture, a result
+   tile or a button) opens its detail, like the club name does */
+document.addEventListener("click",e=>{const t=e.target;if(!t||!t.closest)return;const r=t.closest("tr.tg-r");
+  if(!r||t.closest("button,a,.tg-fx,.tg-form"))return;act("topen",r.getAttribute("data-club"));});
 document.addEventListener("mouseover",e=>{const tip=document.getElementById("ctip");if(!tip)return;
   const s=e.target&&e.target.closest?e.target.closest("[data-sig][data-tt]"):null;
   if(s){sigTipShow(tip,s);return;}

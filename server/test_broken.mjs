@@ -127,6 +127,36 @@ try {
   const sig = doc.querySelector(".pdt .tile[data-sig][data-tt]");
   check(!!sig && sig.getAttribute("data-tt").length > 0 && sig.getAttribute("data-tt").length <= 90, "signal tiles carry a short hover line", sig && sig.getAttribute("data-tt"));
 
+  /* Teams (12 Nov 2026): the Fixture Grid and Matches */
+  S.fixMode = "grid"; S.tWin = 1; S.tLens = "all"; S.tSort = null; S.tOpen = null; show("fixtures");
+  const tgRows = [...doc.querySelectorAll(".tg-t tbody tr.tg-r")];
+  check(tgRows.length === 20, "Teams grid lists all 20 clubs", tgRows.length);
+  const posSet = new Set(tgRows.map(r => +r.children[1].textContent));
+  check(posSet.size === 20 && Math.min(...posSet) === 1 && Math.max(...posSet) === 20, "Teams grid Pos is a league table, 1 to 20", [...posSet].join(","));
+  const nextG = vm.runInContext("S.model.next.id", ctx);
+  check(/Overall/.test(doc.querySelector(".tg-t th.act")?.textContent || ""), "Teams grid sorts by the Overall lens by default");
+  const fxCols = doc.querySelectorAll(".tg-t thead th.tg-gw").length;
+  check(fxCols === 38 - nextG + 1, "Teams grid shows every gameweek to GW38", fxCols);
+  const overallOk = vm.runInContext(`(()=>{const t=S.model.teams[0],s=tgScore(t,S.model.next.id,S.model.next.id),fx=tgFx(t,S.model.next.id);let p=0;fx.forEach(x=>{p+=9*fdrCalc(t,x.opp,x.home,"xgf")+31*Math.exp(-fdrCalc(t,x.opp,x.home,"xgc"));});return Math.abs(s.pts-p)<1e-9;})()`, ctx);
+  check(overallOk, "Overall is 9 per expected goal plus 31 per clean sheet");
+  const one = doc.querySelector(".tg-t tbody tr.tg-r td.tg-n.act")?.textContent;
+  g.act("twin", "5"); show("fixtures");
+  const five = doc.querySelector(".tg-t tbody tr.tg-r td.tg-n.act")?.textContent;
+  check(doc.querySelectorAll(".tg-t thead th.tg-gw.in").length === Math.min(5, 38 - nextG + 1) && /5 GW|GW/.test(doc.querySelector(".tg-t th.act").title), "Teams 5 GW window covers five gameweeks", doc.querySelectorAll(".tg-t thead th.tg-gw.in").length);
+  check(one != null && five != null, "Teams scores redraw for the window", `${one} -> ${five}`);
+  const firstClub = tgRows[0].getAttribute("data-club");
+  g.act("topen", firstClub); show("fixtures");
+  check(doc.querySelectorAll(".tg-drawer .tg-dr section").length === 4, "a club's detail opens with four cards");
+  const tile = doc.querySelector(".tg-form i[data-tt]");
+  check(!!tile && /GW\d+ · (Home|Away) · (Won|Drew|Lost)\n.+ \d+–\d+ .+/.test(tile.getAttribute("data-tt")), "result tiles carry the match and score on hover", tile && tile.getAttribute("data-tt"));
+  g.act("tmatch", String(nextG)); show("fixtures");
+  const mrows = doc.querySelectorAll(".tg-m").length, nfx = vm.runInContext("(S.model.byEv[S.model.next.id]||[]).length", ctx);
+  check(S.fixMode === "matches" && mrows === nfx && mrows > 0, "Matches lists the gameweek's fixtures, one row each", `${mrows} of ${nfx}`);
+  check(doc.querySelectorAll(".tg-m .tg-form").length === mrows * 2 && doc.querySelectorAll(".tg-m .tg-bar").length === mrows, "every match shows both clubs' form and a result bar");
+  g.act("mgw", String(nextG + 1)); show("fixtures");
+  check(/Gameweek \d+/.test(doc.querySelector(".tg-step b")?.textContent || "") && +doc.querySelector(".tg-step b").textContent.match(/\d+/)[0] === nextG + 1, "Matches steps to the next gameweek", doc.querySelector(".tg-step b")?.textContent);
+  S.fixMode = "grid"; S.tWin = 1; S.tOpen = null; S.mGw = null;
+
   /* F8: independent read of the feed */
   const feed = await (await fetch(BASE + "/data/feeds/actuals.json")).json();
   const ranked = (feed.team.gw || []).filter(r => r.orRank != null).sort((a, b) => b.event - a.event)[0];
@@ -172,10 +202,10 @@ try {
 
   /* redesign wave 8: the retired pages' links land on their new homes */
   show("odds");
-  check(S.tab === "fixtures" && S.fixMode === "odds" && /Odds/.test(doc.querySelector("main").textContent), "W8 the Odds route opens Teams > Odds", `${S.tab} ${S.fixMode}`);
+  check(S.tab === "fixtures" && S.fixMode === "matches" && !!doc.querySelector(".tg-mp"), "W8 the Odds route opens Teams > Matches", `${S.tab} ${S.fixMode}`);
   show("transfers");
   check(S.tab === "squad" && S.pop === "move" && /Plan your transfers/.test(doc.querySelector(".modal") ? doc.querySelector(".modal").textContent : ""), "W8 the Transfers route opens the Top Move pop-up with the transfer tools", `${S.tab} ${S.pop}`);
-  S.pop = null; S.fixMode = "clubs";
+  S.pop = null; S.fixMode = "grid";
 
   /* F10 behaviour: Enter presses a role=button element; Escape closes a card */
   show("signals");

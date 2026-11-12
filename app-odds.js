@@ -892,6 +892,7 @@ function provHTML(){
     <span>Prices, flags and deadlines: <b>FPL, ${esc(agoText(fpl.fetchedAt))}</b></span>
     <span>News: <b>${esc(agoText(news.fetchedAt))}</b></span>
     <span>Odds: <b>${esc(ukWhen(odds.fetchedAt))}</b></span>
+    <span>TV channels: <b>${st.tv&&st.tv.fetchedAt?esc(agoText(st.tv.fetchedAt)):"not pushed yet"}</b></span>
     <span>FPL price predictor and set pieces: <b>${S.fplLive&&Object.keys(S.fplLive.players||{}).length?(S.fplLive.fetchedAt?esc(agoText(S.fplLive.fetchedAt)):"loaded"):"not loaded"}</b></span>
     <span>Your team and rivals: <b style="${feeds.error?"color:var(--red)":""}">${feeds.error?"last build failed, showing "+esc(agoText(feeds.lastOk))+" copy":esc(agoText(feeds.lastOk))}</b></span>
     ${(S.loadWarnings||[]).length||(S.fixFail||[]).length?`<span style="color:var(--amber);flex-basis:100%">Did not load: ${esc([...(S.loadWarnings||[]),...((S.fixFail||[]).length?["fixtures for GW"+S.fixFail.join(", GW")+" (those weeks show no projection)"]:[])].join("; "))}. Figures that use them are less reliable; Check now retries.</span>`:""}</div>`;
@@ -951,7 +952,7 @@ function renderPage(){
   /* wave 8: the Odds and Transfers pages are retired; their old links land
      on the new homes (Teams > Odds, the Planner's Top Move pop-up) */
   if(S.tab==="transfers"){S.tab="squad";S.pop="move";try{history.replaceState({},"",routeFor("squad"));}catch(e){}}
-  if(S.tab==="odds"){S.tab="fixtures";S.fixMode="odds";try{history.replaceState({},"",routeFor("fixtures"));}catch(e){}}
+  if(S.tab==="odds"){S.tab="fixtures";S.fixMode="matches";try{history.replaceState({},"",routeFor("fixtures"));}catch(e){}}
   const g=VG();
   /* a flagged player counts as sold: value drops, bank rises by his selling price */
   const flaggedP=squadPlayers().filter(p=>S.flagged.includes(p.id));
