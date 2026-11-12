@@ -10,22 +10,23 @@
 function posStats(p){
   const w=ws(String(p.code||""),p.pos,38,p.price,teamMaxPrice(p.team));
   const g=VG(), q=p.gw[g];
-  const cs=q&&!q.blank&&q.fixtures[0]
-    ? Math.exp(-clamp(p.gc90/Math.max(.35,1.42/ (q.fixtures[0].xgc||1.42)),.25,3.2)) : null;
-  const csPct=q&&!q.blank?Math.round(clamp(Math.exp(-(q.fixtures[0]?.xgc||1.42)),0,0.8)*100)+"%":"—";
+  /* one clean-sheet figure everywhere: the model's own (odds when priced) */
+  const csv=csProbNext(p,g),csPct=csv!=null?Math.round(csv*100)+"%":"—";
+  /* FPL's own season figures (p.off), not the model's shrunk inputs */
+  const o=p.off||{};
   const n=(v,d)=>v==null||!isFinite(v)?"—":v.toFixed(d==null?2:d);
   const pc=v=>v==null||!isFinite(v)?"—":Math.round(v*100)+"%";
-  if(p.pos===1)return[["CS %",csPct],["Saves/90",n(p.sv90)],
-    ["Goals prev",n(w?w.gp:null,1)],["GC/90",n(p.gc90)]];
+  if(p.pos===1)return[["CS %",csPct],["Saves/90",n(o.sv90)],
+    ["Goals prev",n(w?w.gp:null,1)],["GC/90",n(o.gc90)]];
   /* DefCon: his hit share (both seasons, recent weighted) and this season's
      hits out of matches played */
   const dcTile=["DefCon",`${pc(p.dcHitRate)}${p.dcApps?` · ${p.dcHits}/${p.dcApps}`:""}`];
   if(p.pos===2)return[["CS %",csPct],dcTile,
-    ["Aerial/90",n(w?w.aer90:null,1)],["GC/90",n(p.gc90)]];
+    ["Aerial/90",n(w?w.aer90:null,1)],["GC/90",n(o.gc90)]];
   /* a midfielder who has reached DefCon twice or more shows it in place of
      final-third passes */
-  if(p.pos===3)return[(p.dcHits||0)>=2?dcTile:["F3 pass/90",n(w?w.f390:null,1)],["xA/90",n(p.xa90)],
-    ["Shots/90",n(w?w.sh90:null,1)],["xGI/90",n(p.xg90+p.xa90)]];
+  if(p.pos===3)return[(p.dcHits||0)>=2?dcTile:["F3 pass/90",n(w?w.f390:null,1)],["xA/90",n(o.xa90)],
+    ["Shots/90",n(w?w.sh90:null,1)],["xGI/90",n(o.xgi90)]];
   /* conversion is goals against shots; big chances missed comes straight from
      the match records rather than being derived */
   const conv=w&&w.sh90>0&&w.mins>0?(w.g/Math.max(1,w.sh90*w.mins/90)):null;
@@ -123,27 +124,61 @@ const fix3=(p,g)=>{let h='';const LENS=p2=>p2.pos<=2?'def':'att';for(let e=g;e<g
    read p.csRate, which model players never carry, so it sorted on 0; the
    BPS/90 sort and the radar used the season total. */
 function csProbNext(p,g){
-  const f=p.gw[g]?.fixtures?.[0];
+  const q=p.gw[g],f=q?.fixtures?.[0];
+  /* 12 Nov 2026: the model's own clean-sheet chance for the first fixture
+     (the one its points use, bookmakers' when priced); the old band formula
+     only where the model has none */
+  if(q&&q.csPs&&q.csPs.length)return q.csPs[0];
   return f?Math.exp(-clamp(p.gc90/(1+(3-(f.diffDef??3))*0.18),.25,3.2)):null;
+}
+/* Stats windows (12 Nov 2026 audit). "Season" is this season only, and
+   shows FPL's own per-90 figures where FPL publishes one; Last N reads the
+   match rows. Start % is starts out of his club's matches, so weeks on the
+   bench or injured count against him. */
+function dispWin(){const w=S.lWin||38;return w>=38?SEASON_WIN:w;}
+let _clubPlayed=null;
+function clubPlayed(){
+  if(_clubPlayed&&_clubPlayed.h===S.hist&&_clubPlayed.m===S.teamMatch)return _clubPlayed.v;
+  const key={};(S.teams||[]).forEach(t=>{key[Math.round(num(t.code))]=t.short;key["id"+t.id]=t.short;});
+  const sh=v=>key[v]||key["id"+v],seen=new Set(),v={};
+  Object.values(S.hist||{}).forEach(rows=>rows.forEach(r=>{if(r.tag==="now"&&r.mins>0)seen.add(r.mid);}));
+  seen.forEach(mid=>{const m=(S.teamMatch||{})[mid];if(!m)return;
+    [sh(m.h),sh(m.a)].forEach(t=>{if(t)(v[t]=v[t]||[]).push({mid,gw:m.gw});});});
+  Object.values(v).forEach(a=>a.sort((x,y)=>x.gw-y.gw));
+  _clubPlayed={h:S.hist,m:S.teamMatch,v};return v;
+}
+function startShare(p,n){
+  const all=clubPlayed()[p.teamName]||[],club=n?all.slice(-n):all;if(!club.length)return null;
+  const mids=new Set(club.map(x=>x.mid));
+  const st=((S.hist&&S.hist[String(p.code||"")])||[]).filter(r=>r.tag==="now"&&r.mins>0&&r.start===0&&mids.has(r.mid)).length;
+  return st/club.length;
+}
+function statVal(p,k,W){
+  const o=p.off,season=(S.lWin||38)>=38;
+  if(k==="startpct")return startShare(p,season?0:S.lWin);
+  if(season&&o){const m={xgi:o.xgi90,xa:o.xa90,xg:o.xg90,dc:o.dc90,sv90:o.sv90,gc90:o.gc90}[k];if(m!=null)return m;}
+  if(!W)return null;
+  return {xgi:(W.xg90||0)+(W.xa90||0),xa:W.xa90,xg:W.xg90,dc:W.dc90,sv90:W.sv90,gc90:p.pos===1?W.gc90:W.gcTeam90}[k];
 }
 function bpsPer90(p,q){return q&&q.mins>0?p.bps*90/Math.max(1,p.minutes||q.mins):null;}
 const SORTVAL=(p,k,g)=>{
-  const W=ws(String(p.code||""),p.pos,S.lWin||38)||{};
+  const W=ws(String(p.code||""),p.pos,dispWin())||{};
+  const sv=k=>statVal(p,k,W)??-1;
   const f0=p.gw[g]?.fixtures?.[0];
   const team=(S.model.teams||[]).find(t=>t.id===p.team);
   const gwr=lGwRange();
   return ({name:p.web_name,team:p.teamName,pos:p.pos,price:p.price,
   next:(p.gw[g]?.fixtures||[]).reduce((s,f)=>s+f.diff,0)||99,form:p.form,lastform:p.lastForm,
   pred:hPts(p,g,S.tab==="table"?1:S.horizon),prxfpl:hPts(p,gwr.from,gwr.count),pred3:hPts(p,g,3),pred5:hPts(p,g,5),avg:avgFP(p,g,S.horizon),
-  total:p.total,owned:p.owned,ppg:p.ppg,xg:p.xg90,xa:p.xa90,dc:p.dc90,
+  total:p.total,owned:p.owned,ppg:p.ppg,xg:sv("xg"),xa:sv("xa"),dc:sv("dc"),
   mins:p.minutes,xmins:p.xMins,bonus:p.bonus,tin:p.tIn,
-  startpct:W.startPct||0,xgi:(W.xg90||0)+(W.xa90||0),
+  startpct:sv("startpct"),xgi:sv("xgi"),
   npxg:W.npxg90||0,dchit:W.dcHit||0,dchits:W.estimated||p.pos<2?-1:(W.dcHits||0)-(W.dcApps||0)/1000,cc:W.cc90||0,box:W.box90||0,
-  bps:bpsPer90(p,W)??-1,csp:csProbNext(p,g)??-1,sv90:W.sv90||0,
+  bps:bpsPer90(p,W)??-1,csp:csProbNext(p,g)??-1,sv90:sv("sv90"),
   spthreat:p.spThreat||0,penord:p.penOrder||99,
   /* position-specific columns — previously missing, so their headers did not sort */
   oppatt:f0?(f0.oppAtt??3):0,teamdef:team?team.def:0,
-  xgot:W.xgot90||0,gprev:W.gp||0,gc90:W.gc90||0,pensv:p.pensSaved||0,og:p.ownGoals||0,
+  xgot:W.xgot90||0,gprev:W.gp||0,gc90:sv("gc90"),pensv:p.pensSaved||0,og:p.ownGoals||0,
   cbit:W.cbit90||0,aer:W.aer90||0,shbox:(W.sh90||0)*0.62,sh90:W.sh90||0,sot:W.sot90||0,
   f3:W.f390||0,drb:W.drb90||0,bcm:W.bcm||0,
   conv:(W.xg90>0?(W.g||0)/Math.max(.1,W.xg90*(W.mins||0)/90):0)}[k]);
@@ -2096,7 +2131,9 @@ function sgPlayers(G,H,posF){
   const nmB=x=>x?`<button class="pn" onclick="act('card',${x.p.id})">${esc(x.p.web_name)}</button>`:'<span class="mu">—</span>';
   const evs=(S.events||[]).filter(e=>e.finished).sort((a,b)=>b.id-a.id).slice(0,8);
   const nm=id=>{const p=M.players.find(x=>x.id===+id);return p?`<button class="pn" onclick="act('card',${p.id})">${esc(p.web_name)}</button>`:"—";};
-  const threat=pool.filter(p=>p.minutes>=270&&p.pos>=2).sort((a,b)=>((b.xg90||0)+(b.xa90||0))-((a.xg90||0)+(a.xa90||0))).slice(0,10);
+  /* FPL's own xG/xA per 90 (p.off), not the model's shrunk inputs */
+  const ox=p=>(p.off||{}),xgi=p=>ox(p).xgi90||0;
+  const threat=pool.filter(p=>p.minutes>=270&&p.pos>=2).sort((a,b)=>xgi(b)-xgi(a)).slice(0,10);
   const moreReps=`<div class="repgrid">
     ${rep("pvalue","wallet","Value by Price Band",`Points per £1m over the ${hzL(H)} by position and price band, regular starters only; the best value and top scorer in each band, with your players marked.`,squadShapeHTML(G,H,posF),{bare:true})}
     ${rep("minwatch","clock-alert","Minutes Watch","Players the bookmakers rate likely to score who are not expected to play the full match: worth a check before the deadline.",S.oddsState==="ok"?minutesWatchHTML():sgEmpty("Needs the bookmakers' prices."),{bare:true})}
@@ -2107,7 +2144,7 @@ function sgPlayers(G,H,posF){
     ${rep("form","flame","In Form","Highest form (average points per game, last 30 days), 180 minutes or more this season.",
       hbars(pool.filter(p=>p.minutes>=180&&avail(p)).sort((a,b)=>b.form-a.form).slice(0,10).map(p=>({...lr(p,p.form,p.form.toFixed(1)),sub:`${esc(p.teamName)} · ${sgPos(p)}`})),{rank:true}))}
     ${rep("threat","crosshair","Underlying Threat","Expected goals plus expected assists per 90 minutes, outfield players with 270 minutes or more.",
-      hbars(threat.map(p=>lr(p,(p.xg90||0)+(p.xa90||0),((p.xg90||0)+(p.xa90||0)).toFixed(2),`${esc(p.teamName)} · ${POS[p.pos]} · xG ${(p.xg90||0).toFixed(2)} xA ${(p.xa90||0).toFixed(2)}`,SG_TONE.purple)),{rank:true}))}
+      hbars(threat.map(p=>lr(p,xgi(p),xgi(p).toFixed(2),`${esc(p.teamName)} · ${POS[p.pos]} · xG ${(ox(p).xg90||0).toFixed(2)} xA ${(ox(p).xa90||0).toFixed(2)}`,SG_TONE.purple)),{rank:true}))}
   </div>
   <div class="repgrid">
     ${rep("xg","target","Goals Against xG","Goals this season minus expected goals. Right: finishing above the chances (the research found this does not last). Left: getting chances but not yet scoring.",
@@ -2149,7 +2186,9 @@ const PD_POS_COLS={0:["xgi6","cs","dchit","dchits","bonus","total"],1:["cs","csm
   2:["cs","csmk","xgi6","dchit","dchits","bps","bonus"],3:["xgi6","goalmk","npxg","xa","ict","dchit","dchits","bonus"],
   4:["xgi6","goalmk","npxg","xa","ict","sot","bonus"]};
 function pdCols(){
-  const g=VG(),r=lGwRange(),W=p=>ws(String(p.code||""),p.pos,S.lWin||38,p.price,teamMaxPrice(p.team))||{};
+  const g=VG(),r=lGwRange(),W=p=>ws(String(p.code||""),p.pos,dispWin(),p.price,teamMaxPrice(p.team))||{};
+  /* Season: FPL's own per-90 where FPL publishes one; Last N: match rows */
+  const sv=(p,k)=>{const v=statVal(p,k,W(p));return v==null||!isFinite(v)?null:v;};
   const L6=p=>{const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));return w?(w.xg90||0)+(w.xa90||0):null;};
   const mk=S.oddsState==="ok"?(()=>{const m={};try{Object.values(oddsPlayers(g)||{}).forEach(x=>{if(x&&x.p)m[x.p.id]=x;});}catch(e){}return m;})():null;
   const mcs=S.oddsState==="ok"?(()=>{try{return marketCS(g)||{};}catch(e){return {};}})():null;
@@ -2167,12 +2206,12 @@ function pdCols(){
       val:own,cell:p=>{if(ownMode==="all")return p.owned.toFixed(1)+"%";const a=aroundOwn(p,ownMode);return a?`${a.k}/${a.n}`:"—";},heat:0},
     xmins:{label:"xMins",tip:"Expected minutes next gameweek",val:p=>p.xMins||0,cell:p=>Math.round(p.xMins||0)+"′"+minsTag(p),heat:1},
     xgi6:{label:"xGI/90 L6",tip:"Expected goals plus assists per 90, last 6 matches (the study's best underlying number for midfielders and forwards)",val:L6,cell:p=>f2(L6(p)),heat:1},
-    cs:{label:"CS %",tip:"Model chance of a clean sheet next match",val:p=>csProbNext(p,g),cell:p=>pct(csProbNext(p,g)),heat:1},
+    cs:{label:"CS %",tip:"Model chance of a clean sheet next match, as its points use it (bookmakers' odds when priced)",val:p=>csProbNext(p,g),cell:p=>pct(csProbNext(p,g)),heat:1},
     csmk:{label:"CS mkt",tip:"Bookmakers' clean-sheet chance next match (margin removed)",val:p=>mcs?mcs[p.team]??null:null,cell:p=>pct(mcs?mcs[p.team]:null),heat:1,market:1},
     goalmk:{label:"Goal mkt",tip:"Bookmakers' chance he scores next match, if he plays (the model's figure in the hover)",val:p=>mk&&mk[p.id]?mk[p.id].goal:null,
       cell:p=>{const x=mk&&mk[p.id];return x&&x.goal!=null?`<span title="Model ${pct(modelChance(p,p.xg90||0))}">${pct(x.goal)}</span>`:"—";},heat:1,market:1},
-    npxg:{label:"npxG/90",tip:"Non-penalty expected goals per 90 (stats window)",val:p=>W(p).npxg90??null,cell:p=>f2(W(p).npxg90),heat:1},
-    xa:{label:"xA/90",tip:"Expected assists per 90 (stats window)",val:p=>W(p).xa90??null,cell:p=>f2(W(p).xa90),heat:1},
+    npxg:{label:"npxG/90",tip:"Non-penalty expected goals per 90 (stats window; penalties scored or missed taken out)",val:p=>W(p).npxg90??null,cell:p=>f2(W(p).npxg90),heat:1},
+    xa:{label:"xA/90",tip:"Expected assists per 90 (Season: FPL's figure; Last N: match records)",val:p=>sv(p,"xa"),cell:p=>f2(sv(p,"xa")),heat:1},
     ict:{label:"ICT",tip:"FPL's ICT index, season total (ranks first for forwards over 5 gameweeks)",val:p=>p.ict||0,cell:p=>(p.ict||0).toFixed(0),heat:1},
     sot:{label:"SoT/90",tip:"Shots on target per 90 (stats window)",val:p=>W(p).sot90??null,cell:p=>f2(W(p).sot90),heat:1},
     dchits:{label:"DefCon Hits",tip:"Matches this season reaching the DefCon target (10 for defenders, 12 for midfielders and forwards), out of the matches he played",
@@ -2182,8 +2221,8 @@ function pdCols(){
     bps:{label:"BPS/90",tip:"Bonus-point-system score per 90",val:p=>bpsPer90(p,W(p)),cell:p=>f1(bpsPer90(p,W(p))),heat:1},
     bonus:{label:"Bonus",tip:"Bonus points this season",val:p=>p.bonus||0,cell:p=>p.bonus||0,heat:1},
     total:{label:"Pts",tip:"Total points this season",val:p=>p.total,cell:p=>p.total,heat:1},
-    gc90:{label:"GC/90",tip:"Goals conceded per 90 (stats window); lower is better",val:p=>W(p).gc90??null,cell:p=>f2(W(p).gc90),heat:-1},
-    sv90:{label:"Saves/90",tip:"Saves per 90 (stats window)",val:p=>W(p).sv90??null,cell:p=>f2(W(p).sv90),heat:1},
+    gc90:{label:"GC/90",tip:"Goals conceded per 90 (Season: FPL's figure; Last N: his team's goals conceded while he played); lower is better",val:p=>sv(p,"gc90"),cell:p=>f2(sv(p,"gc90")),heat:-1},
+    sv90:{label:"Saves/90",tip:"Saves per 90 (Season: FPL's figure; Last N: match records)",val:p=>sv(p,"sv90"),cell:p=>f2(sv(p,"sv90")),heat:1},
     gprev:{label:"G prev",tip:"Goals prevented against the xG on target he faced (stats window)",val:p=>W(p).gp??null,cell:p=>f1(W(p).gp),heat:1}
   };
   const pos=S.lPos||0;

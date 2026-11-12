@@ -235,7 +235,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.38.0";
+const APP_VERSION="12.39.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -901,6 +901,7 @@ const RULES={
 };
 const GOAL_PTS=RULES.goal, CS_PTS=RULES.cs, DC_THRESH=RULES.dcThresh;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const SEASON_WIN=99;
 /* Chance of reaching the DefCon target in a full match, from his DefCon per
    90. Defenders: negative binomial (size 8), as their counts vary more than a
    Poisson allows; midfielders and forwards: Poisson. Both chosen on GW1-10
@@ -1224,7 +1225,9 @@ function windowStats(code,n,pos,price,teamMax){
       sv90:cs.sv90,gc90:cs.gc90,xgot90:0,gp:0,cs:0,
       csRate:Math.exp(-clamp(cs.gc90,0.3,3.2))};
   }
-  const take=n>=38?rows:rows.slice(-n);
+  /* SEASON_WIN: this season's matches only, unweighted (the Stats page's
+     "Season" button; 38 means every match on record, both seasons) */
+  const take=n===SEASON_WIN?rows.filter(r=>r.tag==="now"):n>=38?rows:rows.slice(-n);
   if(!take.length)return null;
   /* ---- recency and season weighting ----
      A window that treats a match from August 2025 as equal evidence to one
@@ -1251,7 +1254,7 @@ function windowStats(code,n,pos,price,teamMax){
   const lastW=1-(1-LAST_FLOOR)*clamp(nowApps/FADE_OVER,0,1);
   const nowIdx=new Map();
   nowRows.forEach((r,i)=>nowIdx.set(r,nowRows.length-1-i));   // 0 = most recent
-  const wt=r=>r.tag==="now"
+  const wt=n===SEASON_WIN?(()=>1):r=>r.tag==="now"
     ? SEASON_W*Math.pow(0.5,(nowIdx.get(r)||0)/HALF_LIFE)
     : lastW;
 
@@ -1280,7 +1283,8 @@ function windowStats(code,n,pos,price,teamMax){
     minsPerApp:wAll>0?wMins/wAll:0,
     g:sum("g"),a:sum("a"),
     xg90:per90("xg"),xa90:per90("xa"),
-    npxg90:wMins>0?(wsum("xg")-wsum("pens")*0.79)*90/wMins:0,
+    /* penalties taken, scored or missed, each worth 0.79 xG */
+    npxg90:wMins>0?(wsum("xg")-(wsum("pens")+wsum("penm"))*0.79)*90/wMins:0,
     sh90:per90("sh"),sot90:per90("sot"),
     cc90:per90("cc"),box90:per90("box"),f390:per90("f3"),drb90:per90("drb"),
     aer90:per90("aer"),bcm:sum("bcm"),
@@ -1290,7 +1294,10 @@ function windowStats(code,n,pos,price,teamMax){
     /* this season's matches in the window, and how many reached the target */
     dcHits:take.filter(r=>r.tag==="now"&&r.mins>0&&r.dc>=(S._dcThresh||10)).length,
     dcApps:take.filter(r=>r.tag==="now"&&r.mins>0).length,
-    sv90:per90("sv"),gc90:per90("gc"),xgot90:per90("xgot"),
+    sv90:per90("sv"),gc90:per90("gc"),
+    /* goals_conceded is only filled for keepers in the match rows; for
+       outfield players, his team's goals conceded per 90 on the pitch */
+    gcTeam90:wMins>0?take.reduce((a,r)=>a+wt(r)*(r.tgc||0)*Math.min(1,(r.mins||0)/90),0)*90/wMins:0,xgot90:per90("xgot"),
     gp:sum("gp"),gp90:per90("gp"),
     cs:take.filter(r=>r.mins>=60&&r.tgc===0).length,
     csRate:wShare(played60,r=>r.tgc===0)
@@ -1538,6 +1545,7 @@ function appearFactor(xMins){
   return band[1]/.985;
 }
 function buildModel(){
+  applyLiveStats();
   clearModelCaches();
   const teams={};S.teams.forEach(t=>teams[t.id]=t);
   const byCode={};S.teams.forEach(t=>byCode[t.code]=t);
@@ -1823,8 +1831,14 @@ function buildModel(){
         const ord=k==="F"?LV.dfk:LV.cor;return ord===1||ord===2;}
       return !!(duty&&(duty[k]||[]).some(nm=>{const t=norm(nm);
         return t&&(me===t||me.includes(t)||t.includes(me));}));};
-    const penRate=isNamed("P")?0.45:(penOrder===1?0.30:(penOrder===2?0.08:0));
-    const setBoost=(isNamed("F")||isNamed("C"))?0.30:(setOrder===1?0.22:(setOrder===2?0.08:0));
+    /* Audit fix (12 Nov 2026): with FPL's live orders loaded, the dataset's
+       orders no longer add credit. They lag transfers, and at clubs where the
+       live order (or PEN_OVERRIDE) names someone else they gave a second
+       player the taker's share (Rudoni at Coventry, Diarra at Sunderland). */
+    const livePen2=liveOn&&!PEN_OVERRIDE[club]&&LV&&LV.pen===2;
+    const penRate=isNamed("P")?0.45:liveOn?(livePen2?0.08:0):(penOrder===1?0.30:(penOrder===2?0.08:0));
+    const setBoost=(isNamed("F")||isNamed("C"))?0.30:liveOn?0:(setOrder===1?0.22:(setOrder===2?0.08:0));
+    const penShown=liveOn?(isNamed("P")?1:livePen2?2:(LV&&LV.pen)||99):penOrder;
     const epNext=num(s.ep_next);
 
     return{id:p.id,code:String(p.code||""),web_name:p.web_name,first:p.first,last:p.last,pos:p.pos,
@@ -1835,7 +1849,15 @@ function buildModel(){
       minsSrc,xg90,xa90,dc90,dcHitRate,dcChance,dcHits,dcApps,gc90,sv90,gpRate,bonus90,penBoost:penRate,setBoost,epNext,avail:av,xMins,roleMins,
       bonus:num(s.bonus),bps:num(s.bps),ict:num(s.ict_index),
       pensSaved:num(s.penalties_saved),ownGoals:num(s.own_goals),
-      spThreat:num(s.set_piece_threat),penOrder:penOrder,tIn:num(s.transfers_in_event),gw:{},_team:team};
+      /* FPL's own season figures, for display (12 Nov 2026 audit): the cards
+         and Stats table showed the model's shrunk inputs above (xg90, xa90,
+         sv90 blend toward last season; gc90 is expected goals conceded) as if
+         they were the stats. The model keeps using its own. */
+      off:mins>0?{xg90:num(s.expected_goals_per_90),xa90:num(s.expected_assists_per_90),
+        xgi90:num(s.expected_goal_involvements_per_90),sv90:num(s.saves_per_90),
+        gc90:num(s.goals_conceded_per_90),xgc90:num(s.expected_goals_conceded_per_90),
+        dc90:num(s.defensive_contribution_per_90),starts:num(s.starts)}:null,
+      spThreat:num(s.set_piece_threat),penOrder:penShown,tIn:num(s.transfers_in_event),gw:{},_team:team};
   });
 
   /* D9 (12 Oct 2026): when each absent player is due back (0 = available
@@ -1943,7 +1965,7 @@ function buildModel(){
       const pPlay=clamp(mE/17,0,.985);
       const p60=clamp((mE-22)/62,0,.985);
       const share=clamp(mE/90,0,1);
-      let tot=0;
+      let tot=0;const csPs=[];
       fx.forEach(f=>{
         const opp=f.oppT||{};
         /* Fixture swing. The +/-30% used by most public component models is
@@ -2016,7 +2038,7 @@ function buildModel(){
            few high-quality chances keeps more clean sheets than raw xGC implies. */
         let csP=Math.exp(-xGC);
         if(p.pos===1&&p.gpRate)csP=clamp(csP*(1+clamp(p.gpRate,-0.25,0.25)),0.02,0.75);
-        const cs=(CS_PTS[p.pos]||0)*csP*p60;
+        const cs=(CS_PTS[p.pos]||0)*csP*p60;csPs.push(csP);
         /* D11: -1 per two conceded is, in expectation, xGC/2 - (1 - e^-2xGC)/4 */
         const conc=p.pos<=2?-(xGC/2-(1-Math.exp(-2*xGC))/4)*p60:0;
         /* DefCon pays only when a player clears the threshold in that match.
@@ -2050,7 +2072,7 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false,
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false,csPs,
         pPlay:clamp(availE,0,1)*appearShare(mE)*Math.min(1,fx.length)};
     }
     /* --- fixture sensitivity ---
@@ -2122,8 +2144,31 @@ function buildModel(){
   render();
 }
 /* "Expected back 30 Aug" → 30-Aug */
+/* Audit fix (12 Nov 2026): availability, news, price, ownership, transfers,
+   form and points come from FPL's own feed, which the server fetches every
+   15 minutes (5 near a deadline), instead of the dataset mirror, which runs
+   hours behind. Laid over each player's dataset row before every model
+   build; the dataset row is kept (p._ds) so a later feed replaces, never
+   stacks. No feed (the Pages backup, an older server): the dataset stands. */
+const LIVE_STATS=[["st","status"],["cn","chance_of_playing_next_round"],["ct","chance_of_playing_this_round"],
+  ["news","news"],["na","news_added"],["cost","now_cost",v=>v/10],["cce","cost_change_event"],["ccs","cost_change_start"],
+  ["sel","selected_by_percent"],["tie","transfers_in_event"],["toe","transfers_out_event"],["form","form"],
+  ["tp","total_points"],["ppg","points_per_game"]];
+function applyLiveStats(){
+  const L=S.fplLive&&S.fplLive.players;
+  (S.players||[]).forEach(p=>{
+    if(!p.stats)return;
+    if(!p._ds)p._ds=p.stats;
+    const lv=L&&L[p.id];
+    if(!lv||lv.st==null){p.stats=p._ds;return;}
+    const o={...p._ds};
+    LIVE_STATS.forEach(([k,f,fn])=>{if(!(k in lv))return;const v=lv[k];
+      o[f]=v==null?"":(fn?fn(+v):v);});
+    p.stats=o;
+  });
+}
 function parseReturn(news){
-  const m=/expected back\s+(\d{1,2})\s+([A-Za-z]{3})/i.exec(news||"");
+  const m=/(?:expected back|suspended until)\s+(\d{1,2})\s+([A-Za-z]{3})/i.exec(news||"");
   if(m)return `${m[1].padStart(2,"0")}-${m[2][0].toUpperCase()+m[2].slice(1,3).toLowerCase()}`;
   if(/unknown return/i.test(news||""))return "unknown";
   return "";
