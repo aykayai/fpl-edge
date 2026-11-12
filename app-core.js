@@ -235,7 +235,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="12.36.0";
+const APP_VERSION="12.38.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1519,11 +1519,13 @@ const CS_FROM_FIXTURE=true;
    pick 0.75-1. Closing prices know the line-ups, so this flatters them; it is
    re-tested at GW12 on the prices archived at each deadline. */
 let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); method being rebuilt and re-tested */
-/* D5 (13 Oct 2026, Andy: apply half now, re-fit at GW10). Per-position level
-   on the final projection. Full out-of-sample scales over GW1-5 were GK 1.334,
-   DEF 1.095, MID 0.896, FWD 1.098 (leans -0.33/-0.17/+0.22/-0.17 a week);
-   these are halfway, so each lean is roughly halved until ten weeks of data. */
-const POS_LEVEL={1:1.167,2:1.048,3:0.948,4:1.049};
+/* D5 (re-fit 12 Nov 2026, Andy: apply now). Per-position level on the final
+   projection, fitted on GW5-10 (after the minutes ramp ends, xMins matches
+   actual minutes, but points per minute were ~25-30% low at every position).
+   Out of sample: bias -0.42 -> 0.00, MAE 1.40 -> 1.51 (MAE rewards under-
+   prediction on skewed points), top-50 picks unchanged. Was the GW1-5 half
+   step {1:1.167,2:1.048,3:0.948,4:1.049}. Which scoring parts are short is next. */
+const POS_LEVEL={1:1.289,2:1.361,3:1.237,4:1.501};
 /* D17: chance he appears at all in a week, on the same evidence as D1 */
 function appearShare(m){
   if(!(m>30))return clamp(m/17,0,.985);
