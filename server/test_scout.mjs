@@ -73,6 +73,24 @@ try {
     check("evaluate: the engine's own move is legal and gains", e && e.ok && e.legal && e.figures.gain_pts > 0, e);
     const p = await call("fpl_propose_plan_change", { changes: [{ type: "transfer", out: m.out, in: m.in }] });
     check("propose: an action for the pop-up", p && p.ok && p.action && p.action.kind === "fpl_plan" && p.action.changes[0].in_id > 0, p);
+
+    /* 12 Nov 2026: a planned move undone (sold, bought back) left his plan
+       with the official squad and a bank £0.5m short, and The Scout quoted it.
+       The official squad has the official bank; a real planned move keeps its own. */
+    const off = await call("fpl_my_team", { horizon: 1 });
+    const ids = off.players.map(x => x.id), B = off.figures.bank, gw = off.inputs.gw;
+    const send = plan => post("/api/scout/ask", { message: "x", plan }, { Host: "127.0.0.1:" + PORT, "X-Scout": "1" });
+    const short = +(B - 0.5).toFixed(1);
+    await send({ squad: ids, original: ids, bank: short, ft: 1, planByGw: { [gw]: { squad: ids, bank: short } } });
+    d = await call("fpl_my_team", { horizon: 1 });
+    check("bank: an undone move leaves the official squad with FPL's bank", d && d.ok && d.figures.bank === B && d.plan && /draft plan/.test(d.plan.from), [B, d && d.figures]);
+    const c = p && p.action && p.action.changes[0];
+    if (c) {
+      const moved = ids.map(x => (x === c.out_id ? c.in_id : x)), own = +(B + 0.3).toFixed(1);
+      await send({ squad: moved, original: ids, bank: own, ft: 1, planByGw: { [gw]: { squad: moved, bank: own } } });
+      d = await call("fpl_my_team", { horizon: 1 });
+      check("bank: a real planned move keeps its own bank", d && d.ok && d.figures.bank === own, [own, d && d.figures]);
+    }
   }
   d = await call("fpl_propose_plan_change", { changes: [{ type: "sell everything" }] });
   check("propose: an unknown change is refused", d && d.ok === false, d);
