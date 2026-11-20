@@ -116,6 +116,46 @@ try {
   const mineRows = doc.querySelectorAll(".pdt tbody tr.mine").length, sq = (S.squad || []).length;
   check(sq > 0 && mineRows === sq && doc.querySelectorAll(".pdt tbody tr.mine .pdrole").length === sq, "every squad player is marked in the list with a role", `${mineRows} marked of ${sq}`);
   check(doc.querySelectorAll(".pdt tbody .pdrole.c").length === 1, "exactly one captain mark");
+  /* compare (20 Nov 2026): a tray once ticked; the pop-up opens on the radar with the
+     Scout's verdict, the Stats view on the toggle; stats follow the players' position */
+  {
+    g.act("pdless"); S.pTicks = []; S.pCmp = false; S.pCmpView = "radar"; show("table");
+    check(!doc.querySelector(".cptray"), "no compare tray until a player is ticked");
+    const mids = S.model.players.filter(p => p.pos === 3 && (p.xMins || 0) >= 60).sort((x, y) => y.price - x.price).slice(0, 3);
+    g.act("tick", mids[0].id); show("table");
+    check(!!doc.querySelector(".cptray") && !!doc.querySelector(".cptray .cpgo")?.disabled, "one tick: the tray shows and Compare waits for a second player");
+    mids.slice(1).forEach(p => g.act("tick", p.id)); show("table");
+    check(doc.querySelectorAll(".cptray .cpsw").length === 3 && doc.querySelectorAll(".cptray .cpem").length === 2 && !doc.querySelector(".cptray .cpgo").disabled,
+      "three ticks: three photos, two empty slots, Compare on", doc.querySelector(".cptray")?.textContent.trim().slice(0, 80));
+    check(![...doc.querySelectorAll(".pagetabs button")].some(b => /^Compare/.test(b.textContent.trim())), "the old header Compare button is gone");
+    g.act("pcmp");
+    let md = doc.querySelector(".modal");
+    check(!!md && !!md.querySelector(".cpscout") && md.querySelectorAll(".cpins").length === 3 && !!md.querySelector(".cprgrid svg polygon"),
+      "Compare opens on the radar with the Scout's verdict and a card per player");
+    check(/Midfielder stats/.test(md?.querySelector(".cpchip")?.textContent || ""), "three midfielders get midfielder stats", md?.querySelector(".cpchip")?.textContent);
+    const axes = [...(md?.querySelectorAll(".cprgrid svg text") || [])].map(t => t.textContent);
+    check(["xGI", "Goal %", "npxG", "xA", "DefCon", "Bonus"].every(x => axes.includes(x)), "the radar's axes are the midfielder set", axes.slice(0, 12).join("|"));
+    const r = vm.runInContext("lGwRange()", ctx), hP = vm.runInContext("hPts", ctx);
+    const top = mids.slice().sort((x, y) => hP(y, r.from, r.count) - hP(x, r.from, r.count))[0];
+    check((md?.querySelector(".cphl")?.textContent || "") === "Scout pick: " + top.web_name, "the Scout's pick is the best projection over the window", md?.querySelector(".cphl")?.textContent + " vs " + top.web_name);
+    check(!doc.querySelector(".cptray"), "the tray hides while the pop-up is open");
+    check(!!doc.querySelector(".modal .mbox.cpfull") && !!doc.querySelector(".cprgrid .cpcol .cpradsvg svg"), "the compare pop-up is the full-screen panel with the radar in its own column");
+    g.act("pcmpview", "stats"); md = doc.querySelector(".modal");
+    check(md?.querySelectorAll(".cphero").length === 3 && md.querySelectorAll(".cphero .cpsig").length === 3 && /Owned by Rivals/.test(md.textContent) && !!md.querySelector(".cpline svg polyline"),
+      "Stats view: hero cards with signals, owned by rivals and the points line chart");
+    const firstWin = [...md.querySelector(".cprows.cpout")?.querySelectorAll(".cprc") || []].slice(0, 3).findIndex(c => c.classList.contains("win"));
+    check(firstWin === mids.indexOf(top), "Stats view marks the best projection in green", firstWin);
+    g.act("pcmpclose"); g.act("tickclear");
+    const gk = S.model.players.find(p => p.pos === 1 && (p.xMins || 0) >= 60);
+    g.act("tick", gk.id); g.act("tick", mids[0].id); g.act("pcmp");
+    check(/Shared stats/.test(doc.querySelector(".modal .cpchip")?.textContent || ""), "a keeper and a midfielder share one stat set");
+    g.act("pcmpclose"); g.act("tickclear"); S.pCmpView = "radar";
+    const cssText = readFileSync(join(ROOT, "index.html"), "utf8");
+    const cpRules = cssText.match(/\.cp[^{]*\{[^}]*\}/g) || [];
+    const stripes = cpRules.filter(x => /inset\s+\d+px\s+0\s+0/.test(x) || /border-left\s*:/.test(x));
+    check(cpRules.length > 20 && stripes.length === 0, `no coloured edge stripes in the compare styles (${cpRules.length} rules)`, stripes.join(" "));
+    show("table");
+  }
   g.act("pdless");
   g.act("pwin", "ros");
   check(vm.runInContext("lGwRange().to", ctx) === 38 && /ROS/.test(doc.querySelector(".pdt th.act")?.textContent || ""), "ROS projects to GW38", doc.querySelector(".pdt th.act")?.textContent);

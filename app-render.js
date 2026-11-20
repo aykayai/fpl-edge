@@ -224,7 +224,7 @@ function listHTML(){
   const ownIds=S.squad||[];
   const raised=flags.reduce((t,id)=>{
     const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
-  const budget=+(S.bank+raised).toFixed(1);
+  const budget=+(planBank()+raised).toFixed(1);   // the header's bank, not the drifting S.bank (as F41)
   const outP=flags.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
@@ -1314,7 +1314,7 @@ function wkSpan(g,h){return h>1?`GW${g}–${Math.min(38,g+h-1)}`:`GW${g}`;}
 function modalHTML(title,body,opts){
   opts=opts||{};
   return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="if(event.target===this)act('${opts.close||"popclose"}')">
-    <div class="mbox${opts.wide?" wide":""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
+    <div class="mbox${opts.wide?" wide":""}${opts.cls?" "+opts.cls:""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
       <button class="mx" onclick="act('${opts.close||"popclose"}')" aria-label="Close">${lic("x",18)}</button></div>
     <div class="mbody">${body}</div></div></div>`;
 }
@@ -1526,33 +1526,170 @@ function fixPills(p,g,n){
 }
 /* the old Player Data table, kept whole as the Stats view */
 /* tick-to-compare: up to five players side by side as figure cards */
+/* Compare pop-up (20 Nov 2026, Andy). Radar view by default: the Scout's
+   verdict, a radar of each player's percentile (among regular starters, 60+
+   expected minutes, in his position) on his position's stats, with top-10%
+   and average rings and the leader under each stat, a card per player, and
+   points played and predicted. Stats view (toggle): hero cards with signals,
+   percentile bars with the best of the group in green, owned by rivals,
+   fixtures and the same line chart. The stats follow the position of the
+   players picked; mixed positions share one set. No coloured edge stripes:
+   a player's colour is the ring on his photo and the dot by his name. */
+const CP_COL=["#3DDC97","#6FB7FF","#F5B841","#FF7A9A","#B58CFF"];
+const CP_ST={ /* label, note, format, better (1 high, -1 low), short */
+  xgi6:["xGI per 90","Last 6 matches",v=>v.toFixed(2),1,"xGI"],
+  goalmk:["Anytime Goal","Bookmakers, next match",v=>Math.round(v*100)+"%",1,"Goal %"],
+  npxg:["npxG per 90","Season",v=>v.toFixed(2),1,"npxG"],
+  xa:["xA per 90","Season",v=>v.toFixed(2),1,"xA"],
+  sot:["Shots on Target per 90","Season",v=>v.toFixed(2),1,"SoT"],
+  dchit:["DefCon Hit Rate","Matches reaching the target",v=>Math.round(v*100)+"%",1,"DefCon"],
+  bps:["BPS per 90","Season",v=>v.toFixed(1),1,"BPS"],
+  bonus:["Bonus Points","Season",v=>v.toFixed(0),1,"Bonus"],
+  cs:["Clean Sheet Chance","Model, next match",v=>Math.round(v*100)+"%",1,"CS %"],
+  csmk:["Clean Sheet, Market","Bookmakers, next match",v=>Math.round(v*100)+"%",1,"CS mkt"],
+  gc90:["Goals Conceded per 90","Season, fewer is better",v=>v.toFixed(2),-1,"GC"],
+  sv90:["Saves per 90","Season",v=>v.toFixed(2),1,"Saves"],
+  gprev:["Goals Prevented","Season",v=>(v>0?"+":"")+v.toFixed(1),1,"G prev"],
+  total:["Total Points","Season",v=>v.toFixed(0),1,"Pts"]};
+const CP_SETS={1:["cs","csmk","sv90","gprev","gc90","bonus"],2:["cs","csmk","xgi6","dchit","bps","bonus"],
+  3:["xgi6","goalmk","npxg","xa","dchit","bonus"],4:["xgi6","goalmk","npxg","sot","xa","bonus"],0:["xgi6","cs","dchit","bonus","total"]};
+const CP_POS={1:"Goalkeeper",2:"Defender",3:"Midfielder",4:"Forward"};
+let _cpC=null;
+function cpVal(k,p){
+  if(!_cpC||_cpC.m!==S.model)_cpC={m:S.model,C:pdCols().C,pool:{}};
+  try{const v=_cpC.C[k].val(p);return v==null||!isFinite(v)?null:+v;}catch(e){return null;}
+}
+/* percentile and rank among regular starters in his position */
+function cpPr(k,p){
+  const v=cpVal(k,p);if(v==null)return null;
+  const key=k+"|"+p.pos;
+  if(!_cpC.pool[key])_cpC.pool[key]=S.model.players.filter(q=>q.pos===p.pos&&(q.xMins||0)>=60).map(q=>cpVal(k,q)).filter(x=>x!=null);
+  const a=_cpC.pool[key];if(!a.length)return null;
+  const b=CP_ST[k][3],better=a.filter(x=>b>0?x>v:x<v).length,worse=a.filter(x=>b>0?x<v:x>v).length;
+  return{pct:Math.round(100*(worse+(a.length-better-worse)/2)/a.length),rank:better+1,of:a.length};
+}
+const cpOrd=n=>n+(n%100>=11&&n%100<=13?"th":n%10===1?"st":n%10===2?"nd":n%10===3?"rd":"th");
+const cpKit=p=>(KITS[p.teamName]||KITS._d||{b:"#444"}).b;
+const cpPhoto=(p,cls,size)=>`<img class="${cls}" alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="${cls} cpfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,size)}</span>`;
+const cpSet=ps=>{const pos=ps.every(p=>p.pos===ps[0].pos)?ps[0].pos:0;return{pos,keys:CP_SETS[pos],name:pos?CP_POS[pos]+" stats":"Shared stats"};};
+const cpRiv=p=>{const R=rivalOwn();return R&&R.n?{k:R.own[p.id]||0,n:R.n}:null;};
+const cpBest=(vals,better)=>{const ok=vals.filter(v=>v!=null);if(!better||ok.length<2||ok.every(x=>x===ok[0]))return null;return better>0?Math.max(...ok):Math.min(...ok);};
+function cpLast6(p,g){const A=S.playerActuals||{},a=A[p.id]||A[String(p.id)]||{},o=[];for(let e=g-6;e<g;e++){const v=e>=1?(a[e]??a[String(e)]):null;o.push(v==null?0:+v);}return o;}
+function cpFix(p,g){const o=[];for(let e=g;e<g+5;e++){const w=p.gw[e];if(w&&!w.blank)w.fixtures.forEach(f=>o.push({e,opp:f.opp,d:posDiff(p,f)}));}return o;}
+const cpStrengths=(p,keys)=>keys.map(k=>({k,r:cpPr(k,p)})).filter(x=>x.r).sort((a,b)=>b.r.pct-a.r.pct);
+const cpChips=(p,keys)=>{const s=cpStrengths(p,keys),up=s.filter(x=>x.r.pct>=80).slice(0,3),dn=s.filter(x=>x.r.pct<=30).slice(-2);
+  return `<div class="cpchips">${up.map(x=>`<span class="up">${CP_ST[x.k][4]} ${cpOrd(x.r.pct)}</span>`).join("")}${dn.map(x=>`<span class="dn">${CP_ST[x.k][4]} ${cpOrd(x.r.pct)}</span>`).join("")}</div>`;};
+/* the Scout's verdict, from the same figures the pop-up shows */
+function cpVerdict(ps,g,H,win){
+  const S2=cpSet(ps),pos=S2.pos?CP_POS[S2.pos].toLowerCase()+"s":"players";
+  const xp=p=>hPts(p,g,H),r=[...ps].sort((a,b)=>xp(b)-xp(a)),pick=r[0],second=r[1],last=r[r.length-1];
+  const st=p=>cpStrengths(p,S2.keys),nm=k=>CP_ST[k][0].replace(" per 90","");
+  const top2=st(pick).filter(x=>x.r.pct>=75).slice(0,2).map(x=>`${nm(x.k)} (${cpOrd(x.r.pct)})`).join(" and ");
+  const pts=[{kind:"good",text:`**${pick.web_name}** projects **${xp(pick).toFixed(1)}** over ${win}, ${(xp(pick)-xp(second)).toFixed(1)} ahead of ${second.web_name}${top2?`, and leads ${pos} for ${top2}`:""}.`}];
+  const rv=cpRiv(pick),weak=st(pick).filter(x=>x.r.pct<=35).pop();
+  if(rv&&rv.k===rv.n)pts.push({kind:"warn",text:`All ${rv.n} of your rivals own him, so he protects your league place rather than gaining ground.`});
+  else if(weak)pts.push({kind:"warn",text:`Weak spot: ${nm(weak.k)} (${cpOrd(weak.r.pct)} among ${pos}).`});
+  const cheap=ps.filter(p=>p!==pick&&pick.price-p.price>=0.5).sort((a,b)=>a.price-b.price)[0];
+  if(cheap){const cs=st(cheap)[0],rc=cpRiv(cheap);
+    pts.push({kind:"next",text:`**${cheap.web_name}** is the budget route: £${(pick.price-cheap.price).toFixed(1)}m cheaper and ${(xp(pick)-xp(cheap)).toFixed(1)} pts behind${cs?`, with ${nm(cs.k)} in the ${cpOrd(cs.r.pct)} percentile`:""}${rc?`; ${rc.k} of ${rc.n} rivals own him`:""}.`});}
+  if(last!==cheap&&last!==pick){const lf=cpFix(last,g).filter(f=>f.d>=4),ls=st(last)[0];
+    pts.push({kind:"info",text:`**${last.web_name}** trails on projection (${xp(last).toFixed(1)})${ls?` despite ${nm(ls.k)} in the ${cpOrd(ls.r.pct)} percentile`:""}${lf.length?`; tough games: ${lf.map(f=>`${f.opp.toUpperCase()} GW${f.e}`).join(", ")}`:""}.`});}
+  return{pick,headline:`Scout pick: ${pick.web_name}`,meta:`From ${win} projections, ${S2.name.toLowerCase()}, fixtures and your league`,pts};
+}
+const CP_KIND={good:["check","#3DDC97"],warn:["triangle-alert","#F5B841"],next:["arrow-right","#6FB7FF"],info:["info","#9A9A9A"]};
+function cpScoutHTML(v){
+  const md=t=>esc(t).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+  return `<div class="cpscout"><span class="cpav">${window.scoutAvatar||""}</span>
+    <div class="cpsb"><div class="cphl">${esc(v.headline)}</div><div class="cpmt">${esc(v.meta)}</div>
+      ${v.pts.map(p=>`<div class="cppt"><i style="background:${CP_KIND[p.kind][1]}22;color:${CP_KIND[p.kind][1]}">${lic(CP_KIND[p.kind][0],12)}</i><span>${md(p.text)}</span></div>`).join("")}</div>
+    ${typeof askScout==="function"?`<button class="cpask" onclick="act('pcmpscout')">${lic("message-circle",14)} Ask The Scout</button>`:""}</div>`;
+}
+/* points: last 6 played (solid) and next 5 predicted (dashed) */
+function cpLineHTML(ps,g,W,Hh){
+  W=W||1160;Hh=Hh||170;const pad=34,top=14,xs=11,act=ps.map(p=>cpLast6(p,g)),pre=ps.map(p=>[0,1,2,3,4].map(i=>hPts(p,g+i,1)));
+  const mx=Math.max(...act.flat(),...pre.flat(),4),X=i=>pad+i*(W-pad-34)/(xs-1),Y=v=>top+(Hh-top)*(1-v/mx),xn=(X(5)+X(6))/2;
+  let s=`<svg viewBox="0 0 ${W} ${Hh+26}" width="100%" role="img" aria-label="Points played and predicted">`;
+  [0,.5,1].forEach(f=>{const v=mx*f;s+=`<line x1="${pad}" x2="${W-24}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/><text x="${pad-8}" y="${Y(v)+3}" text-anchor="end" fill="#555" font-size="10" font-family="Geist Mono">${v.toFixed(0)}</text>`;});
+  s+=`<rect x="${xn}" y="${top-6}" width="${W-24-xn}" height="${Hh-top+6}" fill="rgba(255,255,255,.025)" rx="6"/><line x1="${xn}" x2="${xn}" y1="${top-6}" y2="${Hh}" stroke="rgba(255,255,255,.18)" stroke-dasharray="3 4"/>
+    <text x="${xn-8}" y="${top+4}" text-anchor="end" fill="#6E6E6E" font-size="10.5">Played</text><text x="${xn+8}" y="${top+4}" fill="#6E6E6E" font-size="10.5">Predicted</text>`;
+  for(let i=0;i<xs;i++)if(g-6+i>=1)s+=`<text x="${X(i)}" y="${Hh+18}" text-anchor="middle" fill="${i>=6?"#BDBDBD":"#6E6E6E"}" font-size="10.5">GW${g-6+i}</text>`;
+  ps.forEach((p,j)=>{const a=act[j].map((v,i)=>[X(i),Y(v)]),b=pre[j].map((v,i)=>[X(i+6),Y(v)]),c=CP_COL[j];
+    s+=`<polyline points="${a.map(q=>q.join(",")).join(" ")}" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>`;
+    s+=`<polyline points="${[a[5],...b].map(q=>q.join(",")).join(" ")}" fill="none" stroke="${c}" stroke-width="2.2" stroke-dasharray="5 4" stroke-linejoin="round"/>`;
+    [...a,...b].forEach(([x,y],i)=>{s+=`<circle cx="${x}" cy="${y}" r="${i>=6?3.2:2.6}" fill="${i>=6?"#101010":c}" stroke="${c}" stroke-width="1.8"><title>${esc(p.web_name)} GW${g-6+i}: ${(i>=6?pre[j][i-6]:act[j][i]).toFixed(i>=6?1:0)}</title></circle>`;});});
+  return s+`</svg>`;
+}
+const cpLegend=ps=>`<span class="cpleg">${ps.map((p,i)=>`<span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)}</span>`).join("")}</span>`;
+function cpRadarHTML(ps,keys){
+  const W=520,cx=W/2,cy=250,R=175,n=keys.length,ang=i=>-Math.PI/2+i*2*Math.PI/n,pt=(i,r)=>[cx+Math.cos(ang(i))*r,cy+Math.sin(ang(i))*r];
+  const poly=f=>keys.map((_,i)=>pt(i,R*f).join(",")).join(" ");
+  let s=`<svg viewBox="-60 0 ${W+120} 500" width="100%" role="img" aria-label="Radar of percentiles">`;
+  [.25,.5,.75,1].forEach(q=>{s+=`<polygon points="${poly(q)}" fill="${q===1?"rgba(255,255,255,.02)":"none"}" stroke="rgba(255,255,255,${q===1?.14:.06})"/>`;});
+  s+=`<polygon points="${poly(.9)}" fill="none" stroke="#3DDC97" stroke-opacity=".45" stroke-dasharray="2 5"/><polygon points="${poly(.5)}" fill="none" stroke="rgba(255,255,255,.28)" stroke-dasharray="4 4"/>`;
+  keys.forEach((k,i)=>{const[x,y]=pt(i,R);s+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(255,255,255,.06)"/>`;
+    const[lx,ly]=pt(i,R+38),anc=Math.abs(lx-cx)<8?"middle":lx>cx?"start":"end";
+    const vs=ps.map(p=>cpPr(k,p)?.pct??-1),b=Math.max(...vs),j=vs.indexOf(b),tie=vs.filter(v=>v===b).length>1;
+    s+=`<text x="${lx}" y="${ly-7}" text-anchor="${anc}" dominant-baseline="middle" fill="#DCDCDC" font-size="16" font-weight="500">${CP_ST[k][4]}</text>
+      <text x="${lx}" y="${ly+11}" text-anchor="${anc}" dominant-baseline="middle" font-size="13.5" fill="${tie||b<0?"#6E6E6E":CP_COL[j]}">${tie||b<0?"level":`${esc(ps[j].web_name)} · ${cpOrd(b)}`}</text>`;});
+  ps.forEach((p,j)=>{const v=keys.map(k=>(cpPr(k,p)||{pct:0}).pct),c=CP_COL[j];
+    s+=`<polygon points="${v.map((q,i)=>pt(i,R*Math.max(4,q)/100).join(",")).join(" ")}" fill="${c}" fill-opacity=".12" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>`;
+    v.forEach((q,i)=>{const[x,y]=pt(i,R*Math.max(4,q)/100);s+=`<circle cx="${x}" cy="${y}" r="3.5" fill="${c}"><title>${esc(p.web_name)} · ${CP_ST[keys[i]][0]}: ${cpOrd(q)} percentile</title></circle>`;});});
+  return s+`</svg>`;
+}
 function playerCompareHTML(){
   const ids=S.pTicks||[];if(!S.pCmp||!ids.length||!S.model)return "";
-  const g=VG(),ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  const A=S.playerActuals||{};
-  const last6=p=>{const a=A[p.id]||A[String(p.id)]||{},out=[];for(let e=Math.max(1,g-6);e<g;e++){const v=a[e]??a[String(e)];out.push(v==null?0:+v);}return out;};
-  const rows=[
-    ["Predicted 1 GW",p=>hPts(p,g,1),v=>v.toFixed(1),"high"],
-    ["Predicted 3 GW",p=>hPts(p,g,3),v=>v.toFixed(1),"high"],
-    ["Predicted 5 GW",p=>hPts(p,g,5),v=>v.toFixed(1),"high"],
-    ["Expected Minutes",p=>p.xMins||0,v=>Math.round(v)+"′","high"],
-    ["xGI/90, Last 6",p=>{const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));return w?(w.xg90||0)+(w.xa90||0):0;},v=>v.toFixed(2),"high"],
-    ["Clean Sheet Chance",p=>p.pos<=2?(csProbNext(p,g)||0):null,v=>Math.round(v*100)+"%","high"],
-    ["Form",p=>p.form,v=>v.toFixed(1),"high"],
-    ["Price",p=>p.price,v=>"£"+v.toFixed(1),"low"],
-    ["Owned",p=>p.owned,v=>v.toFixed(1)+"%",null],
-    ["Points Per Game",p=>p.ppg,v=>v.toFixed(1),"high"]];
-  const cell=(row,p,best)=>{const v=row[1](p);if(v==null)return `<div class="cmc empty">—</div>`;
-    return `<div class="cmc${best?" best":""}"><span class="cmv">${row[2](v)}</span></div>`;};
-  const head=ps.map(p=>`<div class="cmh">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,34)}<div>${pName(p,"big")}<div class="mu">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)}</div>
-      <div style="margin-top:4px">${sigHTML(p,g)}</div></div><button class="mx" onclick="act('tick',${p.id})" aria-label="Remove ${esc(p.web_name)}">${lic("x",14)}</button></div>`).join("");
-  const body=rows.filter(r=>ps.some(p=>r[1](p)!=null)).map(r=>{const vals=ps.map(p=>r[1](p)),ok=vals.filter(v=>v!=null);
-    const best=r[3]&&ok.length>1?(r[3]==="high"?Math.max(...ok):Math.min(...ok)):null;
-    return `<div class="cml">${r[0]}</div>${ps.map((p,i)=>cell(r,p,best!=null&&vals[i]===best)).join("")}`;}).join("")
-    +`<div class="cml">Next 5 Fixtures</div>${ps.map(p=>`<div class="cmc">${fixPills(p,g,5)}</div>`).join("")}`
-    +`<div class="cml">Last 6 Gameweeks</div>${ps.map(p=>{const s=last6(p);return `<div class="cmc"><span class="cmv sm">${s.reduce((a,b)=>a+b,0)} pts</span>${s.length>1?spark(s,"#3DDC97",90,26):""}</div>`;}).join("")}`;
-  return modalHTML(`Compare ${ps.length} Players`,`<div class="cmgrid" style="grid-template-columns:170px repeat(${ps.length},minmax(0,1fr))"><div></div>${head}${body}</div>
-    <p class="note" style="margin-top:12px">Best in each row is outlined. Tick more players in the table to add them (up to five).</p>`,{wide:true,close:"pcmpclose"});
+  const ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
+  const r=lGwRange(),g=r.from,H=Math.max(1,r.count),win=H>1?`GW${g}–${g+H-1}`:`GW${g}`;
+  const S2=cpSet(ps),view=S.pCmpView==="stats"?"stats":"radar",xp=p=>hPts(p,g,H);
+  const ctl=`<span class="cpchip">${lic("sparkles",13)} ${S2.name}</span>
+    <span class="hz cpseg" role="group" aria-label="View"><button class="${view==="radar"?"on":""}" aria-pressed="${view==="radar"}" onclick="act('pcmpview','radar')">Radar</button><button class="${view==="stats"?"on":""}" aria-pressed="${view==="stats"}" onclick="act('pcmpview','stats')">Stats</button></span>`;
+  const lines=(W,Hh)=>`<div class="cppanel cpline"><div class="cpph2"><b>Points: Last 6 Played, Next 5 Predicted</b>${cpLegend(ps)}</div>${cpLineHTML(ps,g,W,Hh)}</div>`;
+  let body;
+  if(view==="radar"){
+    const v=ps.length>1?cpVerdict(ps,g,H,win):null;
+    const cards=ps.map((p,i)=>{const rv=cpRiv(p);
+      return `<div class="cpins"><span class="cpav2 sm" style="--c:${CP_COL[i]};--k:${cpKit(p)}">${cpPhoto(p,"cpimg",36)}</span>
+        <div class="cpinm"><div class="cpnm"><i style="background:${CP_COL[i]}"></i>${pName(p)}${v&&p===v.pick?`<span class="cppick">Scout pick</span>`:""}</div>
+          <div class="cpm">${esc(p.teamName)} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}%${rv?` · ${rv.k}/${rv.n} rivals`:""}</div>${cpChips(p,S2.keys)}</div>
+        <div class="cpfx">${fixPills(p,g,5)}</div>
+        <div class="cpxp">${xp(p).toFixed(1)}<small>xPts ${win}</small></div></div>`;}).join("");
+    body=`<div class="cprgrid"><div class="cpcol"><div class="cppanel cprad"><div class="cpph2"><b>${S2.pos?CP_POS[S2.pos]:"Player"} Profile</b><span>Percentile vs regular starters in his position · <span style="color:#3DDC97">┄ top 10%</span> · - - average · leader under each stat</span></div>
+        <div class="cpradsvg">${cpRadarHTML(ps,S2.keys)}</div></div>${lines(760,140)}</div>
+      <div class="cpcol">${v?cpScoutHTML(v):""}<div class="cpinsl">${cards}</div></div></div>`;
+  }else{
+    const n=ps.length,cols=`grid-template-columns:170px repeat(${n},minmax(0,1fr))`,wins=ps.map(()=>0);
+    const row=(label,small,vals,fmt,bar,better)=>{const best=cpBest(vals,better);
+      return `<div class="cprl"${small?` title="${esc(small)}"`:""}>${label}</div>`+vals.map((v,i)=>{if(v==null)return `<div class="cprc"><div class="cpval">—</div></div>`;
+        const w=best!=null&&v===best;if(w)wins[i]++;const b=bar(v,i);
+        return `<div class="cprc${w?" win":""}"><div class="cpval"><span>${fmt(v)}${w?"<b>▲</b>":""}</span><i>${b&&b.cap||""}</i></div>${b?`<div class="cptr"><span style="width:${Math.max(3,b.w)}%"></span></div>`:""}</div>`;}).join("");};
+    const OUT=[[`xPts ${win}`,xp,v=>v.toFixed(1),1],["xPts Next GW",p=>hPts(p,g,1),v=>v.toFixed(1),1],["Expected Minutes",p=>p.xMins||0,v=>Math.round(v)+"′",1],
+      ["Form",p=>+p.form||0,v=>v.toFixed(1),1]]; /* price and ownership are on the hero cards */
+    const outl=OUT.map(([l,f,fm,b])=>{const v=ps.map(f),mx=Math.max(...v.map(x=>Math.abs(x||0)),1e-9);return row(l,"",v,fm,x=>b?{w:100*Math.abs(x)/mx}:null,b);}).join("");
+    const rivRow=`<div class="cprl" title="Your league">Owned by Rivals</div>`+ps.map(p=>{const rv=cpRiv(p);
+      return `<div class="cprc"><div class="cpval cpdots">${rv?`<span>${Array.from({length:rv.n},(_,i)=>`<i class="${i<rv.k?"on":""}"></i>`).join("")}</span>${rv.k} of ${rv.n}`:"—"}</div></div>`;}).join("");
+    const stats=S2.keys.map(k=>row(CP_ST[k][0],CP_ST[k][1],ps.map(p=>cpVal(k,p)),CP_ST[k][2],(x,i)=>{const pr=cpPr(k,ps[i]);return pr?{w:pr.pct,cap:cpOrd(pr.pct)}:null;},CP_ST[k][3])).join("");
+    const heroes=ps.map((p,i)=>`<div class="cphero" style="--k:${cpKit(p)}">${cpPhoto(p,"cpph",96)}<span class="cpdot" style="background:${CP_COL[i]}"></span>
+      <div class="cpht"><div class="cphn">${pName(p,"big")}</div><div class="cphm">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}%</div><div class="cpsig">${sigHTML(p,g)}</div></div>
+      <div class="cpht"><div class="cpbig">${xp(p).toFixed(1)}</div><div class="cpbl">xPts ${win}</div></div></div>`).join("");
+    const table=`<div class="cprows" style="${cols}"><div class="cpnote">Bars: percentile among regular starters in his position. Green: best of the group.</div>${heroes}</div>
+      <div class="cpsec">Outlook</div><div class="cprows cpout" style="${cols}">${outl}${rivRow}</div>
+      <div class="cpsec">${S2.name}</div><div class="cprows" style="${cols}">${stats}</div>`;
+    const tot=wins.reduce((a,b)=>a+b,0),lead=wins.indexOf(Math.max(...wins));
+    const vbar=tot?`<div class="cppanel cpwins"><span><b>${esc(ps[lead].web_name)}</b> wins ${wins[lead]} of ${tot} rows</span><span class="cpwbar">${ps.map((p,i)=>`<span style="flex:${wins[i]||0.0001};background:${CP_COL[i]}"></span>`).join("")}</span><span class="cpleg">${ps.map((p,i)=>`<span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)} ${wins[i]}</span>`).join("")}</span></div>`:"";
+    const fxl=`<div class="cppanel cpfxl"><div class="cpph2"><b>Next 5 Fixtures</b></div>${ps.map((p,i)=>`<div class="cpfxr"><span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)}</span>${fixPills(p,g,5)}</div>`).join("")}</div>`;
+    body=`<div class="cpsgrid"><div class="cpcol cpscroll"><div class="cpstats">${table}</div></div><div class="cpcol">${vbar}${lines(440,190)}${fxl}</div></div>`;
+  }
+  return modalHTML(`Compare ${ps.length} Player${ps.length>1?"s":""}`,`<div class="cpbody">${body}</div>`,{wide:true,ctl,close:"pcmpclose",cls:"cpfull"});
+}
+/* compare tray: docked at the bottom of Player Data once a player is ticked */
+function cmpTrayHTML(){
+  const ps=(S.pTicks||[]).map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);if(!ps.length)return "";
+  const slots=ps.map((p,i)=>`<span class="cpsw"><span class="cpav2 sm" style="--c:${CP_COL[i]};--k:${cpKit(p)}">${cpPhoto(p,"cpimg",34)}</span>
+      <button class="cprm" onclick="act('tick',${p.id})" aria-label="Remove ${esc(p.web_name)}">${lic("x",11)}</button><span class="cpsn">${esc(p.web_name)}</span></span>`).join("")
+    +Array.from({length:5-ps.length},()=>`<span class="cpem" aria-hidden="true">+</span>`).join("");
+  return `<div class="cptrayspace"></div><div class="cptray" role="region" aria-label="Compare tray"><div class="cptl"><b>Compare</b><span>${ps.length} of 5 ticked</span></div>
+    <div class="cpslots">${slots}</div><span class="cpdiv"></span><button class="cpclr" onclick="act('tickclear')">Clear</button>
+    <button class="cpgo" onclick="act('pcmp')"${ps.length<2?" disabled":""}>${ps.length<2?"Tick one more":`Compare ${ps.length} players ${lic("arrow-right",15)}`}</button></div>`;
 }
 
 /* Signals board (redesign wave 4): one card per signal, in Andy's order,
@@ -2434,7 +2571,7 @@ function pdHeadHTML(rows,r){
   const any=nMore||S.lSearch||S.lTeam||lo>3.5||hi<top||S.iconF.length||S.lPos;
   const box=(on,label,action)=>`<label class="pdchk"><input type="checkbox" ${on?"checked":""} onchange="act('${action}')"> ${label}</label>`;
   return `<div class="pagetabs"><h1>Player Data <span class="pdcount">${rows.length} players${nMine?` · <b>${nMine}</b> from your squad`:""}</span></h1>
-      <span style="display:flex;gap:8px;align-items:center">${ticks.length?`<button class="pri" onclick="act('pcmp')">Compare ${ticks.length}</button><button onclick="act('tickclear')">Clear</button>`:`<span class="note">Tick up to 5 players to compare</span>`}</span></div>
+      <span style="display:flex;gap:8px;align-items:center">${ticks.length?"":`<span class="note">Tick up to 5 players to compare</span>`}</span></div>
     <div class="pdcard">
       <div class="pdbar">
         <label class="pdsearch">${lic("search",15)}<input id="srch-l" placeholder="Search players" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" aria-label="Search players"></label>

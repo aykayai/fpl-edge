@@ -21,7 +21,7 @@ function act(k,a,b){
   const P=id=>S.model?.players.find(p=>p.id===id);
   switch(k){
     case"load":loadAll().then(()=>loadNews());return;
-    case"tab":S.tab=a;S.menuOpen=false;break;
+    case"tab":if(a!==S.tab)savePaint();S.tab=a;S.menuOpen=false;break;
     case"menu":S.menuOpen=!S.menuOpen;break;
     case"dash":S.dash={...S.dash,[a]:!S.dash[a]};break;
     case"chipview":S.chipView=a;break;
@@ -61,6 +61,12 @@ function act(k,a,b){
     case"tickclear":S.pTicks=[];S.pCmp=false;break;
     case"pcmp":S.pCmp=!!(S.pTicks||[]).length;break;
     case"pcmpclose":S.pCmp=false;break;
+    case"pcmpview":S.pCmpView=a==="stats"?"stats":"radar";break;
+    case"pcmpscout":{const ps=(S.pTicks||[]).map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean),r=lGwRange();
+      const names=ps.map(p=>p.web_name),list=names.length>1?names.slice(0,-1).join(", ")+" and "+names[names.length-1]:names[0]||"";
+      S.pCmp=false;render();
+      if(typeof askScout==="function")askScout("Compare: "+names.join(", "),"",`Compare ${list} for GW${r.from}–${r.to}. Who should I pick, and why?`);
+      return;}
     case"compare":S.cmp=S.cmp?null:{mode:"edits",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
     case"cmpclose":S.cmp=null;break;
     case"cmpmode":{const C=S.cmp;if(!C)break;Object.assign(C,{mode:a,locks:[],bans:[],pendLocks:[],pendBans:[]});
@@ -319,7 +325,7 @@ function act(k,a,b){
   render();
 }
 /* ---------- init ---------- */
-window.addEventListener("hashchange",()=>{if(applyHash())render();});
+window.addEventListener("hashchange",()=>{savePaint();if(applyHash())render();});
 /* F10: Enter and Space press anything given a button role by a11yPass();
    F108: Escape closes the player card. */
 document.addEventListener("keydown",e=>{
@@ -329,7 +335,7 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&S.cardId){S.cardId=null;render();return;}
   if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp)){S.pop=null;S.cmp=null;S.pCmp=false;render();}
 });
-window.addEventListener("popstate",()=>{if(applyHash())render();});
+window.addEventListener("popstate",()=>{savePaint();if(applyHash())render();});
 /* Signals charts: the hover card reads data-tip "title|figure|note" */
 /* Player Data signal tiles: a card above the tile with the signal's name
    and one short line (data-tt), on hover or keyboard focus */
@@ -389,7 +395,10 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
      repainted, so its <use> references have something to point at */
   Object.keys(KITS).forEach(k=>{shirtSVG(k,false,20);shirtSVG(k,true,20);});
   (async()=>{
-    const [snap,paint]=await Promise.all([IDB.get("snap"),IDB.get("paint")]);
+    /* this page's own picture; the single picture kept before 20 Nov 2026
+       serves only if it is of this page */
+    const [snap,own,old]=await Promise.all([IDB.get("snap"),IDB.get("paint:"+S.tab),IDB.get("paint")]);
+    const paint=own||(old&&old.tab===S.tab?old:null);
     const app=document.getElementById("app");
     if(snap&&snap.files&&snap.v===SNAP_V){
       _snap=snap;
