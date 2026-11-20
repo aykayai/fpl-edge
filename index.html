@@ -1182,6 +1182,9 @@ svg.chart circle[data-tip]{cursor:pointer}
 @media(max-width:1100px){.pktiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1250px) and (min-width:761px){.pkrow3{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);grid-template-rows:auto minmax(0,1fr)}.pkrow3>.pkpanel:nth-child(1){grid-area:1/1}.pkrow3>.pkpanel:nth-child(2){grid-area:2/1}.pkrow3>.pkhistw{grid-area:1/2/3/3}}
 @media(max-width:760px){.pk2,.pkrow3{grid-template-columns:1fr;height:auto}.pktlw{height:250px;overflow-x:auto}.pkhs{max-height:320px}.pktl{min-width:560px}.pkpct{grid-template-columns:110px minmax(50px,1fr) 46px 34px}}
+
+/* ranks (1 = best) replace percentiles in the compare pop-up and player card */
+.cprk{font-family:'Geist Mono',monospace;cursor:help}
 </style>
 </head>
 <body>
@@ -1195,13 +1198,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.5.0"></script>
-<script src="./app-squad.js?v=13.5.0"></script>
-<script src="./app-render.js?v=13.5.0"></script>
-<script src="./app-odds.js?v=13.5.0"></script>
-<script src="./app-tracker.js?v=13.5.0"></script>
-<script src="./app-main.js?v=13.5.0"></script>
-<script src="./app-scout.js?v=13.5.0"></script>
+<script src="./app-core.js?v=13.5.1"></script>
+<script src="./app-squad.js?v=13.5.1"></script>
+<script src="./app-render.js?v=13.5.1"></script>
+<script src="./app-odds.js?v=13.5.1"></script>
+<script src="./app-tracker.js?v=13.5.1"></script>
+<script src="./app-main.js?v=13.5.1"></script>
+<script src="./app-scout.js?v=13.5.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
