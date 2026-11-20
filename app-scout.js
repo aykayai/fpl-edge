@@ -228,6 +228,8 @@
     draw();
   }
   /* "Ask about this": other parts of the page can open The Scout on a subject */
+  /* the compare pop-up's Scout verdict wears the same face */
+  window.scoutAvatar = ICON.avatar || "";
   window.askScout = function (title, id, question) { st.about = title ? { id: id || "", title } : null; toggle(true); if (question) send(question); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", draw); else draw();
 })();

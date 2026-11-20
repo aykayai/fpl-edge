@@ -1111,6 +1111,7 @@ function renderPage(){
    ${S.pop?popHTML():""}${S.cmp?compareModalHTML():""}${S.pCmp?playerCompareHTML():""}
    ${S.cardId?playerCardHTML():""}
    <main id="main" style="display:block;max-width:100%">${main}</main>
+   ${S.tab==="table"&&!S.pCmp&&(S.pTicks||[]).length?cmpTrayHTML():""}
    <div class="foot">FPL Signals v${APP_VERSION}</div>`;
 }
 /* Figure card (Fintel style): title with (i), figure, change line and a

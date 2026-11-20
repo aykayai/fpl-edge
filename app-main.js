@@ -61,6 +61,12 @@ function act(k,a,b){
     case"tickclear":S.pTicks=[];S.pCmp=false;break;
     case"pcmp":S.pCmp=!!(S.pTicks||[]).length;break;
     case"pcmpclose":S.pCmp=false;break;
+    case"pcmpview":S.pCmpView=a==="stats"?"stats":"radar";break;
+    case"pcmpscout":{const ps=(S.pTicks||[]).map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean),r=lGwRange();
+      const names=ps.map(p=>p.web_name),list=names.length>1?names.slice(0,-1).join(", ")+" and "+names[names.length-1]:names[0]||"";
+      S.pCmp=false;render();
+      if(typeof askScout==="function")askScout("Compare: "+names.join(", "),"",`Compare ${list} for GW${r.from}–${r.to}. Who should I pick, and why?`);
+      return;}
     case"compare":S.cmp=S.cmp?null:{mode:"edits",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
     case"cmpclose":S.cmp=null;break;
     case"cmpmode":{const C=S.cmp;if(!C)break;Object.assign(C,{mode:a,locks:[],bans:[],pendLocks:[],pendBans:[]});
