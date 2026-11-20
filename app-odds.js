@@ -949,7 +949,7 @@ function renderPage(){
   }
   /* wave 8: the Odds and Transfers pages are retired; their old links land
      on the new homes (Teams > Odds, the Planner's Top Move pop-up) */
-  if(S.tab==="transfers"){S.tab="squad";S.pop="move";try{history.replaceState({},"",routeFor("squad"));}catch(e){}}
+  if(S.tab==="transfers"){S.tab="squad";S.pop="move";S.popTab="all";try{history.replaceState({},"",routeFor("squad"));}catch(e){}}
   if(S.tab==="odds"){S.tab="fixtures";S.fixMode="matches";try{history.replaceState({},"",routeFor("fixtures"));}catch(e){}}
   const g=VG();
   /* a flagged player counts as sold: value drops, bank rises by his selling price */

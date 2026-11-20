@@ -1264,7 +1264,7 @@ function cardHTML(p,bench,ctx){
     <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
     <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('${A.vice}',${p.id})" title="Vice-captain">V</button>`;
   return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
-   <div class="kit">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}
+   <div class="kit"><span class="kitbtn" role="button" tabindex="0" onclick="act('card',${p.id})" onkeydown="if(event.key==='Enter')act('card',${p.id})" title="Open ${esc(p.web_name)}'s card">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}</span>
     ${p.avail<1?`<span class="dot" style="top:-2px;left:20px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
     ${controls}</div>
    <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
