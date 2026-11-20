@@ -1224,8 +1224,10 @@ table.cx-ht{width:100%;border-collapse:collapse;font-size:12.5px}
 .pkh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:14px;font-weight:600;margin-bottom:10px}.pkh span{font-size:11.5px;color:#6E6E6E;font-weight:400}
 .pktlw{flex:none;height:clamp(180px,27vh,280px);display:flex;flex-direction:column}
 .pktl{flex:1;display:grid;gap:6px;align-items:stretch;min-height:0}
-.pktl .c{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;min-height:0}
-.pktl .bw{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;padding-top:2px}
+.pktl .c{display:grid;grid-template-rows:minmax(0,1fr) 24px 14px;justify-items:center;row-gap:4px;min-width:0;min-height:0}
+.pktl .c>:nth-child(2){align-self:center;display:flex;align-items:center;justify-content:center;width:100%;height:24px;line-height:1}
+.pktl .c>:nth-child(3){align-self:start;line-height:14px}
+.pktl .bw{min-height:0;height:100%;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;padding-top:2px}
 .pktl .v{font:600 11.5px 'Geist Mono',monospace;color:#CFCFCF}
 .pktl .b{width:100%;border-radius:5px 5px 2px 2px;flex:none;max-height:calc(100% - 18px)}
 .pktl .lab{font-size:10.5px;color:#8A8A8A;white-space:nowrap}
@@ -1265,13 +1267,13 @@ table.cx-ht{width:100%;border-collapse:collapse;font-size:12.5px}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.6.0"></script>
-<script src="./app-squad.js?v=13.6.0"></script>
-<script src="./app-render.js?v=13.6.0"></script>
-<script src="./app-odds.js?v=13.6.0"></script>
-<script src="./app-tracker.js?v=13.6.0"></script>
-<script src="./app-main.js?v=13.6.0"></script>
-<script src="./app-scout.js?v=13.6.0"></script>
+<script src="./app-core.js?v=13.6.1"></script>
+<script src="./app-squad.js?v=13.6.1"></script>
+<script src="./app-render.js?v=13.6.1"></script>
+<script src="./app-odds.js?v=13.6.1"></script>
+<script src="./app-tracker.js?v=13.6.1"></script>
+<script src="./app-main.js?v=13.6.1"></script>
+<script src="./app-scout.js?v=13.6.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
