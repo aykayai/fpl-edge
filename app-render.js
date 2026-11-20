@@ -1307,7 +1307,7 @@ function wkSpan(g,h){return h>1?`GW${g}–${Math.min(38,g+h-1)}`:`GW${g}`;}
 function modalHTML(title,body,opts){
   opts=opts||{};
   return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="if(event.target===this)act('${opts.close||"popclose"}')">
-    <div class="mbox${opts.wide?" wide":""}${opts.cls?" "+opts.cls:""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
+    <div class="mbox mfull${opts.wide?" wide":""}${opts.cls?" "+opts.cls:""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
       <button class="mx" onclick="act('${opts.close||"popclose"}')" aria-label="Close">${lic("x",18)}</button></div>
     <div class="mbody">${body}</div></div></div>`;
 }
@@ -1372,10 +1372,15 @@ function popHTML(){
   const D=weekData(),{g,h}=D;
   const L=p=>fplLive(p)||{};
   const ctl=hzHTML(h,"weekh");
-  if(k==="move")return modalHTML(`Top Moves · ${wkSpan(g,h)}`,
-    (D.moves.length?`<div class="tgrid">${D.moves.map(m=>swapCardHTML(m,g)).join("")}</div>`:`<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p>`)
-    +`<p class="note" style="margin-top:10px">Each move is scored on your best XI plus captain, week by week${h>1?" (later weeks count for a little less)":""}, against your current team.</p>`
-    +fundingHTML()+planPanelHTML()+transfersHTML(),{wide:true,ctl});
+  /* full-screen pop-ups (20 Nov 2026): long ones split into tabs so each fits */
+  const tabs=(list,cur)=>`<span class="hz poptabs" role="group" aria-label="Section">${list.map(([k2,n])=>`<button class="${cur===k2?"on":""}" aria-pressed="${cur===k2}" onclick="act('poptab','${k2}')">${n}</button>`).join("")}</span>`;
+  if(k==="move"){
+    const T=["best","plan","fund","all"].includes(S.popTab)?S.popTab:"best";
+    const body=T==="plan"?planPanelHTML():T==="fund"?fundingHTML():T==="all"?`<div class="xfgrid"><div>${transfersHTML("picker")}${transfersHTML("ignored")}</div><div class="xfpos">${transfersHTML("bypos")}</div></div>`
+      :(D.moves.length?`<div class="mvgrid">${D.moves.map(m=>swapCardHTML(m,g)).join("")}</div>`:`<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p>`)
+        +`<p class="note" style="margin-top:10px">Each move is scored on your best XI plus captain, week by week${h>1?" (later weeks count for a little less)":""}, against your current team.</p>`;
+    return modalHTML(`Top Moves · ${wkSpan(g,h)}`,body,{wide:true,ctl:tabs([["best","Best Moves"],["plan","Five-Week Plan"],["fund","Funding"],["all","All Transfers"]],T)+ctl});
+  }
   if(k==="cap")return modalHTML("Captain",captaincyHTML()||`<p class="note">Captaincy is set for the next deadline.</p>`,{});
   if(k==="price"){
     const row=p=>{const l=L(p),pr=(l.pcProj||[]).map(([o,v,lk])=>`<td>${Math.round(v)}%</td>`).join("");
@@ -1386,12 +1391,13 @@ function popHTML(){
     const up=all.filter(p=>L(p).pcp>0).sort((a,b)=>L(b).pcp-L(a).pcp).slice(0,8);
     const dn=all.filter(p=>L(p).pcp<0).sort((a,b)=>L(a).pcp-L(b).pcp).slice(0,8);
     const mineRows=squadPlayers().filter(p=>L(p).pcp!=null).sort((a,b)=>Math.abs(L(b).pcp)-Math.abs(L(a).pcp));
+    const PT=S.popTab==="moves"?"moves":"watch";
+    if(PT==="moves")return modalHTML("Price Watch",priceMovesHTML(),{wide:true,ctl:tabs([["watch","Price Watch"],["moves","Price Moves"]],PT)});
     return modalHTML("Price Watch",`<div class="pmgrid">
       <div><div class="note">Your Squad</div><table class="mkt">${head}<tbody>${mineRows.map(row).join("")}</tbody></table></div>
       <div><div class="note">Closest to a Rise</div><table class="mkt">${head}<tbody>${up.map(row).join("")}</tbody></table></div>
       <div><div class="note">Closest to a Fall</div><table class="mkt">${head}<tbody>${dn.map(row).join("")}</tbody></table></div></div>
-      <p class="note" style="margin-top:10px">FPL's own price predictor: progress towards tonight's change (100% = it changes), and where it projects the next three nights. Refreshed every 15 minutes.</p>
-      ${priceMovesHTML()}`,{wide:true});
+      <p class="note" style="margin-top:10px">FPL's own price predictor: progress towards tonight's change (100% = it changes), and where it projects the next three nights. Refreshed every 15 minutes.</p>`,{wide:true,ctl:tabs([["watch","Price Watch"],["moves","Price Moves"]],PT)});
   }
   if(k==="warn"){
     const sw=new Map();bestSwaps(60,h).forEach(m=>{if(!sw.has(m.out.id))sw.set(m.out.id,m);});

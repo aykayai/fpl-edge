@@ -176,10 +176,18 @@ body.scrolled .tbfig{display:flex}
 .cpask{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:999px;padding:8px 14px;background:#E8743B;color:#0A0A0A;font:600 12.5px 'Geist',sans-serif;white-space:nowrap;min-height:0;cursor:pointer}
 .cpask:hover{background:#F08A55}
 /* full screen, no scrolling: two columns per view, sized to the window */
-.mbox.cpfull{max-width:none;height:calc(100vh - 24px);height:calc(100dvh - 24px);display:flex;flex-direction:column}
-.modal:has(.mbox.cpfull){align-items:stretch;padding:12px}
-.mbox.cpfull .mhead{position:static;flex:none;padding:12px 18px}
-.mbox.cpfull .mbody{flex:1;min-height:0;overflow:auto;padding:14px 18px 16px}
+/* every pop-up is a full-window panel (20 Nov 2026, Andy) */
+.mbox.mfull{max-width:none;height:calc(100vh - 24px);height:calc(100dvh - 24px);display:flex;flex-direction:column}
+.modal:has(.mbox.mfull){align-items:stretch;padding:12px}
+.mbox.mfull .mhead{position:static;flex:none;padding:12px 18px}
+.mbox.mfull .mbody{flex:1;min-height:0;overflow:auto;padding:14px 18px 16px}
+.mvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px}
+.poptabs{margin-right:10px}
+.mbox.mfull .crow{margin-bottom:4px}.mbox.mfull .cpl{padding:2px}
+.xfgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:14px;align-items:start}.xfgrid .panel{margin-top:0}.xfgrid>div:first-child{display:flex;flex-direction:column;gap:12px}
+.xfpos{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+@media(max-width:900px){.xfgrid,.xfpos{grid-template-columns:1fr}}.mbox.mfull .cpitch{padding-top:10px}.mbox.mfull .cgrid{margin-top:12px}.mbox.mfull .mfoot{margin-top:10px}
+.kitbtn{cursor:pointer;display:inline-block;border-radius:8px}.kitbtn:hover{filter:brightness(1.15)}.kitbtn:focus-visible{outline:2px solid var(--mint);outline-offset:2px}
 .mbox.cpfull .cpbody{height:100%}
 .cprgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;height:100%}
 .cpsgrid{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:14px;height:100%}
@@ -276,7 +284,7 @@ body.scrolled .tbfig{display:flex}
 .cpgo:disabled{background:#2A2A2A;color:#8A8A8A;box-shadow:none;cursor:default}
 @media(max-width:760px){
   .cprgrid,.cpsgrid{grid-template-columns:1fr;height:auto}
-  .mbox.cpfull{height:auto}.mbox.cpfull .mbody{overflow:visible}.mbox.cpfull .cpbody{height:auto}
+  .mbox.mfull{height:auto}.mbox.mfull .mbody{overflow:visible}.mbox.cpfull .cpbody{height:auto}
   .cpradsvg{min-height:0}.cpradsvg svg{position:static;height:auto}.cprad{min-height:0}
   .cpins{grid-template-columns:44px minmax(0,1fr) auto}.cpins .cpfx{grid-column:2/-1;white-space:normal}
   .cprgrid svg text{font-size:21px}.cprgrid svg text+text{font-size:17px}
@@ -1153,13 +1161,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.3.0"></script>
-<script src="./app-squad.js?v=13.3.0"></script>
-<script src="./app-render.js?v=13.3.0"></script>
-<script src="./app-odds.js?v=13.3.0"></script>
-<script src="./app-tracker.js?v=13.3.0"></script>
-<script src="./app-main.js?v=13.3.0"></script>
-<script src="./app-scout.js?v=13.3.0"></script>
+<script src="./app-core.js?v=13.4.1"></script>
+<script src="./app-squad.js?v=13.4.1"></script>
+<script src="./app-render.js?v=13.4.1"></script>
+<script src="./app-odds.js?v=13.4.1"></script>
+<script src="./app-tracker.js?v=13.4.1"></script>
+<script src="./app-main.js?v=13.4.1"></script>
+<script src="./app-scout.js?v=13.4.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

@@ -156,6 +156,20 @@ try {
     check(cpRules.length > 20 && stripes.length === 0, `no coloured edge stripes in the compare styles (${cpRules.length} rules)`, stripes.join(" "));
     show("table");
   }
+  /* full-screen pop-ups and the shirt click (20 Nov 2026) */
+  {
+    show("squad");
+    const kit = doc.querySelector(".card .kitbtn");
+    check(!!kit && /act\('card',\d+\)/.test(kit.getAttribute("onclick") || ""), "a Planner shirt opens the player card");
+    for (const k of ["move", "cap", "price", "warn", "rival"]) { g.act("pop", k);
+      check(!!doc.querySelector(".modal .mbox.mfull"), `the ${k} pop-up is full screen`); g.act("pop", null); }
+    g.act("pop", "move");
+    const tabs = [...doc.querySelectorAll(".modal .poptabs button")].map(b => b.textContent.trim());
+    check(tabs.join("|") === "Best Moves|Five-Week Plan|Funding|All Transfers", "Top Moves splits into four tabs", tabs.join("|"));
+    g.act("poptab", "all");
+    check(!!doc.querySelector(".modal .xfgrid .xfpos"), "All Transfers lays out in columns");
+    g.act("pop", null); show("table");
+  }
   /* fixture chips (20 Nov 2026): one strip design everywhere, no old pills */
   {
     show("table");
