@@ -1202,15 +1202,55 @@ function chipsHTML(){
     </tbody></table></div>`,{wide:true});
   const rivals=rep("chrivals","users","Rivals' Chips",`Which chips each manager in your league has played this half; a dot is still to play.`,chipGridHTML(g>=20?2:1)||`<p class="note">The league feed has not loaded.</p>`,{wide:true});
 
-  return `<div class="cx">
-    <div class="cx-phd"><div class="cx-kick">GW${g} · ${left.length} of 8 chips left</div><h1>Chips</h1></div>
-    <div class="fcgrid cx-figs">${figs}</div>
-    ${roadmap}
-    ${bestWeek}
-    ${plansHTML}
-    ${builder}
-    <h2 class="cx-sh">History</h2>
-    ${hindsight}${seasons}${rivals}</div>`;
+  /* ---- two layouts to choose between (21 Nov 2026, Andy: the page was
+     far too long). A: tabs under the roadmap. B: one screen, with the Team
+     Builder, History and each chip's full chart in full-screen pop-ups. The
+     switch is temporary: the layout he picks stays, the other goes. ---- */
+  if(S.chipLayout==null){try{S.chipLayout=localStorage.getItem("fplChipLayout")||"a";}catch(_){S.chipLayout="a";}}
+  const L=S.chipLayout==="b"?"b":"a";
+  const sel=left.includes(S.chipSel)?S.chipSel:left[0];
+  /* one compact row per chip: tile, name, best (or planned) week, gain,
+     optional mini chart of every week, plan */
+  const chipRow=(k,o)=>{const kind=chipKind(k),cv=chipCurve(k),weeks=Object.keys(cv).map(Number).sort((a,b)=>a-b);
+    const b=chipBestWeeks(k)[0],planned=S.chips[k],e=planned||(b||[])[0],v=e?((cv[e]||{}).v||0):0;
+    const mx=Math.max(...weeks.map(w=>cv[w].v),0.1);
+    const mini=o.mini&&weeks.length?`<span class="cx-mini">${weeks.map(w=>`<i class="${w===e?"on":""}${cv[w].f?" fc":""}" style="height:${Math.max(3,Math.round(Math.max(0,cv[w].v)/mx*30))}px;--tc:${CHIP_UI[kind].c}" title="GW${w}: ${sgnPts(cv[w].v)}"></i>`).join("")}</span>`:"";
+    return `<div class="cx-cr${o.sel===k?" sel":""}" onclick="act('${o.act}','${k}')" role="button" tabindex="0">
+      ${chipTile(kind,30,false,planned?"ring":"")}<span class="cx-crn"><b>${chipKeyName(k)}</b><span>${planned?"Planned":"Best week"}${k.endsWith("1")?" · expires GW19":""}</span></span>
+      ${mini}<span class="cx-crw"><b>GW${e||"—"}</b><i class="${v>=0?"up":"dn"}">${sgnPts(v)}</i></span>
+      ${o.plan?(planned?`<button class="cx-ghost" onclick="event.stopPropagation();act('clearchip','${k}')">Clear</button>`
+        :`<button class="cx-ghost" onclick="event.stopPropagation();act('setchip','${k}',${e})">Plan GW${e}</button>`):""}</div>`;};
+  const plansCompact=plans.length?`<div class="cx-pgrid${L==="b"?" stack":""}">${plans.map((p,i)=>`<div class="cx-pc${p.tag?" rec":""}"><div class="cx-pch"><b>${esc(p.name)}</b>${p.tag?`<span class="cx-tag">${esc(p.tag)}</span>`:""}<span class="cx-ptot up">${sgnPts(p.tot)}</span></div>
+      <div class="cx-seqh">${Object.entries(p.pick).sort((a,b)=>a[1][0]-b[1][0]).map(([k,[e,v]])=>`<span class="cx-sth" title="${esc(CHIP_UI[chipKind(k)].n+" GW"+e+" "+sgnPts(v))}">${chipTile(chipKind(k),22)}<b>GW${e}</b></span>`).join("")}</div>
+      <div class="cx-pcf"><span class="cx-why">${p.why}</span><button class="cx-ghost" onclick="act('chipplan',${i})">Use</button></div></div>`).join("")}</div>`:"";
+  const histTabs=[["picked","How Well You Picked"],["seasons","By Season"],["rivals","Rivals' Chips"]];
+  const hk=histTabs.some(([k])=>k===S.chipHist)?S.chipHist:"picked";
+  const histSeg=`<span class="cx-seg">${histTabs.map(([k,n])=>`<button class="${hk===k?"on":""}" onclick="act('chiphist','${k}')">${n}</button>`).join("")}</span>`;
+  const histBody=hk==="seasons"?seasons:hk==="rivals"?rivals:(hindsight||`<p class="note">Nothing finished to score yet.</p>`);
+  const head=`<div class="cx-phd"><div><div class="cx-kick">GW${g} · ${left.length} of 8 chips left</div><h1>Chips</h1></div>
+    <span class="cx-lay"><span class="cx-layk">Layout (pick one)</span><span class="cx-seg"><button class="${L==="a"?"on":""}" onclick="act('chiplayout','a')">A · Tabs</button><button class="${L==="b"?"on":""}" onclick="act('chiplayout','b')">B · One screen</button></span></span></div>`;
+  if(L==="a"){
+    const tabs=[["plan","Plan"],["build","Team Builder"],["history","History"]];
+    const tk=tabs.some(([k])=>k===S.chipTab)?S.chipTab:"plan";
+    const body=tk==="build"?builder
+      :tk==="history"?`<div class="cx-subbar">${histSeg}</div>${histBody}`
+      :`<div class="cx-plan"><div class="cx-rail">${left.map(k=>chipRow(k,{act:"chipsel",sel,plan:false})).join("")}</div>
+        <div class="cx-detail">${sel?rep("chsel","target","Gain by Week","Each bar is the points the chip adds that week on the Planner's team score. Hatched bars include Ben Crellin's forecast blanks or doubles, weighted for how likely they are. Click any bar to plan the chip for that week.",bwRow(sel),{wide:true}):""}
+          ${plans.length?rep("chplans","layers","Second-Half Chip Plans","Whole second-half plans with one chip per week. A Bench Boost or Triple Captain within five weeks of a Wildcard is scored on the Wildcard squad. Use sets every chip in the plan.",plansCompact,{wide:true}):""}</div></div>`;
+    return `<div class="cx">${head}<div class="fcgrid cx-figs">${figs}</div>${roadmap}
+      <div class="cx-tabs">${tabs.map(([k,n])=>`<button class="${tk===k?"on":""}" onclick="act('chiptab','${k}')">${n}</button>`).join("")}</div>${body}</div>`;
+  }
+  /* B: one screen */
+  const pop=S.chipPop==="build"?modalHTML("Team Builder",builder,{wide:true,close:"chippopclose"})
+    :S.chipPop==="history"?modalHTML("Chip History",histBody,{wide:true,close:"chippopclose",ctl:histSeg})
+    :S.chipPop&&left.includes(S.chipPop)?modalHTML(chipKeyName(S.chipPop),rep("chsel","target","Gain by Week","Each bar is the points the chip adds that week on the Planner's team score. Hatched bars include Ben Crellin's forecast, weighted for how likely. Click any bar to plan the chip for that week.",bwRow(S.chipPop),{wide:true}),{wide:true,close:"chippopclose"}):"";
+  return `<div class="cx">${head}<div class="fcgrid cx-figs">${figs}</div>${roadmap}
+    <div class="cx-one"><div>${rep("chleft","target","Chips Left","Best week, its gain on the Planner's team score, and every week's gain as a mini chart. Click a chip for its full chart, or Plan to set it.",
+      left.map(k=>chipRow(k,{act:"chippop",plan:true,mini:true})).join("")||`<p class="note">No chips left this season.</p>`,{wide:true})}</div>
+      <div>${plans.length?rep("chplans","layers","Second-Half Plans","Whole second-half plans with one chip per week. Use sets every chip in the plan.",plansCompact,{wide:true}):""}
+        <div class="cx-launch"><button class="cx-big" onclick="act('chippop','build')">${lic("users",18)}<span><b>Team Builder</b><i>Free Hit and Wildcard teams for any week</i></span></button>
+          <button class="cx-big" onclick="act('chippop','history')">${lic("trophy",18)}<span><b>History</b><i>How well you picked, every season, rivals</i></span></button></div></div></div>
+    ${pop}</div>`;
 }
 /* the season label for this season, "2026/27" */
 function curSeasonLabel(){const y=Number(FEED_SEASON)||2027;return `${y-1}/${String(y).slice(2)}`;}
