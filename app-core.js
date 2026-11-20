@@ -249,7 +249,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.0.2";
+const APP_VERSION="13.0.3";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -898,9 +898,12 @@ async function loadAll(force,opts){
    loads, before the model is rebuilt. It is a picture of the page only: clicks
    are held off (see .booting) until the real render replaces it. */
 function savePaint(){
+  if(typeof document==="undefined"||!document.getElementById)return;   // the server's model has no page
   const app=document.getElementById("app");
   if(S.loading||S.statusPending||S.booting)return;
-  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint",{tab:S.tab,html:app.innerHTML,at:Date.now()});
+  /* One picture per page (20 Nov 2026), so opening any page seen before
+     shows it at once rather than a loading screen. */
+  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint:"+S.tab,{tab:S.tab,html:app.innerHTML,at:Date.now()});
 }
 
 /* ============================================================
