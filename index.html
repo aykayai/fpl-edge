@@ -651,30 +651,6 @@ input[type=range]{padding:0;accent-color:var(--mint);border:none;background:none
 .tag.c{background:var(--cream);color:var(--ink)}.tag.v{background:var(--cyan);color:var(--ink)}
 .tag.s{background:var(--ink3);color:var(--mute)}
 .mini{padding:3px 7px;font-size:10.5px;border-radius:6px;margin-left:3px}
-.pcwrap{position:fixed;inset:0;z-index:200;background:rgba(4,6,9,.78);display:flex;
- align-items:center;justify-content:center;padding:14px;backdrop-filter:blur(3px)}
-.pcard{position:relative;width:100%;max-width:380px;max-height:90vh;overflow:auto;
- background:var(--ink2);border:1px solid var(--line);border-radius:16px;padding:18px;
- box-shadow:0 24px 60px rgba(0,0,0,.65)}
-.pcx{position:absolute;top:12px;right:12px;padding:4px 10px;border-radius:8px}
-.pchead{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px}
-.pcimgwrap{width:88px;height:112px;border-radius:14px;overflow:hidden;background:
- linear-gradient(180deg,var(--ink3),var(--ink));display:flex;align-items:flex-end;
- justify-content:center;margin-bottom:8px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
-.pcname{font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:28px;line-height:1.02}
-.pcimg{width:88px;height:112px;object-fit:cover;object-position:top center;display:block}
-.pcgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
-.pcs{background:var(--ink);border:1px solid var(--ink3);border-radius:10px;padding:8px 9px}
-.pcs .k{display:block;font-size:10px;color:var(--mute);font-weight:800}
-.pcs .v{display:block;font-family:'Geist',system-ui,sans-serif;font-weight:800;font-size:18px;margin-top:2px}
-.pclab{margin-top:16px;font-size:10px;color:var(--mute);font-weight:800}
-.pcbars{display:flex;gap:8px;align-items:flex-end;margin-top:8px}
-.pcbar{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px}
-.pcbar .pv{font-size:10.5px;font-family:'Geist Mono',ui-monospace,monospace;color:var(--cream)}
-.pcbar .bar{width:100%;border-radius:5px 5px 0 0;min-height:4px}
-.pcbar .op{font-size:10px;color:var(--cream)}
-.pcbar .gw{font-size:10px;color:var(--mute)}
-@media(max-width:520px){.pcard{padding:14px;max-width:340px}}
 /* The set-piece and signal groups are separate spans, so nesting flex gaps
    made the join between the two groups wider than the gaps inside them.
    Flattening with `display:contents` puts every badge in one flex row. */
@@ -1091,7 +1067,7 @@ svg.chart circle[data-tip]{cursor:pointer}
  font:italic 700 10px/1 Georgia,serif;flex:none}
 .infobox{margin:8px 0 0;padding:10px 12px;background:var(--ink2);border:1px solid var(--ink3);border-radius:9px;font-size:11.5px;color:var(--mute);line-height:1.6}
 /* F87 (13 Oct 2026): labels read at 11px; nothing on the page under 10px */
-.stat .k,.ps .k,.pcs .k,.pclab,.benchbar .lb,/* F88: the controls used most get a 40px target */
+.stat .k,.ps .k,.benchbar .lb,/* F88: the controls used most get a 40px target */
 .phead button,.chipbtn,button.pri{min-height:40px}
 .benchbar .lb{min-height:0}
 .navlink{min-height:36px;display:inline-flex;align-items:center}
@@ -1148,6 +1124,64 @@ svg.chart circle[data-tip]{cursor:pointer}
 .fxdbl .fxc{height:11px;font-size:8px;border-radius:3px}.fxdbl .fxc:after{height:2px}.fxdbl .fxc.aw:before{display:none}
 .fxc.sm,.sm .fxc{width:34px;height:19px;font-size:9.5px}
 .fxc.key{width:20px;height:18px}
+
+/* Player card, the Dossier (20 Nov 2026, Andy's pick) */
+.pk2{display:grid;grid-template-columns:330px minmax(0,1fr);gap:14px;height:100%}
+.pkhero{position:relative;border-radius:18px;overflow:hidden;isolation:isolate;padding:18px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.pkhero:before{content:"";position:absolute;inset:0;z-index:-2;background:linear-gradient(170deg,var(--k) 0%,color-mix(in srgb,var(--k) 40%,#0E0E0E) 55%,#141414 100%)}
+.pkhero:after{content:"";position:absolute;inset:0;z-index:-1;background:repeating-linear-gradient(115deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px)}
+.pkpos{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75)}
+.pkfirst{font-size:18px;color:rgba(255,255,255,.85)}
+.pklast{font-size:34px;font-weight:750;letter-spacing:-.02em;line-height:1}
+.pkph{display:flex;justify-content:center;flex:1;min-height:90px;max-height:200px}
+.pkph img{height:100%;max-height:200px;filter:drop-shadow(0 12px 20px rgba(0,0,0,.5))}
+.pkph .pkfb{place-items:center}
+.pkpr{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.pkprice{font:700 28px 'Geist Mono',monospace;letter-spacing:-.02em}
+.pkpc{font-size:12px;border-radius:999px;padding:3px 10px;background:rgba(0,0,0,.35)}
+.pkwarn{font-size:12.5px;border-radius:10px;padding:6px 10px;background:rgba(245,184,65,.14);color:#F5B841}
+.pkkv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pkkv>div{background:rgba(0,0,0,.28);border-radius:10px;padding:8px 10px;min-width:0}
+.pkkv>div.wide{grid-column:1/-1}
+.pkkv span{display:block;font-size:11px;color:rgba(255,255,255,.6)}
+.pkkv b{display:block;font:700 16px 'Geist Mono',monospace}.pkkv b.txt{font:600 12.5px 'Geist',sans-serif}
+.pkkv em{display:block;font-style:normal;font-size:10.5px;color:rgba(255,255,255,.45)}
+.pkkv.tot{grid-template-columns:repeat(3,minmax(0,1fr))}.pkkv.tot>div{background:#1B1B1B}.pkkv.tot span{color:#8A8A8A}
+.pkright{display:flex;flex-direction:column;gap:14px;min-height:0;min-width:0}
+.pktiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.pktile{background:#151515;border-radius:14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);padding:12px 14px;min-width:0}
+.pktile span{display:block;font-size:11.5px;color:#8A8A8A}
+.pktile b{display:block;font:700 22px 'Geist Mono',monospace;margin:4px 0 2px;white-space:nowrap}.pktile b.mdl{color:var(--mint)}
+.pktile em{font-style:normal;font-size:11px;color:#6E6E6E}
+.pkpanel{background:#151515;border-radius:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);padding:14px 16px;min-height:0;min-width:0}
+.pkh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:14px;font-weight:600;margin-bottom:10px}.pkh span{font-size:11.5px;color:#6E6E6E;font-weight:400}
+.pktlw{flex:none;height:clamp(180px,27vh,280px);display:flex;flex-direction:column}
+.pktl{flex:1;display:grid;gap:6px;align-items:stretch;min-height:0}
+.pktl .c{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;min-height:0}
+.pktl .bw{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;padding-top:2px}
+.pktl .v{font:600 11.5px 'Geist Mono',monospace;color:#CFCFCF}
+.pktl .b{width:100%;border-radius:5px 5px 2px 2px;flex:none;max-height:calc(100% - 18px)}
+.pktl .lab{font-size:10.5px;color:#8A8A8A;white-space:nowrap}
+.pktl .c.pred .v{color:var(--mint)}
+.pktl .c.pred .b{background:repeating-linear-gradient(135deg,rgba(61,220,151,.55) 0 3px,rgba(61,220,151,.25) 3px 6px);box-shadow:inset 0 0 0 1px rgba(61,220,151,.6)}
+.pktl .c .sm .fxc{width:100%;min-width:30px}
+.pkrow3{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr) minmax(0,1.45fr);gap:14px}
+.pkrow3>.pkpanel{overflow:hidden}
+.pkhistw{display:flex;flex-direction:column}
+.pkhs{flex:1;min-height:0;overflow:auto;margin:0 -6px;padding:0 6px}
+.pkhist{width:100%;border-collapse:collapse;font-size:12.5px}
+.pkhist th{position:sticky;top:0;background:#151515;font-weight:500;color:#6E6E6E;text-align:right;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.pkhist th:nth-child(-n+2){text-align:left}
+.pkhist td{text-align:right;padding:5px 8px;font-family:'Geist Mono',monospace;color:#BDBDBD;border-bottom:1px solid rgba(255,255,255,.035);white-space:nowrap}
+.pkhist td:nth-child(-n+2){text-align:left;font-family:'Geist',sans-serif}
+.pkhist td.pp{font-weight:700}
+.pkhist tbody tr:hover td{background:rgba(255,255,255,.03)}
+.pkpct{display:grid;grid-template-columns:minmax(0,120px) minmax(40px,1fr) 46px 34px;gap:8px 12px;align-items:center;font-size:12.5px}
+.pkpct .pkbar{display:block;height:7px;border-radius:99px;background:#232323;overflow:hidden}.pkpct .pkbar span{display:block;height:100%;border-radius:99px}
+.pkpct b{font:600 12.5px 'Geist Mono',monospace;text-align:right}.pkpct em{font-style:normal;font-size:11px;color:#6E6E6E;text-align:right}
+@media(max-width:1100px){.pktiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1250px) and (min-width:761px){.pkrow3{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);grid-template-rows:auto minmax(0,1fr)}.pkrow3>.pkpanel:nth-child(1){grid-area:1/1}.pkrow3>.pkpanel:nth-child(2){grid-area:2/1}.pkrow3>.pkhistw{grid-area:1/2/3/3}}
+@media(max-width:760px){.pk2,.pkrow3{grid-template-columns:1fr;height:auto}.pktlw{height:250px;overflow-x:auto}.pkhs{max-height:320px}.pktl{min-width:560px}.pkpct{grid-template-columns:110px minmax(50px,1fr) 46px 34px}}
 </style>
 </head>
 <body>
@@ -1161,13 +1195,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.4.1"></script>
-<script src="./app-squad.js?v=13.4.1"></script>
-<script src="./app-render.js?v=13.4.1"></script>
-<script src="./app-odds.js?v=13.4.1"></script>
-<script src="./app-tracker.js?v=13.4.1"></script>
-<script src="./app-main.js?v=13.4.1"></script>
-<script src="./app-scout.js?v=13.4.1"></script>
+<script src="./app-core.js?v=13.5.0"></script>
+<script src="./app-squad.js?v=13.5.0"></script>
+<script src="./app-render.js?v=13.5.0"></script>
+<script src="./app-odds.js?v=13.5.0"></script>
+<script src="./app-tracker.js?v=13.5.0"></script>
+<script src="./app-main.js?v=13.5.0"></script>
+<script src="./app-scout.js?v=13.5.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

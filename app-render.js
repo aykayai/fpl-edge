@@ -33,49 +33,80 @@ function posStats(p){
   return[["Box/90",n(w?w.box90:null,1)],["SoT/90",n(w?w.sot90:null,1)],
     ["BC missed",n(w?w.bcm:null,0)],["Conversion",pc(conv)]];
 }
+/* Player card (20 Nov 2026, Andy picked the Dossier): a full-screen pop-up.
+   Left, the hero panel: photo on club colour, name, price and tonight's
+   change, signals, availability, ownership and rivals, what he cost and sells
+   for if he is yours, set pieces. Right: the model's figures and FPL's with
+   FPL's own ranks in his position; his last ten scores and the model's next
+   five on one timeline with fixture chips; percentiles against regular
+   starters in his position; season totals. Opens from any name, and from a
+   shirt on the Planner pitch. */
 function playerCardHTML(){
   const p=S.model.players.find(x=>x.id===S.cardId);
   if(!p)return "";
-  const g=VG();
-  const w=ws(String(p.code||""),p.pos,38,p.price,teamMaxPrice(p.team));
-  const pu=purchaseOf(p), buy=pu.paid, owns=(S.squad||[]).includes(p.id);
-  const five=[];for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];
-    five.push({e,pts:q&&!q.blank?q.pts:0,f:q&&q.fixtures[0]});}
-  const mx=Math.max(1,...five.map(x=>x.pts));
-  const stat=(k,v,c)=>`<div class="pcs"><span class="k">${k}</span><span class="v" style="${c||""}">${v}</span></div>`;
-  return `<div class="pcwrap" onclick="act('card',0)">
-    <div class="pcard" onclick="event.stopPropagation()">
-      <button class="pcx" onclick="act('card',0)">✕</button>
-      <div class="pchead">
-        <span class="pcimgwrap">
-          <img class="pcimg" alt="" src="${imgSrc("player",p.code)}"
-            onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-          <span style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,72)}</span></span>
-        <div class="pcname">${esc(p.web_name)}</div>
-        <div class="note">${esc(p.teamFull||p.teamName)} · ${POS[p.pos]} · ${p.owned.toFixed(1)}% owned</div>
-        <div style="margin-top:7px">${sigHTML(p,g)}</div>
-      </div>
-      ${p.avail<1?`<div class="warn" style="margin:12px 0 0">${esc(p.news||"Fitness doubt")}${p.back?` · back ${esc(p.back)}`:""}${p.availAssumed?` · 50% to play${availTag(p)}`:""}</div>`:""}
-      <div class="pclab">Next five</div>
-      <div class="pcbars">${five.map(x=>{
-        const h=Math.max(5,Math.round(x.pts/mx*54));
-        const[b,c]=x.f?fdrCol(posDiff(p,x.f)):["var(--ink3)","var(--mute)"];
-        return `<span class="pcbar"><span class="pv">${x.pts.toFixed(1)}</span>
-          <span class="bar" style="height:${h}px;background:${b}"></span>
-          <span class="op">${x.f?`${x.f.home?"":"@"}${esc(String(x.f.opp).slice(0,3).toUpperCase())}`:"—"}</span>
-          <span class="gw">GW${x.e}</span></span>`;}).join("")}</div>
-      <div class="pcgrid">
-        ${owns?stat("Bought",`£${buy.toFixed(1)}`+(pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):"")):stat("Price",`£${p.price.toFixed(1)}`)}
-        ${stat("Sells for",`£${sellPrice(p).toFixed(1)}`,
-          sellPrice(p)>buy?"color:var(--mint)":sellPrice(p)<buy?"color:var(--red)":"")}
-        ${stat("Form",p.form.toFixed(1)+formTag(p))}
-        ${stat("xMins",p.xMins+"′"+minsTag(p))}
-      </div>
-      <div class="pclab">${POS[p.pos]} detail</div>
-      <div class="pcgrid">${posStats(p).map(([k,v])=>stat(k,v)).join("")}</div>
-      ${setPieceText(p)?`<div class="pclab">Set pieces</div>
-        <div style="padding-top:6px;font-size:12.5px">${esc(setPieceText(p))}</div>`:""}
+  const G=S.model.next.id,s=(S.players.find(x=>x.id===p.id)||{}).stats||{};
+  const n=S.model.players.filter(x=>x.pos===p.pos).length,rk=r=>r?`${r} of ${n}`:"";
+  const posN=["","Goalkeeper","Defender","Midfielder","Forward"][p.pos];
+  const kit=(KITS[p.teamName]||KITS._d||{b:"#444"}).b;
+  const pu=purchaseOf(p),owns=(S.squad||[]).includes(p.id),sell=sellPrice(p);
+  const l=(typeof fplLive==="function"?fplLive(p):null)||{},pc=l.pcp;
+  const R=rivalOwn(),rv=R&&R.n?(R.own[p.id]||0):null;
+  const A=S.playerActuals||{},act=A[p.id]||A[String(p.id)]||{},pts=e=>{const v=act[e]??act[String(e)];return v==null?null:+v;};
+  const team=(S.model.teams||S.teams).find(t=>t.id===p.team);
+  const opp=e=>{const f=(S.model.byEv[e]||[]).find(f=>f.ht===team||f.at===team);return f?(f.ht===team?f.at:f.ht):null;};
+  const sp=setPieceText(p);
+  const pcTxt=pc==null?"":`<span class="pkpc" style="color:${pc>0?"var(--mint)":pc<0?"#FF8FAB":"#BDBDBD"}">${pc>0?"▲":pc<0?"▼":""} ${Math.abs(Math.round(pc))}% to a ${pc>=0?"rise":"fall"} tonight</span>`;
+  const hero=`<div class="pkhero" style="--k:${kit}">
+    <div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
+    <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
+    <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
+    <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
+    ${sigHTML(p,G)?`<div>${sigHTML(p,G)}</div>`:""}
+    ${p.avail<1?`<div class="pkwarn">${esc(p.news||"Fitness doubt")}${p.back?` · back ${esc(p.back)}`:""}${p.availAssumed?` · 50% to play${availTag(p)}`:""}</div>`:""}
+    <div class="pkkv">
+      <div><span>Selected by</span><b>${(+s.selected_by_percent||p.owned).toFixed(1)}%</b><em>${rk(s.selected_rank_type)}</em></div>
+      <div><span>Your rivals</span><b>${rv!=null?`${rv} of ${R.n}`:"–"}</b><em>own him</em></div>
+      ${owns?`<div><span>Bought</span><b>£${pu.paid.toFixed(1)}${pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):""}</b><em>your price</em></div>
+      <div><span>Sells for</span><b style="color:${sell>pu.paid?"var(--mint)":sell<pu.paid?"#FF8FAB":"inherit"}">£${sell.toFixed(1)}</b><em>if sold now</em></div>`:""}
+      <div class="wide"><span>Set pieces</span><b class="txt">${esc(sp||"None")}</b></div>
     </div></div>`;
+  const tile=(l2,v,e2,m)=>`<div class="pktile"><span>${l2}</span><b${m?' class="mdl"':""}>${v}</b><em>${e2||"&nbsp;"}</em></div>`;
+  const tiles=tile(`xPts GW${G}–${Math.min(38,G+4)}`,hPts(p,G,5).toFixed(1),"model",1)+tile("xMins",Math.round(p.xMins||0)+"′"+minsTag(p),"model",1)
+    +tile("Form",(+s.form||p.form||0).toFixed(1)+formTag(p),rk(s.form_rank_type))+tile("Pts / Match",s.points_per_game??p.ppg,rk(s.points_per_game_rank_type))
+    +tile("Total Pts",s.total_points??p.total,`bonus ${s.bonus??p.bonus}`)+tile("ICT Index",s.ict_index??p.ict,rk(s.ict_index_rank_type));
+  /* last ten played and the model's next five */
+  const past=[],fut=[];
+  for(let e=Math.max(1,G-10);e<G;e++)past.push({e,o:opp(e),v:pts(e)});
+  for(let e=G;e<G+5&&e<=38;e++)fut.push({e,v:hPts(p,e,1)});
+  const mx=Math.max(8,...past.map(x=>x.v||0),...fut.map(x=>x.v));
+  const pc2=v=>v==null?"#1C1C1C":v>=10?"#2BD47D":v>=6?"#1E7A4D":v>=3?"#3A3A3A":"#4A1F2B";
+  const tl=past.map(x=>`<div class="c"><span class="bw"><span class="v">${x.v??"–"}</span><span class="b" style="height:${Math.max(2,100*(x.v||0)/mx)}%;background:${pc2(x.v)}"></span></span><span class="lab">${x.o?esc(x.o.short):"–"}</span><span class="lab">GW${x.e}</span></div>`).join("")
+    +fut.map(x=>`<div class="c pred"><span class="bw"><span class="v">${x.v.toFixed(1)}</span><span class="b" style="height:${Math.max(2,100*x.v/mx)}%"></span></span><span class="sm">${fxGW(p,x.e)}</span><span class="lab">GW${x.e}</span></div>`).join("");
+  const keys=CP_SETS[p.pos]||CP_SETS[0];
+  const pct=keys.map(k=>{const r=cpPr(k,p),v=cpVal(k,p),col=r?(r.pct>=90?"var(--mint)":r.pct>=70?"#9BE7C4":r.pct>=40?"#6E6E6E":"#FF8FAB"):"#333";
+    return `<span title="${esc(CP_ST[k][1])}">${CP_ST[k][0]}</span><span class="pkbar"><span style="width:${r?Math.max(3,r.pct):0}%;background:${col}"></span></span><b>${v==null?"–":CP_ST[k][2](v)}</b><em>${r?cpOrd(r.pct):""}</em>`;}).join("");
+  const tot=[["Minutes",s.minutes],["Starts",s.starts],["Goals",s.goals_scored],["Assists",s.assists],["xG",(+s.expected_goals||0).toFixed(1)],["xA",(+s.expected_assists||0).toFixed(1)],
+    p.pos<=2?["Clean sheets",s.clean_sheets]:["Bonus",s.bonus],p.pos===1?["Saves",s.saves]:["DefCon",s.defensive_contribution],p.pos<=2?["Conceded",s.goals_conceded]:["BPS",s.bps]]
+    .map(([k,v])=>`<div><span>${k}</span><b>${v??"–"}</b></div>`).join("");
+  /* every gameweek played this season, latest first (a double sums its two matches) */
+  const hrows=[];
+  for(let e=G-1;e>=1;e--){const ms=((S.hist||{})[p.code]||[]).filter(r=>r.tag==="now"&&r.gw===e),o=opp(e),v=pts(e);
+    if(!ms.length&&v==null&&!o)continue;
+    const fx=(S.model.byEv[e]||[]).filter(f=>f.ht===team||f.at===team).map(f=>`${esc((f.ht===team?f.at:f.ht).short)} (${f.ht===team?"H":"A"})`).join(", ");
+    const sm=k=>ms.reduce((a,r)=>a+(+r[k]||0),0),mins=sm("mins");
+    const third=p.pos===1?["Saves",sm("sv")]:p.pos===2?["CS",mins>=60&&ms.length&&ms.every(r=>!(+r.tgc))?1:0]:["SoT",sm("sot")];
+    hrows.push({e,fx:fx||"–",v,mins,g:sm("g"),a:sm("a"),xg:sm("xg"),xa:sm("xa"),t:third,dc:sm("dc")});}
+  const third=hrows[0]?hrows[0].t[0]:(p.pos===1?"Saves":p.pos===2?"CS":"SoT");
+  const hist=`<div class="pkpanel pkhistw"><div class="pkh">Game History<span>this season, latest first</span></div><div class="pkhs"><table class="pkhist"><thead><tr><th>GW</th><th>Opponent</th><th>Pts</th><th>Mins</th><th>G</th><th>A</th><th>xG</th><th>xA</th><th>${third}</th><th>DefCon</th></tr></thead><tbody>${
+    hrows.map(r=>`<tr><td>GW${r.e}</td><td>${r.fx}</td><td class="pp" style="color:${r.v==null?"#5A5A5A":r.v>=10?"var(--mint)":r.v>=6?"#9BE7C4":r.v<3?"#FF8FAB":"#E4E4E4"}">${r.v??"–"}</td><td>${r.mins||"–"}</td><td>${r.g}</td><td>${r.a}</td><td>${r.xg.toFixed(2)}</td><td>${r.xa.toFixed(2)}</td><td>${r.t[1]}</td><td>${r.dc}</td></tr>`).join("")
+    ||'<tr><td colspan="10" style="text-align:left;color:#6E6E6E">No league matches yet this season.</td></tr>'}</tbody></table></div></div>`;
+  const body=`<div class="pk2">${hero}<div class="pkright">
+    <div class="pktiles">${tiles}</div>
+    <div class="pkpanel pktlw"><div class="pkh">Points: Last ${past.length} Played, Next ${fut.length} Predicted<span>bars coloured by points · striped = predicted · chips = difficulty for him</span></div><div class="pktl" style="grid-template-columns:repeat(${past.length+fut.length},minmax(0,1fr))">${tl}</div></div>
+    <div class="pkrow3"><div class="pkpanel"><div class="pkh">Against Other ${posN}s<span>percentile among regular starters</span></div><div class="pkpct">${pct}</div></div>
+      <div class="pkpanel"><div class="pkh">This Season<span>totals</span></div><div class="pkkv tot">${tot}</div></div>${hist}</div>
+  </div></div>`;
+  return modalHTML(`${esc(p.web_name)} · ${esc(p.teamName)}`,body,{wide:true,close:"card",cls:"pkcard"});
 }
 
 function pitchHTML(){
