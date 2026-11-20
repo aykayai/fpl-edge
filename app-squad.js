@@ -1239,14 +1239,9 @@ function cardHTML(p,bench,ctx){
   if(g<S.model.next.id){
     /* Historical gameweek: show only the opponent for that week, not the next 3. */
     const w=p.gw[g];
-    if(w&&!w.blank&&w.fixtures[0]){const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
-      n3=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${g} · ${f.home?"home":"away"}">${esc(f.opp.slice(0,3))}</span>`;
-    }else n3=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;
+    n3=fxRun(fxGW(p,g),"sm");
   }else{
-    for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
-      if(!w||w.blank){n3+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
-      const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
-      n3+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}" title="GW${e} · ${f.home?"home":"away"} · difficulty ${posDiff(p,f)}">${esc(f.opp.slice(0,3))}</span>`;}
+    n3=fxNext(p,g,3,"sm");
   }
   const sub=(C?C.subFrom:S.subFrom)===p.id;
   /* Bench players show their sub-order number; tapping ⇄ mid-substitution receives

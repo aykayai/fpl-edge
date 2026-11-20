@@ -141,8 +141,8 @@ try {
     check(!doc.querySelector(".cptray"), "the tray hides while the pop-up is open");
     check(!!doc.querySelector(".modal .mbox.cpfull") && !!doc.querySelector(".cprgrid .cpcol .cpradsvg svg"), "the compare pop-up is the full-screen panel with the radar in its own column");
     g.act("pcmpview", "stats"); md = doc.querySelector(".modal");
-    check(md?.querySelectorAll(".cphero").length === 3 && md.querySelectorAll(".cphero .cpsig").length === 3 && /Owned by Rivals/.test(md.textContent) && !!md.querySelector(".cpline svg polyline"),
-      "Stats view: hero cards with signals, owned by rivals and the points line chart");
+    check(md?.querySelectorAll(".cphero").length === 3 && md.querySelectorAll(".cphero .cpsig").length === 3 && /Owned by Rivals/.test(md.textContent) && !md.querySelector(".cpline") && md.querySelectorAll(".cpfxrow .fxrun").length === 3,
+      "Stats view: hero cards with signals, owned by rivals, a fixtures row and no line chart (it lives on the radar)");
     const firstWin = [...md.querySelector(".cprows.cpout")?.querySelectorAll(".cprc") || []].slice(0, 3).findIndex(c => c.classList.contains("win"));
     check(firstWin === mids.indexOf(top), "Stats view marks the best projection in green", firstWin);
     g.act("pcmpclose"); g.act("tickclear");
@@ -154,6 +154,17 @@ try {
     const cpRules = cssText.match(/\.cp[^{]*\{[^}]*\}/g) || [];
     const stripes = cpRules.filter(x => /inset\s+\d+px\s+0\s+0/.test(x) || /border-left\s*:/.test(x));
     check(cpRules.length > 20 && stripes.length === 0, `no coloured edge stripes in the compare styles (${cpRules.length} rules)`, stripes.join(" "));
+    show("table");
+  }
+  /* fixture chips (20 Nov 2026): one strip design everywhere, no old pills */
+  {
+    show("table");
+    const runs = doc.querySelectorAll(".pdt .fxrun"), cells = doc.querySelectorAll(".pdt .fxrun .fxc");
+    const bands = new Set([...cells].map(c => [...c.classList].find(k => /^d[1-5]$/.test(k))).filter(Boolean));
+    check(runs.length > 0 && cells.length >= runs.length * 5 && bands.size >= 3 && !doc.querySelector(".fdrpill,.fx5,.fxrow"),
+      `Player Data's Next 5 uses the one fixture strip (${runs.length} runs, difficulty bands ${[...bands].sort().join(" ")})`);
+    show("squad");
+    check(doc.querySelectorAll(".fxrun .fxc").length > 0 && !doc.querySelector(".fdrpill,.fx5,.fxrow"), "the Planner uses the same fixture strip");
     show("table");
   }
   g.act("pdless");

@@ -62,7 +62,7 @@ function playerCardHTML(){
         const[b,c]=x.f?fdrCol(posDiff(p,x.f)):["var(--ink3)","var(--mute)"];
         return `<span class="pcbar"><span class="pv">${x.pts.toFixed(1)}</span>
           <span class="bar" style="height:${h}px;background:${b}"></span>
-          <span class="op" style="${x.f&&!x.f.home?"font-style:italic":""}">${x.f?esc(x.f.opp):"—"}</span>
+          <span class="op">${x.f?`${x.f.home?"":"@"}${esc(String(x.f.opp).slice(0,3).toUpperCase())}`:"—"}</span>
           <span class="gw">GW${x.e}</span></span>`;}).join("")}</div>
       <div class="pcgrid">
         ${owns?stat("Bought",`£${buy.toFixed(1)}`+(pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):"")):stat("Price",`£${p.price.toFixed(1)}`)}
@@ -114,11 +114,7 @@ function filtered(scope){
   }
   return out;
 }
-const fix3=(p,g)=>{let h='';const LENS=p2=>p2.pos<=2?'def':'att';for(let e=g;e<g+3&&e<=38;e++){const q=p.gw[e];
-  if(!q||q.blank){h+='<span class="fdrpill" style="background:var(--ink3);color:var(--mute);font-size:10px;padding:1px 4px">—</span>';continue;}
-  const f=q.fixtures[0],[b,c]=fdrCol(p.pos<=2?(f.diffDef??f.diff):(f.diffAtt??f.diff));
-  h+=`<span class="fdrpill" style="background:${b};color:${c};font-size:10px;padding:1px 4px">${esc(f.opp.slice(0,3))}</span>`;}
-  return `<span style="display:inline-flex;gap:2px">${h}</span>`;};
+const fix3=(p,g)=>fxNext(p,g,3,"sm");
 /* F35: one expression for each figure Player Data shows, so its sort and
    the Transfers radar read the same number the cell prints. The CS % sort
    read p.csRate, which model players never carry, so it sorted on 0; the
@@ -701,8 +697,8 @@ function teamGridHTML(){
     let cells="";
     for(let e=g;e<=38;e++){const xs=tgFx(r.t,e);
       cells+=`<td class="tg-gw${e<=g2?" in":""}">${xs.length?xs.map(x=>{const d=tgBand(r.t,x,lens),[b,c]=pdFdr(d);
-        return `<span class="tg-fx${x.home?"":" aw"}" style="background:${b};color:${c}" onclick="act('tmatch',${e})" title="GW${e}: ${esc(x.opp.name)} ${x.home?"(home)":"(away)"} · ${d}">${esc(x.opp.short)}</span>`;}).join("")
-        :'<span class="tg-fx bl" title="No match this gameweek">—</span>'}</td>`;}
+        return fxChip(x.opp.short,x.home,d,{cls:"tg-fx",attr:` onclick="act('tmatch',${e})"`,title:`GW${e}: ${x.opp.name} ${x.home?"(home)":"(away)"} · difficulty ${d}`});}).join("")
+        :fxBlank("No match this gameweek","tg-fx")}</td>`;}
     const open=S.tOpen===r.t.short;
     const num=k=>`<td class="tg-n${sk===k?" act":""}${k==="all"?" tg-gap":""}">${tgFmt(TG_KEY[k],r.w[TG_KEY[k]])}</td>`;
     let tr=`<tr class="tg-r${open?" open":""}" data-club="${r.t.short}">
@@ -779,7 +775,7 @@ function tgTargetPopHTML(key){
     const band=d.mode==="own-att"?tgBand(r.t,x,"att"):d.mode==="own-def"?tgBand(r.t,x,"def")
       :tgBand(x.opp,{opp:r.t,home:!x.home},d.mode==="vs-att"?"def":"att");
     const[b,c]=pdFdr(band),home=vs?!x.home:x.home;
-    return `<i class="${home?"":"aw"}" style="background:${b};color:${c}" title="GW${x.e}: ${esc(vs?x.opp.name+(home?" at home to ":" away at ")+r.t.name:(home?"v ":"at ")+x.opp.name)}">${esc(x.opp.short)}</i>`;}).join("")+(r.fx.length>6?`<em>+${r.fx.length-6}</em>`:"");
+    return fxChip(x.opp.short,home,band,{title:`GW${x.e}: ${vs?x.opp.name+(home?" at home to ":" away at ")+r.t.name:(home?"v ":"at ")+x.opp.name}`});}).join("")+(r.fx.length>6?`<em>+${r.fx.length-6}</em>`:"");
   const ctl=`<span class="hz">${[[1,"Next GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS"]].map(([k,n])=>`<button class="${String(win)===String(k)?"on":""}" onclick="act('twin','${k}')">${n}</button>`).join("")}</span>`;
   const body=`<p class="note" style="margin:0 0 10px">${d.why} ${vs?"Fixtures show the clubs that face them, coloured for those clubs' players.":"Fixtures are their own, coloured for their players."}</p>
     <table class="tg-pt"><thead><tr><th></th><th class="l">Club</th><th>${d.unit}</th><th class="l">${vs?"Faced by":"Fixtures"}</th></tr></thead><tbody>
@@ -1256,10 +1252,7 @@ function chipCard(p,t,showActual){
       <div class="pv">${hasActual?act1.toFixed(1):proj.toFixed(1)}</div>
       ${hasActual?`<div class="pv2">proj ${proj.toFixed(1)} <span style="font-weight:700;color:${diff>=0?"#0f5132":"#7a1f1f"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`:""}
       <div class="fx">${f0?`<span style="${f0.home?"":"font-style:italic"}">${esc(f0.opp)} (${f0.home?"H":"A"})</span>`:"No fixture"}</div></div>
-    <div class="next3">${(()=>{let h="";for(let e=g;e<g+3&&e<=38;e++){const w=p.gw[e];
-      if(!w||w.blank){h+=`<span style="background:var(--ink3);color:var(--mute)">—</span>`;continue;}
-      const f=w.fixtures[0],[b,c]=fdrCol(posDiff(p,f));
-      h+=`<span style="background:${b};color:${c};${f.home?"":"font-style:italic"}">${esc(f.opp.slice(0,3))}</span>`;}return h;})()}</div>
+    <div class="next3">${fxNext(p,g,3,"sm")}</div>
     <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
 }
 
@@ -1517,13 +1510,7 @@ function aroundOwn(p,mode){
   if(mode==="rank"){const N=S.neighbours;return N&&N.n?{k:N.own[p.id]||0,n:N.n}:null;}
   const R=rivalOwn();return R&&R.n?{k:R.own[p.id]||0,n:R.n}:null;
 }
-function fixPills(p,g,n){
-  let h="";
-  for(let e=g;e<g+n&&e<=38;e++){const q=p.gw[e];
-    if(!q||q.blank||!q.fixtures.length){h+=`<span class="fdrpill blankpill">—</span>`;continue;}
-    h+=q.fixtures.map(f=>fdrPill(f.opp,f.home,posDiff(p,f),{short:true,tiny:true})).join("");}
-  return `<span class="fxrow">${h}</span>`;
-}
+function fixPills(p,g,n){return fxNext(p,g,n);}
 /* the old Player Data table, kept whole as the Stats view */
 /* tick-to-compare: up to five players side by side as figure cards */
 /* Compare pop-up (20 Nov 2026, Andy). Radar view by default: the Scout's
@@ -1671,13 +1658,15 @@ function playerCompareHTML(){
     const heroes=ps.map((p,i)=>`<div class="cphero" style="--k:${cpKit(p)}">${cpPhoto(p,"cpph",96)}<span class="cpdot" style="background:${CP_COL[i]}"></span>
       <div class="cpht"><div class="cphn">${pName(p,"big")}</div><div class="cphm">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}%</div><div class="cpsig">${sigHTML(p,g)}</div></div>
       <div class="cpht"><div class="cpbig">${xp(p).toFixed(1)}</div><div class="cpbl">xPts ${win}</div></div></div>`).join("");
-    const table=`<div class="cprows" style="${cols}"><div class="cpnote">Bars: percentile among regular starters in his position. Green: best of the group.</div>${heroes}</div>
-      <div class="cpsec">Outlook</div><div class="cprows cpout" style="${cols}">${outl}${rivRow}</div>
-      <div class="cpsec">${S2.name}</div><div class="cprows" style="${cols}">${stats}</div>`;
     const tot=wins.reduce((a,b)=>a+b,0),lead=wins.indexOf(Math.max(...wins));
-    const vbar=tot?`<div class="cppanel cpwins"><span><b>${esc(ps[lead].web_name)}</b> wins ${wins[lead]} of ${tot} rows</span><span class="cpwbar">${ps.map((p,i)=>`<span style="flex:${wins[i]||0.0001};background:${CP_COL[i]}"></span>`).join("")}</span><span class="cpleg">${ps.map((p,i)=>`<span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)} ${wins[i]}</span>`).join("")}</span></div>`:"";
-    const fxl=`<div class="cppanel cpfxl"><div class="cpph2"><b>Next 5 Fixtures</b></div>${ps.map((p,i)=>`<div class="cpfxr"><span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)}</span>${fixPills(p,g,5)}</div>`).join("")}</div>`;
-    body=`<div class="cpsgrid"><div class="cpcol cpscroll"><div class="cpstats">${table}</div></div><div class="cpcol">${vbar}${lines(440,190)}${fxl}</div></div>`;
+    const vbar=tot?`<div class="cpwins"><span><b>${esc(ps[lead].web_name)}</b> wins ${wins[lead]} of ${tot} rows</span><span class="cpwbar">${ps.map((p,i)=>`<span style="flex:${wins[i]||0.0001};background:${CP_COL[i]}"></span>`).join("")}</span><span class="cpleg">${ps.map((p,i)=>`<span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)} ${wins[i]}</span>`).join("")}</span></div>`:"";
+    const fxr=ps.map(p=>`<div class="cprc">${fxNext(p,g,5)}</div>`).join("");
+    body=`<div class="cpscroll cpsfill"><div class="cpstats">
+      <div class="cprows" style="${cols}"><div class="cpnote">Bars: percentile among regular starters in his position. Green: best of the group.</div>${heroes}</div>
+      ${vbar?`<div class="cprows" style="${cols}"><div></div><div style="grid-column:2/-1">${vbar}</div></div>`:""}
+      <div class="cpsec">Outlook</div><div class="cprows cpout" style="${cols}">${outl}${rivRow}</div>
+      <div class="cpsec">${S2.name}</div><div class="cprows" style="${cols}">${stats}</div>
+      <div class="cpsec">Fixtures</div><div class="cprows cpfxrow" style="${cols}"><div class="cprl">Next 5</div>${fxr}</div></div></div>`;
   }
   return modalHTML(`Compare ${ps.length} Player${ps.length>1?"s":""}`,`<div class="cpbody">${body}</div>`,{wide:true,ctl,close:"pcmpclose",cls:"cpfull"});
 }
@@ -2290,7 +2279,7 @@ function sgTeams(G,H){
   const runs=M.teams.map(t=>{const out=[];let s=0,n=0;
     for(let e=G;e<G+5&&e<=38;e++)(M.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{const home=f.ht===t,opp=home?f.at:f.ht,d=fdrOf(opp,home,t,"att");s+=d;n++;out.push(fdrPill(opp.short,home,d,{short:true,tiny:true}));});
     return{t,avg:n?s/n:9,pills:out.join("")};});
-  const runList=list=>`<div class="runs">${list.map((x,i)=>`<div class="hbr"><span class="hbn">${i+1}</span><span class="hbl"><b>${esc(x.t.name||x.t.short)}</b><em>avg difficulty ${x.avg.toFixed(1)}</em></span><span class="fxrow">${x.pills}</span></div>`).join("")}</div>`;
+  const runList=list=>`<div class="runs">${list.map((x,i)=>`<div class="hbr"><span class="hbn">${i+1}</span><span class="hbl"><b>${esc(x.t.name||x.t.short)}</b><em>avg difficulty ${x.avg.toFixed(1)}</em></span>${fxRun(x.pills)}</div>`).join("")}</div>`;
   const opp=M.teams.map(t=>{let c=0;const by=[];for(let e=G;e<G+H&&e<=38;e++)(M.byEv[e]||[]).filter(f=>f.ht===t||f.at===t).forEach(f=>{const home=f.ht===t,o=home?f.at:f.ht;c+=fdrCalc(o,t,!home,"xgf");by.push(o.short);});
     return{t,c,by};}).sort((a,b)=>b.c-a.c).slice(0,8);
   return `<div class="repgrid">
@@ -2465,17 +2454,9 @@ function pdCols(){
    More filters. His players stay in the list, marked by a green edge and
    their role (C, VC, XI, Bench) instead of a Yours tab. Figures are grey,
    white for the top quarter of the column and green for the top tenth. */
-const PD_FDR={1:["#1F7A4C","#D9FBE8"],2:["#24533B","#A6E8C3"],3:["#383838","#D4D4D4"],4:["#6A2230","#FFC2CC"],5:["#9A1C31","#FFE5EA"]};
-const pdFdr=d=>PD_FDR[clamp(Math.round(+d)||3,1,5)];
+const pdFdr=d=>FDR5[fdrBand(d)]; /* the one scale (app-core FDR5) */
 /* compact next-five fixtures: home in capitals, away in lower case */
-function fix5(p,g){
-  let h="";
-  for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];
-    if(!q||q.blank||!q.fixtures.length){h+=`<i class="fx5 bl" title="GW${e}: no fixture">–</i>`;continue;}
-    h+=`<span class="fx5s${q.fixtures.length>1?" dbl":""}">${q.fixtures.map(f=>{const d=posDiff(p,f),[b,c]=pdFdr(d),o=String(f.opp).slice(0,3);
-      return `<i class="fx5" style="background:${b};color:${c}" title="GW${e}: ${esc(f.oppName||f.opp)} ${f.home?"home":"away"} · difficulty ${d}">${esc(f.home?o.toUpperCase():o.toLowerCase())}</i>`;}).join("")}</span>`;}
-  return `<span class="fx5r">${h}</span>`;
-}
+function fix5(p,g){return fxNext(p,g,5);}
 /* a signal tile whose hover card (app-main) shows the name and one short line */
 function pdTile(k,t,b){const[ic,tone,label]=SIGNAL[k],s=sigShort(k,t);
   return `<span class="tile${b?" bright":""}" style="--tc:${tone==="NAVY"?"#7AA2FF":tone}" data-sig="${k}" data-tt="${esc(s)}" tabindex="0" aria-label="${esc(label+": "+s)}">${lic(ic)}</span>`;}
@@ -2553,12 +2534,12 @@ function playerDataHTML(){
   const more=rows.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${rows.length} players</span>
     <span><button onclick="act('pdmore')">Show ${Math.min(PD_PAGE,rows.length-lim)} more</button> <button onclick="act('pdall')">Show all ${rows.length}</button></span></div>`:
     (lim>PD_PAGE&&rows.length>PD_PAGE?`<div class="pdmore"><span class="note">Showing all ${rows.length} players</span><button onclick="act('pdless')">Show fewer</button></div>`:"");
-  const key5=[1,2,3,4,5].map(d=>{const[b,c]=pdFdr(d);return `<i class="fx5" style="background:${b};color:${c}">${d}</i>`;}).join("");
+  const key5=[1,2,3,4,5].map(d=>`<span class="fxc d${d} key">${d}</span>`).join("");
   return pdHeadHTML(rows,r)+(S.starOnly&&!S.stars.length?`<div class="panel"><div class="pbody"><p class="note" style="margin:0">No shortlisted players yet. Tap ★ on any row to add one.</p></div></div>`:
     `<div class="panel pdpanel"><div class="scroll tallscroll pdt${ticks.length?" ticking":""}"><table><thead>${head}</thead><tbody>${body||`<tr><td colspan="${14+D.extra.length}" class="note" style="padding:14px">No players match these filters.</td></tr>`}</tbody></table></div>${more}</div>`)
     +`<div class="pdkey"><span><i class="kmine"></i>Your squad</span><span><span class="pdrole c">C</span><span class="pdrole v">VC</span><span class="pdrole xi">XI</span><span class="pdrole bn">Bench</span></span><i class="sep"></i>
       <span><b class="t10">4.6</b> top 10% of the column</span><span><b class="t25">4.6</b> top 25%</span><i class="sep"></i>
-      <span>Fixture difficulty <span class="fx5r">${key5}</span> · capitals home</span>${S.oddsState==="ok"?`<i class="sep"></i><span>Market columns: bookmakers' figures, margin removed</span>`:""}</div>`;
+      <span>Fixture difficulty <span class="fxrun">${key5}</span> · H home, A away</span>${S.oddsState==="ok"?`<i class="sep"></i><span>Market columns: bookmakers' figures, margin removed</span>`:""}</div>`;
 }
 function pdHeadHTML(rows,r){
   const seg=(cur,list,action,lbl)=>`<span class="hz" role="group" aria-label="${lbl}">${list.map(([k,l,t])=>`<button class="${String(cur)===String(k)?"on":""}" aria-pressed="${String(cur)===String(k)}" onclick="act('${action}','${k}')"${t?` title="${t}"`:""}>${l}</button>`).join("")}</span>`;
