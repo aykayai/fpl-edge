@@ -894,11 +894,25 @@ function planBank(){
   const g=VG(), next=S.model?S.model.next.id:1;
   if(g>next&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)return S.planByGw[g].bank;
   /* For the live week, trust the official figure unless the user has made
-     planned edits this week that move it (those write their own bank). */
-  if(g===next&&!(S.planByGw&&S.planByGw[g]&&S.planByGw[g].bank!=null)){
-    const f=bankFromFeed();if(f!=null)return f;
+     planned edits this week that move it (those write their own bank).
+     An edit undone (sell a player, buy him back) leaves the official squad
+     with a bank short by the sell/buy gap; FPL charges nothing for a
+     transfer never made, so the official squad always has the official bank
+     (12 Nov 2026: £0.6 shown, and quoted by The Scout, against FPL's £1.1). */
+  if(g===next){
+    const pb=S.planByGw&&S.planByGw[g];
+    if(!(pb&&pb.bank!=null)||isOfficialSquad(pb.squad||S.squad)){
+      const f=bankFromFeed();if(f!=null)return f;
+    }
   }
   return S.bank;
+}
+/* Whether a squad is the latest official one, the same fifteen players. */
+function isOfficialSquad(ids){
+  const off=latestOfficialPicks();
+  if(!off||!Array.isArray(ids)||ids.length!==15)return false;
+  const have=new Set(off.picks.map(pk=>pk.id));
+  return ids.every(i=>have.has(i));
 }
 /* Historical returns for this manager, shown alongside each projection */
 const TRANSFER_MIN=1.0;   // a suggestion has to be worth the transfer

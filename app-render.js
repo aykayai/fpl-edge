@@ -224,7 +224,7 @@ function listHTML(){
   const ownIds=S.squad||[];
   const raised=flags.reduce((t,id)=>{
     const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
-  const budget=+(S.bank+raised).toFixed(1);
+  const budget=+(planBank()+raised).toFixed(1);   // the header's bank, not the drifting S.bank (as F41)
   const outP=flags.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
