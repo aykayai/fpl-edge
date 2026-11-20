@@ -921,7 +921,6 @@ function isOfficialSquad(ids){
 }
 /* Historical returns for this manager, shown alongside each projection */
 const TRANSFER_MIN=1.0;   // a suggestion has to be worth the transfer
-const CHIP_HISTORY={wildcard:10.2,bboost:23.7,freehit:10.7,"3xc":14.2};
 const chipKind=k=>k.replace(/[12]$/,"");
 const CHIP_NAME={wildcard:"Wildcard",freehit:"Free Hit",bboost:"Bench Boost","3xc":"Triple Captain"};
 /* The gameweek a chip (key like "freehit1") was actually played, from the
@@ -950,160 +949,6 @@ function chipRuleBreak(k,e){
     if(near.some(v=>v===e-1||v===e+1))return "Free Hit cannot be played in two gameweeks in a row";
   }
   return null;
-}
-
-/* ---------- chip planning ----------
-   Each chip is judged on what actually makes it pay, not one shared formula. */
-/* "Your XI" for a week: the legal best XI plus the captain (its top scorer),
-   and the four left on the bench (F34; was the top 11 with no formation). */
-function weekScore(sp,e){
-  const v=p=>p.gw[e]?.pts||0;
-  const start=legalBestXI(sp,v);
-  const bench=sp.filter(p=>!start.includes(p)).sort((a,b)=>v(b)-v(a));
-  const cap=start.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
-  const vice=start.filter(p=>p!==cap).reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
-  return{xi:start,bench,
-    pts:start.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0)+coverPts(start,[],cap,vice,e),   // vice only: compared with bestXIScore, which has no bench
-    benchPts:bench.reduce((a,p)=>a+v(p),0)};
-}
-function bestXIScore(e){
-  const pool=S.model.players.filter(p=>p.avail>0&&p.gw[e]&&!p.gw[e].blank);
-  const by={1:[],2:[],3:[],4:[]};pool.forEach(p=>by[p.pos]&&by[p.pos].push(p));
-  Object.values(by).forEach(a=>a.sort((x,y)=>y.gw[e].pts-x.gw[e].pts));
-  const club={},take=[];
-  const grab=(pos,n)=>{let c=0;for(const p of by[pos]){if(c>=n)break;if((club[p.team]||0)>=3)continue;
-    club[p.team]=(club[p.team]||0)+1;take.push(p);c++;}};
-  grab(1,1);grab(2,3);grab(4,1);
-  const rest=[...by[2].slice(3),...by[3],...by[4].slice(1)].sort((a,b)=>b.gw[e].pts-a.gw[e].pts);
-  for(const p of rest){if(take.length>=11)break;if(take.includes(p))continue;
-    if((club[p.team]||0)>=3)continue;club[p.team]=(club[p.team]||0)+1;take.push(p);}
-  const byPts=take.slice().sort((a,b)=>b.gw[e].pts-a.gw[e].pts),c=byPts[0];
-  /* D17: vice cover, as weekScore counts it, so the two compare like for like */
-  return take.reduce((a,p)=>a+p.gw[e].pts,0)+(c?c.gw[e].pts:0)+coverPts(take,[],c,byPts[1],e);
-}
-function chipPlan(kind){
-  const sp=squadPlayers();if(!sp.length||!S.model)return[];
-  const g=S.model.next.id,half=kind.endsWith("2");
-  const from=half?Math.max(20,g):g, to=half?38:19;
-  const weeks=[];for(let e=from;e<=to;e++)if(sp.some(p=>p.gw[e]&&!p.gw[e].blank))weeks.push(e);
-  if(!weeks.length)return[];
-  const k=chipKind(kind);
-  if(k==="bboost"){
-    const wc=S.chips[half?"wildcard2":"wildcard1"];
-    return weeks.map(e=>{const w=weekScore(sp,e);
-      return{e,up:w.benchPts,note:(wc&&e===wc+1?"straight after your Wildcard — ":"")+
-        "bench: "+w.bench.map(p=>p.web_name).join(", ")};})
-      .sort((a,b)=>b.up-a.up).slice(0,3);
-  }
-  if(k==="freehit"){
-    return weeks.map(e=>{const mine=weekScore(sp,e).pts,best=bestXIScore(e);
-      return{e,up:Math.max(0,best-mine),note:`your XI ${mine.toFixed(1)} v best available ${best.toFixed(1)}`};})
-      .sort((a,b)=>b.up-a.up).slice(0,3);
-  }
-  if(k==="3xc"){
-    return weeks.map(e=>{
-      const top=[...sp].sort((a,b)=>(b.gw[e]?.pts||0)-(a.gw[e]?.pts||0))[0];
-      const f=top?.gw[e]?.fixtures?.[0];
-      return{e,up:top?.gw[e]?.pts||0,
-        note:top?`${top.web_name} v ${f?f.opp:"?"} ${f?(f.home?"(H)":"(A)"):""}`:""};})
-      .sort((a,b)=>b.up-a.up).slice(0,3);
-  }
-  const out=[];
-  for(let i=0;i+2<weeks.length;i++){
-    const win=[weeks[i],weeks[i+1],weeks[i+2]];
-    const tot=win.reduce((a,e)=>a+weekScore(sp,e).pts,0);
-    out.push({e:win[0],span:win,tot,up:CHIP_HISTORY.wildcard,
-      note:`GW${win[0]}–${win[2]} projects only ${tot.toFixed(1)}`});
-  }
-  return out.sort((a,b)=>a.tot-b.tot).slice(0,3);
-}
-/* Every legal formation is built and scored; the best one wins. The single
-   highest projected player in the game is always taken and captained. */
-const FORMATIONS=[[3,4,3],[3,5,2],[4,3,3],[4,4,2],[4,5,1],[5,3,2],[5,4,1],[5,2,3]];
-function teamOfWeek(){
-  if(!S.model)return null;
-  /* D19 (13 Oct 2026): the same budget as the Free Hit card (D12), not a
-     fixed £100.0 */
-  const g=VG(), BUDGET=squadBudget(), BENCH_MAX=17.5, need=RULES.squad;
-  const pool=S.model.players.filter(p=>p.avail>0&&p.gw[g]&&!p.gw[g].blank&&p.gw[g].pts>0);
-  if(!pool.length)return null;
-  const by={1:[],2:[],3:[],4:[]};
-  pool.forEach(p=>by[p.pos]&&by[p.pos].push(p));
-  const rank=(a,b)=>(b.gw[g].pts-a.gw[g].pts)||(b.owned-a.owned);
-  Object.values(by).forEach(a=>a.sort(rank));
-  const star=pool.slice().sort(rank)[0];          // must-have, always captain
-
-  let best=null;
-  FORMATIONS.forEach(([d,m,f])=>{
-    const XI={1:1,2:d,3:m,4:f};
-    const picked=[],club={};
-    const can=p=>!picked.includes(p)&&(club[p.team]||0)<3;
-    const add=p=>{picked.push(p);club[p.team]=(club[p.team]||0)+1;};
-    if(XI[star.pos]>=1)add(star);
-    [4,3,2,1].forEach(pos=>{let n=picked.filter(x=>x.pos===pos).length;
-      for(const p of by[pos]){if(n>=XI[pos])break;if(!can(p))continue;add(p);n++;}});
-    if(picked.length<11)return;
-    const startCost=()=>picked.reduce((a,p)=>a+p.price,0);
-    /* cheapest legal bench that fits the remaining budget */
-    const bench=[];
-    let benchSpend=0;
-    [1,2,3,4].forEach(pos=>{
-      const want=need[pos]-picked.filter(x=>x.pos===pos).length;
-      const cheap=by[pos].slice().sort((a,b)=>a.price-b.price||rank(a,b));
-      let taken=0;
-      for(const p of cheap){if(taken>=want)break;
-        if(picked.includes(p)||bench.includes(p))continue;
-        if((club[p.team]||0)>=3)continue;
-        bench.push(p);club[p.team]=(club[p.team]||0)+1;benchSpend+=p.price;taken++;}
-    });
-    if(bench.length!==4||benchSpend>BENCH_MAX+0.001)return;
-    /* trim starters until the whole squad fits £100 */
-    let guard=0;
-    while(startCost()+benchSpend>BUDGET&&guard++<200){
-      const order=picked.slice().sort((a,b)=>(a.gw[g].pts/a.price)-(b.gw[g].pts/b.price));
-      let done=false;
-      for(const out of order){
-        if(out===star)continue;
-        const alt=by[out.pos].find(q=>!picked.includes(q)&&!bench.includes(q)&&q.price<out.price-0.05
-          &&((club[q.team]||0)<3||q.team===out.team));
-        if(alt){club[out.team]--;picked.splice(picked.indexOf(out),1);
-          picked.push(alt);club[alt.team]=(club[alt.team]||0)+1;done=true;break;}}
-      if(!done)break;
-    }
-    if(startCost()+benchSpend>BUDGET+0.001)return;
-    /* spend anything spare on the XI without lowering the projection */
-    let up=true,g2=0;
-    while(up&&g2++<150){
-      up=false;
-      const spare=BUDGET-startCost()-benchSpend;
-      if(spare<0.1)break;
-      let pick=null;
-      picked.forEach(out=>{
-        if(out===star)return;
-        by[out.pos].forEach(q=>{
-          if(picked.includes(q)||bench.includes(q))return;
-          const extra=q.price-out.price;
-          if(extra<=0||extra>spare+1e-9)return;
-          if(q.team!==out.team&&(club[q.team]||0)>=3)return;
-          const dd=q.gw[g].pts-out.gw[g].pts;
-          if(dd>=-1e-9&&(!pick||dd>pick.dd))pick={out,inn:q,dd};});});
-      if(pick){club[pick.out.team]--;picked.splice(picked.indexOf(pick.out),1);
-        picked.push(pick.inn);club[pick.inn.team]=(club[pick.inn.team]||0)+1;up=true;}
-    }
-    const total=picked.reduce((a,p)=>a+p.gw[g].pts,0)+star.gw[g].pts;   // captain doubled
-    if(!best||total>best.total)
-      best={squad:picked.concat(bench),xi:picked.slice(),bench:bench.slice(),cap:star,
-        total,value:+(startCost()+benchSpend).toFixed(1),
-        benchValue:+benchSpend.toFixed(1),shape:`${d}-${m}-${f}`};
-  });
-  return best;
-}
-function teamRating(){
-  const t=teamOfWeek();if(!t||!t.total)return null;
-  const g=VG();const xi=startingXI();if(!xi.length)return null;
-  const cap=S.model.players.find(p=>p.id===S.captain);
-  let mine=xi.reduce((a,p)=>a+(p.gw[g]?.pts||0),0)+(cap&&xi.includes(cap)?(cap.gw[g]?.pts||0):0);
-  return{pct:Math.round(clamp(mine/t.total,0,1)*100),mine,best:t.total,totw:t,budget:squadBudget()};
 }
 
 /* ---------- news ---------- */
@@ -1570,4 +1415,226 @@ function squadListHTML(){
         <button class="mini" onclick="act('cap',${p.id})" title="Captain">C</button>
         <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button>`}</td></tr>`;}).join("");
   return `<div class="scroll"><table class="sqtable"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+/* icons for the Chips page (Lucide 1.52.0, ISC) */
+Object.assign(LUCIDE,{"wand-sparkles":"<path d=\"m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72\" /><path d=\"m14 7 3 3\" /><path d=\"M5 6v4\" /><path d=\"M19 14v4\" /><path d=\"M10 2v2\" /><path d=\"M7 8H3\" /><path d=\"M21 16h-4\" /><path d=\"M11 3H9\" />","zap":"<path d=\"M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z\" />","armchair":"<path d=\"M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3\" /><path d=\"M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z\" /><path d=\"M5 18v2\" /><path d=\"M19 18v2\" />","layers":"<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\" /><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\" /><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\" />","calendar-range":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /><path d=\"M16 2v3\" /><path d=\"M3 9h18\" /><path d=\"M8 2v3\" /><path d=\"M17 13h-6\" /><path d=\"M13 17H7\" /><path d=\"M7 13h.01\" /><path d=\"M17 17h.01\" />","circle-check":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m16 9-5.5 5.5L8 12\" />"});
+/* ============================================================
+   CHIPS (20 Nov 2026, Andy): one team score for every chip.
+   A chip's gain is the Planner's own team score (weekPtsFor's rules: best
+   legal XI, captain, vice and bench cover, the chip) with the chip minus
+   without it, so planning a chip moves the Planner's total by exactly the
+   gain shown here. Free Hit and Wildcard teams come from the same optimiser
+   as Compare and the Team Rating. Blanks and doubles FPL has not yet put in
+   its fixtures come from Ben Crellin's forecast, weighted by how sure it is.
+   ============================================================ */
+/* Ben Crellin's 2026/27 forecast (his calendar, fantasyfootballhub.co.uk/
+   articles/crellin-calendar, read 20 Nov 2026). He is the source of truth:
+   update this by hand when he posts changes. A week FPL has already
+   rearranged uses FPL's own fixtures instead. p = how sure (likely .75,
+   possible .4, cup blanks .9). */
+const CRELLIN={read:"20 Nov 2026",weeks:{
+  30:{t:"blank",p:0.9,why:"Carabao Cup final"},
+  32:{t:"double",p:0.75,why:"likely double"},
+  33:{t:"blank",p:0.9,why:"FA Cup semi-finals"},
+  35:{t:"double",p:0.4,why:"possible double"},
+  36:{t:"double",p:0.4,why:"possible double"}}};
+/* The week each chip was played in past seasons, from Andy's season
+   workbooks (Planner sheet, chip row). Gains come from League's chip
+   performance (TRACKER_HISTORY.chips); this season from FPL. */
+const CHIP_WEEKS={
+  "2025/26":{WC1:4,FH1:3,TC1:6,BB1:8,TC2:26,WC2:32,BB2:33,FH2:34},
+  "2024/25":{WC1:7,BB1:24,TC1:25,WC2:30,FH1:36},
+  "2023/24":{WC1:8,TC1:25,WC2:27,FH1:29,BB1:34},
+  "2022/23":{WC1:9,TC1:22,FH1:28,BB1:29,WC2:33},
+  "2021/22":{WC1:4,FH1:18,TC1:26,WC2:28,BB1:29,FH2:37},
+  "2020/21":{WC1:5,FH1:18,BB1:19,TC1:24,WC2:30}};
+const CHIP_UI={wildcard:{n:"Wildcard",s:"WC",c:"#A78BFA",i:"wand-sparkles"},freehit:{n:"Free Hit",s:"FH",c:"#22D3EE",i:"zap"},
+  bboost:{n:"Bench Boost",s:"BB",c:"#3DDC97",i:"armchair"},"3xc":{n:"Triple Captain",s:"TC",c:"#FFB020",i:"crown"}};
+let _chipCid=0;
+const _chipModelId=()=>S.model?(S.model._cid||(S.model._cid=++_chipCid)):0;
+let _chipById=null;
+function chipPlayer(id){
+  if(!_chipById||_chipById.m!==_chipModelId())_chipById={m:_chipModelId(),map:new Map(S.model.players.map(p=>[p.id,p]))};
+  return _chipById.map.get(id);
+}
+/* the Planner's team score for any 15 in any week (weekPtsFor's rules with
+   the best legal XI and its top scorer as captain) */
+function teamScore(ids,e,chip){
+  const sp=(ids||[]).map(chipPlayer).filter(Boolean),v=p=>p.gw[e]?.pts||0;
+  if(!sp.length)return 0;
+  const xi=legalBestXI(sp,v);if(!xi.length)return 0;
+  const cap=xi.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
+  const vice=xi.filter(p=>p!==cap).reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
+  const bench=sp.filter(p=>!xi.includes(p));
+  let s=xi.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0);
+  if(chip==="bboost")s+=bench.reduce((a,p)=>a+v(p),0);
+  if(chip==="3xc"&&cap)s+=v(cap);
+  if(chip!=="bboost")s+=coverPts(xi,orderBench(bench),cap,vice,e,chip==="3xc"?3:2);
+  return s;
+}
+/* FPL's own doubles and blanks for a week */
+function weekShape(e){
+  const n={};(S.model.byEv[e]||[]).forEach(f=>{if(f.ht)n[f.ht.id]=(n[f.ht.id]||0)+1;if(f.at)n[f.at.id]=(n[f.at.id]||0)+1;});
+  return{dbl:S.model.teams.filter(t=>(n[t.id]||0)>=2),blank:S.model.teams.filter(t=>!n[t.id])};
+}
+/* Crellin's forecast for a week, unless FPL has already rearranged it */
+function chipForecast(e){
+  const sh=weekShape(e);if(sh.dbl.length||sh.blank.length)return null;
+  return CRELLIN.weeks[e]||null;
+}
+/* the week's shape for the roadmap: FPL's when known, else the forecast */
+function chipWeekMark(e){
+  const sh=weekShape(e);
+  if(sh.dbl.length)return{t:"double",p:1,why:sh.dbl.map(t=>t.short).join(" "),src:"FPL"};
+  if(sh.blank.length&&sh.blank.length<S.model.teams.length)return{t:"blank",p:1,why:sh.blank.map(t=>t.short).join(" "),src:"FPL"};
+  const f=CRELLIN.weeks[e];return f?Object.assign({src:"Crellin"},f):null;
+}
+/* the best Free Hit or Wildcard 15 for a week: the optimiser (as Compare
+   and Team Rating use) when best is asked for, else the quick builder */
+function chipTeam(kind,e,best){
+  const b=squadBudget();
+  const t=(best?optimalSquad(kind,e,b):null)||buildSquad(kind,e,null,b);
+  return t?{t,ids:t.xi.concat(t.bench).map(p=>p.id)}:null;
+}
+/* gain from a chip in week e, on the team score; Wildcard over five weeks
+   with the transfer engine's decay */
+function chipGainAt(kind,e,best,ids){
+  ids=ids||effectiveSquadIds(e).ids;
+  const base=teamScore(ids,e,null);
+  if(kind==="bboost"||kind==="3xc")return teamScore(ids,e,kind)-base;
+  const T=chipTeam(kind,e,best);if(!T)return null;
+  if(kind==="freehit")return Math.max(0,teamScore(T.ids,e,null)-base);
+  let g=0;for(let k=0;k<5&&e+k<=38;k++)g+=Math.pow(DECAY,k)*(teamScore(T.ids,e+k,null)-teamScore(ids,e+k,null));
+  return g;
+}
+/* forecast weighting: a blank adds to a Free Hit what the blanking players
+   would cost your team (about a fifth of the XI at four blanking clubs); a
+   double adds to Bench Boost and Triple Captain roughly in proportion to
+   the share of players doubling (about 30%), each times how sure it is */
+function chipWeighted(kind,e,v,ids){
+  const f=chipForecast(e);if(!f||v==null)return{v,f:null};
+  if(kind==="freehit"&&f.t==="blank")return{v:v+f.p*0.2*teamScore(ids,e,null),f};
+  if((kind==="bboost"||kind==="3xc")&&f.t==="double")return{v:v*(1+f.p*0.3),f};
+  return{v,f:null};
+}
+let _chipCurves=null;
+function chipSig(){return[_chipModelId(),(S.squad||[]).join("."),JSON.stringify(S.planByGw||{}),squadBudget().toFixed(1),S.bank].join("|");}
+/* gain for every legal week of a chip key ("bboost1", "wildcard2"...):
+   {e:{v (weighted), raw, f (forecast), proven}} */
+function chipCurve(key){
+  if(!S.model)return{};
+  const sig=chipSig();
+  if(!_chipCurves||_chipCurves.sig!==sig)_chipCurves={sig,c:{}};
+  if(_chipCurves.c[key])return _chipCurves.c[key];
+  const kind=chipKind(key),half2=key.endsWith("2"),g=S.model.next.id;
+  const from=half2?Math.max(20,g):g,to=half2?38:19,out={};
+  for(let e=from;e<=to;e++){
+    const ids=effectiveSquadIds(e).ids;if(!ids.length)continue;
+    const raw=chipGainAt(kind,e,false,ids);if(raw==null)continue;
+    const w=chipWeighted(kind,e,raw,ids);
+    out[e]={v:+w.v.toFixed(1),raw:+raw.toFixed(1),f:w.f};
+  }
+  /* the weeks people look at come from the optimiser, so they match the
+     Team Builder and Compare */
+  if(kind==="freehit"||kind==="wildcard"){
+    const top=Object.entries(out).sort((a,b)=>b[1].v-a[1].v).slice(0,3).map(([e])=>+e);
+    [...new Set([...top,g])].forEach(e=>{if(!out[e])return;
+      const ids=effectiveSquadIds(e).ids,raw=chipGainAt(kind,e,true,ids);if(raw==null)return;
+      const w=chipWeighted(kind,e,raw,ids);out[e]={v:+w.v.toFixed(1),raw:+raw.toFixed(1),f:w.f,proven:true};});
+  }
+  return _chipCurves.c[key]=out;
+}
+const chipBestWeeks=key=>Object.entries(chipCurve(key)).filter(([e])=>!chipRuleBreak(key,+e)||S.chips[key]===+e)
+  .map(([e,o])=>[+e,o.v]).sort((a,b)=>b[1]-a[1]);
+/* chips still to play, in the order they come up */
+function chipsLeft(){
+  const g=S.model?S.model.next.id:1,out=[];
+  [1,2].forEach(h=>{if(h===1&&g>19)return;["wildcard","freehit","bboost","3xc"].forEach(k=>{if(chipPlayed(k+h)==null)out.push(k+h);});});
+  return out;
+}
+/* Second-half plans: one chip per week, a Bench Boost or Triple Captain
+   inside a Wildcard's first five weeks scored on the Wildcard squad */
+let _chipPlans=null;
+function chipPlans(){
+  if(!S.model)return[];
+  const sig=chipSig();if(_chipPlans&&_chipPlans.sig===sig)return _chipPlans.p;
+  const keys=chipsLeft().filter(k=>k.endsWith("2"));
+  if(keys.length<2){_chipPlans={sig,p:[]};return[];}
+  const cv={};keys.forEach(k=>cv[k]=chipCurve(k));
+  const top={};keys.forEach(k=>top[k]=chipBestWeeks(k).slice(0,6));
+  const wcKey=keys.find(k=>chipKind(k)==="wildcard");
+  const after={};
+  const synergy=(pick,k,e,v)=>{
+    if(!wcKey||!pick[wcKey]||!["bboost","3xc"].includes(chipKind(k)))return v;
+    const w=pick[wcKey][0];if(!(e>w&&e<w+5))return v;
+    const id=w+"|"+e+"|"+k;
+    if(after[id]==null){const T=chipTeam("wildcard",w,false);
+      after[id]=T?chipWeighted(chipKind(k),e,teamScore(T.ids,e,chipKind(k))-teamScore(T.ids,e,null),T.ids).v:v;}
+    return Math.max(v,after[id]);
+  };
+  const score=pick=>{let tot=0;const out={};
+    keys.forEach(k=>{if(!pick[k])return;const [e]=pick[k];const base=(cv[k][e]||{}).v||0;const v=synergy(pick,k,e,base);out[k]=[e,+v.toFixed(1)];tot+=v;});
+    return{pick:out,tot};};
+  let best=null;
+  const order=wcKey?[wcKey,...keys.filter(k=>k!==wcKey)]:keys;
+  const rec=(i,used,pick)=>{
+    if(i===order.length){const s=score(pick);if(!best||s.tot>best.tot)best=s;return;}
+    const k=order[i];top[k].forEach(([e])=>{if(used.has(e))return;
+      if(chipKind(k)==="freehit"&&chipPlayed("freehit1")===19&&e===20)return;
+      used.add(e);pick[k]=[e];rec(i+1,used,pick);used.delete(e);delete pick[k];});};
+  rec(0,new Set(),{});
+  const fill=fixed=>{const used=new Set(Object.values(fixed).map(x=>x[0])),pick={...fixed};
+    keys.forEach(k=>{if(pick[k])return;const b=chipBestWeeks(k).find(([e])=>!used.has(e));if(b){pick[k]=[b[0]];used.add(b[0]);}});
+    return score(pick);};
+  const plans=[];
+  if(best)plans.push(Object.assign(best,{name:"Most Points",tag:"Recommended",why:"The highest total with one chip per week."}));
+  const marks=[];for(let e=Math.max(20,S.model.next.id);e<=38;e++){const m=chipWeekMark(e);if(m)marks.push(Object.assign({e},m));}
+  const dbl=marks.find(m=>m.t==="double"&&m.p>=0.6),blank=marks.find(m=>m.t==="blank");
+  const has=k=>keys.includes(k);
+  if(dbl&&has("wildcard2")&&has("bboost2")&&dbl.e-1>=20){
+    const fx={wildcard2:[dbl.e-1],bboost2:[dbl.e]};
+    const bl2=marks.find(m=>m.t==="blank"&&m.e>dbl.e);if(bl2&&has("freehit2"))fx.freehit2=[bl2.e];
+    plans.push(Object.assign(fill(fx),{name:"Set Up the Double",tag:"",why:`Wildcard in GW${dbl.e-1}, straight before the ${dbl.src==="FPL"?"":dbl.p>=0.6?"likely ":"possible "}double, so the Bench Boost has doublers on the bench.`}));
+  }
+  if(blank&&has("freehit2"))plans.push(Object.assign(fill({freehit2:[blank.e]}),{name:"Free Hit the First Blank",tag:"",why:`Covers the GW${blank.e} blank (${esc(blank.why)}); transfers or the Wildcard handle the rest.`}));
+  const seen=new Set();const uniq=plans.filter(p=>{const k=JSON.stringify(p.pick);if(seen.has(k))return false;seen.add(k);return true;});
+  _chipPlans={sig,p:uniq};return uniq;
+}
+/* Hindsight for this season: every finished week each chip could have been
+   played in, scored on what happened. Triple Captain: your captain's points.
+   Bench Boost: your bench's points. Free Hit and Wildcard: the team the app
+   would have built before that deadline (its saved prediction), against the
+   squad you had. Prices are today's, so those two are estimates. */
+function chipHindsight(){
+  const tr=((S.tracker&&S.tracker.gw)||[]).filter(r=>weekFinal(r.event)).slice().sort((a,b)=>a.event-b.event);
+  if(!tr.length||!S.model)return null;
+  const A=S.playerActuals||{};
+  const act=(id,e)=>{const f=A[id]||A[String(id)];const v=f?(f[e]??f[String(e)]):null;return v==null?0:+v;};
+  const picksOf=e=>{const r=tr.find(x=>x.event===e);return r&&r.picks?r.picks.map(p=>p.id):null;};
+  const predOf=e=>{const sn=(S.predLive&&S.predLive.gw&&S.predLive.gw[e])||(S.predBack&&S.predBack.gw&&S.predBack.gw[e]);return sn&&sn.players||null;};
+  const bestOn=(ids,val)=>{const sp=ids.map(chipPlayer).filter(Boolean);const xi=legalBestXI(sp,val);
+    return xi.reduce((a,p)=>a+val(p),0)+(xi.length?Math.max(...xi.map(val)):0);};
+  const preTeam=(e,bud)=>{const pr=predOf(e);if(!pr)return null;
+    const pv=p=>+(pr[p.id]??pr[String(p.id)]??0);
+    const t=buildSquad("freehit",e,null,bud,{val:pv,tag:"pre"+e});return t?t.xi.concat(t.bench).map(p=>p.id):null;};
+  const last=tr[tr.length-1].event,out={tc:[],bb:[],fh:[],wc:[]};
+  tr.forEach(r=>{const e=r.event,pk=r.picks||[],cap=pk.find(x=>x.isC);
+    out.tc.push({e,v:cap?act(cap.id,e):0});
+    out.bb.push({e,v:r.bench||0});
+    if(e<2)return;
+    const pre=picksOf(e-1)||pk.map(x=>x.id),bud=(+r.value||100)+(+r.bank||0);
+    const T=preTeam(e,bud);
+    if(T){const v1=p=>act(p.id,e);out.fh.push({e,v:+(bestOn(T,v1)-bestOn(pre,v1)).toFixed(1)});
+      if(e+2<=last){const v3=p=>act(p.id,e)+act(p.id,e+1)+act(p.id,e+2);out.wc.push({e,v:+(bestOn(T,v3)-bestOn(pre,v3)).toFixed(1)});}}
+  });
+  return out;
+}
+/* the Team Rating: your team score against the best Free Hit team's, the
+   same team the Chips page and Compare show */
+function teamRating(){
+  if(!S.model)return null;
+  const g=VG(),T=chipTeam("freehit",g,true);if(!T)return null;
+  const mine=teamScore(effectiveSquadIds(g).ids,g,null),best=teamScore(T.ids,g,null);
+  if(!(best>0))return null;
+  return{pct:Math.round(clamp(mine/best,0,1)*100),mine,best,totw:T.t,budget:squadBudget()};
 }

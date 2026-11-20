@@ -76,7 +76,8 @@ try {
   w.setInterval = () => 0; w.console = { log() {}, warn() {}, error() {} };
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
-    weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,chipPlayed,VG}`, ctx);
+    weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,chipPlayed,VG,
+    teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
   while (Date.now() < until && !(S.model && !S.loading)) await new Promise(r => setTimeout(r, 250));
@@ -213,7 +214,26 @@ try {
   check(g.chipRuleBreak("bboost2", 30) == null, "F47 a legal plan is allowed", g.chipRuleBreak("bboost2", 30));
   restore(clean); g.render();
   S.tab = "chips"; g.render();
-  if (free1 != null) check(/Played in GW\d+ · used/.test(doc.getElementById("app").textContent), "F47 the Chips page shows a played chip as used");
+  /* Chips page (20 Nov 2026): one team score. A chip's gain is the team
+     score with the chip minus without, and Team Rating divides by the same
+     Free Hit team's score the Chips page and Compare show. */
+  {
+    const gw = S.model.next.id, ids = g.effectiveSquadIds(gw).ids;
+    const bb = g.teamScore(ids, gw, "bboost") - g.teamScore(ids, gw, null);
+    const cv = g.chipCurve(gw <= 19 ? "bboost1" : "bboost2")[gw];
+    if (cv) check(Math.abs(cv.raw - bb) < 0.06, "Chips: Bench Boost gain is the team score with the chip minus without", `${cv.raw} vs ${bb.toFixed(2)}`);
+    const r = g.teamRating(), T = g.chipTeam("freehit", gw, true);
+    if (r && T) check(Math.abs(r.best - g.teamScore(T.ids, gw, null)) < 0.01, "Chips: Team Rating uses the Free Hit team's team score", `${r.best} vs ${g.teamScore(T.ids, gw, null)}`);
+    const plans = g.chipPlans();
+    check(plans.every(p => new Set(Object.values(p.pick).map(x => x[0])).size === Object.keys(p.pick).length), "Chips: every plan has one chip per week");
+  }
+  /* the rebuilt Chips page (20 Nov 2026) marks a played chip on its roadmap
+     and offers no best week for it */
+  if (free1 != null) {
+    const html = doc.getElementById("app").innerHTML;
+    check(new RegExp(`GW${free1}: Free Hit played`).test(html), "F47 the Chips page shows a played chip as used");
+    check(!/<b>Free Hit 1<\/b>/.test(html.split("How Well You Picked")[0]), "F47 a played chip gets no best week on the Chips page");
+  }
   S.tab = "squad"; g.render();
 
   /* ---------- F60 best combination ---------- */
