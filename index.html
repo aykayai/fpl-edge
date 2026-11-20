@@ -216,9 +216,11 @@ body.scrolled .tbfig{display:flex}
 .cpxp small{display:block;font:500 10.5px 'Geist',sans-serif;color:#6E6E6E;margin-top:2px}
 .cpscroll{overflow-x:auto}
 .cpstats{min-width:640px}
+.mbox.cpfull .cpstats{display:flex;flex-direction:column;min-height:100%}
+.mbox.cpfull .cpstats>.cprows:not(:first-child){flex:1 1 auto;align-content:space-evenly}
 .cprows{display:grid;align-items:center;column-gap:12px;row-gap:2px}
 .cpnote{align-self:end;color:#6E6E6E;font-size:11.5px;line-height:1.45;padding-bottom:4px}
-.cphero{position:relative;height:136px;border-radius:16px;overflow:hidden;padding:12px 14px 12px;display:flex;flex-direction:column;justify-content:space-between;isolation:isolate}
+.cphero{position:relative;min-height:136px;border-radius:16px;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;gap:10px;isolation:isolate}
 .cphero:before{content:"";position:absolute;inset:0;z-index:-2;background:linear-gradient(90deg,rgba(8,8,8,.72),rgba(8,8,8,.25) 55%,rgba(8,8,8,0) 75%),linear-gradient(150deg,var(--k) 0%,color-mix(in srgb,var(--k) 45%,#0E0E0E) 60%,#121212 100%)}
 .cphero:after{content:"";position:absolute;inset:0;z-index:-1;background:repeating-linear-gradient(115deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px)}
 .cphero .cpph{position:absolute;right:4px;bottom:0;height:128px;z-index:-1;filter:drop-shadow(0 10px 18px rgba(0,0,0,.45))}
@@ -232,7 +234,9 @@ body.scrolled .tbfig{display:flex}
 .cphm{font-size:11.5px;color:rgba(255,255,255,.8);margin-top:2px}
 .cpsig{margin-top:6px}
 .cpbig{font:700 28px 'Geist Mono',monospace;letter-spacing:-.03em;line-height:1}
-.cpbl{font-size:11px;color:rgba(255,255,255,.7);margin-top:3px}
+.cpbl{font-size:11px;color:rgba(255,255,255,.7);white-space:nowrap}
+.cphero>.cpht:last-child{display:flex;align-items:baseline;gap:8px}
+.cphero .cpsig .tile{width:24px;height:24px}
 .cpwins{display:flex;align-items:center;gap:14px;margin:10px 0 2px;padding:10px 14px;border-radius:14px;background:#161616;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);font-size:13.5px}
 .cpwins b{font-weight:600}
 .cpwbar{flex:1;display:flex;height:8px;border-radius:99px;overflow:hidden;gap:2px}
@@ -286,12 +290,12 @@ body.scrolled .tbfig{display:flex}
 /* shorter windows: the same layout, tighter */
 @media (max-height:780px) and (min-width:761px){
   .mbox.cpfull .mhead{padding:8px 16px}.mbox.cpfull .mbody{padding:10px 16px 12px}.cpcol{gap:10px}
-  .cphero{height:112px;padding:10px 12px}.cphero .cpph{height:106px}.cpbig{font-size:24px}.cphn .pn{font-size:17px}.cpsig{margin-top:4px}
+  .cphero{min-height:116px;padding:10px 12px;gap:8px}.cphero .cpph{height:106px}.cpbig{font-size:24px}.cphn .pn{font-size:17px}.cpsig{margin-top:4px}
   .cprc{padding:2px 10px}.cprl{padding:2px 0}.cptr{margin-top:3px;height:4px}.cpsec{margin:8px 0 2px}
   .cpins{padding:6px 12px}.cpinsl{gap:6px}.cpmt{display:none}.cphl{font-size:15.5px}.cppt{margin-top:4px;font-size:13px}.cpscout{padding:12px 14px}
   .cpline{padding:8px 12px}.cpline .cpph2{padding-bottom:2px}
 }
-@media (max-height:700px) and (min-width:761px){.cphero{height:104px}.cphero .cpph{height:98px}.cpinsl:has(.cpins:nth-child(5)) .cpm{display:none}.cprc{padding:1px 10px}.cprl{padding:1px 0;font-size:12.5px}.cpsec{margin:6px 0 1px}.cptr{margin-top:2px}}
+@media (max-height:700px) and (min-width:761px){.cphero{min-height:108px}.cphero .cpph{height:98px}.cpinsl:has(.cpins:nth-child(5)) .cpm{display:none}.cprc{padding:1px 10px}.cprl{padding:1px 0;font-size:12.5px}.cpsec{margin:6px 0 1px}.cptr{margin-top:2px}}
 .cmv{font:600 20px 'Geist',sans-serif;letter-spacing:-.01em}.cmv.sm{font-size:15px}
 /* wave 4: Signals board */
 .sbgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:18px}
@@ -1139,13 +1143,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.2.0"></script>
-<script src="./app-squad.js?v=13.2.0"></script>
-<script src="./app-render.js?v=13.2.0"></script>
-<script src="./app-odds.js?v=13.2.0"></script>
-<script src="./app-tracker.js?v=13.2.0"></script>
-<script src="./app-main.js?v=13.2.0"></script>
-<script src="./app-scout.js?v=13.2.0"></script>
+<script src="./app-core.js?v=13.2.1"></script>
+<script src="./app-squad.js?v=13.2.1"></script>
+<script src="./app-render.js?v=13.2.1"></script>
+<script src="./app-odds.js?v=13.2.1"></script>
+<script src="./app-tracker.js?v=13.2.1"></script>
+<script src="./app-main.js?v=13.2.1"></script>
+<script src="./app-scout.js?v=13.2.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
