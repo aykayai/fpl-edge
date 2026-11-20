@@ -338,8 +338,13 @@ function syncOfficialSquad(){
   if(S.baseGw!=null&&off.event<=S.baseGw)return false;
   const had=!!(S.squad&&S.squad.length);
   if(had){try{LS.set("state_before_gw"+off.event,LS.get("state"));}catch(e){}}
-  /* plans were drafted against the old squad, so they go with the old draft */
-  S.planByGw={};S.replacedBy={};
+  /* plans were drafted against the old squad, so the weeks still to come go
+     with the old draft. Finished weeks are a record and stay: wiping them all
+     here (until 20 Nov 2026) took every past week's stored prediction with
+     them each time FPL published a new official squad. */
+  const nextGw=S.model?S.model.next.id:off.event+1,kept={};
+  Object.entries(S.planByGw||{}).forEach(([e,v])=>{if(+e<nextGw)kept[e]=v;});
+  S.planByGw=kept;S.replacedBy={};
   resolveOfficial(true);
   dedupeSquad();
   S.seedProvisional=false;
@@ -1205,8 +1210,7 @@ function cardHTML(p,bench,ctx){
   /* For a historical week, hPts() can't compute a real number (the model only
      projects forward) — use the snapshot captured while that week was still
      live, if one was taken. */
-  const snapPred=(g<S.model.next.id&&S.planByGw&&S.planByGw[g]&&S.planByGw[g].predByPlayer
-    &&S.planByGw[g].predByPlayer[p.id]!=null)?S.planByGw[g].predByPlayer[p.id]:null;
+  const sp=g<S.model.next.id?pastPred(p,g):null,snapPred=sp?sp.v:null;
   /* For a finished gameweek, only a snapshot is trustworthy. hPts() sums
      forward from g, and the model holds no entries for past weeks, so calling
      it here silently added up FUTURE gameweeks instead (a single past week
@@ -1237,9 +1241,10 @@ function cardHTML(p,bench,ctx){
   const noHistData=g<S.model.next.id&&!p.gw[g]&&snapPred==null&&!hasActual;
   let n3="";
   if(g<S.model.next.id){
-    /* Historical gameweek: show only the opponent for that week, not the next 3. */
-    const w=p.gw[g];
-    n3=fxRun(fxGW(p,g),"sm");
+    /* Historical gameweek: the opponent and score that week, from the
+       season's calendar (the model's own weeks start at the next deadline,
+       so p.gw[g] is empty here and the strip showed only "–"). */
+    n3=fxRun(pastFxGW(p,g),"sm");
   }else{
     n3=fxNext(p,g,3,"sm");
   }
@@ -1274,7 +1279,7 @@ function cardHTML(p,bench,ctx){
     <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):(hasPred?shownPts.toFixed(1):"—"))}</div>
     ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}</div>
    ${(hasActual&&hasPred)
-     ?`<div class="fxpill" style="background:var(--ink2);color:var(--mute)">pred ${shownPts.toFixed(1)}
+     ?`<div class="fxpill" style="background:var(--ink2);color:var(--mute)"${sp?` title="${esc(sp.why)}"`:""}>${sp&&sp.src==="backtest"?"backtest":"pred"} ${shownPts.toFixed(1)}
         <span style="font-weight:700;color:${diff>=0?"var(--mint)":"var(--red)"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`
      :(hasActual
        ?`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">no prediction stored</div>`
@@ -1283,6 +1288,37 @@ function cardHTML(p,bench,ctx){
        :"")}
    <div class="next3">${n3}</div>
    <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
+}
+/* A finished week's prediction for one player (20 Nov 2026). First the
+   server's snapshot taken before that deadline (/data/feeds/predictions.json,
+   the same record the Status page grades), then the copy this browser saved
+   while the week was live, then the labelled backtest (today's model on that
+   week's pre-deadline data) for weeks before snapshots began. Past weeks no
+   longer depend on what one browser happened to keep. */
+function pastPred(p,g){
+  const L=S.predLive&&S.predLive.gw&&S.predLive.gw[g];
+  const lv=L&&L.players&&(L.players[p.id]??L.players[String(p.id)]);
+  if(lv!=null){const t=L.taken?new Date(L.taken):null;
+    return{v:+lv,src:"live",why:`Model's prediction saved before the GW${g} deadline${t?" ("+t.toLocaleString("en-GB",{timeZone:"Europe/London",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})+")":""}`};}
+  const pb=S.planByGw&&S.planByGw[g]&&S.planByGw[g].predByPlayer;
+  const lc=pb&&(pb[p.id]??pb[String(p.id)]);
+  if(lc!=null)return{v:+lc,src:"local",why:`Model's prediction saved in this browser while GW${g} was live`};
+  const B=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
+  const bk=B&&B.players&&(B.players[p.id]??B.players[String(p.id)]);
+  if(bk!=null)return{v:+bk,src:"backtest",why:`Backtest: what the model projects from the data as it stood before the GW${g} deadline (no live snapshot that week)`};
+  return null;
+}
+/* A finished week's fixture for one player, from the season's calendar:
+   the opponent, home or away, and the score. Difficulty is the opponent's
+   FPL strength rating for the venue. */
+function pastFxGW(p,g){
+  const fx=((S.model&&S.model.byEv&&S.model.byEv[g])||[]).filter(f=>f.ht&&f.at&&(f.ht.id===p.team||f.at.id===p.team));
+  if(!fx.length)return fxBlank(`GW${g}: no fixture`);
+  const ch=fx.map(f=>{const home=f.ht.id===p.team,o=home?f.at:f.ht;
+    const d=fdrBand(home?(o.soa||3):(o.soh||3));
+    const sc=f.hs!=null&&f.as!=null&&f.finished?` · ${home?f.hs:f.as}–${home?f.as:f.hs}`:"";
+    return fxChip(o.short,home,d,{title:`GW${g}: ${o.name||o.short} ${home?"(home)":"(away)"}${sc}`});});
+  return ch.length>1?`<span class="fxdbl">${ch.join("")}</span>`:ch[0];
 }
 /* F108 (bundle 8, 13 Oct 2026): the flag is readable on the pitch, not
    hover-only: "75% · Knee", "Out · Hamstring", "Suspended". */
