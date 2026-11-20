@@ -284,6 +284,13 @@ function act(k,a,b){
     case"setchip":{const why=chipRuleBreak(a,b);if(why){toast(why,{warn:true});break;}
       S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;}
     case"clearchip":{const c={...S.chips};delete c[a];S.chips=c;saveState();break;}
+    /* Chips page (20 Nov 2026): set a whole plan, Team Builder toggle and week, open Compare in a mode */
+    case"chipplan":{const p=_chipPlanList[+a];if(!p)break;const c={...S.chips};Object.keys(p.pick).forEach(k=>delete c[k]);S.chips=c;
+      const bad=[];Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).forEach(([k,[e]])=>{const why=chipRuleBreak(k,e);if(why)bad.push(why);else S.chips={...S.chips,[k]:e};});
+      saveState();if(bad.length)toast(bad[0],{warn:true});else toast("Plan set: "+Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).map(([k,[e]])=>CHIP_UI[chipKind(k)].s+" GW"+e).join(", "));break;}
+    case"chipbuild":S.chipBuild=a==="wc"?"wc":"fh";S.chipWeek=null;break;
+    case"chipweek":S.chipWeek=+a;break;
+    case"cmpopen":S.cmp={mode:a==="wc"?"wc":"fh",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
     case"fixmode":S.fixMode=a==="matches"?"matches":"grid";if(a==="matches")S.mGw=null;break;
     case"toggleout":S.outList=S.outList.includes(a)?S.outList.filter(x=>x!==a):[...S.outList,a];break;
