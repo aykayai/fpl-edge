@@ -139,10 +139,11 @@ try {
     const top = mids.slice().sort((x, y) => hP(y, r.from, r.count) - hP(x, r.from, r.count))[0];
     check((md?.querySelector(".cphl")?.textContent || "") === "Scout pick: " + top.web_name, "the Scout's pick is the best projection over the window", md?.querySelector(".cphl")?.textContent + " vs " + top.web_name);
     check(!doc.querySelector(".cptray"), "the tray hides while the pop-up is open");
+    check(!!doc.querySelector(".modal .mbox.cpfull") && !!doc.querySelector(".cprgrid .cpcol .cpradsvg svg"), "the compare pop-up is the full-screen panel with the radar in its own column");
     g.act("pcmpview", "stats"); md = doc.querySelector(".modal");
     check(md?.querySelectorAll(".cphero").length === 3 && md.querySelectorAll(".cphero .cpsig").length === 3 && /Owned by Rivals/.test(md.textContent) && !!md.querySelector(".cpline svg polyline"),
       "Stats view: hero cards with signals, owned by rivals and the points line chart");
-    const firstWin = [...md.querySelectorAll(".cprows")[2]?.querySelectorAll(".cprc") || []].slice(0, 3).findIndex(c => c.classList.contains("win"));
+    const firstWin = [...md.querySelector(".cprows.cpout")?.querySelectorAll(".cprc") || []].slice(0, 3).findIndex(c => c.classList.contains("win"));
     check(firstWin === mids.indexOf(top), "Stats view marks the best projection in green", firstWin);
     g.act("pcmpclose"); g.act("tickclear");
     const gk = S.model.players.find(p => p.pos === 1 && (p.xMins || 0) >= 60);

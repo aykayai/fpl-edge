@@ -1314,7 +1314,7 @@ function wkSpan(g,h){return h>1?`GW${g}–${Math.min(38,g+h-1)}`:`GW${g}`;}
 function modalHTML(title,body,opts){
   opts=opts||{};
   return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="if(event.target===this)act('${opts.close||"popclose"}')">
-    <div class="mbox${opts.wide?" wide":""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
+    <div class="mbox${opts.wide?" wide":""}${opts.cls?" "+opts.cls:""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
       <button class="mx" onclick="act('${opts.close||"popclose"}')" aria-label="Close">${lic("x",18)}</button></div>
     <div class="mbody">${body}</div></div></div>`;
 }
@@ -1605,8 +1605,8 @@ function cpScoutHTML(v){
     ${typeof askScout==="function"?`<button class="cpask" onclick="act('pcmpscout')">${lic("message-circle",14)} Ask The Scout</button>`:""}</div>`;
 }
 /* points: last 6 played (solid) and next 5 predicted (dashed) */
-function cpLineHTML(ps,g){
-  const W=1160,Hh=170,pad=34,top=14,xs=11,act=ps.map(p=>cpLast6(p,g)),pre=ps.map(p=>[0,1,2,3,4].map(i=>hPts(p,g+i,1)));
+function cpLineHTML(ps,g,W,Hh){
+  W=W||1160;Hh=Hh||170;const pad=34,top=14,xs=11,act=ps.map(p=>cpLast6(p,g)),pre=ps.map(p=>[0,1,2,3,4].map(i=>hPts(p,g+i,1)));
   const mx=Math.max(...act.flat(),...pre.flat(),4),X=i=>pad+i*(W-pad-34)/(xs-1),Y=v=>top+(Hh-top)*(1-v/mx),xn=(X(5)+X(6))/2;
   let s=`<svg viewBox="0 0 ${W} ${Hh+26}" width="100%" role="img" aria-label="Points played and predicted">`;
   [0,.5,1].forEach(f=>{const v=mx*f;s+=`<line x1="${pad}" x2="${W-24}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/><text x="${pad-8}" y="${Y(v)+3}" text-anchor="end" fill="#555" font-size="10" font-family="Geist Mono">${v.toFixed(0)}</text>`;});
@@ -1627,10 +1627,10 @@ function cpRadarHTML(ps,keys){
   [.25,.5,.75,1].forEach(q=>{s+=`<polygon points="${poly(q)}" fill="${q===1?"rgba(255,255,255,.02)":"none"}" stroke="rgba(255,255,255,${q===1?.14:.06})"/>`;});
   s+=`<polygon points="${poly(.9)}" fill="none" stroke="#3DDC97" stroke-opacity=".45" stroke-dasharray="2 5"/><polygon points="${poly(.5)}" fill="none" stroke="rgba(255,255,255,.28)" stroke-dasharray="4 4"/>`;
   keys.forEach((k,i)=>{const[x,y]=pt(i,R);s+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(255,255,255,.06)"/>`;
-    const[lx,ly]=pt(i,R+34),anc=Math.abs(lx-cx)<8?"middle":lx>cx?"start":"end";
+    const[lx,ly]=pt(i,R+38),anc=Math.abs(lx-cx)<8?"middle":lx>cx?"start":"end";
     const vs=ps.map(p=>cpPr(k,p)?.pct??-1),b=Math.max(...vs),j=vs.indexOf(b),tie=vs.filter(v=>v===b).length>1;
-    s+=`<text x="${lx}" y="${ly-7}" text-anchor="${anc}" dominant-baseline="middle" fill="#DCDCDC" font-size="13" font-weight="500">${CP_ST[k][4]}</text>
-      <text x="${lx}" y="${ly+10}" text-anchor="${anc}" dominant-baseline="middle" font-size="11" fill="${tie||b<0?"#6E6E6E":CP_COL[j]}">${tie||b<0?"level":`${esc(ps[j].web_name)} · ${cpOrd(b)}`}</text>`;});
+    s+=`<text x="${lx}" y="${ly-7}" text-anchor="${anc}" dominant-baseline="middle" fill="#DCDCDC" font-size="16" font-weight="500">${CP_ST[k][4]}</text>
+      <text x="${lx}" y="${ly+11}" text-anchor="${anc}" dominant-baseline="middle" font-size="13.5" fill="${tie||b<0?"#6E6E6E":CP_COL[j]}">${tie||b<0?"level":`${esc(ps[j].web_name)} · ${cpOrd(b)}`}</text>`;});
   ps.forEach((p,j)=>{const v=keys.map(k=>(cpPr(k,p)||{pct:0}).pct),c=CP_COL[j];
     s+=`<polygon points="${v.map((q,i)=>pt(i,R*Math.max(4,q)/100).join(",")).join(" ")}" fill="${c}" fill-opacity=".12" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/>`;
     v.forEach((q,i)=>{const[x,y]=pt(i,R*Math.max(4,q)/100);s+=`<circle cx="${x}" cy="${y}" r="3.5" fill="${c}"><title>${esc(p.web_name)} · ${CP_ST[keys[i]][0]}: ${cpOrd(q)} percentile</title></circle>`;});});
@@ -1643,42 +1643,43 @@ function playerCompareHTML(){
   const S2=cpSet(ps),view=S.pCmpView==="stats"?"stats":"radar",xp=p=>hPts(p,g,H);
   const ctl=`<span class="cpchip">${lic("sparkles",13)} ${S2.name}</span>
     <span class="hz cpseg" role="group" aria-label="View"><button class="${view==="radar"?"on":""}" aria-pressed="${view==="radar"}" onclick="act('pcmpview','radar')">Radar</button><button class="${view==="stats"?"on":""}" aria-pressed="${view==="stats"}" onclick="act('pcmpview','stats')">Stats</button></span>`;
-  const lines=`<div class="cppanel cpline"><div class="cpph2"><b>Points: Last 6 Played, Next 5 Predicted</b>${cpLegend(ps)}</div>${cpLineHTML(ps,g)}</div>`;
+  const lines=(W,Hh)=>`<div class="cppanel cpline"><div class="cpph2"><b>Points: Last 6 Played, Next 5 Predicted</b>${cpLegend(ps)}</div>${cpLineHTML(ps,g,W,Hh)}</div>`;
   let body;
   if(view==="radar"){
     const v=ps.length>1?cpVerdict(ps,g,H,win):null;
     const cards=ps.map((p,i)=>{const rv=cpRiv(p);
-      return `<div class="cpins"><span class="cpav2" style="--c:${CP_COL[i]};--k:${cpKit(p)}">${cpPhoto(p,"cpimg",44)}</span>
-        <div><div class="cpnm"><i style="background:${CP_COL[i]}"></i>${pName(p)}${v&&p===v.pick?`<span class="cppick">Scout pick</span>`:""}</div>
-          <div class="cpm">${esc(p.teamName)} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}%${rv?` · ${rv.k}/${rv.n} rivals`:""}</div>${cpChips(p,S2.keys)}<div class="cpfx">${fixPills(p,g,5)}</div></div>
+      return `<div class="cpins"><span class="cpav2 sm" style="--c:${CP_COL[i]};--k:${cpKit(p)}">${cpPhoto(p,"cpimg",36)}</span>
+        <div class="cpinm"><div class="cpnm"><i style="background:${CP_COL[i]}"></i>${pName(p)}${v&&p===v.pick?`<span class="cppick">Scout pick</span>`:""}</div>
+          <div class="cpm">${esc(p.teamName)} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}%${rv?` · ${rv.k}/${rv.n} rivals`:""}</div>${cpChips(p,S2.keys)}</div>
+        <div class="cpfx">${fixPills(p,g,5)}</div>
         <div class="cpxp">${xp(p).toFixed(1)}<small>xPts ${win}</small></div></div>`;}).join("");
-    body=(v?cpScoutHTML(v):"")+`<div class="cprgrid"><div class="cppanel"><div class="cpph2"><b>${S2.pos?CP_POS[S2.pos]:"Player"} Profile</b><span>Percentile vs regular starters in his position · <span style="color:#3DDC97">┄ top 10%</span> · - - average · leader under each stat</span></div>${cpRadarHTML(ps,S2.keys)}</div>
-      <div class="cpinsl">${cards}</div></div>${lines}`;
+    body=`<div class="cprgrid"><div class="cpcol"><div class="cppanel cprad"><div class="cpph2"><b>${S2.pos?CP_POS[S2.pos]:"Player"} Profile</b><span>Percentile vs regular starters in his position · <span style="color:#3DDC97">┄ top 10%</span> · - - average · leader under each stat</span></div>
+        <div class="cpradsvg">${cpRadarHTML(ps,S2.keys)}</div></div>${lines(760,140)}</div>
+      <div class="cpcol">${v?cpScoutHTML(v):""}<div class="cpinsl">${cards}</div></div></div>`;
   }else{
-    const n=ps.length,cols=`grid-template-columns:200px repeat(${n},minmax(0,1fr))`,wins=ps.map(()=>0);
+    const n=ps.length,cols=`grid-template-columns:170px repeat(${n},minmax(0,1fr))`,wins=ps.map(()=>0);
     const row=(label,small,vals,fmt,bar,better)=>{const best=cpBest(vals,better);
-      return `<div class="cprl">${label}${small?`<small>${small}</small>`:""}</div>`+vals.map((v,i)=>{if(v==null)return `<div class="cprc"><div class="cpval">—</div></div>`;
+      return `<div class="cprl"${small?` title="${esc(small)}"`:""}>${label}</div>`+vals.map((v,i)=>{if(v==null)return `<div class="cprc"><div class="cpval">—</div></div>`;
         const w=best!=null&&v===best;if(w)wins[i]++;const b=bar(v,i);
         return `<div class="cprc${w?" win":""}"><div class="cpval"><span>${fmt(v)}${w?"<b>▲</b>":""}</span><i>${b&&b.cap||""}</i></div>${b?`<div class="cptr"><span style="width:${Math.max(3,b.w)}%"></span></div>`:""}</div>`;}).join("");};
     const OUT=[[`xPts ${win}`,xp,v=>v.toFixed(1),1],["xPts Next GW",p=>hPts(p,g,1),v=>v.toFixed(1),1],["Expected Minutes",p=>p.xMins||0,v=>Math.round(v)+"′",1],
-      ["Form",p=>+p.form||0,v=>v.toFixed(1),1],["Price",p=>p.price,v=>"£"+v.toFixed(1),0],["Owned",p=>p.owned,v=>v.toFixed(1)+"%",0]];
+      ["Form",p=>+p.form||0,v=>v.toFixed(1),1]]; /* price and ownership are on the hero cards */
     const outl=OUT.map(([l,f,fm,b])=>{const v=ps.map(f),mx=Math.max(...v.map(x=>Math.abs(x||0)),1e-9);return row(l,"",v,fm,x=>b?{w:100*Math.abs(x)/mx}:null,b);}).join("");
-    const rivRow=`<div class="cprl">Owned by Rivals<small>Your league</small></div>`+ps.map(p=>{const rv=cpRiv(p);
+    const rivRow=`<div class="cprl" title="Your league">Owned by Rivals</div>`+ps.map(p=>{const rv=cpRiv(p);
       return `<div class="cprc"><div class="cpval cpdots">${rv?`<span>${Array.from({length:rv.n},(_,i)=>`<i class="${i<rv.k?"on":""}"></i>`).join("")}</span>${rv.k} of ${rv.n}`:"—"}</div></div>`;}).join("");
     const stats=S2.keys.map(k=>row(CP_ST[k][0],CP_ST[k][1],ps.map(p=>cpVal(k,p)),CP_ST[k][2],(x,i)=>{const pr=cpPr(k,ps[i]);return pr?{w:pr.pct,cap:cpOrd(pr.pct)}:null;},CP_ST[k][3])).join("");
-    const fx=`<div class="cprl">Next 5 Fixtures</div>${ps.map(p=>`<div class="cprc">${fixPills(p,g,5)}</div>`).join("")}`;
-    const heroes=ps.map((p,i)=>`<div class="cphero" style="--k:${cpKit(p)}">${cpPhoto(p,"cpph",120)}<span class="cpdot" style="background:${CP_COL[i]}"></span>
+    const heroes=ps.map((p,i)=>`<div class="cphero" style="--k:${cpKit(p)}">${cpPhoto(p,"cpph",96)}<span class="cpdot" style="background:${CP_COL[i]}"></span>
       <div class="cpht"><div class="cphn">${pName(p,"big")}</div><div class="cphm">${esc(p.teamName)} · ${POS[p.pos]} · £${p.price.toFixed(1)} · ${p.owned.toFixed(1)}%</div><div class="cpsig">${sigHTML(p,g)}</div></div>
       <div class="cpht"><div class="cpbig">${xp(p).toFixed(1)}</div><div class="cpbl">xPts ${win}</div></div></div>`).join("");
-    const rowsHTML=`<div class="cpsec">Outlook</div><div class="cprows" style="${cols}">${outl}${rivRow}</div>
-      <div class="cpsec">${S2.name}</div><div class="cprows" style="${cols}">${stats}</div>
-      <div class="cpsec">Fixtures and Points</div><div class="cprows" style="${cols}">${fx}</div>`;
+    const table=`<div class="cprows" style="${cols}"><div class="cpnote">Bars: percentile among regular starters in his position. Green: best of the group.</div>${heroes}</div>
+      <div class="cpsec">Outlook</div><div class="cprows cpout" style="${cols}">${outl}${rivRow}</div>
+      <div class="cpsec">${S2.name}</div><div class="cprows" style="${cols}">${stats}</div>`;
     const tot=wins.reduce((a,b)=>a+b,0),lead=wins.indexOf(Math.max(...wins));
-    const vbar=tot?`<div class="cpwins"><span><b>${esc(ps[lead].web_name)}</b> wins ${wins[lead]} of ${tot} rows</span><span class="cpwbar">${ps.map((p,i)=>`<span style="flex:${wins[i]||0.0001};background:${CP_COL[i]}"></span>`).join("")}</span>${cpLegend(ps)}</div>`:"";
-    body=`<div class="cpscroll"><div class="cpstats"><div class="cprows" style="${cols}"><div class="cpnote">Bars show each player's percentile among regular starters in his position. Green marks the best of the group.</div>${heroes}</div>
-      <div class="cprows" style="${cols}"><div></div><div style="grid-column:2/-1">${vbar}</div></div>${rowsHTML}</div></div>${lines}`;
+    const vbar=tot?`<div class="cppanel cpwins"><span><b>${esc(ps[lead].web_name)}</b> wins ${wins[lead]} of ${tot} rows</span><span class="cpwbar">${ps.map((p,i)=>`<span style="flex:${wins[i]||0.0001};background:${CP_COL[i]}"></span>`).join("")}</span><span class="cpleg">${ps.map((p,i)=>`<span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)} ${wins[i]}</span>`).join("")}</span></div>`:"";
+    const fxl=`<div class="cppanel cpfxl"><div class="cpph2"><b>Next 5 Fixtures</b></div>${ps.map((p,i)=>`<div class="cpfxr"><span><i style="background:${CP_COL[i]}"></i>${esc(p.web_name)}</span>${fixPills(p,g,5)}</div>`).join("")}</div>`;
+    body=`<div class="cpsgrid"><div class="cpcol cpscroll"><div class="cpstats">${table}</div></div><div class="cpcol">${vbar}${lines(440,190)}${fxl}</div></div>`;
   }
-  return modalHTML(`Compare ${ps.length} Player${ps.length>1?"s":""}`,`<div class="cpbody">${body}</div>`,{wide:true,ctl,close:"pcmpclose"});
+  return modalHTML(`Compare ${ps.length} Player${ps.length>1?"s":""}`,`<div class="cpbody">${body}</div>`,{wide:true,ctl,close:"pcmpclose",cls:"cpfull"});
 }
 /* compare tray: docked at the bottom of Player Data once a player is ticked */
 function cmpTrayHTML(){
