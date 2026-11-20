@@ -170,6 +170,20 @@ try {
     check(!!doc.querySelector(".modal .xfgrid .xfpos"), "All Transfers lays out in columns");
     g.act("pop", null); show("table");
   }
+  /* player card, the Dossier (20 Nov 2026): full screen, opened from a Planner shirt */
+  {
+    show("squad");
+    const kit = doc.querySelector(".card .kitbtn"), id = +((kit?.getAttribute("onclick") || "").match(/act\('card',(\d+)\)/) || [])[1];
+    g.act("card", id);
+    const md = doc.querySelector(".modal .mbox.mfull.pkcard"), p = S.model.players.find(x => x.id === id);
+    check(!!md && !!p && md.querySelector(".pklast")?.textContent.length > 0, "a Planner shirt opens the full-screen Dossier card", p && p.web_name);
+    const keys = vm.runInContext("CP_SETS", ctx)[p.pos];
+    check(md?.querySelectorAll(".pktile").length === 6 && md.querySelectorAll(".pktl .c.pred").length >= 1 && md.querySelectorAll(".pkpct .pkbar").length === keys.length && md.querySelectorAll(".pkhist tbody tr").length >= 1 && md.querySelectorAll(".pkkv.tot>div").length === 9,
+      "the card shows figures, the points timeline, percentiles for his position, season totals and game history");
+    const owned = (S.squad || []).includes(id);
+    check(!owned || (/Bought/.test(md.textContent) && /Sells for/.test(md.textContent)), "a squad player's card shows what he cost and sells for");
+    g.act("card", null); show("table");
+  }
   /* fixture chips (20 Nov 2026): one strip design everywhere, no old pills */
   {
     show("table");
