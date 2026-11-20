@@ -1050,6 +1050,7 @@ const chipTile=(k,sz,solid,ring)=>{const u=CHIP_UI[k];
   return `<span class="cx-ct${solid?" solid":""}${ring?" "+ring:""}" style="--tc:${u.c};width:${sz}px;height:${sz}px" aria-hidden="true">${lic(u.i,Math.round(sz*.55))}</span>`;};
 const chipKeyName=k=>`${CHIP_UI[chipKind(k)].n} ${k.endsWith("2")?"2":"1"}`;
 const sgnPts=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(1);
+const sgnInt=v=>(v>=0?"+":"−")+Math.abs(Math.round(v));
 let _chipPlanList=[];
 function chipsHTML(){
   if(!S.model)return "";
@@ -1084,8 +1085,8 @@ function chipsHTML(){
   const recAt={};Object.entries(rec).forEach(([k,[e,v]])=>{if(!S.chips[k])recAt[e]=[k,v];});
   left.filter(k=>k.endsWith("1")).forEach(k=>{if(!S.chips[k]){const b=chipBestWeeks(k)[0];if(b)recAt[b[0]]=[k,b[1]];}});
   const cols=[];for(let e=1;e<=38;e++){const m=chipWeekMark(e),pl=playedAt[e],pn=plannedAt[e],rc=recAt[e];
-    const tok=pl?chipTile(pl,26,true):pn?`${chipTile(chipKind(pn),26,false,"ring")}<span class="cx-rv">${sgnPts(((chipCurve(pn)[e]||{}).v)||0)}</span>`
-      :rc?`${chipTile(chipKind(rc[0]),26,false,"dash")}<span class="cx-rv mu">${sgnPts(rc[1])}</span>`:"";
+    const tok=pl?chipTile(pl,26,true):pn?`${chipTile(chipKind(pn),26,false,"ring")}<span class="cx-rv">${sgnInt(((chipCurve(pn)[e]||{}).v)||0)}</span>`
+      :rc?`${chipTile(chipKind(rc[0]),26,false,"dash")}<span class="cx-rv mu">${sgnInt(rc[1])}</span>`:"";
     const tip=pl?`GW${e}: ${CHIP_UI[pl].n} played`:pn?`GW${e}: ${chipKeyName(pn)} planned`:rc?`GW${e}: ${chipKeyName(rc[0])} recommended`:"";
     cols.push(`<div class="cx-rc${e===g?" now":""}${e<g?" past":""}${e===20?" h2":""}"${tip?` title="${esc(tip)}"`:""}>
       <span class="cx-rgw">${e}</span><span class="cx-rfx">${m?`<i class="cx-fx ${m.t==="blank"?"bl":m.p>=0.6?"dl":"dp"}" title="${esc((m.t==="blank"?"Blank":"Double")+" · "+m.why+(m.src==="Crellin"?" (Ben Crellin's forecast)":" (FPL fixtures)"))}">${m.t==="blank"?"BGW":"DGW"}</i>`:""}</span>
