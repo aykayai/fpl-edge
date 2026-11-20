@@ -898,9 +898,12 @@ async function loadAll(force,opts){
    loads, before the model is rebuilt. It is a picture of the page only: clicks
    are held off (see .booting) until the real render replaces it. */
 function savePaint(){
+  if(typeof document==="undefined"||!document.getElementById)return;   // the server's model has no page
   const app=document.getElementById("app");
   if(S.loading||S.statusPending||S.booting)return;
-  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint",{tab:S.tab,html:app.innerHTML,at:Date.now()});
+  /* One picture per page (20 Nov 2026), so opening any page seen before
+     shows it at once rather than a loading screen. */
+  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint:"+S.tab,{tab:S.tab,html:app.innerHTML,at:Date.now()});
 }
 
 /* ============================================================

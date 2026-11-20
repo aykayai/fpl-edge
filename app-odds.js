@@ -938,15 +938,13 @@ function renderPage(){
   if(!S.model&&S.booting)return;
   if(S.booting){S.booting=false;app.classList.remove("booting");}
   if(!S.model){
-    app.innerHTML=`<div style="max-width:460px;margin:0 auto;padding:28px 4px">
-      <h1 style="font-size:44px;line-height:.95;font-weight:800">FPL<br><span style="color:var(--mint)">Signals</span></h1>
-      <p class="note" style="margin-top:12px">${esc(IDENTITY.team)} · team ${IDENTITY.id}</p>
-      <div class="panel" style="border-color:var(--mint);margin-top:18px"><div class="pbody">
-        <p class="note" style="margin:0 0 10px">Loads players, prices, fixtures and last season's underlying stats from this box's own FPL Signals server, which mirrors the FPL Core Insights dataset.</p>
-        <button class="pri" style="width:100%" onclick="act('load')">${S.loading?esc(S.progress||"Loading…"):"Load data"}</button>
-      </div></div>
-      ${S.err?`<div class="warn" style="margin-top:12px">${esc(S.err)}</div>`:""}
-      <p class="note" style="margin-top:14px">Data: <a href="https://github.com/olbauday/FPL-Core-Insights" target="_blank" style="color:var(--cyan)">FPL Core Insights</a>, mirrored locally about three times a day.</p></div>`;
+    /* No splash (Andy, 20 Nov 2026): the data loads by itself, so while it
+       does there is one quiet line saying what it is fetching; only a failed
+       load shows anything more (the error and Try again). */
+    app.innerHTML=(S.err&&!S.loading)
+      ?`<div style="max-width:460px;margin:0 auto;padding:28vh 4px 0"><div class="warn">${esc(S.err)}</div>
+         <button class="pri" style="width:100%;margin-top:12px" onclick="act('load')">Try again</button></div>`
+      :`<p class="note" role="status" aria-live="polite" style="text-align:center;padding:38vh 4px 0;margin:0">Loading ${esc(S.progress||"")}</p>`;
     return;
   }
   /* wave 8: the Odds and Transfers pages are retired; their old links land
