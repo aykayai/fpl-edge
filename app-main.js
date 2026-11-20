@@ -30,7 +30,8 @@ function act(k,a,b){
     case"wcForm":S.wcForm=a||null;break;
     /* wave 2: This Week strip and the Compare pop-up */
     case"weekh":S.weekH=[1,3,5].includes(+a)?+a:1;LS.set("weekh",S.weekH);break;
-    case"pop":S.pop=a||null;break;
+    case"pop":S.pop=a||null;S.popTab=null;break;
+    case"poptab":S.popTab=a;break;
     case"popclose":S.pop=null;break;
     /* wave 3: Players hub */
     /* Teams (redesign 12 Nov 2026): Fixture Grid and Matches */

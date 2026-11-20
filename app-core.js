@@ -249,7 +249,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.3.0";
+const APP_VERSION="13.6.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -427,8 +427,29 @@ const PBAND=[["#4A0010","#FFD9DF"],["#96122A","#FFE3E8"],["#D4545E","#3A0009"],
   ["#5FE083","#04250D"],["#7DFB9E","#042A0E"]];
 /* One seven-step ramp, dark red through to bright green, used for both
    projected points and fixture difficulty so the two read consistently. */
-const fdrCol=d=>({5:["#4A0010","#FFD9DF"],4:["#C0182F","#FFF0F2"],3:["#F0A02A","#2A1000"],
-  2:["#2E9E52","#EAFFF1"],1:["#7DFB9E","#042A0E"]}[d]||["#F0A02A","#2A1000"]);
+/* Fixture difficulty (20 Nov 2026, Andy): one five-step scale everywhere,
+   light green (easiest) through neutral grey to deep red (hardest); the
+   lightness changes at every step so it reads without colour too. */
+const FDR5={1:["#2BD47D","#04210F"],2:["#1E7A4D","#E2F8EC"],3:["#3A3A3A","#E4E4E4"],4:["#B54A2C","#FFF1EC"],5:["#7E1733","#FFDDE5"]};
+const fdrBand=d=>Math.min(5,Math.max(1,Math.round(+d)||3));
+const fdrCol=d=>FDR5[fdrBand(d)];
+/* THE fixture chip (Andy's pick B, 20 Nov 2026): a strip of equal cells,
+   three capitals, "@" before an away opponent (drawn by CSS), and a
+   difficulty bar along the bottom of each cell. Every fixture on the site
+   uses it; the colours come from FDR5. */
+function fxChip(opp,home,diff,o){
+  o=o||{};const d=fdrBand(diff),code=esc(String(opp||"").slice(0,3).toUpperCase());
+  return `<span class="fxc d${d}${home?"":" aw"}${o.cls?" "+o.cls:""}" title="${esc(o.title||`${opp} ${home?"(home)":"(away)"} · difficulty ${d}`)}"${o.attr||""}>${code}</span>`;
+}
+const fxBlank=(t,cls)=>`<span class="fxc bl${cls?" "+cls:""}" title="${esc(t||"No fixture")}">–</span>`;
+const fxRun=(h,cls)=>`<span class="fxrun${cls?" "+cls:""}">${h}</span>`;
+/* one gameweek for a player: a double stacks its two chips */
+function fxGW(p,e){
+  const q=p.gw[e];if(!q||q.blank||!q.fixtures.length)return fxBlank(`GW${e}: no fixture`);
+  const ch=q.fixtures.map(f=>{const d=fdrBand(posDiff(p,f));return fxChip(f.opp,f.home,d,{title:`GW${e}: ${f.oppName||f.opp} ${f.home?"(home)":"(away)"} · difficulty ${d}`});});
+  return ch.length>1?`<span class="fxdbl">${ch.join("")}</span>`:ch[0];
+}
+function fxNext(p,g,n,cls){let h="";for(let e=g;e<g+n&&e<=38;e++)h+=fxGW(p,e);return fxRun(h,cls);}
 /* One pill renderer so every fixture looks the same wherever it appears.
    Away games are italic. */
 /* THE fixture pill. Every tab uses this so colour, italics and abbreviation
@@ -436,14 +457,7 @@ const fdrCol=d=>({5:["#4A0010","#FFD9DF"],4:["#C0182F","#FFF0F2"],3:["#F0A02A","
 /* Which difficulty applies to this player: keepers and defenders are judged on
    the opponent's attack, midfielders and forwards on their defence. */
 function posDiff(p,f){return p.pos<=2?(f.diffDef??f.diff):(f.diffAtt??f.diff);}
-function fdrPill(opp,home,diff,opts){
-  const o=opts||{};
-  const[b,c]=fdrCol(diff);
-  const label=o.short?String(opp).slice(0,3):String(opp);
-  const sz=o.tiny?"font-size:10px;padding:1px 4px;":"";
-  return `<span class="fdrpill" style="background:${b};color:${c};${sz}${home?"":"font-style:italic;"}${o.style||""}"
-    title="${esc(opp)} ${home?"(home)":"(away)"} · difficulty ${diff}">${esc(label)}</span>`;
-}
+function fdrPill(opp,home,diff,opts){return fxChip(opp,home,diff,opts&&opts.title?{title:opts.title}:null);}
 
 /* ---------- CSV ---------- */
 function parseCSV(text){

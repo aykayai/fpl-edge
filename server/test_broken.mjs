@@ -141,8 +141,8 @@ try {
     check(!doc.querySelector(".cptray"), "the tray hides while the pop-up is open");
     check(!!doc.querySelector(".modal .mbox.cpfull") && !!doc.querySelector(".cprgrid .cpcol .cpradsvg svg"), "the compare pop-up is the full-screen panel with the radar in its own column");
     g.act("pcmpview", "stats"); md = doc.querySelector(".modal");
-    check(md?.querySelectorAll(".cphero").length === 3 && md.querySelectorAll(".cphero .cpsig").length === 3 && /Owned by Rivals/.test(md.textContent) && !!md.querySelector(".cpline svg polyline"),
-      "Stats view: hero cards with signals, owned by rivals and the points line chart");
+    check(md?.querySelectorAll(".cphero").length === 3 && md.querySelectorAll(".cphero .cpsig").length === 3 && /Owned by Rivals/.test(md.textContent) && !md.querySelector(".cpline") && md.querySelectorAll(".cpfxrow .fxrun").length === 3,
+      "Stats view: hero cards with signals, owned by rivals, a fixtures row and no line chart (it lives on the radar)");
     const firstWin = [...md.querySelector(".cprows.cpout")?.querySelectorAll(".cprc") || []].slice(0, 3).findIndex(c => c.classList.contains("win"));
     check(firstWin === mids.indexOf(top), "Stats view marks the best projection in green", firstWin);
     g.act("pcmpclose"); g.act("tickclear");
@@ -154,6 +154,45 @@ try {
     const cpRules = cssText.match(/\.cp[^{]*\{[^}]*\}/g) || [];
     const stripes = cpRules.filter(x => /inset\s+\d+px\s+0\s+0/.test(x) || /border-left\s*:/.test(x));
     check(cpRules.length > 20 && stripes.length === 0, `no coloured edge stripes in the compare styles (${cpRules.length} rules)`, stripes.join(" "));
+    show("table");
+  }
+  /* full-screen pop-ups and the shirt click (20 Nov 2026) */
+  {
+    show("squad");
+    const kit = doc.querySelector(".card .kitbtn");
+    check(!!kit && /act\('card',\d+\)/.test(kit.getAttribute("onclick") || ""), "a Planner shirt opens the player card");
+    for (const k of ["move", "cap", "price", "warn", "rival"]) { g.act("pop", k);
+      check(!!doc.querySelector(".modal .mbox.mfull"), `the ${k} pop-up is full screen`); g.act("pop", null); }
+    g.act("pop", "move");
+    const tabs = [...doc.querySelectorAll(".modal .poptabs button")].map(b => b.textContent.trim());
+    check(tabs.join("|") === "Best Moves|Five-Week Plan|Funding|All Transfers", "Top Moves splits into four tabs", tabs.join("|"));
+    g.act("poptab", "all");
+    check(!!doc.querySelector(".modal .xfgrid .xfpos"), "All Transfers lays out in columns");
+    g.act("pop", null); show("table");
+  }
+  /* player card, the Dossier (20 Nov 2026): full screen, opened from a Planner shirt */
+  {
+    show("squad");
+    const kit = doc.querySelector(".card .kitbtn"), id = +((kit?.getAttribute("onclick") || "").match(/act\('card',(\d+)\)/) || [])[1];
+    g.act("card", id);
+    const md = doc.querySelector(".modal .mbox.mfull.pkcard"), p = S.model.players.find(x => x.id === id);
+    check(!!md && !!p && md.querySelector(".pklast")?.textContent.length > 0, "a Planner shirt opens the full-screen Dossier card", p && p.web_name);
+    const keys = vm.runInContext("CP_SETS", ctx)[p.pos];
+    check(md?.querySelectorAll(".pktile").length === 6 && md.querySelectorAll(".pktl .c.pred").length >= 1 && md.querySelectorAll(".pkpct .pkbar").length === keys.length && md.querySelectorAll(".pkhist tbody tr").length >= 1 && md.querySelectorAll(".pkkv.tot>div").length === 9,
+      "the card shows figures, the points timeline, percentiles for his position, season totals and game history");
+    const owned = (S.squad || []).includes(id);
+    check(!owned || (/Bought/.test(md.textContent) && /Sells for/.test(md.textContent)), "a squad player's card shows what he cost and sells for");
+    g.act("card", null); show("table");
+  }
+  /* fixture chips (20 Nov 2026): one strip design everywhere, no old pills */
+  {
+    show("table");
+    const runs = doc.querySelectorAll(".pdt .fxrun"), cells = doc.querySelectorAll(".pdt .fxrun .fxc");
+    const bands = new Set([...cells].map(c => [...c.classList].find(k => /^d[1-5]$/.test(k))).filter(Boolean));
+    check(runs.length > 0 && cells.length >= runs.length * 5 && bands.size >= 3 && !doc.querySelector(".fdrpill,.fx5,.fxrow"),
+      `Player Data's Next 5 uses the one fixture strip (${runs.length} runs, difficulty bands ${[...bands].sort().join(" ")})`);
+    show("squad");
+    check(doc.querySelectorAll(".fxrun .fxc").length > 0 && !doc.querySelector(".fdrpill,.fx5,.fxrow"), "the Planner uses the same fixture strip");
     show("table");
   }
   g.act("pdless");
