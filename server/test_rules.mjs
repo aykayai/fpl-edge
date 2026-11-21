@@ -157,9 +157,9 @@ try {
   doSwaps(ftW + 1);
   check(g.transfersIn(W) === ftW + 1 && g.hitCost(W) === 4, `F19 ${ftW} free and ${ftW + 1} transfers costs 4`, `transfers ${g.transfersIn(W)} hit ${g.hitCost(W)}`);
   g.render();
-  /* header figures are cards (.fc) since bundle 8 */
-  const header = [...doc.querySelectorAll(".fc, .stat")].find(s => /Predicted/i.test(s.textContent));
-  check(header && /[-−]4 hit/.test(header.textContent), "F19 the header shows the hit beside the predicted figure", header && header.textContent.replace(/\s+/g, " "));
+  /* the Planner's week line under the gameweek scroller (21 Nov 2026) */
+  const header = doc.querySelector(".pz-wl");
+  check(header && /[-−]4 hit/.test(header.textContent), "F19 the week line shows the hit", header && header.textContent.replace(/\s+/g, " "));
   check(new RegExp(`${ftW + 1} transfers · -4 hit`).test(doc.getElementById("app").textContent), "F19 the planner shows the transfers and the hit");
   restore(clean); S.startGW = W; g.render();
   doSwaps(ftW);
@@ -180,11 +180,36 @@ try {
     for (const o of sq.filter(p => p.pos >= 2).slice(0, 4)) { const i = cheapSwap(o, used3); if (!i) continue; used3.push(i.id); g.applySwap(o.id, i.id); }
     check(g.hitCost(wcWeek) === 0, "F19 a Wildcard week costs nothing however many transfers", `transfers ${g.transfersIn(wcWeek)} hit ${g.hitCost(wcWeek)}`);
     g.render();
-    /* since the redesign (wave 1) free transfers sit on the Budget card */
-    const ftStat = [...doc.querySelectorAll(".fc")].find(s => /Budget/i.test(s.textContent));
-    check(ftStat && /Unlimited FT/.test(ftStat.textContent) && /Wildcard this week/.test(ftStat.textContent), "F61 a Wildcard week shows Unlimited", ftStat && ftStat.textContent.replace(/\s+/g, " "));
+    /* free transfers sit on the Bank figure, the chip on the week line (21 Nov 2026) */
+    const ftStat = [...doc.querySelectorAll(".pz-st")].find(s => /Bank/i.test(s.textContent)), wl = doc.querySelector(".pz-wl");
+    check(ftStat && /unlimited transfers/i.test(ftStat.textContent) && wl && /Wildcard/.test(wl.textContent), "F61 a Wildcard week shows unlimited transfers", ftStat && ftStat.textContent.replace(/\s+/g, " "));
   } else check(false, `F61 setup: a Wildcard could be planned for GW${wcWeek}`, g.chipRuleBreak("wildcard" + half, wcWeek));
   restore(clean); g.render();
+
+  /* ---------- Team Planner (21 Nov 2026): menu, chip buttons, scroller ---------- */
+  S.startGW = NEXT; g.render();
+  {
+    const c = doc.querySelector(".pz-c[data-pid]"), id = c ? +c.getAttribute("data-pid") : null;
+    g.act("pmenu", id);
+    const items = [...doc.querySelectorAll(".pz-menu button")].map(b => b.textContent.trim());
+    check(items.includes("Substitute") && items.includes("Player card"), "Planner: a right-click opens the player menu", items.join("|"));
+    g.act("sqview", "pitch");
+    check(!doc.querySelector(".pz-menu") && S.pMenu == null, "Planner: any other action closes the menu");
+    check(doc.querySelectorAll(".pz-cbs .pz-cb").length === 4, "Planner: one row of four chip buttons");
+    const pills = doc.querySelectorAll(".pz-scr .pz-gp"), on = doc.querySelector(".pz-scr .pz-gp.on");
+    check(pills.length === 8 && on && on.textContent.includes("GW" + NEXT), "Planner: the gameweek scroller shows eight weeks with the one in view lit");
+  }
+  {
+    const W2 = Math.max(NEXT, 20), keep = { ...S.chips };
+    S.startGW = W2; g.render();
+    if (!g.chipRuleBreak("wildcard2", W2)) {
+      g.act("achip", "wildcard");
+      const wc = [...doc.querySelectorAll(".pz-cb")].find(b => /Wildcard/.test(b.textContent));
+      check(S.chips.wildcard2 === W2 && wc && wc.classList.contains("active") && /Build team/.test(wc.textContent) && /cmpopen','wc'/.test(wc.getAttribute("onclick") || ""),
+        `Planner: the Wildcard button plays it in GW${W2} and then opens its best team`, wc && wc.textContent.replace(/\s+/g, " "));
+    } else check(false, `Planner setup: a Wildcard could be played in GW${W2}`);
+    S.chips = keep; S.startGW = NEXT; g.render();
+  }
 
   /* ---------- F47 chip rules ---------- */
   const refused = (k, e, re, name) => {

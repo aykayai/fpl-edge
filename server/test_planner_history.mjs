@@ -163,7 +163,7 @@ try {
     const capBadges = [...app.querySelectorAll('[title="Captain (official)"]')];
     if (capBadges.length !== 1) { ok = false; why.push(`${capBadges.length} official C badges`); }
     else {
-      const card = capBadges[0].closest(".card");
+      const card = capBadges[0].closest(".pz-c");
       if (!card || !card.textContent.includes(capPlayer.web_name)) { ok = false; why.push(`C badge not on ${capPlayer.web_name}`); }
     }
 
@@ -172,7 +172,7 @@ try {
     const capPts = (capActs[String(gw)] ?? capActs[gw]);
     if (capPts != null && capBadges.length === 1) {
       const wantShown = (capPts * capPick.multiplier).toFixed(1);
-      const card = capBadges[0].closest(".card");
+      const card = capBadges[0].closest(".pz-c");
       if (!card.textContent.includes(wantShown)) { ok = false; why.push(`captain card misses actual ${wantShown}`); }
     }
 
@@ -198,8 +198,8 @@ try {
   g.act("startgw", next);
   const app = w.document.getElementById("app");
   const curText = app.textContent.replace(/\s+/g, " ");
-  const curControls = [...app.querySelectorAll("button")].filter(b =>
-    ["Substitute", "Captain"].includes(b.getAttribute("title") || ""));
+  /* the editable week: each card carries the transfer button and the right-click menu (21 Nov 2026) */
+  const curControls = [...app.querySelectorAll(".pz-c[oncontextmenu] .pz-xf")];
   check(curControls.length > 0, `GW${next} (current): edit controls render (${curControls.length} found)`);
   check(!curText.includes("Official line-up · final"), `GW${next} (current): not labelled official`);
   const curXI = g.startingXI().map(p => p.id);
