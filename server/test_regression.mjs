@@ -193,6 +193,8 @@ function normalise(text, isNew) {
     t = t.replace(/ FPL (?=Predicted )/, " ");
   }
   t = t.replace(/expire [^▲▼]+/g, "expire ");                          /* chips expiry was hard-coded */
+  /* PLANNED (21 Nov 2026): seasons read "25/26" instead of "2026" */
+  t = t.replace(/(\d{2})\/(\d{2})/g, (m, a, b) => +b === +a + 1 && +a >= 18 && +a <= 40 ? "20" + b : m);
   /* PLANNED (redesign wave 1): new signal key and labels, League tabs,
      Status page around the xFPL model, Player Data renamed Players */
   t = t.replace(/^League ?Tracker ?Rivals ?/, "");

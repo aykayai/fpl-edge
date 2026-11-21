@@ -40,6 +40,10 @@ const SEASON="2026-2027", LAST="2025-2026";
    state, so this fails silently rather than blocking the main load. */
 /* the season label the feed builder writes (FPL_SEASON) */
 const FEED_SEASON="2027";
+/* a season as "25/26" (21 Nov 2026, Andy): takes "2025/26" or the year a
+   season ends ("2026") */
+const seasonShort=s=>{s=String(s);const m=s.match(/^(\d{4})\/(\d{2,4})$/);if(m)return m[1].slice(2)+"/"+m[2].slice(-2);
+  const n=+s;return n>2000&&n<2100?String(n-1).slice(2)+"/"+String(n).slice(2):s;};
 const ACTUALS_URL=BACKUP?"data/actuals.json":"/data/feeds/actuals.json";
 const RIVALS_URL=BACKUP?null:"/data/feeds/rivals.json";
 const DCD_URL=BACKUP?"data/dc-doubles.json":"/data/feeds/dc-doubles.json";
@@ -249,7 +253,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.8.0";
+const APP_VERSION="13.8.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

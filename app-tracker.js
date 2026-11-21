@@ -102,11 +102,11 @@ function trkChartHTML(){
      (2027) darkest, so recency reads directly from shade depth rather than an
      arbitrary colour assignment. */
   const ORANGE_RAMP=["#FFD9B0","#FFB980","#FF9D57","#FF8A3D","#E6672A","#B84413"];
-  const series=seasons.map((ssn,i)=>({label:ssn,data:trkSeries(ssn,key),color:ORANGE_RAMP[i]}))
+  const series=seasons.map((ssn,i)=>({label:seasonShort(ssn),data:trkSeries(ssn,key),color:ORANGE_RAMP[i]}))
     .filter(s=>trkClean(s.data).length);
   const cur=(S.tracker&&S.tracker.gw)||null;
   if(cur){const cs=key==="rankChange"?trkChange(cur.map(r=>r.orRank)):cur.map(r=>r[key]);
-    series.push({label:S.tracker.season||"2027",data:cs,color:ORANGE_RAMP[5]});}
+    series.push({label:seasonShort(S.tracker.season||FEED_SEASON),data:cs,color:ORANGE_RAMP[5]});}
 
   const all=!!S.trkGwAll;
   const start=all?0:Math.min(Math.max(S.trkGwStart||0,0),30);
@@ -239,7 +239,7 @@ function trkChipHTML(){
     if(score!=null||ch)return `<td style="color:var(--mute)" title="Played${ch?" in GW"+ch.event:""}. The gain is not published yet.">used</td>`;
     return cell(null);
   };
-  const head=`<th>Chip</th><th style="color:var(--mint)">2027</th>${c.labels.map(l=>`<th>${l}</th>`).join("")}`;
+  const head=`<th>Chip</th><th style="color:var(--mint)">${seasonShort(FEED_SEASON)}</th>${c.labels.map(l=>`<th>${seasonShort(l)}</th>`).join("")}`;
   const rows=Object.keys(c.rows).map(name=>
     `<tr><td>${name}</td>${curCell(name)}${c.rows[name].map(cell).join("")}</tr>`).join("");
   return `<div class="panel"><div class="phead"><h2>Chip performance</h2>

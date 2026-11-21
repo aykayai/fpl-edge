@@ -226,6 +226,20 @@ try {
     if (r && T) check(Math.abs(r.best - g.teamScore(T.ids, gw, null)) < 0.01, "Chips: Team Rating uses the Free Hit team's team score", `${r.best} vs ${g.teamScore(T.ids, gw, null)}`);
     const plans = g.chipPlans();
     check(plans.every(p => new Set(Object.values(p.pick).map(x => x[0])).size === Object.keys(p.pick).length), "Chips: every plan has one chip per week");
+    /* 21 Nov 2026: plans listed highest total first, Most Points the highest */
+    check(plans.every((p, i) => i === 0 || plans[i - 1].tot >= p.tot), "Chips: plans are listed highest total first", plans.map(p => p.tot.toFixed(1)).join(", "));
+    if (plans.length) check(plans[0].name === "Most Points", "Chips: Most Points is the top plan", plans[0].name);
+    /* placing a chip on the roadmap (click a chip, then a week) plans it, and
+       the Planner shows it for that week: one shared plan */
+    const k2 = ["bboost2", "3xc2", "freehit2", "wildcard2"].find(k => g.chipPlayed(k) == null);
+    if (k2) {
+      const keep = S.chips, wk = Math.max(gw, 20) + 3;
+      S.chips = Object.fromEntries(Object.entries(S.chips || {}).filter(([k, e]) => k !== k2 && e !== wk));
+      g.act("chippick", k2); g.act("chipplace", wk);
+      check(S.chips[k2] === wk && !S.chipPick, `Chips: placing ${k2} on GW${wk} plans it`, JSON.stringify(S.chips));
+      check(vm.runInContext(`chipForWeek(${wk})`, ctx) === k2.replace(/2$/, ""), "Chips: the Planner shows the placed chip for that week", vm.runInContext(`chipForWeek(${wk})`, ctx));
+      S.chips = keep;
+    }
   }
   /* the rebuilt Chips page (20 Nov 2026, v3 21 Nov) marks a played chip on
      its roadmap, lists it in Chips Used and offers no best week for it */

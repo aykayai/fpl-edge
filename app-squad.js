@@ -1563,6 +1563,12 @@ function chipPlans(){
   const cv={};keys.forEach(k=>cv[k]=chipCurve(k));
   const top={};keys.forEach(k=>top[k]=chipBestWeeks(k).slice(0,6));
   const wcKey=keys.find(k=>chipKind(k)==="wildcard");
+  /* a Bench Boost or Triple Captain inside a Wildcard's first five weeks is
+     scored on the Wildcard squad, so those weeks are searched as well as the
+     chip's own six best (21 Nov 2026: Most Points had missed them and a
+     named plan beat it) */
+  if(wcKey)keys.filter(k=>["bboost","3xc"].includes(chipKind(k))).forEach(k=>{const all=chipBestWeeks(k),have=new Set(top[k].map(x=>x[0]));
+    top[wcKey].forEach(([w])=>{for(let e=w+1;e<w+5;e++){const x=all.find(y=>y[0]===e);if(x&&!have.has(e)){have.add(e);top[k].push(x);}}});});
   const after={};
   const synergy=(pick,k,e,v)=>{
     if(!wcKey||!pick[wcKey]||!["bboost","3xc"].includes(chipKind(k)))return v;
@@ -1597,7 +1603,12 @@ function chipPlans(){
     plans.push(Object.assign(fill(fx),{name:"Set Up the Double",tag:"",why:`Wildcard in GW${dbl.e-1}, straight before the ${dbl.src==="FPL"?"":dbl.p>=0.6?"likely ":"possible "}double, so the Bench Boost has doublers on the bench.`}));
   }
   if(blank&&has("freehit2"))plans.push(Object.assign(fill({freehit2:[blank.e]}),{name:"Free Hit the First Blank",tag:"",why:`Covers the GW${blank.e} blank (${esc(blank.why)}); transfers or the Wildcard handle the rest.`}));
+  /* Most Points is the best of everything found, named plans included;
+     every plan is listed highest total first */
+  const topP=plans.reduce((m,p)=>!m||p.tot>m.tot?p:m,null);
+  if(topP&&plans[0]&&topP!==plans[0]&&plans[0].name==="Most Points"){plans[0].pick=topP.pick;plans[0].tot=topP.tot;}
   const seen=new Set();const uniq=plans.filter(p=>{const k=JSON.stringify(p.pick);if(seen.has(k))return false;seen.add(k);return true;});
+  uniq.sort((a,b)=>b.tot-a.tot);
   _chipPlans={sig,p:uniq};return uniq;
 }
 /* Hindsight for this season: every finished week each chip could have been
@@ -1624,8 +1635,9 @@ function chipHindsight(){
     if(e<2)return;
     const pre=picksOf(e-1)||pk.map(x=>x.id),bud=(+r.value||100)+(+r.bank||0);
     const T=preTeam(e,bud);
-    if(T){const v1=p=>act(p.id,e);out.fh.push({e,v:+(bestOn(T,v1)-bestOn(pre,v1)).toFixed(1)});
-      if(e+2<=last){const v3=p=>act(p.id,e)+act(p.id,e+1)+act(p.id,e+2);out.wc.push({e,v:+(bestOn(T,v3)-bestOn(pre,v3)).toFixed(1)});}}
+    /* Wildcard on the Wildcard week alone, the same basis as FPL's figure
+       for it (21 Nov 2026), so the week you played reads like the rest */
+    if(T){const v1=p=>act(p.id,e),d=+(bestOn(T,v1)-bestOn(pre,v1)).toFixed(1);out.fh.push({e,v:d});out.wc.push({e,v:d});}
   });
   return out;
 }
