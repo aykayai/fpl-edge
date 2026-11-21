@@ -290,6 +290,9 @@ function act(k,a,b){
       saveState();if(bad.length)toast(bad[0],{warn:true});else toast("Plan set: "+Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).map(([k,[e]])=>CHIP_UI[chipKind(k)].s+" GW"+e).join(", "));break;}
     case"chipbuild":S.chipBuild=a==="wc"?"wc":"fh";S.chipWeek=null;break;
     case"chipweek":S.chipWeek=+a;break;
+    case"chiphist":S.chipHist=a;break;
+    case"chippop":S.chipPop=a||null;break;
+    case"chippopclose":S.chipPop=null;break;
     case"cmpopen":S.cmp={mode:a==="wc"?"wc":"fh",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
     case"fixmode":S.fixMode=a==="matches"?"matches":"grid";if(a==="matches")S.mGw=null;break;
@@ -341,7 +344,7 @@ document.addEventListener("keydown",e=>{
   if((e.key==="Enter"||e.key===" ")&&el&&el.getAttribute&&el.getAttribute("role")==="button"
      &&!/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)){e.preventDefault();el.click();return;}
   if(e.key==="Escape"&&S.cardId){S.cardId=null;render();return;}
-  if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp)){S.pop=null;S.cmp=null;S.pCmp=false;render();}
+  if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp||S.chipPop)){S.pop=null;S.cmp=null;S.pCmp=false;S.chipPop=null;render();}
 });
 window.addEventListener("popstate",()=>{savePaint();if(applyHash())render();});
 /* Signals charts: the hover card reads data-tip "title|figure|note" */
