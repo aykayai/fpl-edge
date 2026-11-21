@@ -1317,7 +1317,7 @@ function chipsHTML(){
   const leftRow=k=>{const kind=chipKind(k),cv=chipCurve(k),h2=k.endsWith("2"),e=weekOf(k),planned=S.chips[k],v=e?((cv[e]||{}).v||0):0;
     const mx=Math.max(...Object.values(cv).map(o=>o.v),0.1);let bars="";
     for(let w=h2?20:1;w<=(h2?38:19);w++){const o=cv[w];
-      bars+=o?`<span class="cx-ms${w===planned?" pl":""}" onclick="event.stopPropagation();act('chipset','${k}',${w})" title="GW${w}: ${sgnPts(o.v)}. ${w===planned?"Click to clear the plan.":`Click to plan ${esc(chipKeyName(k))} here.`}"><i class="${w===e?"on":""}${o.f?" hx":""}" style="height:${Math.max(3,Math.round(Math.max(0,o.v)/mx*30))}px;--tc:${CHIP_UI[kind].c}"></i></span>`:`<span class="cx-ms nil"><i></i></span>`;}
+      bars+=o?`<span class="cx-ms${w===planned?" pl":""}" onclick="event.stopPropagation();act('chipset','${k}',${w})" title="GW${w}: ${sgnPts(o.v)}. ${w===planned?"Click to clear the plan.":`Click to plan ${esc(chipKeyName(k))} here.`}"><i class="${w===e?"on":""}${o.f?" hx":""}" style="height:${Math.max(6,Math.round(Math.max(0,o.v)/mx*100))}%;--tc:${CHIP_UI[kind].c}"></i></span>`:`<span class="cx-ms nil"><i></i></span>`;}
     return `<div class="cx-cr" onclick="act('chippop','${k}')" role="button" tabindex="0" title="${esc(chipKeyName(k))}: every week's gain">
       ${chipTile(kind,30,false,planned?"ring":"")}<span class="cx-crn"><b>${chipKeyName(k)}</b><span>${planned?"Planned":"Suggested"}${h2?"":" · expires GW19"}</span></span>
       <span class="cx-mini">${bars}</span><span class="cx-crw"><b>GW${e||"—"}</b><i class="${v>=0?"up":"dn"}">${sgnPts(v)}</i></span>
@@ -1377,7 +1377,7 @@ function chipsHTML(){
       <div class="cx-ro">${opts.map(e=>{const v=(cv[e]||{}).v||0,mk=chipWeekMark(e);
         return `<button class="cx-roo${e===road?" pick":""}" onclick="act('chipset','${sel}',${e})" aria-label="${esc(`${chipKeyName(sel)} GW${e} ${sgnPts(v)}. ${e===planned?"Clear the plan.":"Plan it."}`)}">${mk?`<i class="cx-fx cx-ft ${mk.t==="blank"?"bl":mk.p>=0.6?"dl":"dp"}">${mk.t==="blank"?"BGW":"DGW"}</i>`:""}<b>GW${e}</b><i class="cx-rov">${sgnPts(v)}</i>${e===road?`<span class="cx-rmk">${planned?"Planned":"Suggested"}</span>`:""}${tipFor(sel,e)}</button>`;}).join("")}</div>
       <div class="cx-rbf"><span>${note}</span></div></div>`;};
-  const remainingSec=rep("chrem","layers","Remaining Plans",
+  const remainingSec=rep("chrem","layers","My Plan",
     "One box per chip: its best three weeks by points added, with the selected week highlighted (the week you planned, or the suggested one). Click a week to plan it, or the planned week again to clear it. Hover a week to see where the points come from. When both of a chip are left, switch between them. Plans here and on the Team Planner are the same plan.",
     `<div class="cx-rgrid">${KORD.map(rpBox).join("")}</div>`,{wide:true});
 
@@ -1388,8 +1388,8 @@ function chipsHTML(){
       <span class="cx-bpt">${sgnPts(sel.tot)}</span><span class="cx-bpd ${selD>=-0.05?"up":"dn"}">${Math.abs(selD)<0.05?"Matches best":sgnPts(selD)+" v best"}</span>
       <div class="cx-bps">${Object.entries(sel.pick).sort((a,b)=>a[1][0]-b[1][0]).map(([k,[e,v]])=>`<span class="cx-bpx" title="${esc(chipKeyName(k)+" GW"+e+" "+sgnPts(v)+(S.chips[k]?" (planned)":" (suggested)"))}">${chipTile(chipKind(k),24,false,S.chips[k]?"ring":"dash")}<b>GW${e}</b><i>${sgnPts(v)}</i></span>`).join("")}</div></div>`:"";
   const bestSec=plans.length?rep("chbest","trophy","Best Plan",
-    "Your selected plan (planned chips where you put them, the rest at their suggested weeks) against the best available plans for every second-half chip left, one chip per week, highest total first. A Bench Boost or Triple Captain within five weeks of a Wildcard is scored on the Wildcard squad. Use sets every chip in a plan.",
-    selRow+plans.slice(0,3).map((p,i)=>{const u=inUse(p);return `<div class="cx-bp${i===0?" top":""}">
+    "Your selected plan (planned chips where you put them, the rest at their suggested weeks) against the two best available plans for every second-half chip left, one chip per week, highest total first. A Bench Boost or Triple Captain within five weeks of a Wildcard is scored on the Wildcard squad. Use sets every chip in a plan.",
+    selRow+plans.slice(0,2).map((p,i)=>{const u=inUse(p);return `<div class="cx-bp${i===0?" top":""}">
       <span class="cx-bpr">${i+1}</span><div class="cx-bpn"><b>${esc(p.name)}</b>${i===0?`<span class="cx-tag">Best</span>`:""}<button class="fci" data-tip="${esc(String(p.why).replace(/<[^>]*>/g,""))}" aria-label="About ${esc(p.name)}">i</button></div>
       <span class="cx-bpt up">${sgnPts(p.tot)}</span><button class="cx-ghost" onclick="act('chipplan',${i})"${u?" disabled":""}>${u?"In use":"Use"}</button>
       <div class="cx-bps">${Object.entries(p.pick).sort((a,b)=>a[1][0]-b[1][0]).map(([k,[e,v]])=>`<span class="cx-bpx" title="${esc(chipKeyName(k)+" GW"+e+" "+sgnPts(v))}">${chipTile(chipKind(k),24,false,i===0?"ring":"")}<b>GW${e}</b><i>${sgnPts(v)}</i></span>`).join("")}</div></div>`;}).join(""),{wide:true}):"";
@@ -1452,7 +1452,7 @@ function chipsHTML(){
   const pop=S.chipPop==="report"?modalHTML("Chip Report",report(),{wide:true,close:"chippopclose",ctl:`<span class="cx-mhs">Every season from ${esc(seasonShort(SEAS[SEAS.length-1]))}</span>`})
     :S.chipPop&&left.includes(S.chipPop)?modalHTML(chipKeyName(S.chipPop),rep("chsel","target","Gain by Week","Each bar is the points the chip adds that week on the Planner's team score. Hatched bars include Ben Crellin's forecast, weighted for how likely. Click any bar to plan the chip for that week.",bwRow(S.chipPop),{wide:true}),{wide:true,close:"chippopclose"}):"";
   return `<div class="cx">${head}${roadmap}
-    <div class="cx-one"><div>${chipsLeftSec}${chipsUsedSec}</div><div>${remainingSec}${bestSec}</div></div>
+    <div class="cx-quad">${remainingSec}${bestSec}${chipsLeftSec}${chipsUsedSec}</div>
     ${pop}</div>`;
 }
 /* the season label for this season, "2026/27" */
