@@ -19,11 +19,12 @@ function searchInput(action,el,extra){
 }
 function act(k,a,b){
   const P=id=>S.model?.players.find(p=>p.id===id);
+  /* any action closes the player menu (21 Nov 2026) */
+  if(k!=="pmenu"&&S.pMenu!=null)S.pMenu=null;
   switch(k){
     case"load":loadAll().then(()=>loadNews());return;
     case"tab":if(a!==S.tab)savePaint();S.tab=a;S.menuOpen=false;break;
     case"menu":S.menuOpen=!S.menuOpen;break;
-    case"dash":S.dash={...S.dash,[a]:!S.dash[a]};break;
     case"chipview":S.chipView=a;break;
     case"chiphalf":S.chipHalf=a;break;
     case"fhForm":S.fhForm=a||null;break;
@@ -103,6 +104,7 @@ function act(k,a,b){
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
+    case"pmenu":S.pMenu=a==null?null:+a;break;
     case"pdmore":S.pdLimit=(S.pdLimit||PD_PAGE)+PD_PAGE;break;
     case"pdall":S.pdLimit=1000;break;
     case"poolmore":S.poolLimit=Math.min(150,(S.poolLimit||50)+50);break;
@@ -288,8 +290,6 @@ function act(k,a,b){
     case"chipplan":{const p=_chipPlanList[+a];if(!p)break;const c={...S.chips};Object.keys(p.pick).forEach(k=>delete c[k]);S.chips=c;
       const bad=[];Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).forEach(([k,[e]])=>{const why=chipRuleBreak(k,e);if(why)bad.push(why);else S.chips={...S.chips,[k]:e};});
       saveState();if(bad.length)toast(bad[0],{warn:true});else toast("Plan set: "+Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).map(([k,[e]])=>CHIP_UI[chipKind(k)].s+" GW"+e).join(", "));break;}
-    case"chipbuild":S.chipBuild=a==="wc"?"wc":"fh";S.chipWeek=null;break;
-    case"chipweek":S.chipWeek=+a;break;
     case"chiprp":S.chipRP={...(S.chipRP||{}),[a]:b};break;
     case"chippop":S.chipPop=a||null;break;
     case"chippopclose":S.chipPop=null;break;
@@ -344,6 +344,7 @@ document.addEventListener("keydown",e=>{
   if((e.key==="Enter"||e.key===" ")&&el&&el.getAttribute&&el.getAttribute("role")==="button"
      &&!/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)){e.preventDefault();el.click();return;}
   if(e.key==="Escape"&&S.cardId){S.cardId=null;render();return;}
+  if(e.key==="Escape"&&S.pMenu!=null){S.pMenu=null;render();return;}
   if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp||S.chipPop)){S.pop=null;S.cmp=null;S.pCmp=false;S.chipPop=null;render();}
 });
 window.addEventListener("popstate",()=>{savePaint();if(applyHash())render();});
@@ -433,3 +434,15 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   if(!BACKUP)setInterval(()=>{if(S.loading)return;
     loadStatus().then(s=>{if(s)refreshStatusUI();});},60000);
 })();
+/* Planner player menu (21 Nov 2026): right-click opens it, a long press on
+   a touch screen too; a click anywhere else closes it. */
+let _lpT=null,_lpFired=false;
+document.addEventListener("pointerdown",e=>{
+  const c=e.target&&e.target.closest?e.target.closest(".pz-c[data-pid]"):null;
+  if(!c||e.pointerType==="mouse"||e.target.closest(".pz-menu,button"))return;
+  _lpFired=false;clearTimeout(_lpT);
+  _lpT=setTimeout(()=>{_lpFired=true;act("pmenu",+c.dataset.pid);},500);});
+["pointerup","pointercancel","pointerleave"].forEach(t=>document.addEventListener(t,()=>clearTimeout(_lpT)));
+document.addEventListener("click",e=>{
+  if(_lpFired){_lpFired=false;e.preventDefault();e.stopPropagation();return;}
+  if(S.pMenu!=null&&!(e.target.closest&&e.target.closest(".pz-menu,.pz-c"))){S.pMenu=null;render();}},true);

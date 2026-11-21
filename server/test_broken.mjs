@@ -159,8 +159,9 @@ try {
   /* full-screen pop-ups and the shirt click (20 Nov 2026) */
   {
     show("squad");
-    const kit = doc.querySelector(".card .kitbtn");
-    check(!!kit && /act\('card',\d+\)/.test(kit.getAttribute("onclick") || ""), "a Planner shirt opens the player card");
+    /* the Planner card (21 Nov 2026): a click opens the player card, a right-click the menu */
+    const kit = doc.querySelector(".pz-c[data-pid]");
+    check(!!kit && /'card',\d+\)/.test(kit.getAttribute("onclick") || "") && /act\('pmenu',\d+\)/.test(kit.getAttribute("oncontextmenu") || ""), "a Planner shirt opens the player card, a right-click the menu");
     for (const k of ["move", "cap", "price", "warn", "rival"]) { g.act("pop", k);
       check(!!doc.querySelector(".modal .mbox.mfull"), `the ${k} pop-up is full screen`); g.act("pop", null); }
     g.act("pop", "move");
@@ -173,7 +174,7 @@ try {
   /* player card, the Dossier (20 Nov 2026): full screen, opened from a Planner shirt */
   {
     show("squad");
-    const kit = doc.querySelector(".card .kitbtn"), id = +((kit?.getAttribute("onclick") || "").match(/act\('card',(\d+)\)/) || [])[1];
+    const kit = doc.querySelector(".pz-c[data-pid]"), id = +((kit?.getAttribute("onclick") || "").match(/'card',(\d+)\)/) || [])[1];
     g.act("card", id);
     const md = doc.querySelector(".modal .mbox.mfull.pkcard"), p = S.model.players.find(x => x.id === id);
     check(!!md && !!p && md.querySelector(".pklast")?.textContent.length > 0, "a Planner shirt opens the full-screen Dossier card", p && p.web_name);
@@ -252,11 +253,11 @@ try {
   const feed = await (await fetch(BASE + "/data/feeds/actuals.json")).json();
   const ranked = (feed.team.gw || []).filter(r => r.orRank != null).sort((a, b) => b.event - a.event)[0];
   show("squad");
-  /* header figures are cards (.fc: .fcv figure, .fcc change line) since bundle 8 */
-  const rankStat = [...doc.querySelectorAll(".fc, .stat")].find(s => /Overall rank/i.test(s.textContent));
-  const shown = rankStat ? rankStat.querySelector(".fcv, .v").textContent.replace(/,/g, "") : "";
+  /* the Planner's stats strip (21 Nov 2026): .pz-st, figure in b, change line in i */
+  const rankStat = [...doc.querySelectorAll(".pz-st")].find(s => /Overall rank/i.test(s.textContent));
+  const shown = rankStat ? rankStat.querySelector("b").textContent.replace(/,/g, "") : "";
   check(ranked && +shown === ranked.orRank, "F8 header overall rank is the feed's latest week", `page ${shown} feed ${ranked && ranked.orRank} (GW${ranked && ranked.event})`);
-  check(rankStat && rankStat.querySelector(".fcc, .s").textContent.trim().endsWith("after GW" + ranked.event), "F8 the rank says which week it is from", rankStat && rankStat.querySelector(".fcc, .s").textContent);
+  check(rankStat && rankStat.querySelector("i").textContent.trim().endsWith("after GW" + ranked.event), "F8 the rank says which week it is from", rankStat && rankStat.querySelector("i").textContent);
 
   /* F7: make one page builder throw */
   const real = vm.runInContext("signalsHTML", ctx);

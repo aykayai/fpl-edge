@@ -153,6 +153,8 @@ export async function fplPlayersPayload() {
       dfk: e.direct_freekicks_order ?? null,
       ep: e.ep_next == null ? null : +e.ep_next,
       dt: e.dreamteam_count ?? null,
+      /* 21 Nov 2026: in FPL's season Dream Team (the Planner's star) */
+      idt: e.in_dreamteam ? 1 : 0,
       /* 12 Nov 2026 audit: availability, news, price, ownership and transfers
          from this 15-minute fetch, so the page need not wait for the dataset
          mirror (hours behind). now_cost and cost changes in tenths, as FPL. */

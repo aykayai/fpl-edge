@@ -1026,114 +1026,6 @@ const sgn1=x=>{const r=Math.round(x*10)/10;return (r>0?"+":r<0?"−":"")+Math.ab
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const arw=c=>c>0?'<span style="color:var(--mint)">▲</span>':c<0?'<span style="color:var(--red)">▼</span>':"";
 
-function cardHTML(p,bench,ctx){
-  const g=VG(),q=p.gw[g]||{fixtures:[],pts:0};
-  /* ctx lets the comparison squad render through this exact same function
-     instead of its own stripped-down copy, so it gains the form pill,
-     actual-points display, injury dot, bench numbering and fixture strip
-     automatically and can never drift out of step with the planner again.
-     Its buttons dispatch the c-prefixed actions so edits land on the
-     comparison team rather than the real one. */
-  const C=ctx||null;
-  const A=C?{sub:"csub",flag:"cflag",cap:"ccap",vice:"cvice"}
-           :{sub:"sub",flag:"flag",cap:"cap",vice:"vice"};
-  const capId=C?C.captain:null, viceId=C?C.vice:null;
-  const flaggedList=C?(C.flagged||[]):S.flagged;
-  const {captain:capForGw,vice:viceForGw}=C?{captain:capId,vice:viceId}:effectiveCaptainVice(g);
-  const isC=C?(capId===p.id):(_histCaptain!=null?_histCaptain===p.id:capForGw===p.id);
-  const isV=C?(viceId===p.id):(_histSquadActive?_histVice===p.id:(_histCaptain==null&&viceForGw===p.id));
-  const fl=flaggedList.includes(p.id);
-  /* A finished week with official picks is a record, not a draft: the edit
-     controls don't render, and the multiplier comes from the official pick
-     (so a real Triple Captain week triples), never from the local chip plan. */
-  const official=_histSquadActive&&!C;
-
-  const chipNow=chipForWeek(g);
-  const capMult=official
-    ?((_histMult&&_histMult[p.id]>=2)?_histMult[p.id]:1)
-    :(isC?(chipNow==="3xc"?3:2):1);
-  /* For a historical week, hPts() can't compute a real number (the model only
-     projects forward) — use the snapshot captured while that week was still
-     live, if one was taken. */
-  const sp=g<S.model.next.id?pastPred(p,g):null,snapPred=sp?sp.v:null;
-  /* For a finished gameweek, only a snapshot is trustworthy. hPts() sums
-     forward from g, and the model holds no entries for past weeks, so calling
-     it here silently added up FUTURE gameweeks instead (a single past week
-     showing "pred 19.0"). No snapshot means no prediction, not a fabricated one. */
-  const isPast=S.model&&g<S.model.next.id;
-  const basePred=snapPred!=null?snapPred:(isPast?null:hPts(p,g,S.horizon));
-  const hasPred=basePred!=null;
-  const shownPts=hasPred?basePred*capMult:null;
-  /* Actual points for this specific gameweek — only present once the live-actuals
-     feed has that GW. Captain-multiplied the same way as the prediction, so the two
-     compare like-for-like (both = "contribution to the squad total"). */
-  const feedGW=(S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]))||null;
-  const actualRaw=feedGW?feedGW[g]??feedGW[String(g)]:null;
-  const hasActual=actualRaw!=null;
-  const actualShown=hasActual?actualRaw*capMult:null;
-  const diff=(hasActual&&hasPred)?actualShown-shownPts:null;
-  /* The score box colour must follow whichever number is actually displayed —
-     previously it always used the predicted band, so a past week with a real
-     (and possibly good) actual score still coloured itself off a near-zero
-     retrospective prediction, which is why actuals looked permanently red. */
-  const shownVal=hasActual?actualShown:(hasPred?shownPts:0);
-  const col=ptsCol(shownVal/Math.max(1,S.horizon));
-  const bg=col[0], fg=col[1], elite=col[2]==="elite";
-  /* The model only projects forward from the current gameweek, so a past week
-     with no live-actuals data yet has no real number to show — the naive shownPts
-     would render a misleading "0.0" (and colour it as a bad projection) rather
-     than making clear no data exists for that week. */
-  const noHistData=g<S.model.next.id&&!p.gw[g]&&snapPred==null&&!hasActual;
-  let n3="";
-  if(g<S.model.next.id){
-    /* Historical gameweek: the opponent and score that week, from the
-       season's calendar (the model's own weeks start at the next deadline,
-       so p.gw[g] is empty here and the strip showed only "–"). */
-    n3=fxRun(pastFxGW(p,g),"sm");
-  }else{
-    n3=fxNext(p,g,3,"sm");
-  }
-  const sub=(C?C.subFrom:S.subFrom)===p.id;
-  /* Bench players show their sub-order number; tapping ⇄ mid-substitution receives
-     the swap. Outfield subs also cycle their order when idle (benchcycle); the
-     keeper is fixed at position 1 and does not cycle. */
-  const isBench=!!bench,slot=isBench?bench.slot:0,cyc=isBench&&bench.cycle;
-  const subOnclick=isBench
-    ? (cyc?`act(${C?"S.compare.subFrom":"S.subFrom"}!=null?'${A.sub}':'benchcycle',${p.id})`:`act('${A.sub}',${p.id})`)
-    : `act('${A.sub}',${p.id})`;
-  const subGlyph=isBench?(S.subFrom==null?slot:"⇄"):"⇄";
-  const subTitle=isBench?(cyc?`Bench ${slot} · tap to change order (or to receive a substitution)`:`Bench ${slot} · goalkeeper (fixed)`):"Substitute";
-  /* Official past week: no edit controls at all, just the armbands that were
-     actually worn, as plain badges, and the bench number as a plain label. */
-  const controls=official
-    ?`${isC?`<span class="badge" style="bottom:-2px;left:4px;background:var(--cream);color:var(--ink)" title="Captain (official)">C</span>`:""}
-      ${isV?`<span class="badge" style="bottom:-2px;right:4px;background:var(--cyan);color:var(--ink)" title="Vice-captain (official)">V</span>`:""}
-      ${isBench?`<span class="badge" style="top:-2px;left:2px;background:var(--ink3);color:var(--cream)" title="Bench ${slot} (official)">${slot}</span>`:""}`
-    :`<button class="badge" style="top:-2px;right:2px;background:${fl?"var(--mint)":"var(--ink3)"};color:${fl?"var(--ink)":"var(--cream)"}" onclick="act('${A.flag}',${p.id})" title="${fl?"Keep":"Replace"}">✕</button>
-    <button class="badge" style="top:-2px;left:2px;background:${sub?"var(--cyan)":"var(--ink3)"};color:${sub?"var(--ink)":"var(--cream)"}" onclick="${subOnclick}" title="${subTitle}">${subGlyph}</button>
-    <button class="badge" style="bottom:-2px;left:4px;background:${isC?"var(--cream)":"rgba(0,0,0,.5)"};color:${isC?"var(--ink)":"var(--mute)"}" onclick="act('${A.cap}',${p.id})" title="Captain">C</button>
-    <button class="badge" style="bottom:-2px;right:4px;background:${isV?"var(--cyan)":"rgba(0,0,0,.5)"};color:${isV?"var(--ink)":"var(--mute)"}" onclick="act('${A.vice}',${p.id})" title="Vice-captain">V</button>`;
-  return `<div class="card ${fl?"dim":""}" ${sub?'style="outline:2px solid var(--cyan);outline-offset:2px;border-radius:7px"':""}>
-   <div class="kit"><span class="kitbtn" role="button" tabindex="0" onclick="act('card',${p.id})" onkeydown="if(event.key==='Enter')act('card',${p.id})" title="Open ${esc(p.web_name)}'s card">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,38)}</span>
-    ${p.avail<1?`<span class="dot" style="top:-2px;left:20px;background:${p.avail===0?"var(--red)":"var(--amber)"}" title="${esc(p.news||"Doubt")}"></span>`:""}
-    ${controls}</div>
-   <div class="namebar" onclick="act('card',${p.id})"><span class="nm">${esc(p.web_name)}</span>
-    <span class="pr">£${p.price.toFixed(1)}${arw(p.priceChange)}</span></div>
-   ${p.avail<1?injLine(p):""}
-   <div class="ptsbar" style="background:${noHistData?"var(--ink3)":bg};color:${noHistData?"var(--mute)":fg}${elite&&!noHistData?";box-shadow:0 0 0 2px #EAFFEF, 0 0 12px rgba(125,251,158,.85)":""}" title="${p.total} pts this season (actual)">
-    <div class="pv">${noHistData?"—":(hasActual?actualShown.toFixed(1):(hasPred?shownPts.toFixed(1):"—"))}</div>
-    ${noHistData?`<div class="pv2" style="opacity:.85">no data for GW${g}</div>`:""}</div>
-   ${(hasActual&&hasPred)
-     ?`<div class="fxpill" style="background:var(--ink2);color:var(--mute)"${sp?` title="${esc(sp.why)}"`:""}>${sp&&sp.src==="backtest"?"backtest":"pred"} ${shownPts.toFixed(1)}
-        <span style="font-weight:700;color:${diff>=0?"var(--mint)":"var(--red)"}">${diff>=0?"+":""}${diff.toFixed(1)}</span></div>`
-     :(hasActual
-       ?`<div class="fxpill" style="background:var(--ink2);color:var(--ink3)">no prediction stored</div>`
-       /* the FORM bar left the pitch cards (12 Nov 2026): form is in the
-          Player Pool, Player Data and the player card */
-       :"")}
-   <div class="next3">${n3}</div>
-   <div class="cardsigs">${sigHTML(p,g)}</div></div>`;
-}
 /* A finished week's prediction for one player (20 Nov 2026). First the
    server's snapshot taken before that deadline (/data/feeds/predictions.json,
    the same record the Status page grades), then the copy this browser saved
@@ -1164,14 +1056,6 @@ function pastFxGW(p,g){
     const sc=f.hs!=null&&f.as!=null&&f.finished?` · ${home?f.hs:f.as}–${home?f.as:f.hs}`:"";
     return fxChip(o.short,home,d,{title:`GW${g}: ${o.name||o.short} ${home?"(home)":"(away)"}${sc}`});});
   return ch.length>1?`<span class="fxdbl">${ch.join("")}</span>`:ch[0];
-}
-/* F108 (bundle 8, 13 Oct 2026): the flag is readable on the pitch, not
-   hover-only: "75% · Knee", "Out · Hamstring", "Suspended". */
-function injLine(p){
-  const n=String(p.news||"");
-  const what=(/suspend/i.test(n)?"Suspended":n.replace(/\s*-\s*.*$/,"").replace(/\s*injury$/i,"").trim())||"Doubt";
-  const pct=p.avail>0?Math.round(p.avail*100)+"%":"Out";
-  return `<div class="injline${p.avail===0?" out":""}" title="${esc(n||what)}">${pct} · ${esc(what)}</div>`;
 }
 /* keep any explicit bench order the optimiser set, else best first */
 function orderBench(list){
@@ -1271,9 +1155,28 @@ function dashData(){
     .sort((a,b)=>b.score-a.score);
   return{strength,outlook,risks,conc:top,bench,benchPts,caps,risky,riskPts,xiPts,diffs,diffPts,runList,xi};
 }
-function dashHTML(){
+/* Kind and hard fixture runs for the next five weeks (Attack and Defence
+   outlook): This Week's Fixture Outlook card and its pop-up */
+function dashRuns(){
+  const g=VG(), sp=squadPlayers();
+  const kind=p=>{let good=0,n=0;
+    for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];if(!q||q.blank)continue;
+      q.fixtures.forEach(f=>{if(posDiff(p,f)<=2)good++;n++;});}
+    return{good,n};};
+  const rated=list=>list.map(p=>{const k=kind(p);
+    return{p,...k,bad:k.n-k.good};}).filter(x=>x.n>=4);
+  const bestOf=list=>rated(list).filter(x=>x.good>=4)
+    .sort((a,b)=>b.good-a.good||(b.p.gw[g]?.pts||0)-(a.p.gw[g]?.pts||0)).slice(0,3);
+  const worstOf=list=>rated(list).filter(x=>x.bad>=3)
+    .sort((a,b)=>b.bad-a.bad||(a.p.gw[g]?.pts||0)-(b.p.gw[g]?.pts||0)).slice(0,3);
+  const attP=sp.filter(p=>p.pos>=3), defP=sp.filter(p=>p.pos<=2);
+  return{att:bestOf(attP),attBad:worstOf(attP),def:bestOf(defP),defBad:worstOf(defP)};
+}
+/* The Squad Dashboard's detail, now shown in This Week's pop-ups (21 Nov
+   2026): pick lists the parts to show (str, caps, risk, form, aout, dout). */
+function dashHTML(pick){
+  pick=pick||["str","caps","risk","form","aout","dout"];
   const g=VG(), d=dashData();
-  const open=k=>!!S.dash[k];
   const sp=squadPlayers(), xi=startingXI();
   const kind=p=>{let good=0,n=0;
     for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];if(!q||q.blank)continue;
@@ -1294,21 +1197,17 @@ function dashHTML(){
       <span style="display:flex;align-items:center;gap:7px">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,18)}
         <span><b>${esc(p.web_name)}</b><span class="note" style="display:block">${esc(p.teamName)} · ${POS[p.pos]}</span></span></span>
       <span class="mono" style="${c||""};font-weight:700">${right}</span></div>`;
-  const cell=(k,title,head,body,colour)=>`
-    <div class="dashcell ${open(k)?"open":""}">
-      <button class="dashrow" onclick="act('dash','${k}')">
-        <span class="dtop"><span class="dkey">${title}</span>
-          <span class="dchev">${open(k)?"▲":"▼"}</span></span>
-        <span class="dval" style="${colour||""}">${head}</span>
-      </button>
-      ${open(k)?`<div class="dashbody">${body}</div>`:""}</div>`;
+  const cell=(k,title,head,body,colour)=>!pick.includes(k)?"":`
+    <div class="dashpart"><div class="dashph"><span class="dkey">${title}</span>
+        <span class="dval" style="${colour||""}">${head}</span></div>
+      <div class="dashbody">${body}</div></div>`;
 
   /* strength is keyed by position: {got, best, pct, n} for each */
   const st=d.strength||{};
   const totGot=[1,2,3,4].reduce((a,k)=>a+(st[k]?st[k].got:0),0);
   const totBest=[1,2,3,4].reduce((a,k)=>a+(st[k]?st[k].best:0),0);
   const barPct=Math.round(100*totGot/Math.max(1,totBest));
-  return `<div class="dashgrid">
+  return `<div class="dashparts">
     ${cell("str","Squad strength",`${totGot.toFixed(1)} of ${totBest.toFixed(1)}`,
       `<div class="dbar"><span style="width:${clamp(barPct,3,100)}%"></span></div>
        <p class="note" style="margin:8px 0 10px">Your squad against the strongest one the same budget could buy.</p>
