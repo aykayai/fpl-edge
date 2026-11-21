@@ -258,16 +258,19 @@ async function handle(req, res) {
        from the Premier League once, kept in STATE_DIR/img and served from
        here, instead of 20+ hot-linked images per visit. A missing image is a
        404 and the page falls back to its shirt drawing as before. */
-    const im = /^\/img\/(badge|player)\/(\d{1,7})\.png$/.exec(path);
+    const im = /^\/img\/(badge|player|shirt|shirtgk)\/(\d{1,7})\.png$/.exec(path);
     if (im) {
       const dir = join(CONFIG.STATE_DIR, "img", im[1]);
       const full = join(dir, im[2] + ".png");
       let have = false;
       try { have = (await stat(full)).isFile(); } catch { /* not cached yet */ }
       if (!have) {
+        /* 21 Nov 2026: FPL's own kit pictures for the Planner (shirt_<club>, keepers _1) */
         const url = im[1] === "badge"
           ? `https://resources.premierleague.com/premierleague/badges/50/t${im[2]}.png`
-          : `https://resources.premierleague.com/premierleague/photos/players/110x140/p${im[2]}.png`;
+          : im[1] === "player"
+            ? `https://resources.premierleague.com/premierleague/photos/players/110x140/p${im[2]}.png`
+            : `https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${im[2]}${im[1] === "shirtgk" ? "_1" : ""}-220.png`;
         try {
           const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
           if (!r.ok) { sendJson(res, method, 404, { error: "not found" }); return; }

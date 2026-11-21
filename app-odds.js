@@ -989,59 +989,18 @@ function renderPage(){
           ${S.pendingOpt.map(m=>`<div><div style="font-size:10px;
             color:var(--cyan);font-weight:700;margin-bottom:4px">${POS[m.out.pos]}</div>${swapCardHTML(m,g)}</div>`).join("")}</div>
         <button style="margin-top:10px" onclick="act('cancelopt')">Cancel</button></div></div>`:"";
-    /* Planner layout (12 Nov 2026, Andy's pick A): one header row holds the
-       title, Pitch/List, the gameweek score with its label under it, and the
-       actions; the pitch follows straight on, the bench under it. */
-    const offRow=(g<first&&S.tracker&&Array.isArray(S.tracker.gw))
-      ?(S.tracker.gw.find(r=>r.event===g&&Array.isArray(r.picks)&&r.picks.length)||null):null;
-    let gwFig;
-    /* Finished week with the official history published: the real total,
-       the transfers and hit paid for it, and the chip. */
-    if(offRow)gwFig=`<b class="gwv">${(+offRow.points).toFixed(0)}</b>
-      <span class="gwl" title="Squad, line-up, formation, captain and points confirmed from the official FPL API.">GW${g} official · ${offRow.transfers||0} transfer${(offRow.transfers||0)===1?"":"s"}${offRow.transferCost>0?`, <span class="dn">-${offRow.transferCost} hit</span>`:""}${offRow.chipLabel?` · <span style="color:var(--amber)">${esc(offRow.chipLabel)}</span>`:""}</span>
-      <span class="gwl up">Official line-up · final</span>`;
-    /* F55: a week in play shows its score so far, tagged live */
-    else if(S.actuals&&S.actuals[g]!=null){const d=S.actuals[g]-weekPts();
-      gwFig=`<b class="gwv">${(+S.actuals[g]).toFixed(0)}</b>
-      <span class="gwl">GW${g} ${weekFinal(g)?"actual":"so far"+LIVE_TAG} · pred ${weekPts().toFixed(1)} <span class="${d>=0?"up":"dn"}">${d>=0?"+":""}${d.toFixed(1)}</span></span>`;}
-    else{const t=transfersIn(g),h=(t&&!freeWeek(g))?hitCost(g):0;
-      gwFig=`<b class="gwv mint">${weekPts().toFixed(1)}</b>
-      <span class="gwl">GW${g}${t&&!freeWeek(g)?` · ${t} transfer${t>1?"s":""} · ${h?`<span class="dn">-${h} hit</span>`:"free"}`:""}</span>`;}
-    main=`<div class="grid2"><div>
-      <div class="panel plpanel"><div class="phead plhead">
-        <span class="plleft"><h2>Planner</h2>
-          <span class="pseg">
-            <button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button>
-            <button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span></span>
-        <div class="gwbar">
-          <button onclick="act('startgw',${Math.max(1,VG()-1)})" title="Earlier gameweek" aria-label="Earlier gameweek">←</button>
-          <span class="gwfig">${gwFig}</span>
-          <button onclick="act('startgw',${Math.min(38,VG()+1)})" title="Later gameweek" aria-label="Later gameweek">→</button>
-        </div>
-        <span class="placts">
-          <span class="pseg">
-            <button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button>
-            <button onclick="act('opt')">Optimise</button></span>
-          <button onclick="act('reset')">Reset</button><button class="pri" onclick="act('save')">Save</button></span></div>
-        ${S.sqView==="list"?squadListHTML():pitchHTML()}
-        </div>
-      <div class="panel chippanel">
-        <div class="chiprow">
-          <span class="chipinline">
-            <span class="chiplbl">Chips</span>
-            ${[["none","None"],["bboost","Bench Boost"],["3xc","Triple Capt"],["freehit","Free Hit"],["wildcard","Wildcard"]]
-              .map(([k,n])=>{const on=k==="none"?!chipForWeek(VG()):chipForWeek(VG())===k;
-                return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}
-          </span></div></div>
-      <div class="panel"><div class="phead"><h2>Squad dashboard</h2>
-        <span class="note">GW${VG()}</span></div>${dashHTML()}</div>${conf}${flag}</div>
+    /* Team Planner (21 Nov 2026, round 4): the Planner and the Player Pool
+       side by side, then Chips and This Week full width */
+    main=`<div class="grid2 pz-grid"><div>
+      <div class="panel plpanel">${plannerHeadHTML()}${S.sqView==="list"?squadListHTML():plannerPitchHTML()}</div>${conf}${flag}</div>
       <div class="poolcol">
         <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
         <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">Player Data →</a></div>
         ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
-          <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>`;
+          <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>
+      ${plannerChipsHTML()}${thisWeekHTML()}`;
   }
   else if(S.tab==="table")main=playerDataHTML();
   else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();
@@ -1069,42 +1028,7 @@ function renderPage(){
   const topbar=topbarHTML({gv,pred,bank,ftTxt});
   let hero="";
   if(S.tab==="squad"){
-    const fRows=((S.tracker&&S.tracker.gw)||[]).slice().sort((x,y)=>x.event-y.event);
-    const lastRow=fRows[fRows.length-1], prevRow=fRows[fRows.length-2];
-    const chg=(d,f,goodUp)=>(d==null||!isFinite(d)||Math.abs(d)<1e-9)?"":
-      `<span class="${(d>0)===goodUp?"up":"dn"}">${d>0?"▲":"▼"} ${f(Math.abs(d))}</span> `;
-    const hits=hitsOver(gv,S.horizon), lastAct=S.actuals?S.actuals[gv-1]:null;
-    const fv=valueFromFeed();
-    const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
-    const done=fRows.filter(r=>r.points!=null).slice(-7);
-    const cards=[
-      figCard(S.horizon===1?`Predicted GW${gv}`:`Predicted GW${gv}–${Math.min(38,gv+S.horizon-1)}`,
-        "Your XI and captain, plus cover from the vice-captain and bench"+(chipForWeek(gv)?", with "+CHIP_NAME[chipKind(chipForWeek(gv))]:"")
-          +(S.oddsTeams?". Bookmaker odds included, fetched "+ukWhen(S.oddsFetchedAt):"")+(hits?". Less a "+hits+"-point hit":"")
-          +". The line shows your last "+done.length+" scores, then this prediction.",
-        pred.toFixed(1),
-        (S.horizon===1&&lastAct!=null?chg(pred-lastAct,x=>x.toFixed(1),true)+`vs GW${gv-1}'s ${lastAct}`:"")
-          +(hits?` · <span class="dn">−${hits} hit</span>`:""),
-        S.horizon===1?[...done.map(r=>+r.points),pred]:null,"#3DDC97","mint"),
-      figCard("Overall Rank","Your overall rank after the last finished gameweek, from FPL. The line rises as your rank improves.",
-        S.entryRank?S.entryRank.toLocaleString():"—",
-        S.entryRank?(prevRow&&lastRow&&prevRow.orRank&&lastRow.orRank?chg(prevRow.orRank-lastRow.orRank,x=>Math.round(x).toLocaleString(),true):"")+"after GW"+S.entryRankGw:"waiting",
-        fRows.filter(r=>r.orRank).slice(-8).map(r=>-r.orRank),"#3DDC97"),
-      figCard("Team Rating",`Your team score (the Planner's: best XI, captain, bench and vice cover) against the best Free Hit team your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week, the same team the Chips page and Compare show.`,
-        rating?rating.pct:"—",rating?`best Free Hit team: ${rating.best.toFixed(1)}`:"out of 100",
-        null,"#8A8A8A","",`color:${rateCol}`),
-      figCard("Budget",`Bank to spend in this week's plan, after planned transfers and any sales, and free transfers into this week (maximum 5${ftSource()==="feed"?", worked out from your FPL history: FPL does not publish the count":""}). Squad is today's buy prices of the ${squadPlayers().filter(p=>!S.flagged.includes(p.id)).length} players in this plan.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included; the line is that value by gameweek.`:""}`,
-        `<span${bank<0?' style="color:var(--red)"':""}>£${bank.toFixed(1)}</span><span class="fsub"> · ${ftTxt} FT</span>`,
-        (chipForWeek(gv)==="freehit"?"Free Hit this week · ":chipForWeek(gv)==="wildcard"?"Wildcard this week · ":"")
-          +`Squad £${sv.toFixed(1)}`+(raised>0?` · £${raised.toFixed(1)} from sales`:(prevRow&&lastRow&&prevRow.value!=null?" "+chg(lastRow.value-prevRow.value,x=>x.toFixed(1),true):"")),
-        fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value),"#8A8A8A")
-    ].join("");
-    const capWarn=capWarnHTML().replace(/^ · /,"");
-    hero=`<section class="hero"><div class="hid"><div class="hk">Gameweek ${g} · your team</div>
-        <h1>${esc(IDENTITY.team)}</h1><div class="hm">${esc(IDENTITY.manager)} · team ${IDENTITY.id}</div></div>
-      <div class="fcgrid">${cards}</div></section>
-      ${capWarn?`<div class="hwarn" role="status">${capWarn}</div>`:""}
-      ${weekStripHTML()}`;
+    hero=plannerStatsHTML({rating,bank,sv,raised,ftTxt,n:squadPlayers().filter(p=>!S.flagged.includes(p.id)).length});
   }
   app.innerHTML=`${topbar}
    ${hero}
