@@ -1255,6 +1255,9 @@ table.cx-ht{width:100%;border-collapse:collapse;font-size:12.5px}
 /* ranks (1 = best) replace percentiles in the compare pop-up and player card */
 .cprk{font-family:'Geist Mono',monospace;cursor:help}
 /* Chips one-screen layout (21 Nov 2026) */
+.cx-hdr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:center;margin:6px 0 16px}
+.cx-hdr h1{margin:4px 0 0;font:600 30px 'Geist',system-ui,sans-serif;letter-spacing:-.02em}.cx-hdr .cx-figs{margin:0}
+@media(max-width:1100px){.cx-hdr{grid-template-columns:1fr;gap:12px}}
 .cx-phd{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
 .cx-cr{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;gap:12px;align-items:center;background:#141414;border-radius:12px;padding:10px 12px;box-shadow:inset 0 0 0 1px var(--ring);cursor:pointer}
 .cx-cr:hover{background:#181818}
@@ -1286,13 +1289,13 @@ table.cx-ht{width:100%;border-collapse:collapse;font-size:12.5px}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.7.1"></script>
-<script src="./app-squad.js?v=13.7.1"></script>
-<script src="./app-render.js?v=13.7.1"></script>
-<script src="./app-odds.js?v=13.7.1"></script>
-<script src="./app-tracker.js?v=13.7.1"></script>
-<script src="./app-main.js?v=13.7.1"></script>
-<script src="./app-scout.js?v=13.7.1"></script>
+<script src="./app-core.js?v=13.7.2"></script>
+<script src="./app-squad.js?v=13.7.2"></script>
+<script src="./app-render.js?v=13.7.2"></script>
+<script src="./app-odds.js?v=13.7.2"></script>
+<script src="./app-tracker.js?v=13.7.2"></script>
+<script src="./app-main.js?v=13.7.2"></script>
+<script src="./app-scout.js?v=13.7.2"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
