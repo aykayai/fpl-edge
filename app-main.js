@@ -105,6 +105,7 @@ function act(k,a,b){
       else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
     case"pmenu":S.pMenu=a==null?null:+a;break;
+    case"dragsub":S.subFrom=null;if(a!==b)trySub(a,b);break;
     case"pdmore":S.pdLimit=(S.pdLimit||PD_PAGE)+PD_PAGE;break;
     case"pdall":S.pdLimit=1000;break;
     case"poolmore":S.poolLimit=Math.min(150,(S.poolLimit||50)+50);break;
@@ -456,3 +457,10 @@ document.addEventListener("pointerdown",e=>{
 document.addEventListener("click",e=>{
   if(_lpFired){_lpFired=false;e.preventDefault();e.stopPropagation();return;}
   if(S.pMenu!=null&&!(e.target.closest&&e.target.closest(".pz-menu,.pz-c"))){S.pMenu=null;render();}},true);
+/* drag a player onto another to substitute them (21 Nov 2026); the
+   formation follows as long as it stays legal (trySub checks) */
+function pzDrag(e,id){try{e.dataTransfer.setData("text/plain",String(id));e.dataTransfer.effectAllowed="move";}catch(_){}S.pMenu=null;}
+function pzOver(e){e.preventDefault();try{e.dataTransfer.dropEffect="move";}catch(_){}e.currentTarget.classList.add("drop");}
+function pzDrop(e,id){e.preventDefault();e.currentTarget.classList.remove("drop");
+  let from=NaN;try{from=+e.dataTransfer.getData("text/plain");}catch(_){}
+  if(from&&from!==id)act("dragsub",from,id);}

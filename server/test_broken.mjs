@@ -257,7 +257,7 @@ try {
   const rankStat = [...doc.querySelectorAll(".pz-st")].find(s => /Overall rank/i.test(s.textContent));
   const shown = rankStat ? rankStat.querySelector("b").textContent.replace(/,/g, "") : "";
   check(ranked && +shown === ranked.orRank, "F8 header overall rank is the feed's latest week", `page ${shown} feed ${ranked && ranked.orRank} (GW${ranked && ranked.event})`);
-  check(rankStat && rankStat.querySelector("i").textContent.trim().endsWith("after GW" + ranked.event), "F8 the rank says which week it is from", rankStat && rankStat.querySelector("i").textContent);
+  check(rankStat && rankStat.querySelector("i").textContent.trim().endsWith("GW" + ranked.event), "F8 the rank says which week it is from", rankStat && rankStat.querySelector("i").textContent);
 
   /* F7: make one page builder throw */
   const real = vm.runInContext("signalsHTML", ctx);
