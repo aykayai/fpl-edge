@@ -992,7 +992,7 @@ function renderPage(){
     /* Team Planner (21 Nov 2026, round 4): the Planner and the Player Pool
        side by side, then Chips and This Week full width */
     main=`<div class="grid2 pz-grid"><div>
-      <div class="panel plpanel">${plannerHeadHTML()}${S.sqView==="list"?squadListHTML():plannerPitchHTML()}</div>${conf}${flag}</div>
+      <div class="panel plpanel">${plannerHeadHTML()}${S.sqView==="list"?squadListHTML():plannerPitchHTML()}${plannerChipsHTML()}</div>${conf}${flag}</div>
       <div class="poolcol">
         <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
         <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">Player Data →</a></div>
@@ -1000,7 +1000,7 @@ function renderPage(){
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
           <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>
-      ${plannerChipsHTML()}${thisWeekHTML()}`;
+      ${thisWeekHTML()}`;
   }
   else if(S.tab==="table")main=playerDataHTML();
   else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();

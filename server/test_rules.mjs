@@ -76,7 +76,7 @@ try {
   w.setInterval = () => 0; w.console = { log() {}, warn() {}, error() {} };
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
-    weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,chipPlayed,VG,
+    weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
@@ -182,7 +182,7 @@ try {
     g.render();
     /* free transfers sit on the Bank figure, the chip on the week line (21 Nov 2026) */
     const ftStat = [...doc.querySelectorAll(".pz-st")].find(s => /Bank/i.test(s.textContent)), wl = doc.querySelector(".pz-wl");
-    check(ftStat && /unlimited transfers/i.test(ftStat.textContent) && wl && /Wildcard/.test(wl.textContent), "F61 a Wildcard week shows unlimited transfers", ftStat && ftStat.textContent.replace(/\s+/g, " "));
+    check(ftStat && /Unlimited FT/.test(ftStat.textContent) && wl && /Wildcard/.test(wl.textContent), "F61 a Wildcard week shows Unlimited FT", ftStat && ftStat.textContent.replace(/\s+/g, " "));
   } else check(false, `F61 setup: a Wildcard could be planned for GW${wcWeek}`, g.chipRuleBreak("wildcard" + half, wcWeek));
   restore(clean); g.render();
 
@@ -198,6 +198,16 @@ try {
     check(doc.querySelectorAll(".pz-cbs .pz-cb").length === 4, "Planner: one row of four chip buttons");
     const pills = doc.querySelectorAll(".pz-scr .pz-gp"), on = doc.querySelector(".pz-scr .pz-gp.on");
     check(pills.length === 8 && on && on.textContent.includes("GW" + NEXT), "Planner: the gameweek scroller shows eight weeks with the one in view lit");
+    /* drag a bench player onto a starter: same position always works, the formation follows when legal */
+    const keepXI = S.forceXI, xi0 = g.startingXI(), bench0 = g.squadPlayers().filter(p => !xi0.includes(p) && p.pos > 1);
+    const b = bench0[0], x = b && xi0.find(p => p.pos === b.pos);
+    if (b && x) { g.act("dragsub", b.id, x.id);
+      const xi1 = g.startingXI().map(p => p.id);
+      check(xi1.includes(b.id) && !xi1.includes(x.id), `Planner: dragging ${b.web_name} onto ${x.web_name} substitutes them`); }
+    else check(false, "Planner setup: a bench outfielder with a starter in his position");
+    const draggable = doc.querySelectorAll(".pz-c[draggable=true]").length;
+    check(draggable === 15, `Planner: all 15 players can be dragged in an editable week (${draggable})`);
+    S.forceXI = keepXI; g.render();
   }
   {
     const W2 = Math.max(NEXT, 20), keep = { ...S.chips };

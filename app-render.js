@@ -158,7 +158,7 @@ function pcardHTML(p,bench){
   const under=(hasAct&&hasPred)?`<div class="pz-pv"${sp?` title="${esc(sp.why)}"`:""}>${sp&&sp.src==="backtest"?"backtest":"pred"} ${shownPts.toFixed(1)} <b class="${diff>=0?"up":"dn"}">${diff>=0?"+":""}${diff.toFixed(1)}</b></div>`
     :hasAct?`<div class="pz-pv">no prediction stored</div>`:`<div class="pz-s">${sigHTML(p,g)}</div>`;
   const click=official?`act('card',${p.id})`:`act(S.subFrom!=null?'sub':'card',${p.id})`;
-  return `<div class="pz-c${fl?" dim":""}${sub?" subsel":""}${menu?" open":""}" data-pid="${p.id}" onclick="${click}"${official?"":` oncontextmenu="event.preventDefault();act('pmenu',${p.id})"`} title="${esc(p.web_name)}">
+  return `<div class="pz-c${fl?" dim":""}${sub?" subsel":""}${menu?" open":""}" data-pid="${p.id}" onclick="${click}"${official?"":` oncontextmenu="event.preventDefault();act('pmenu',${p.id})" draggable="true" ondragstart="pzDrag(event,${p.id})" ondragover="pzOver(event)" ondragleave="this.classList.remove('drop')" ondrop="pzDrop(event,${p.id})"`} title="${esc(p.web_name)}">
     <div class="pz-k">${kitHTML(p,"pz-kit")}
       <span class="pz-l">${official?"":`<button class="pz-xf${fl?" on":""}" onclick="event.stopPropagation();act('flag',${p.id})" title="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}" aria-label="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}">${lic("arrow-right-left",11)}</button>`}${armband}${inDT(p)?dtStar("pz-dt"):""}</span>
       <span class="pz-r"><span class="pz-ow" title="Selected by ${p.owned}%">${p.owned}%</span>${inj}</span>
@@ -232,7 +232,7 @@ function gwScrollerHTML(){
 function plannerHeadHTML(){
   return `<div class="phead pz-head"><span class="pseg"><button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button><button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
     ${gwScrollerHTML()}
-    <span class="placts"><span class="pseg"><button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button><button onclick="act('opt')">Optimise</button></span>
+    <span class="placts"><button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button><button onclick="act('opt')">Optimise</button>
       <button onclick="act('reset')">Reset</button><button class="pri" onclick="act('save')">Save</button></span></div>
     <div class="pz-wl">${planWeekLine()}${(()=>{const cw=capWarnHTML().replace(/^ · /,"");return cw?` · <span class="pz-warn" role="status">${cw}</span>`:"";})()}</div>`;
 }
@@ -252,7 +252,7 @@ function plannerStatsHTML(o){
     <div class="pz-id"><h1>${esc(IDENTITY.team)}</h1><span>${esc(IDENTITY.manager)} · ${IDENTITY.id}</span></div>
     ${st("Overall Rank","Your overall rank after the last finished gameweek, from FPL. The line rises as your rank improves.",
       S.entryRank?S.entryRank.toLocaleString():"—",
-      ln(S.entryRank&&prev&&last&&prev.orRank&&last.orRank?chg(prev.orRank-last.orRank,x=>Math.round(x).toLocaleString(),true):"",S.entryRank?"after GW"+S.entryRankGw:"waiting"),
+      ln(S.entryRank&&prev&&last&&prev.orRank&&last.orRank?chg(prev.orRank-last.orRank,x=>Math.round(x).toLocaleString(),true):"",S.entryRank?"GW"+S.entryRankGw:"waiting"),
       fRows.filter(r=>r.orRank).slice(-8).map(r=>-r.orRank))}
     ${st("GW Rank",`Your rank for GW${lastG?lastG.event:"—"} alone, from FPL. The line rises as the week's rank improves.`,
       lastG?lastG.gwRank.toLocaleString():"—",
@@ -265,7 +265,7 @@ function plannerStatsHTML(o){
       `£${o.sv.toFixed(1)}`,o.raised>0?`<i>£${o.raised.toFixed(1)} from sales</i>`:ln(prev&&last&&prev.value!=null?chg(last.value-prev.value,x=>x.toFixed(1),true):"",""),
       fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value),"#8A8A8A")}
     ${st("Bank",`Bank to spend in this week's plan, after planned transfers and any sales, and free transfers into this week (maximum 5${ftSource()==="feed"?", worked out from your FPL history: FPL does not publish the count":""}).`,
-      `<span${o.bank<0?' style="color:var(--red)"':""}>£${o.bank.toFixed(1)}</span>`,`<i>${o.ftTxt==="Unlimited"?"unlimited transfers":`${o.ftTxt} free transfer${o.ftTxt==="1"?"":"s"}`}</i>`)}
+      `<span${o.bank<0?' style="color:var(--red)"':""}>£${o.bank.toFixed(1)}</span>`,`<i>${o.ftTxt} FT</i>`)}
   </section>`;
 }
 /* ---------- chips: one row, the half of the week in view ---------- */
@@ -276,11 +276,11 @@ function plannerChipsHTML(){
     const line=used?`Played GW${played}`:active?`Active GW${g}${team&&!locked?" · Build team":""}`:planned?`Planned GW${planned}`:"Available";
     const call=used||locked?"":active?(team?`act('cmpopen','${kind==="freehit"?"fh":"wc"}')`:`act('achip','none')`):`act('achip','${kind}')`;
     return `<button class="pz-cb${used?" used":""}${active?" active":""}" style="--tc:${u.c}"${call?` onclick="${call}"`:" disabled"} aria-pressed="${active}">
-      ${chipTile(kind,34,active)}<span><b>${u.n}</b><i>${line}</i></span>
+      ${chipTile(kind,28,active)}<span><b>${u.n}</b><i>${line}</i></span>
       ${active&&!locked?`<span class="pz-cx" role="button" tabindex="0" title="Cancel ${u.n}" onclick="event.stopPropagation();act('achip','none')">${lic("x",14)}</span>`:used||locked?"":lic("chevron-right",16)}</button>`;};
-  return `<section class="pz-sec"><div class="pz-sh"><h2>Chips</h2><button class="fci" aria-label="About" data-tip="One set of chips for GW1–19, played by the GW19 deadline. All four come back for GW20–38. A played chip is greyed out until then. Free Hit and Wildcard open the best team for the week in Compare.">i</button>
-    <a class="pz-link" href="${routeFor("chips")}" onclick="return go(event,'chips')">Chips page ${lic("arrow-right",14)}</a></div>
-    <div class="pz-cbs">${["bboost","3xc","wildcard","freehit"].map(btn).join("")}</div></section>`;
+  return `<div class="pz-chipbar"><span class="pz-cbl">Chips<button class="fci" aria-label="About" data-tip="One set of chips for GW1–19, played by the GW19 deadline. All four come back for GW20–38. A played chip is greyed out until then. Free Hit and Wildcard open the best team for the week in Compare.">i</button></span>
+    <div class="pz-cbs">${["bboost","3xc","wildcard","freehit"].map(btn).join("")}</div>
+    <a class="pz-link" href="${routeFor("chips")}" onclick="return go(event,'chips')" title="Chips page">${lic("arrow-right",16)}</a></div>`;
 }
 /* The two pages keep their own filters — changing one never moves the other */
 function filtered(scope){
@@ -414,7 +414,7 @@ function listHTML(){
     const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
   const budget=+(planBank()+raised).toFixed(1);   // the header's bank, not the drifting S.bank (as F41)
   const outP=flags.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  const cols=[["price","£"],["xmins","xMins"],["form","Form"],["pred","xPts"],["pred3","3GW"],["pred5","5GW"]];
+  const cols=[["price","£"],["xmins","xMins"],["total","Pts"],["form","Form"],["pred","xPts"],["pred3","3GW"]];
   const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
     ${cols.map(([k,n])=>`<span class="lc ${S.lSort===k?"act":""}" data-k="${k}" onclick="act('lsort','${k}')">${n}</span>`).join("")}</div>`;
   /* F77 (bundle 9): the pool was 84% of the Planner's page (150 rows, ~4,000
@@ -442,12 +442,12 @@ function listHTML(){
         <span class="poolsigs">${sigHTML(p,g)}</span></span>
       <span class="lc mono" style="font-size:11px">£${p.price.toFixed(1)}${arw(p.priceChange)}</span>
       <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.xMins}′</span>
+      <span class="lc mono" style="font-size:11px">${p.total}</span>
       <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.form.toFixed(1)}</span>
       <span class="lc mono" style="font-size:12px;font-weight:700;color:${
         delta==null?"var(--mint)":(delta<0?"var(--red)":"var(--mint)")}">${
         delta==null?hPts(p,g,S.horizon).toFixed(1):sgn1(delta)}</span>
       <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,3).toFixed(1)}</span>
-      <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,5).toFixed(1)}</span>
     </button>`;}).join("")+(plim<150?pmore:"");
 }
 /* A plain range slider packs many possible values into a short drag distance —
@@ -1511,7 +1511,8 @@ function hzHTML(cur,action,list){
 }
 /* the five readings behind the strip and its pop-ups */
 function weekData(){
-  const g=VG(),h=S.weekH||1,mine=new Set(effectiveSquadIds(g).ids);
+  /* This Week is the gameweek in view only (21 Nov 2026) */
+  const g=VG(),h=1,mine=new Set(effectiveSquadIds(g).ids);
   const sp=squadPlayers();
   const moves=bestSwaps(8,h);
   const xi=startingXI();
@@ -1553,7 +1554,7 @@ function thisWeekHTML(){
   const m=D.moves[0];
   const move=m?card("move","circle-arrow-up","#3DDC97","Top Move",
       `<span class="pz-mv">${photoHTML(m.out,"pz-ph lg")}${lic("arrow-right",16)}${photoHTML(m.inn,"pz-ph lg")}<span><b>${esc(m.out.web_name)} → ${esc(m.inn.web_name)}</b><i class="up">${sgn1(m.gain)} pts · £${m.inn.price.toFixed(1)} · ${esc(m.inn.teamName)}</i></span></span>`,
-      D.moves.slice(1,3).map(x=>`<span class="pz-alt">${photoHTML(x.out,"pz-ph")}<span>${esc(x.out.web_name)} → ${esc(x.inn.web_name)}</span><b class="up">${sgn1(x.gain)}</b></span>`).join(""))
+      D.moves.slice(1,4).map(x=>`<span class="pz-alt">${photoHTML(x.out,"pz-ph")}${lic("arrow-right",12)}${photoHTML(x.inn,"pz-ph")}<span><b>${esc(x.out.web_name)} → ${esc(x.inn.web_name)}</b><i>£${x.inn.price.toFixed(1)} · ${esc(x.inn.teamName)}</i></span><b class="up">${sgn1(x.gain)}</b></span>`).join(""))
     :card("move","circle-arrow-up","#3DDC97","Top Move","Hold",`<span class="mu">No single move improves your XI over ${wkSpan(g,h)}</span>`);
   /* Captain: the top three options, doubled, as the Captain pop-up */
   const caps=D.caps.slice(0,3).map(p=>[p,hPts(p,g,h)*2]),cmx=Math.max(0.1,...caps.map(c=>c[1]));
@@ -1594,10 +1595,10 @@ function thisWeekHTML(){
   /* Rival: what rivals own that you don't, and your players they don't */
   const R=D.R,diffs=R?squadPlayers().map(p=>({p,k:R.own[p.id]||0})).sort((a,b)=>a.k-b.k||b.p.gw[g]?.pts-a.p.gw[g]?.pts):[];
   const rv=(x,col)=>row(x.p,barI(x.k/R.n*100,col),`${x.k}/${R.n}`);
-  const rival=R?card("rival","swords","#B388FF","Rival",diffs[0]?esc(diffs[0].p.web_name):"No differentials",
+  const rival=R?card("rival","swords","#B388FF","Rivals",diffs[0]?esc(diffs[0].p.web_name):"No differentials",
       block("Differentials","up",diffs.slice(0,3).map(x=>rv(x,"#5B4A80")))+block("Threats","dn",D.threats.slice(0,3).map(t=>rv(t,"#B388FF"))))
-    :card("rival","swords","#B388FF","Rival","—",`<span class="mu">League feed not loaded</span>`);
-  return `<section class="pz-sec"><div class="pz-sh"><h2>This Week</h2><button class="fci" aria-label="About" data-tip="Moves, captain, risks and the outlook for the gameweek in view. Each card opens the full detail. Fixture runs use the fixture chips' difficulty scale over the next three gameweeks; a blank week counts as 5 and a double counts one easier.">i</button>${hzHTML(h,"weekh")}</div>
+    :card("rival","swords","#B388FF","Rivals","—",`<span class="mu">League feed not loaded</span>`);
+  return `<section class="pz-sec"><div class="pz-sh"><h2>This Week</h2><button class="fci" aria-label="About" data-tip="Moves, captain, risks and the outlook for the gameweek in view. Each card opens the full detail. Fixture runs use the fixture chips' difficulty scale over the next three gameweeks; a blank week counts as 5 and a double counts one easier.">i</button></div>
     <div class="pz-ins">${move}${cap}${warn}${strength}${price}${outlook}${form}${rival}</div></section>`;
 }
 /* what each strip card opens */
@@ -1614,7 +1615,7 @@ function popHTML(){
     const body=T==="plan"?planPanelHTML():T==="fund"?fundingHTML():T==="all"?`<div class="xfgrid"><div>${transfersHTML("picker")}${transfersHTML("ignored")}</div><div class="xfpos">${transfersHTML("bypos")}</div></div>`
       :(D.moves.length?`<div class="mvgrid">${D.moves.map(m=>swapCardHTML(m,g)).join("")}</div>`:`<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p>`)
         +`<p class="note" style="margin-top:10px">Each move is scored on your best XI plus captain, week by week${h>1?" (later weeks count for a little less)":""}, against your current team.</p>`;
-    return modalHTML(`Top Moves · ${wkSpan(g,h)}`,body,{wide:true,ctl:tabs([["best","Best Moves"],["plan","Five-Week Plan"],["fund","Funding"],["all","All Transfers"]],T)+ctl});
+    return modalHTML(`Top Moves · ${wkSpan(g,h)}`,body,{wide:true,ctl:tabs([["best","Best Moves"],["plan","Five-Week Plan"],["fund","Funding"],["all","All Transfers"]],T)});
   }
   if(k==="cap")return modalHTML("Captain",captaincyHTML()||`<p class="note">Captaincy is set for the next deadline.</p>`,{});
   if(k==="price"){
@@ -1657,7 +1658,7 @@ function popHTML(){
     return modalHTML("Rival Threat",`<div class="pmgrid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
       <div><div class="note">Owned by your rivals, not you</div>${t(top,"Rivals")}</div>
       <div><div class="note">Your players, fewest rivals first (your differentials)</div>${t(myOwn,"Rivals")}</div></div>
-      <p class="note" style="margin-top:10px">From each rival's latest published squad in your mini-league (${D.R.n} rivals).</p>`,{wide:true,ctl});
+      <p class="note" style="margin-top:10px">From each rival's latest published squad in your mini-league (${D.R.n} rivals).</p>`,{wide:true});
   }
   return "";
 }
