@@ -1169,9 +1169,18 @@ svg.chart circle[data-tip]{cursor:pointer}
 .cx-bn{font:500 11.5px 'Geist Mono',monospace;color:#8A8A8A;margin-top:4px}.cx-bf{height:16px;margin-top:2px}
 .mbox .cx-bwr{border-top:0}
 /* the two columns end level */
-.cx-one{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:stretch}
-.cx-one>div{display:flex;flex-direction:column;min-width:0}.cx-one>div>.rep:last-child{flex:1}
-@media(max-width:1100px){.cx-one{grid-template-columns:1fr}}
+/* four equal boxes (21 Nov 2026): My Plan beside Best Plan, then Chips Left
+   beside Chips Used; every row as tall as the tallest, each box's rows
+   share the height */
+.cx-quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr;gap:16px;margin-bottom:16px}
+.cx-quad>.rep{margin:0;display:flex;flex-direction:column;min-width:0}.cx-quad>.rep>.rb{flex:1;display:flex;flex-direction:column;min-height:0}
+.cx-quad .cx-rgrid{flex:1;grid-auto-rows:1fr}.cx-quad .cx-rbox{justify-content:space-between}
+.cx-quad .cx-bp{flex:1}
+.cx-quad #r-chleft .cx-cr:not(.ax){flex:1;align-items:stretch}.cx-quad #r-chleft .cx-cr>*:not(.cx-mini){align-self:center}
+.cx-quad #r-chleft .cx-mini{height:auto;min-height:32px;padding:6px 0}
+.cx-quad #r-chused .cx-ur:not(.hd){flex:1}
+.cx-quad #r-chused .cx-ur{grid-template-columns:30px minmax(96px,1.2fr) 52px 70px 92px 56px minmax(90px,1fr);gap:10px}.cx-quad #r-chused .cx-upk{gap:8px}
+@media(max-width:1100px){.cx-quad{grid-template-columns:1fr;grid-auto-rows:auto}}
 /* chips left */
 .cx-cr{display:grid;grid-template-columns:30px 150px minmax(0,1fr) 64px;gap:12px;align-items:center;padding:9px 4px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer}
 .cx-cr:first-child{border-top:0}.cx-cr:hover{background:rgba(255,255,255,.03)}.cx-cr .cx-ghost{justify-self:end}
@@ -1487,13 +1496,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.10.2"></script>
-<script src="./app-squad.js?v=13.10.2"></script>
-<script src="./app-render.js?v=13.10.2"></script>
-<script src="./app-odds.js?v=13.10.2"></script>
-<script src="./app-tracker.js?v=13.10.2"></script>
-<script src="./app-main.js?v=13.10.2"></script>
-<script src="./app-scout.js?v=13.10.2"></script>
+<script src="./app-core.js?v=13.10.3"></script>
+<script src="./app-squad.js?v=13.10.3"></script>
+<script src="./app-render.js?v=13.10.3"></script>
+<script src="./app-odds.js?v=13.10.3"></script>
+<script src="./app-tracker.js?v=13.10.3"></script>
+<script src="./app-main.js?v=13.10.3"></script>
+<script src="./app-scout.js?v=13.10.3"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
