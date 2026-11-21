@@ -77,7 +77,8 @@ try {
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
-    teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans}`, ctx);
+    teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,
+    get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
   while (Date.now() < until && !(S.model && !S.loading)) await new Promise(r => setTimeout(r, 250));
@@ -264,6 +265,31 @@ try {
     /* 21 Nov 2026: plans listed highest total first, Most Points the highest */
     check(plans.every((p, i) => i === 0 || plans[i - 1].tot >= p.tot), "Chips: plans are listed highest total first", plans.map(p => p.tot.toFixed(1)).join(", "));
     if (plans.length) check(plans[0].name === "Most Points", "Chips: Most Points is the top plan", plans[0].name);
+    /* 21 Nov 2026: the Wildcard is valued against one free transfer a week.
+       The path is five legal squads, each at most one player from the last */
+    {
+      const e0 = Math.max(gw, 20), path = g.ftPath(ids, e0, e0 + 4);
+      const legal = sq => sq.length === 15 && (() => { const c = {}; sq.forEach(i => { const p = g.chipPlayer(i); c[p.team] = (c[p.team] || 0) + 1; }); return Object.values(c).every(n => n <= 3); })();
+      const moves = path.map((sq, i) => (i ? path[i - 1] : ids).filter(x => !sq.includes(x)).length);
+      check(path.length === 5 && path.every(legal) && moves.every(n => n <= 1), "Chips: the free-transfer path is five legal squads, one transfer a week", JSON.stringify(moves));
+    }
+    /* a forecast double naming a bench player's club raises the Bench Boost
+       for that week; one naming nobody's club leaves the plain gain */
+    {
+      const e0 = Object.keys(g.CRELLIN.weeks).map(Number).find(e => e >= gw && g.CRELLIN.weeks[e].t === "double");
+      if (e0) {
+        const keepW = g.CRELLIN.weeks[e0], ids0 = g.effectiveSquadIds(e0).ids, sp = ids0.map(g.chipPlayer).filter(Boolean);
+        const pv = p => p.gw[e0]?.pts || 0, xi = g.legalBestXI(sp, pv), bench = sp.filter(p => !xi.includes(p) && pv(p) > 0);
+        const raw = g.teamScore(ids0, e0, "bboost") - g.teamScore(ids0, e0, null);
+        if (bench.length && g.chipWeighted("bboost", e0, raw, ids0).f) {
+          const club = S.model.teams.find(t => t.id === bench[0].team).short;
+          g.CRELLIN.weeks[e0] = { ...keepW, teams: [club] };
+          const up = g.chipWeighted("bboost", e0, raw, ids0).v;
+          g.CRELLIN.weeks[e0] = keepW;
+          check(up > raw + 0.01, `Chips: a forecast double for ${club} raises the Bench Boost in GW${e0}`, `${raw.toFixed(2)} -> ${up.toFixed(2)}`);
+        }
+      }
+    }
     /* placing a chip on the roadmap (click a chip, then a week) plans it, and
        the Planner shows it for that week: one shared plan */
     const k2 = ["bboost2", "3xc2", "freehit2", "wildcard2"].find(k => g.chipPlayed(k) == null);

@@ -1331,6 +1331,9 @@ Object.assign(LUCIDE,{"chart-column":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\" /><pa
    update this by hand when he posts changes. A week FPL has already
    rearranged uses FPL's own fixtures instead. p = how sure (likely .75,
    possible .4, cup blanks .9). */
+/* Ben Crellin's forecast. Add teams:["ARS","CHE"] (FPL short names) to a
+   week once he names the clubs, and the weighting uses your own players
+   from those clubs (chipWeighted) */
 const CRELLIN={read:"20 Nov 2026",weeks:{
   30:{t:"blank",p:0.9,why:"Carabao Cup final"},
   32:{t:"double",p:0.75,why:"likely double"},
@@ -1358,8 +1361,10 @@ function chipPlayer(id){
 }
 /* the Planner's team score for any 15 in any week (weekPtsFor's rules with
    the best legal XI and its top scorer as captain) */
-function teamScore(ids,e,chip){
-  const sp=(ids||[]).map(chipPlayer).filter(Boolean),v=p=>p.gw[e]?.pts||0;
+function teamScore(ids,e,chip,adj){
+  /* adj: optional Map of player id → factor on his points (a forecast
+     blank or double for named clubs) */
+  const sp=(ids||[]).map(chipPlayer).filter(Boolean),v=p=>(p.gw[e]?.pts||0)*(adj?(adj.get(p.id)??1):1);
   if(!sp.length)return 0;
   const xi=legalBestXI(sp,v);if(!xi.length)return 0;
   const cap=xi.reduce((m,p)=>(!m||v(p)>v(m))?p:m,null);
@@ -1395,23 +1400,70 @@ function chipTeam(kind,e,best){
   const t=(best?optimalSquad(kind,e,b):null)||buildSquad(kind,e,null,b);
   return t?{t,ids:t.xi.concat(t.bench).map(p=>p.id)}:null;
 }
-/* gain from a chip in week e, on the team score; Wildcard over five weeks
-   with the transfer engine's decay */
+/* The squad your free transfers would reach anyway over a Wildcard's five
+   weeks (21 Nov 2026, Andy): one transfer a week from the Wildcard week,
+   each the swap (same position, within budget, at most three per club)
+   that adds most to the team score over the rest of the window. Swaps are
+   shortlisted on the players' own points, then the best ten are tried on
+   the team score. path[k] is the squad in week e+k. */
+let _ftPaths=null;
+function ftPath(ids,e,to){
+  const sg=chipSig();if(!_ftPaths||_ftPaths.sig!==sg)_ftPaths={sig:sg,m:new Map()};
+  const last=Math.min(38,to||e+4);
+  const key=e+"|"+last+"|"+ids.join(".");if(_ftPaths.m.has(key))return _ftPaths.m.get(key);
+  const budget=squadBudget(),out=[];
+  const span=(p,a)=>{let s=0;for(let w=a;w<=last;w++)s+=p.gw[w]?.pts||0;return s;};
+  const sumScore=(sq,a)=>{let s=0;for(let w=a;w<=last;w++)s+=teamScore(sq,w,null);return s;};
+  const pool={};S.model.players.forEach(p=>(pool[p.pos]=pool[p.pos]||[]).push(p));
+  Object.keys(pool).forEach(k=>{pool[k]=pool[k].map(p=>[p,span(p,e)]).sort((a,b)=>b[1]-a[1]).slice(0,30).map(x=>x[0]);});
+  let cur=ids.slice();
+  for(let w=e;w<=last;w++){
+    const sp=cur.map(chipPlayer).filter(Boolean),cost=sp.reduce((a,p)=>a+(p.price||0),0),club={};
+    sp.forEach(p=>club[p.team]=(club[p.team]||0)+1);
+    const cand=[];
+    sp.forEach(o=>{const room=budget-cost+(o.price||0),vo=span(o,w);
+      (pool[o.pos]||[]).forEach(p=>{if(cur.includes(p.id)||(p.price||0)>room+1e-9)return;
+        if(p.team!==o.team&&(club[p.team]||0)>=RULES.clubMax)return;
+        const d=span(p,w)-vo;if(d>0)cand.push({o:o.id,i:p.id,d});});});
+    cand.sort((a,b)=>b.d-a.d);
+    const now=sumScore(cur,w);let best=null;
+    cand.slice(0,10).forEach(c=>{const sq=cur.map(x=>x===c.o?c.i:x),g=sumScore(sq,w)-now;if(g>0&&(!best||g>best.g))best={sq,g};});
+    if(best)cur=best.sq;
+    out.push(cur.slice());}
+  _ftPaths.m.set(key,out);return out;
+}
+/* gain from a chip in week e, on the team score. A Wildcard counts five
+   weeks with the transfer engine's decay, and both sides keep making one
+   free transfer a week: your squad from the Wildcard week, the Wildcard
+   squad from the week after (ftPath). It is worth what it adds beyond the
+   transfers you would make anyway. */
 function chipGainAt(kind,e,best,ids){
   ids=ids||effectiveSquadIds(e).ids;
   const base=teamScore(ids,e,null);
   if(kind==="bboost"||kind==="3xc")return teamScore(ids,e,kind)-base;
   const T=chipTeam(kind,e,best);if(!T)return null;
   if(kind==="freehit")return Math.max(0,teamScore(T.ids,e,null)-base);
-  let g=0;for(let k=0;k<5&&e+k<=38;k++)g+=Math.pow(DECAY,k)*(teamScore(T.ids,e+k,null)-teamScore(ids,e+k,null));
+  const last=Math.min(38,e+4),mine=ftPath(ids,e,last),theirs=e<last?ftPath(T.ids,e+1,last):[];
+  let g=0;for(let k=0;k<5&&e+k<=38;k++)g+=Math.pow(DECAY,k)*(teamScore(k?theirs[k-1]||T.ids:T.ids,e+k,null)-teamScore(mine[k]||ids,e+k,null));
   return g;
 }
-/* forecast weighting: a blank adds to a Free Hit what the blanking players
-   would cost your team (about a fifth of the XI at four blanking clubs); a
-   double adds to Bench Boost and Triple Captain roughly in proportion to
-   the share of players doubling (about 30%), each times how sure it is */
+/* forecast weighting. When the forecast names the clubs (CRELLIN.weeks[e]
+   .teams, FPL short names), it is applied to your own players from those
+   clubs: a blank scales their points by (1 - how sure), a double by
+   (1 + how sure); a Free Hit gains what the blank would cost your team,
+   a Bench Boost or Triple Captain is scored with the adjusted points.
+   Without named clubs: a blank adds to a Free Hit about a fifth of your
+   team score, a double adds about 30% to Bench Boost and Triple Captain,
+   each times how sure it is. */
 function chipWeighted(kind,e,v,ids){
   const f=chipForecast(e);if(!f||v==null)return{v,f:null};
+  if(Array.isArray(f.teams)&&f.teams.length){
+    const named=new Set(S.model.teams.filter(t=>f.teams.includes(t.short)).map(t=>t.id));
+    const adj=new Map(ids.map(chipPlayer).filter(p=>p&&named.has(p.team)).map(p=>[p.id,f.t==="blank"?1-f.p:1+f.p]));
+    if(kind==="freehit"&&f.t==="blank")return{v:v+(teamScore(ids,e,null)-teamScore(ids,e,null,adj)),f};
+    if(kind==="bboost"||kind==="3xc")return{v:teamScore(ids,e,kind,adj)-teamScore(ids,e,null,adj),f};
+    return{v,f:null};
+  }
   if(kind==="freehit"&&f.t==="blank")return{v:v+f.p*0.2*teamScore(ids,e,null),f};
   if((kind==="bboost"||kind==="3xc")&&f.t==="double")return{v:v*(1+f.p*0.3),f};
   return{v,f:null};
