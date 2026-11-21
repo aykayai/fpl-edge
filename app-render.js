@@ -1294,7 +1294,7 @@ function chipsHTML(){
   const READY={bboost:"What your bench adds to the Planner score that week.",
     "3xc":"Your best player's points again, plus the captain cover.",
     freehit:"The best team you can afford that week, minus yours.",
-    wildcard:"The best squad over the next five weeks minus yours, later weeks × 0.85."};
+    wildcard:"The best squad over the next five weeks minus the squad one free transfer a week would reach anyway, later weeks × 0.85."};
   const bwRow=k=>{const kind=chipKind(k),cv=chipCurve(k),weeks=Object.keys(cv).map(Number).sort((a,b)=>a-b);
     if(!weeks.length)return "";
     const bests=chipBestWeeks(k),planned=S.chips[k],sel=planned||weekOf(k),top3=bests.slice(0,3).map(x=>x[0]);
@@ -1358,7 +1358,7 @@ function chipsHTML(){
     else{const T=chipTeam(kind,e,false);
       if(T){const mine=new Set(ids),ins=T.t.xi.concat(T.t.bench).filter(p=>!mine.has(p.id)).sort((a,b)=>pv(b)-pv(a));
         body=`<span class="cx-tl">${kind==="freehit"?`Free Hit team ${teamScore(T.ids,e,null).toFixed(1)} against yours ${teamScore(ids,e,null).toFixed(1)}. The biggest new names:`:`${ins.length} new players. The biggest that week:`}</span>${ins.slice(0,4).map(p=>row(p)).join("")}`;
-        if(kind==="wildcard")foot="The gain counts five weeks, later weeks a little less.";}}
+        if(kind==="wildcard")foot="The gain counts five weeks against the squad one free transfer a week would reach anyway, later weeks a little less.";}}
     if(o.f)foot+=(foot?" ":"")+`Weighted for Ben Crellin's forecast ${o.f.t} (${o.f.why}).`;
     return `<span class="cx-htip" role="tooltip"><span class="cx-thh">${chipTile(kind,18,false,"dash")}<b>${chipKeyName(k)} · GW${e}</b><span class="up">${sgnPts(v)}</span></span>${body}<span class="cx-tf">${foot||"Points are the Planner's projections."}</span></span>`;};
   const rpBox=kind=>{const ks=[kind+"1",kind+"2"],avail=ks.filter(k=>left.includes(k));
