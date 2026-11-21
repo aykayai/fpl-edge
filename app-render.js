@@ -1211,11 +1211,12 @@ function chipsHTML(){
   const hk=histTabs.some(([k])=>k===S.chipHist)?S.chipHist:"picked";
   const histSeg=`<span class="cx-seg">${histTabs.map(([k,n])=>`<button class="${hk===k?"on":""}" onclick="act('chiphist','${k}')">${n}</button>`).join("")}</span>`;
   const histBody=hk==="seasons"?seasons:hk==="rivals"?rivals:(hindsight||`<p class="note">Nothing finished to score yet.</p>`);
-  const head=`<div class="cx-phd"><div><div class="cx-kick">GW${g} · ${left.length} of 8 chips left</div><h1>Chips</h1></div></div>`;
+  /* title and figure cards share one row so the page fits one screen */
+  const head=`<div class="cx-hdr"><div><div class="cx-kick">GW${g}</div><h1>Chips</h1></div><div class="fcgrid cx-figs">${figs}</div></div>`;
   const pop=S.chipPop==="build"?modalHTML("Team Builder",builder,{wide:true,close:"chippopclose"})
     :S.chipPop==="history"?modalHTML("Chip History",histBody,{wide:true,close:"chippopclose",ctl:histSeg})
     :S.chipPop&&left.includes(S.chipPop)?modalHTML(chipKeyName(S.chipPop),rep("chsel","target","Gain by Week","Each bar is the points the chip adds that week on the Planner's team score. Hatched bars include Ben Crellin's forecast, weighted for how likely. Click any bar to plan the chip for that week.",bwRow(S.chipPop),{wide:true}),{wide:true,close:"chippopclose"}):"";
-  return `<div class="cx">${head}<div class="fcgrid cx-figs">${figs}</div>${roadmap}
+  return `<div class="cx">${head}${roadmap}
     <div class="cx-one"><div>${rep("chleft","target","Chips Left","Best week, its gain on the Planner's team score, and every week's gain as a mini chart. Click a chip for its full chart, or Plan to set it.",
       left.map(k=>chipRow(k,{act:"chippop",plan:true,mini:true})).join("")||`<p class="note">No chips left this season.</p>`,{wide:true})}</div>
       <div>${plans.length?rep("chplans","layers","Second-Half Plans","Whole second-half plans with one chip per week. Use sets every chip in the plan.",plansCompact,{wide:true}):""}
