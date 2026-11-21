@@ -290,10 +290,7 @@ function act(k,a,b){
       saveState();if(bad.length)toast(bad[0],{warn:true});else toast("Plan set: "+Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).map(([k,[e]])=>CHIP_UI[chipKind(k)].s+" GW"+e).join(", "));break;}
     case"chipbuild":S.chipBuild=a==="wc"?"wc":"fh";S.chipWeek=null;break;
     case"chipweek":S.chipWeek=+a;break;
-    case"chiplayout":S.chipLayout=a==="b"?"b":"a";S.chipPop=null;try{localStorage.setItem("fplChipLayout",S.chipLayout);}catch(_){}break;
-    case"chiptab":S.chipTab=a;break;
     case"chiphist":S.chipHist=a;break;
-    case"chipsel":S.chipSel=a;break;
     case"chippop":S.chipPop=a||null;break;
     case"chippopclose":S.chipPop=null;break;
     case"cmpopen":S.cmp={mode:a==="wc"?"wc":"fh",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
