@@ -1004,8 +1004,6 @@ svg.chart circle[data-tip]{cursor:pointer}
 .cgridt th{font:500 12px 'Geist',sans-serif;color:var(--mute);padding:6px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,.08);background:none;position:static}
 .cgridt td{padding:7px 8px;text-align:center;border-bottom:1px solid rgba(255,255,255,.05);font-family:'Geist',sans-serif}
 .cgridt tr.me td:first-child{color:var(--mint);font-weight:600}
-.cused{font:500 11.5px 'Geist Mono',monospace;color:var(--mute);background:#222;border-radius:5px;padding:2px 6px}
-.cleft{color:var(--mint);font-size:12px}
 .tform .hbr,.runs .hbr{grid-template-columns:auto minmax(110px,1fr) auto minmax(50px,.8fr) auto}
 .runs .hbr{grid-template-columns:auto minmax(110px,1fr) auto}
 .avl .sgrow{grid-template-columns:34px minmax(0,1fr) auto auto}
@@ -1108,28 +1106,55 @@ svg.chart circle[data-tip]{cursor:pointer}
 .mkt .pair>*{min-width:3.2ch;text-align:right}
 .oddsgrp{margin:8px 0 2px;font-size:12px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
 .oddsgrp:first-child{margin-top:0}
-/* Chips page (20 Nov 2026): every class prefixed cx- so nothing clashes
-   with the pitch cards (.card) or the Signals reports */
+/* Chips page v3 (21 Nov 2026): every class prefixed cx- so nothing clashes
+   with the pitch cards (.card), figure cards (.fc) or the Signals reports */
 .cx .rep{margin-bottom:16px}
 .cx .up{color:var(--mint)}.cx .dn{color:var(--red)}.cx .am{color:var(--amber)}.cx .mu{color:#6A6A6A}
-.cx-phd{margin:6px 0 14px}.cx-kick{font-size:12px;color:#7A7A7A;letter-spacing:.06em;text-transform:uppercase}
-.cx-phd h1{margin:4px 0 0;font:600 30px 'Geist',system-ui,sans-serif;letter-spacing:-.02em}
-.cx-figs{margin-bottom:16px}.cx-figs .fcv{display:flex;align-items:center;gap:8px}.cx-of{font-size:15px;color:var(--mute);font-weight:500}
-.cx-ct{border-radius:50%;display:inline-grid;place-items:center;flex:none;background:color-mix(in srgb,var(--tc) 18%,#161616);color:var(--tc);box-shadow:0 0 0 1.5px color-mix(in srgb,var(--tc) 55%,transparent)}
-.cx-ct.solid{background:var(--tc);color:#0A0A0A;box-shadow:none}
-.cx-ct.ring{box-shadow:0 0 0 2px var(--tc)}
-.cx-ct.dash{background:transparent;box-shadow:none;outline:1.5px dashed var(--tc);outline-offset:-1.5px;opacity:.8}
-.cx-lg{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:#9A9A9A;margin:-4px 0 8px}.cx-lg span{display:inline-flex;gap:6px;align-items:center}
-.cx-src{font-size:12px;color:#7A7A7A;margin-bottom:10px}
-.cx-fx{font:600 9.5px 'Geist',sans-serif;letter-spacing:.04em;padding:2px 4px;border-radius:5px;font-style:normal;white-space:nowrap}
+.cx-kick{font-size:12px;color:#7A7A7A;letter-spacing:.06em;text-transform:uppercase}
+/* the chip tile: two letters in the chip's colour, everywhere a chip shows */
+.cx-ct{display:inline-grid;place-items:center;flex:none;border-radius:30%;font-family:'Geist',sans-serif;font-weight:700;font-style:normal;letter-spacing:-.01em;line-height:1;color:var(--tc);background:color-mix(in srgb,var(--tc) 16%,#151515);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--tc) 55%,transparent);vertical-align:middle}
+.cx-ct.solid{background:var(--tc);color:#0B0B0B;box-shadow:none}
+.cx-ct.ring{box-shadow:inset 0 0 0 2px var(--tc)}
+.cx-ct.dash{background:transparent;box-shadow:none;outline:1.5px dashed color-mix(in srgb,var(--tc) 80%,transparent);outline-offset:-1.5px}
+.cx-fx{display:inline-grid;place-items:center;font:700 9px/1 'Geist',sans-serif;letter-spacing:.02em;padding:3px 5px;border-radius:5px;font-style:normal;white-space:nowrap}
 .cx-fx.bl{background:rgba(255,90,110,.18);color:#FF8A9A}.cx-fx.dl{background:rgba(255,176,32,.2);color:#FFC861}.cx-fx.dp{background:rgba(167,139,250,.2);color:#C4B5FD}
-.cx-rm{display:grid;grid-template-columns:repeat(38,minmax(0,1fr));position:relative;padding-top:22px}
-.cx-half{position:absolute;top:0;left:0;font-size:11px;color:#7A7A7A;text-transform:uppercase;letter-spacing:.06em}.cx-half.h2l{left:50%}
-.cx-rc{display:grid;grid-template-rows:22px 20px 54px;justify-items:center;align-items:center;border-left:1px solid rgba(255,255,255,.04);min-width:0}
-.cx-rc.h2{border-left:2px dashed rgba(255,255,255,.25)}.cx-rc.past .cx-rgw{color:#5A5A5A}.cx-rc.now{background:rgba(255,255,255,.05);border-radius:8px}.cx-rc.now .cx-rgw{color:#FF9A3D;font-weight:700}
-.cx-rfx .cx-fx{padding:2px 2px;font-size:8.5px;letter-spacing:0}
-.cx-rgw{font:500 12px 'Geist Mono',monospace;color:#9A9A9A}.cx-rch{display:flex;flex-direction:column;align-items:center;gap:3px}
-.cx-rv{font:600 11px 'Geist Mono',monospace;color:var(--mint);white-space:nowrap}.cx-rv.mu{color:#8A8A8A}
+.cx-ghost{background:#1F1F1F;border:0;color:#EDEDED;font:500 12.5px 'Geist',sans-serif;padding:8px 14px;border-radius:9px;box-shadow:0 0 0 1px rgba(255,255,255,.1);min-height:0;cursor:pointer;white-space:nowrap}
+.cx-ghost[disabled]{opacity:.55;cursor:default}
+.cx-pri{background:var(--mint);border:0;color:#04170E;font:600 12.5px 'Geist',sans-serif;padding:8px 14px;border-radius:9px;min-height:0;cursor:pointer}
+.cx-tag{font-size:11px;background:var(--mint);color:#04170E;padding:2px 8px;border-radius:999px;font-weight:600}
+.cx-seg{display:inline-flex;background:#1A1A1A;border-radius:999px;padding:3px;box-shadow:0 0 0 1px rgba(255,255,255,.08);flex-wrap:wrap}
+.cx-seg button{background:none;border:0;color:#9A9A9A;font:500 12.5px 'Geist',sans-serif;padding:6px 12px;border-radius:999px;display:inline-flex;gap:6px;align-items:center;min-height:0;cursor:pointer}.cx-seg button.on{background:#EDEDED;color:#0A0A0A}
+/* header: title, report buttons, a scoreboard per half */
+.cx-hdr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:center;margin:6px 0 16px}
+.cx-hdr h1{margin:4px 0 0;font:600 30px 'Geist',system-ui,sans-serif;letter-spacing:-.02em}
+.cx-hbtn{display:flex;gap:6px;margin-top:10px}
+.cx-rpt{display:inline-flex;align-items:center;gap:7px;background:#1C1C1C;border:0;border-radius:999px;padding:7px 13px;color:#EDEDED;font:600 12.5px 'Geist',sans-serif;box-shadow:inset 0 0 0 1px var(--ring);cursor:pointer;min-height:0;white-space:nowrap}.cx-rpt svg{color:var(--mint)}
+.cx-rpt.sub{background:transparent;color:#9A9A9A;font-weight:500}.cx-rpt.sub svg{color:#7A7A7A}.cx-rpt:hover{background:#232323}
+.cx-strip{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cx-sh{background:#141414;border-radius:14px;box-shadow:inset 0 0 0 1px var(--ring);padding:10px 14px 12px;min-width:0}
+.cx-shh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;gap:8px}.cx-shh b{font:600 11px 'Geist',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#8A8A8A}
+.cx-shh span{font-size:12px;color:#8A8A8A;white-space:nowrap}.cx-shh em{font-style:normal;font-weight:600;color:#EDEDED}.cx-shh em.up{color:var(--mint)}
+.cx-shc{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.cx-sc{display:flex;gap:9px;align-items:center;min-width:0}.cx-sc>div{display:flex;flex-direction:column;line-height:1.15;min-width:0}.cx-sc.expired{opacity:.4}
+.cx-scl{font-size:10px;color:#7A7A7A;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}.cx-sc b{font:600 17px 'Geist',sans-serif;letter-spacing:-.01em}
+.cx-sc i{font:600 12px 'Geist Mono',monospace;font-style:normal}.cx-sc i.pj.up{color:#9FD9BE}
+@media(max-width:1100px){.cx-hdr{grid-template-columns:1fr;gap:12px}.cx-strip{grid-template-columns:1fr}}
+/* quiet legends in a section's header */
+.cx-lg{margin-left:auto;margin-right:10px;display:flex;align-items:center;gap:14px;font-size:11.5px;color:#7A7A7A;white-space:nowrap;font-weight:400}.cx-lg>span{display:inline-flex;align-items:center;gap:6px}
+.cx-sep{width:1px;height:14px;background:rgba(255,255,255,.1)}
+.cx-sw{width:11px;height:11px;border-radius:3px;display:inline-block}.cx-sw.solid{background:#8A8A8A}.cx-sw.ring{box-shadow:inset 0 0 0 1.5px #9A9A9A}.cx-sw.dash{outline:1.2px dashed #8A8A8A;outline-offset:-1.2px}
+.cx-ld{width:8px;height:8px;border-radius:50%;display:inline-block}.cx-ld.bl{background:#FF8A9A}.cx-ld.dl{background:#FFC861}.cx-ld.dp{background:#C4B5FD}
+.cx-sw2{width:10px;height:10px;border-radius:2px;display:inline-block}.cx-sw2.h1{background:#4A4A4A}.cx-sw2.h2{background:#8A8A8A}.cx-sw2.cur{background:var(--mint)}
+@media(max-width:900px){.cx-lg{display:none}}
+/* season roadmap */
+.cx-rm{display:grid;grid-template-columns:repeat(38,minmax(0,1fr));row-gap:4px}
+.cx-half{font-size:11px;color:#7A7A7A;text-transform:uppercase;letter-spacing:.07em;padding-bottom:4px;white-space:nowrap}.cx-half.h2l{padding-left:8px}
+.cx-rc{display:grid;grid-template-rows:22px 16px 44px 22px;justify-items:center;align-items:center;border-left:1px solid rgba(255,255,255,.04);min-width:0;padding-bottom:4px}
+.cx-rc.h2{border-left:2px dashed rgba(255,255,255,.22)}.cx-rc.past .cx-rgw{color:#555}.cx-rc.now{background:rgba(255,255,255,.05);border-radius:8px}.cx-rc.now .cx-rgw{color:#FF9A3D;font-weight:700}
+.cx-rgw{font:500 12px 'Geist Mono',monospace;color:#9A9A9A}
+.cx-rfx{width:100%;display:flex;justify-content:center}.cx-rfx .cx-fx{display:flex;align-items:center;justify-content:center;width:calc(100% - 6px);max-width:32px;height:16px;padding:0;font-size:8.5px;letter-spacing:.02em}
+.cx-rch{align-self:end;display:flex}.cx-rpts{align-self:end;padding-top:6px}.cx-rp{font:600 11px 'Geist Mono',monospace;white-space:nowrap}.cx-rp.pj{color:#8A8A8A}
+/* each chip's full chart */
 .cx-bwr{display:grid;grid-template-columns:330px minmax(0,1fr);gap:24px;padding:16px 0;border-top:1px solid rgba(255,255,255,.06)}.cx-bwr:first-child{border-top:0;padding-top:2px}
 .cx-bwi{display:flex;flex-direction:column}.cx-bwt{display:flex;align-items:center;gap:10px;margin-bottom:8px}.cx-bwt b{font:600 16px 'Geist',sans-serif}
 .cx-bwk{display:flex;justify-content:space-between;align-items:end}.cx-bwl{font-size:12px;color:#8A8A8A}.cx-bwv{font:600 30px 'Geist',sans-serif;letter-spacing:-.02em}.cx-bwg{font:600 22px 'Geist',sans-serif}.cx-bwg span{font-size:12px;margin-left:3px;color:#8A8A8A}
@@ -1139,43 +1164,109 @@ svg.chart circle[data-tip]{cursor:pointer}
 .cx-bw{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;position:relative;background:none;border:0;padding:0;cursor:pointer;min-height:0}
 .cx-bw.no{opacity:.35;cursor:not-allowed}
 .cx-bb{width:100%;max-width:44px;border-radius:3px 3px 1px 1px;background:color-mix(in srgb,var(--tc) 35%,#222)}
-.cx-bb.fc{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--tc) 45%,#222) 0 3px,#1c1c1c 3px 6px)}
-.cx-bw.sel .cx-bb{background:var(--tc)}.cx-bw:hover .cx-bb{filter:brightness(1.25)}
+.cx-bb.hx{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--tc) 50%,#222) 0 3px,#1c1c1c 3px 6px);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc) 70%,transparent)}
+.cx-bw.sel .cx-bb{background:var(--tc);box-shadow:none}.cx-bw:hover .cx-bb{filter:brightness(1.25)}
 .cx-bv{position:absolute;top:0;font:600 11.5px 'Geist Mono',monospace;color:#EDEDED;white-space:nowrap}
 .cx-bn{font:500 11.5px 'Geist Mono',monospace;color:#8A8A8A;margin-top:4px}.cx-bf{height:16px;margin-top:2px}
-.cx-ghost{background:#1F1F1F;border:0;color:#EDEDED;font:500 12.5px 'Geist',sans-serif;padding:8px 14px;border-radius:9px;box-shadow:0 0 0 1px rgba(255,255,255,.1);min-height:0;cursor:pointer}
-.cx-pri{background:var(--mint);border:0;color:#04170E;font:600 12.5px 'Geist',sans-serif;padding:8px 14px;border-radius:9px;min-height:0;cursor:pointer}
-.cx-pgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-.cx-pc{background:#181818;border-radius:12px;padding:14px;box-shadow:0 0 0 1px rgba(255,255,255,.06);display:flex;flex-direction:column;gap:12px}.cx-pc.rec{box-shadow:0 0 0 1.5px var(--mint)}
-.cx-pch{display:flex;align-items:center;gap:8px}.cx-tag{font-size:11px;background:var(--mint);color:#04170E;padding:2px 8px;border-radius:999px;font-weight:600}.cx-ptot{margin-left:auto;font:600 22px 'Geist',sans-serif}
-.cx-seq{display:flex;flex-direction:column;gap:8px}.cx-st{display:grid;grid-template-columns:26px 52px 1fr auto;gap:10px;align-items:center}
-.cx-st b{font:600 14px 'Geist',sans-serif}.cx-st span{font-size:13px;color:#BDBDBD}.cx-st i{font:600 14px 'Geist Mono',monospace;font-style:normal}
-.cx-why{font-size:12px;color:#8A8A8A;line-height:1.4}.cx-pc .cx-ghost{align-self:flex-start}
+.mbox .cx-bwr{border-top:0}
+/* the two columns end level */
+.cx-one{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.cx-one>div{display:flex;flex-direction:column;min-width:0}.cx-one>div>.rep:last-child{flex:1}
+@media(max-width:1100px){.cx-one{grid-template-columns:1fr}}
+/* chips left */
+.cx-cr{display:grid;grid-template-columns:30px 150px minmax(0,1fr) 64px 96px;gap:12px;align-items:center;padding:9px 4px;border-top:1px solid rgba(255,255,255,.06);cursor:pointer}
+.cx-cr:first-child{border-top:0}.cx-cr:hover{background:rgba(255,255,255,.03)}.cx-cr .cx-ghost{justify-self:end}
+.cx-cr.ax{border-top:0;padding-top:0;cursor:default}.cx-cr.ax:hover{background:none}
+.cx-crn b{display:block;font:600 14px 'Geist',sans-serif}.cx-crn span{font-size:12px;color:#8A8A8A}
+.cx-crw{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}.cx-crw b{font:600 16px 'Geist',sans-serif}.cx-crw i{font:600 12.5px 'Geist Mono',monospace;font-style:normal}
+.cx-mini{display:grid;grid-template-columns:repeat(19,minmax(0,1fr));gap:5px;align-items:end;height:32px;min-width:0}
+.cx-mini i{display:block;width:100%;padding:0;margin:0;border-radius:2px 2px 0 0;background:color-mix(in srgb,var(--tc) 35%,#222)}
+.cx-mini i.hx{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--tc) 50%,#222) 0 2px,#1c1c1c 2px 4px);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tc) 70%,transparent)}
+.cx-mini i.on{background:var(--tc);box-shadow:none}.cx-mini i.nil{height:2px;background:#232323}
+.cx-axis{height:auto}.cx-axis span{font:500 10px 'Geist Mono',monospace;color:#666;text-align:center}
+/* chips used */
+.cx-ur{display:grid;grid-template-columns:30px 130px 70px 92px 104px 72px minmax(0,1fr);gap:12px;align-items:center;padding:8px 4px;border-top:1px solid rgba(255,255,255,.06)}
+.cx-ur.hd{border-top:0;padding:0 4px 4px;font-size:11px;color:#7A7A7A;text-transform:uppercase;letter-spacing:.05em}
+.cx-ur b{font:600 14px 'Geist',sans-serif}.cx-ur .cx-ug{font-size:16px}.cx-ur i{font-style:normal;font-size:12px;margin-left:4px}.cx-ur .cx-uav{color:#9A9A9A;font-weight:500}
+.cx-upk{display:flex;align-items:center;gap:10px}.cx-upk b{width:38px}
+.cx-pm{flex:1;height:6px;border-radius:99px;background:#242424;overflow:hidden}.cx-pm i{display:block;height:100%;border-radius:99px;margin:0}
+/* remaining plans */
+.cx-rgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cx-rbox{background:#181818;border-radius:12px;padding:11px 12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);display:flex;flex-direction:column;gap:10px;min-width:0}
+.cx-rbox.done{opacity:.38;filter:grayscale(.8)}.cx-rdone{font-size:12px;color:#8A8A8A;padding:18px 0;text-align:center}
+.cx-rbh{display:flex;align-items:center;gap:8px}.cx-rbh b{font:600 14px 'Geist',sans-serif;white-space:nowrap}.cx-pps{margin-left:auto;display:flex;gap:4px}
+.cx-pp{font:600 11px 'Geist',sans-serif;padding:3px 9px;border-radius:999px;background:#232323;color:#9A9A9A;border:0;min-height:0}button.cx-pp{cursor:pointer}
+.cx-pp.pick{background:var(--tc);color:#0B0B0B}.cx-pp.off{background:transparent;color:#666;box-shadow:inset 0 0 0 1px #2C2C2C}
+.cx-ro{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.cx-roo{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#1F1F1F;border:0;border-radius:9px;padding:9px 4px 7px;color:#EDEDED;min-height:0;cursor:pointer;font-family:'Geist',sans-serif}
+.cx-roo>b{font:600 15px 'Geist',sans-serif}.cx-rov{font:600 11.5px 'Geist Mono',monospace;font-style:normal;color:var(--mint)}
+.cx-roo.pick{background:color-mix(in srgb,var(--tc) 14%,#1A1A1A);box-shadow:inset 0 0 0 1.5px var(--tc)}.cx-roo:hover{background:#262626}.cx-roo.pick:hover{background:color-mix(in srgb,var(--tc) 20%,#1A1A1A)}
+.cx-ft{position:absolute;top:-7px;right:5px;font-size:8px;padding:2px 4px}
+.cx-rmk{font:600 9px 'Geist',sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--tc);margin-top:1px}
+.cx-rbf{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#8A8A8A}.cx-rbf span{flex:1;min-width:0}
+/* hover: where a week's points come from */
+.cx-htip{display:none;position:absolute;z-index:40;top:calc(100% + 10px);left:50%;transform:translateX(-50%);width:340px;text-align:left;background:#202020;border-radius:12px;padding:12px 14px;box-shadow:0 14px 40px rgba(0,0,0,.65),inset 0 0 0 1px rgba(255,255,255,.1);cursor:default;color:#EDEDED}
+.cx-roo:hover .cx-htip,.cx-roo:focus-visible .cx-htip{display:block}
+.cx-roo:nth-child(3) .cx-htip{left:auto;right:-4px;transform:none}.cx-roo:nth-child(1) .cx-htip{left:-4px;transform:none}
+.cx-thh{display:flex;align-items:center;gap:8px;margin-bottom:8px}.cx-thh b{flex:1;font:600 13px 'Geist',sans-serif}.cx-thh .up{font:600 13px 'Geist Mono',monospace}
+.cx-tl{display:block;font-size:11.5px;color:#8A8A8A;margin-bottom:6px;font-weight:400}
+.cx-tr{display:grid;grid-template-columns:34px minmax(0,1fr) auto 34px;gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(255,255,255,.06)}
+.cx-tpos{font:600 10px 'Geist Mono',monospace;color:#8A8A8A}.cx-tr b{font:600 12.5px 'Geist',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cx-tv{font:600 12px 'Geist Mono',monospace;text-align:right}
+.cx-tfx .fxc{width:36px;height:20px;font-size:10px}
+.cx-tf{display:block;font-size:11px;color:#8A8A8A;margin-top:8px;line-height:1.4;font-weight:400}
+/* best plan */
+.cx-bp{display:grid;grid-template-columns:24px minmax(0,1fr) auto 70px;column-gap:12px;row-gap:8px;align-items:center;padding:10px;border-radius:12px;margin-bottom:8px;background:#181818;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.cx-bp.top{box-shadow:inset 0 0 0 1.5px var(--mint);background:#161B18}.cx-bp:last-child{margin-bottom:0}.cx-bp .cx-ghost{justify-self:end}
+.cx-bpr{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#232323;font:600 12px 'Geist Mono',monospace;color:#9A9A9A}.cx-bp.top .cx-bpr{background:var(--mint);color:#06130D}
+.cx-bpn{display:flex;align-items:center;gap:8px;min-width:0}.cx-bpn b{font:600 13.5px 'Geist',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-bpt{font:600 18px 'Geist',sans-serif;text-align:right}
+.cx-bps{grid-column:2/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.cx-bpx{display:flex;align-items:center;gap:7px;min-width:0}.cx-bpx b{font:600 13px 'Geist',sans-serif}.cx-bpx i{font:600 11.5px 'Geist Mono',monospace;font-style:normal;color:var(--mint)}
+/* team builder */
 .cx-tbbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.cx-seg{display:inline-flex;background:#1A1A1A;border-radius:999px;padding:3px;box-shadow:0 0 0 1px rgba(255,255,255,.08);flex-wrap:wrap}
-.cx-seg button{background:none;border:0;color:#9A9A9A;font:500 12.5px 'Geist',sans-serif;padding:6px 12px;border-radius:999px;display:inline-flex;gap:6px;align-items:center;min-height:0;cursor:pointer}.cx-seg button.on{background:#EDEDED;color:#0A0A0A}
 .cx-acts{margin-left:auto;display:flex;gap:8px}
 .cx-tbfig{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:12px}.cx-tbfig div{background:#181818;border-radius:10px;padding:10px 12px}
 .cx-tbfig span{display:block;font-size:12px;color:#8A8A8A}.cx-tbfig b{font:600 20px 'Geist',sans-serif}.cx-tbfig b.sm{font-size:14px;font-weight:500;color:#BDBDBD}.cx-tbfig i{font-size:12px;color:#8A8A8A;font-style:normal}
 .cx-tbp{background:#0E1A12;border-radius:12px;overflow:hidden;max-width:980px;margin:0 auto}.cx-tbp .pitch{margin:0}
-.cx-sh{font:600 18px 'Geist',sans-serif;margin:22px 0 10px}
-.cx-hr{display:grid;grid-template-columns:230px 460px minmax(0,1fr);gap:18px;align-items:center;padding:12px 0;border-top:1px solid rgba(255,255,255,.06)}.cx-hr:first-child{border-top:0}
-.cx-hl{display:flex;gap:10px;align-items:center}.cx-hl b{display:block;font:600 14px 'Geist',sans-serif}.cx-hl span{font-size:12px;color:#8A8A8A}
-.cx-hm{display:grid;grid-template-columns:1fr 1.4fr .8fr;gap:10px}.cx-hm span{display:block;font-size:11.5px;color:#8A8A8A}.cx-hm b{font:600 18px 'Geist',sans-serif}.cx-hm i{font-style:normal;font-size:14px;margin-left:4px}
-.cx-hnote{grid-column:2/-1;font-size:11.5px;color:#7A7A7A;margin-top:-6px}
-.cx-hb{display:flex;gap:10px;height:124px}.cx-hw{flex:1;position:relative;min-width:0}
-.cx-hw .z{position:absolute;left:0;right:0;top:57px;height:1px;background:rgba(255,255,255,.14)}
-.cx-hw .b{position:absolute;left:18%;right:18%;border-radius:3px;background:color-mix(in srgb,var(--tc) 38%,#222)}.cx-hw .b.n{background:rgba(255,90,110,.45)}
-.cx-hw.sel .b{background:var(--tc);box-shadow:0 0 0 2px #fff}.cx-hw.sel .b.n{background:var(--red)}
-.cx-hw .l{position:absolute;left:0;right:0;text-align:center;font:600 11px 'Geist Mono',monospace;color:#EDEDED}
-.cx-hw .g{position:absolute;left:0;right:0;bottom:0;text-align:center;font:500 11px 'Geist Mono',monospace;color:#6A6A6A}
-table.cx-ht{width:100%;border-collapse:collapse;font-size:12.5px}
-.cx-ht th{font:500 11.5px 'Geist',sans-serif;color:#8A8A8A;text-align:center;padding:8px;border-bottom:1px solid rgba(255,255,255,.08)}.cx-ht th.cur{color:var(--mint)}
-.cx-ht td{text-align:center;padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.04);font-family:'Geist Mono',monospace}
-.cx-hcn{text-align:left!important;font-family:'Geist',sans-serif!important;white-space:nowrap}.cx-hcn .cx-ct{vertical-align:middle;margin-right:8px}
-.cx-hc{display:inline-flex;flex-direction:column;line-height:1.2}.cx-hc b{font-weight:600}.cx-hc i{font-style:normal;font-size:11.5px}
+/* chip report: a column per chip */
+.cx-mhs{font-size:12.5px;color:#7A7A7A;margin-left:12px;flex:1}
+.cx-crs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.cx-crc{background:#181818;border-radius:14px;padding:14px 16px 10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);text-align:left;display:flex;flex-direction:column;min-width:0}
+.cx-crh{display:flex;align-items:center;gap:9px;margin-bottom:10px}.cx-crh b{flex:1;font:600 14px 'Geist',sans-serif}.cx-crh span{font-size:11.5px;color:#7A7A7A}
+.cx-crg{display:grid;grid-template-columns:1fr 1.3fr 1fr;align-items:end;gap:6px}
+.cx-cre span,.cx-crn2 span{display:block;font-size:10.5px;color:#7A7A7A;text-transform:uppercase;letter-spacing:.06em}.cx-cre b{display:block;font:600 17px 'Geist',sans-serif}
+.cx-cre i,.cx-crn2 i{display:block;font-style:normal;font-size:11px;color:#8A8A8A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-cre.r{text-align:right}.cx-crn2{text-align:center;min-width:0}.cx-crn2 b{display:block;font:700 38px/1.05 'Geist',sans-serif;letter-spacing:-.03em;margin:2px 0}
+.cx-crt{position:relative;height:30px;margin-top:12px}.cx-trk{position:absolute;left:0;right:0;top:8px;height:6px;border-radius:99px;background:linear-gradient(90deg,rgba(255,90,110,.45),#2A2A2A 45%,color-mix(in srgb,var(--tc) 70%,#2A2A2A))}
+.cx-avm{position:absolute;top:4px;width:2px;height:14px;margin-left:-1px;background:#EDEDED;border-radius:2px}.cx-avt{position:absolute;top:20px;transform:translateX(-50%);font:600 10.5px 'Geist Mono',monospace;color:#BDBDBD;white-space:nowrap}
+.cx-nowd{position:absolute;top:3px;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:var(--tc);box-shadow:0 0 0 3px #181818,0 0 14px color-mix(in srgb,var(--tc) 70%,transparent)}
+.cx-mchart{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:128px;margin-top:14px;border-top:1px solid rgba(255,255,255,.06);padding-top:6px}
+.cx-mzero{position:absolute;left:0;right:0;top:72px;height:1px;background:rgba(255,255,255,.14)}
+.cx-mgrp{position:relative;display:flex;justify-content:center;gap:2px}.cx-mgrp.cur{background:rgba(255,255,255,.04);border-radius:6px}
+.cx-mbw{position:relative;width:13px;height:100%}.cx-mnil{position:absolute;left:3px;right:3px;top:71px;height:2px;background:#2A2A2A;border-radius:2px}.cx-mnil.nr{background:#3A3A3A}
+.cx-mbar{position:absolute;left:0;right:0;border-radius:2px}.cx-mbar.h1{background:color-mix(in srgb,var(--tc) 30%,#1E1E1E)}.cx-mbar.h2{background:color-mix(in srgb,var(--tc) 58%,#1E1E1E)}
+.cx-mbar.cur{background:var(--tc)}.cx-mbar.n{background:rgba(255,90,110,.55)}.cx-mbar.n.cur{background:#FF5A6E}
+.cx-mval{position:absolute;left:-8px;right:-8px;text-align:center;font:600 10px 'Geist Mono',monospace;color:#EDEDED;white-space:nowrap}
+.cx-mseas{position:absolute;left:0;right:0;bottom:2px;text-align:center;font:500 10px 'Geist Mono',monospace;color:#6E6E6E;white-space:nowrap}.cx-mgrp.cur .cx-mseas{color:var(--mint);font-weight:700}
+@media(max-width:1100px){.cx-crs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* chip report: how well you picked */
+.cx-hkey{display:flex;gap:18px;font-size:12px;color:#8A8A8A;margin:-2px 0 6px}.cx-hkey span{display:inline-flex;align-items:center;gap:6px}
+.cx-k{width:12px;height:12px;border-radius:3px;display:inline-block}.cx-k.me{background:#EDEDED}.cx-k.bst{box-shadow:inset 0 0 0 1.5px #FFB020}
+.cx-hrow{display:grid;grid-template-columns:190px 330px minmax(0,1fr);gap:20px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)}.cx-hkey+.cx-hrow{border-top:0}
+.cx-hinfo{display:flex;align-items:center;gap:10px}.cx-hinfo b{display:block;font:600 14px 'Geist',sans-serif}.cx-hinfo span{font-size:12px;color:#8A8A8A}
+.cx-hstats{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:10px}.cx-hstats span{display:block;font-size:11px;color:#7A7A7A;text-transform:uppercase;letter-spacing:.05em}.cx-hstats b{font:600 18px 'Geist',sans-serif}.cx-hstats i{font-style:normal;font-size:13px}
+.cx-hchart{display:grid;gap:6px;height:86px}
+.cx-hw{position:relative}.cx-hb2{position:absolute;left:12%;right:12%;border-radius:3px;background:color-mix(in srgb,var(--tc) 30%,#222)}.cx-hb2.n{background:rgba(255,90,110,.5)}
+.cx-hw.me .cx-hb2{background:var(--tc);box-shadow:0 0 0 2px #EDEDED}.cx-hw.me .cx-hb2.n{background:#FF5A6E}.cx-hw.bst .cx-hb2{box-shadow:inset 0 0 0 1.5px #FFB020}.cx-hw.me.bst .cx-hb2{box-shadow:0 0 0 2px #EDEDED,inset 0 0 0 1.5px #FFB020}
+.cx-hl{position:absolute;left:-10px;right:-10px;text-align:center;font:600 11px 'Geist Mono',monospace;color:#EDEDED;white-space:nowrap}.cx-hw.bst .cx-hl{color:#FFC861}
+.cx-hg{position:absolute;left:0;right:0;bottom:0;text-align:center;font:500 10.5px 'Geist Mono',monospace;color:#6A6A6A}.cx-hw.me .cx-hg{color:#EDEDED;font-weight:700}
+@media(max-width:1100px){.cx-hrow{grid-template-columns:1fr}}
+/* chip report: rivals */
+.cx-rvs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.cx-rvc{display:flex;gap:10px;align-items:center;background:#181818;border-radius:12px;padding:10px 12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);min-width:0}.cx-rvc b{display:block;font:600 16px 'Geist',sans-serif}.cx-rvc span{font-size:11.5px;color:#8A8A8A}
 .cgridt th .cx-ct{vertical-align:middle;margin-right:4px}
-
+/* a chip slot in the rivals grid: the tile and its week always line up */
+.cx-ru{display:inline-grid;grid-template-columns:22px 44px;gap:7px;align-items:center;justify-items:start;text-align:left}.cx-ru i{font:600 11.5px 'Geist Mono',monospace;font-style:normal;color:#CFCFCF}.cx-ru.off{opacity:.75}
 /* Fixture chips (20 Nov 2026, Andy picked the strip): one chip everywhere.
    A run of fixtures sits in one dark strip; each cell holds three capitals,
    "@" before an away opponent, a faint tint and a difficulty bar along the
@@ -1254,28 +1345,6 @@ table.cx-ht{width:100%;border-collapse:collapse;font-size:12.5px}
 
 /* ranks (1 = best) replace percentiles in the compare pop-up and player card */
 .cprk{font-family:'Geist Mono',monospace;cursor:help}
-/* Chips one-screen layout (21 Nov 2026) */
-.cx-hdr{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:center;margin:6px 0 16px}
-.cx-hdr h1{margin:4px 0 0;font:600 30px 'Geist',system-ui,sans-serif;letter-spacing:-.02em}.cx-hdr .cx-figs{margin:0}
-@media(max-width:1100px){.cx-hdr{grid-template-columns:1fr;gap:12px}}
-.cx-phd{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
-.cx-cr{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;gap:12px;align-items:center;background:#141414;border-radius:12px;padding:10px 12px;box-shadow:inset 0 0 0 1px var(--ring);cursor:pointer}
-.cx-cr:hover{background:#181818}
-.cx-crn b{display:block;font:600 14px 'Geist',sans-serif}.cx-crn span{font-size:12px;color:#8A8A8A}
-.cx-crw{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}.cx-crw b{font:600 16px 'Geist',sans-serif}.cx-crw i{font:600 13px 'Geist Mono',monospace;font-style:normal}
-.cx-one .cx-cr{grid-template-columns:30px 170px minmax(0,1fr) 70px auto;background:transparent;box-shadow:none;border-radius:0;padding:10px 4px;border-top:1px solid rgba(255,255,255,.06)}
-.cx-one .cx-cr:first-child{border-top:0}.cx-one .cx-cr:hover{background:rgba(255,255,255,.03)}
-.cx-mini{display:flex;gap:2px;align-items:flex-end;height:32px;min-width:0}
-.cx-mini i{flex:1;min-width:2px;max-width:14px;border-radius:2px 2px 0 0;background:color-mix(in srgb,var(--tc) 35%,#222)}
-.cx-mini i.fc{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--tc) 45%,#222) 0 2px,#1c1c1c 2px 4px)}.cx-mini i.on{background:var(--tc)}
-.cx-one{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
-.cx-pgrid.stack{grid-template-columns:1fr;gap:10px}
-.cx-seqh{display:flex;gap:6px;flex-wrap:wrap}.cx-sth{display:inline-flex;align-items:center;gap:6px;background:#1E1E1E;border-radius:999px;padding:3px 10px 3px 3px}.cx-sth b{font:600 12.5px 'Geist',sans-serif}
-.cx-pcf{display:flex;align-items:center;gap:10px}.cx-pcf .cx-why{flex:1}
-.cx-launch{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.cx-big{display:flex;gap:12px;align-items:center;text-align:left;background:#141414;border:0;border-radius:12px;padding:14px 16px;box-shadow:inset 0 0 0 1px var(--ring);color:#EDEDED;cursor:pointer;min-height:0}
-.cx-big:hover{background:#1A1A1A}.cx-big svg{color:var(--mint);flex:none}.cx-big b{display:block;font:600 14px 'Geist',sans-serif}.cx-big i{display:block;font-style:normal;font-size:12px;color:#8A8A8A;margin-top:2px}
-.mbox .cx-bwr{border-top:0}
 </style>
 </head>
 <body>
@@ -1289,13 +1358,13 @@ table.cx-ht{width:100%;border-collapse:collapse;font-size:12.5px}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.7.2"></script>
-<script src="./app-squad.js?v=13.7.2"></script>
-<script src="./app-render.js?v=13.7.2"></script>
-<script src="./app-odds.js?v=13.7.2"></script>
-<script src="./app-tracker.js?v=13.7.2"></script>
-<script src="./app-main.js?v=13.7.2"></script>
-<script src="./app-scout.js?v=13.7.2"></script>
+<script src="./app-core.js?v=13.8.0"></script>
+<script src="./app-squad.js?v=13.8.0"></script>
+<script src="./app-render.js?v=13.8.0"></script>
+<script src="./app-odds.js?v=13.8.0"></script>
+<script src="./app-tracker.js?v=13.8.0"></script>
+<script src="./app-main.js?v=13.8.0"></script>
+<script src="./app-scout.js?v=13.8.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
