@@ -292,6 +292,13 @@ function act(k,a,b){
       const bad=[];Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).forEach(([k,[e]])=>{const why=chipRuleBreak(k,e);if(why)bad.push(why);else S.chips={...S.chips,[k]:e};});
       saveState();if(bad.length)toast(bad[0],{warn:true});else toast("Plan set: "+Object.entries(p.pick).sort((x,y)=>x[1][0]-y[1][0]).map(([k,[e]])=>CHIP_UI[chipKind(k)].s+" GW"+e).join(", "));break;}
     case"chiprp":S.chipRP={...(S.chipRP||{}),[a]:b};break;
+    /* place a chip on the roadmap (21 Nov 2026): click a chip then a week,
+       or drag it; the plan is S.chips, so the Planner shows it too */
+    case"chippick":S.chipPick=a&&S.chipPick!==a?a:null;break;
+    case"chipplace":{const k=S.chipPick,e=+a;if(!k)break;
+      if(S.model&&e<S.model.next.id){toast("GW"+e+" has already started",{warn:true});break;}
+      const why=chipRuleBreak(k,e);if(why){toast(why,{warn:true});break;}
+      S.chips={...S.chips,[k]:e};S.chipPick=null;saveState();toast(`${CHIP_UI[chipKind(k)].n} ${k.slice(-1)} planned for GW${e}`);break;}
     case"chippop":S.chipPop=a||null;break;
     case"chippopclose":S.chipPop=null;break;
     case"cmpopen":S.cmp={mode:a==="wc"?"wc":"fh",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
@@ -346,7 +353,7 @@ document.addEventListener("keydown",e=>{
      &&!/^(BUTTON|A|INPUT|SELECT|TEXTAREA)$/.test(el.tagName)){e.preventDefault();el.click();return;}
   if(e.key==="Escape"&&S.cardId){S.cardId=null;render();return;}
   if(e.key==="Escape"&&S.pMenu!=null){S.pMenu=null;render();return;}
-  if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp||S.chipPop)){S.pop=null;S.cmp=null;S.pCmp=false;S.chipPop=null;render();}
+  if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp||S.chipPop||S.chipPick)){S.pop=null;S.cmp=null;S.pCmp=false;S.chipPop=null;S.chipPick=null;render();}
 });
 window.addEventListener("popstate",()=>{savePaint();if(applyHash())render();});
 /* Signals charts: the hover card reads data-tip "title|figure|note" */
@@ -435,6 +442,9 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   if(!BACKUP)setInterval(()=>{if(S.loading)return;
     loadStatus().then(s=>{if(s)refreshStatusUI();});},60000);
 })();
+/* drag a chip onto a roadmap week (21 Nov 2026) */
+function chipDrag(ev,k){try{ev.dataTransfer.setData("text/plain",k);ev.dataTransfer.effectAllowed="move";}catch(_){}}
+function chipDrop(ev,e){ev.preventDefault();const k=ev.dataTransfer&&ev.dataTransfer.getData("text/plain");if(!k)return;S.chipPick=k;act("chipplace",e);}
 /* Planner player menu (21 Nov 2026): right-click opens it, a long press on
    a touch screen too; a click anywhere else closes it. */
 let _lpT=null,_lpFired=false;
