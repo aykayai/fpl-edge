@@ -51,7 +51,7 @@ const DCD_URL=BACKUP?"data/dc-doubles.json":"/data/feeds/dc-doubles.json";
 const imgSrc=(kind,code)=>BACKUP
   ?(kind==="shirt"||kind==="shirtgk"?`https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${esc(String(code||""))}${kind==="shirtgk"?"_1":""}-220.png`
     :kind==="badge"?`https://resources.premierleague.com/premierleague/badges/50/t${esc(String(code||""))}.png`
-    :`https://resources.premierleague.com/premierleague/photos/players/110x140/p${esc(String(code||""))}.png`)
+    :`https://resources.premierleague.com/premierleague25/photos/players/110x140/${esc(String(code||""))}.png`)
   :`/img/${kind}/${esc(String(code||""))}.png`;
 /* ---------- instant start ----------
    The last good copy of every data file (dataset CSVs and both feeds) is kept
@@ -254,7 +254,7 @@ function applyHash(){
   if(t&&t!==S.tab){S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.9.1";
+const APP_VERSION="13.10.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
