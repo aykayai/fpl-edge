@@ -299,6 +299,12 @@ try {
       g.act("chippick", k2); g.act("chipplace", wk);
       check(S.chips[k2] === wk && !S.chipPick, `Chips: placing ${k2} on GW${wk} plans it`, JSON.stringify(S.chips));
       check(vm.runInContext(`chipForWeek(${wk})`, ctx) === k2.replace(/2$/, ""), "Chips: the Planner shows the placed chip for that week", vm.runInContext(`chipForWeek(${wk})`, ctx));
+      /* 21 Nov 2026: the selected plan holds a planned chip in its week, and
+         clicking that week again clears it */
+      const sp = vm.runInContext("chipSelectedPlan()", ctx);
+      if (sp) check(sp.pick[k2] && sp.pick[k2][0] === wk, "Chips: the selected plan keeps a planned chip in its week", JSON.stringify(sp.pick));
+      g.act("chipset", k2, wk);
+      check(S.chips[k2] == null, "Chips: clicking the planned week again clears the chip", JSON.stringify(S.chips));
       S.chips = keep;
     }
   }
