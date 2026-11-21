@@ -295,6 +295,12 @@ function act(k,a,b){
     /* place a chip on the roadmap (21 Nov 2026): click a chip then a week,
        or drag it; the plan is S.chips, so the Planner shows it too */
     case"chippick":S.chipPick=a&&S.chipPick!==a?a:null;break;
+    /* click a week for a chip: plans it there, or clears it if it is
+       already there (21 Nov 2026: no Plan buttons) */
+    case"chipset":{const e=+b;
+      if(S.chips[a]===e){const c={...S.chips};delete c[a];S.chips=c;saveState();toast(`${CHIP_UI[chipKind(a)].n} ${a.slice(-1)} cleared from GW${e}`);break;}
+      const why=chipRuleBreak(a,e);if(why){toast(why,{warn:true});break;}
+      S.chips={...S.chips,[a]:e};saveState();toast(`${CHIP_UI[chipKind(a)].n} ${a.slice(-1)} planned for GW${e}`);break;}
     case"chipplace":{const k=S.chipPick,e=+a;if(!k)break;
       if(S.model&&e<S.model.next.id){toast("GW"+e+" has already started",{warn:true});break;}
       const why=chipRuleBreak(k,e);if(why){toast(why,{warn:true});break;}

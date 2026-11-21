@@ -1457,6 +1457,9 @@ function chipGainAt(kind,e,best,ids){
    each times how sure it is. */
 function chipWeighted(kind,e,v,ids){
   const f=chipForecast(e);if(!f||v==null)return{v,f:null};
+  /* a possible double counts only once FPL confirms it, so the plans lean
+     on likely doubles until then (21 Nov 2026, Andy) */
+  if(f.t==="double"&&f.p<0.6)return{v,f:null};
   if(Array.isArray(f.teams)&&f.teams.length){
     const named=new Set(S.model.teams.filter(t=>f.teams.includes(t.short)).map(t=>t.id));
     const adj=new Map(ids.map(chipPlayer).filter(p=>p&&named.has(p.team)).map(p=>[p.id,f.t==="blank"?1-f.p:1+f.p]));
@@ -1510,7 +1513,7 @@ function chipPlans(){
   if(!S.model)return[];
   const sig=chipSig();if(_chipPlans&&_chipPlans.sig===sig)return _chipPlans.p;
   const keys=chipsLeft().filter(k=>k.endsWith("2"));
-  if(keys.length<2){_chipPlans={sig,p:[]};return[];}
+  if(keys.length<2){_chipPlans={sig,p:[],search:null,keys};return[];}
   const cv={};keys.forEach(k=>cv[k]=chipCurve(k));
   const top={};keys.forEach(k=>top[k]=chipBestWeeks(k).slice(0,6));
   const wcKey=keys.find(k=>chipKind(k)==="wildcard");
@@ -1532,14 +1535,16 @@ function chipPlans(){
   const score=pick=>{let tot=0;const out={};
     keys.forEach(k=>{if(!pick[k])return;const [e]=pick[k];const base=(cv[k][e]||{}).v||0;const v=synergy(pick,k,e,base);out[k]=[e,+v.toFixed(1)];tot+=v;});
     return{pick:out,tot};};
-  let best=null;
   const order=wcKey?[wcKey,...keys.filter(k=>k!==wcKey)]:keys;
-  const rec=(i,used,pick)=>{
-    if(i===order.length){const s=score(pick);if(!best||s.tot>best.tot)best=s;return;}
-    const k=order[i];top[k].forEach(([e])=>{if(used.has(e))return;
-      if(chipKind(k)==="freehit"&&chipPlayed("freehit1")===19&&e===20)return;
-      used.add(e);pick[k]=[e];rec(i+1,used,pick);used.delete(e);delete pick[k];});};
-  rec(0,new Set(),{});
+  /* the best total with some chips held at a week (fixed: key → week) */
+  const search=fixed=>{let best=null;
+    const rec=(i,used,pick)=>{
+      if(i===order.length){const s=score(pick);if(!best||s.tot>best.tot)best=s;return;}
+      const k=order[i];(fixed[k]?[[fixed[k]]]:top[k]).forEach(([e])=>{if(used.has(e))return;
+        if(chipKind(k)==="freehit"&&chipPlayed("freehit1")===19&&e===20)return;
+        used.add(e);pick[k]=[e];rec(i+1,used,pick);used.delete(e);delete pick[k];});};
+    rec(0,new Set(),{});return best;};
+  let best=search({});
   const fill=fixed=>{const used=new Set(Object.values(fixed).map(x=>x[0])),pick={...fixed};
     keys.forEach(k=>{if(pick[k])return;const b=chipBestWeeks(k).find(([e])=>!used.has(e));if(b){pick[k]=[b[0]];used.add(b[0]);}});
     return score(pick);};
@@ -1560,7 +1565,19 @@ function chipPlans(){
   if(topP&&plans[0]&&topP!==plans[0]&&plans[0].name==="Most Points"){plans[0].pick=topP.pick;plans[0].tot=topP.tot;}
   const seen=new Set();const uniq=plans.filter(p=>{const k=JSON.stringify(p.pick);if(seen.has(k))return false;seen.add(k);return true;});
   uniq.sort((a,b)=>b.tot-a.tot);
-  _chipPlans={sig,p:uniq};return uniq;
+  _chipPlans={sig,p:uniq,search,keys};return uniq;
+}
+/* The selected plan (21 Nov 2026, Andy): the chips you have planned stay in
+   their weeks and the rest go to their best weeks on the same rules as the
+   plans. The roadmap, header, Chips Left and Remaining Plans all show it,
+   and Best Plan compares it with the best available. */
+let _chipSel=null;
+function chipSelectedPlan(){
+  chipPlans();const P=_chipPlans;if(!P||!P.search)return null;
+  const fx={};P.keys.forEach(k=>{if(S.chips[k])fx[k]=S.chips[k];});
+  const key=P.sig+"|"+JSON.stringify(fx);if(_chipSel&&_chipSel.key===key)return _chipSel.p;
+  const p=P.search(fx);
+  _chipSel={key,p:p?Object.assign(p,{name:"Selected Plan"}):null};return _chipSel.p;
 }
 /* Hindsight for this season: every finished week each chip could have been
    played in, scored on what happened. Triple Captain: your captain's points.
