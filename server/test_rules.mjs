@@ -227,12 +227,13 @@ try {
     const plans = g.chipPlans();
     check(plans.every(p => new Set(Object.values(p.pick).map(x => x[0])).size === Object.keys(p.pick).length), "Chips: every plan has one chip per week");
   }
-  /* the rebuilt Chips page (20 Nov 2026) marks a played chip on its roadmap
-     and offers no best week for it */
+  /* the rebuilt Chips page (20 Nov 2026, v3 21 Nov) marks a played chip on
+     its roadmap, lists it in Chips Used and offers no best week for it */
   if (free1 != null) {
-    const html = doc.getElementById("app").innerHTML;
+    const html = doc.getElementById("app").innerHTML, sec = id => (doc.getElementById(id) || {}).innerHTML || "";
     check(new RegExp(`GW${free1}: Free Hit played`).test(html), "F47 the Chips page shows a played chip as used");
-    check(!/<b>Free Hit 1<\/b>/.test(html.split("How Well You Picked")[0]), "F47 a played chip gets no best week on the Chips page");
+    check(!/<b>Free Hit 1<\/b>/.test(sec("r-chleft")), "F47 a played chip gets no best week on the Chips page");
+    check(/<b>Free Hit 1<\/b>/.test(sec("r-chused")), "F47 a played chip is listed in Chips Used");
   }
   S.tab = "squad"; g.render();
 

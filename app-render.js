@@ -1039,89 +1039,191 @@ function buildSquad(kind,gw,form,budget,o){
   _sqCache[key]=best;
   return best;
 }
-/* ============================================================
-   CHIPS PAGE (20 Nov 2026, Andy): figures, season roadmap, the best week
-   for every chip left, second-half plans, the Team Builder (Free Hit /
-   Wildcard toggle), and history: how well each chip was picked this season
-   and every season's chip weeks and gains. All gains on the Planner's team
-   score (see teamScore in app-squad.js).
-   ============================================================ */
 const chipTile=(k,sz,solid,ring)=>{const u=CHIP_UI[k];
-  return `<span class="cx-ct${solid?" solid":""}${ring?" "+ring:""}" style="--tc:${u.c};width:${sz}px;height:${sz}px" aria-hidden="true">${lic(u.i,Math.round(sz*.55))}</span>`;};
+  return `<span class="cx-ct${solid?" solid":""}${ring?" "+ring:""}" style="--tc:${u.c};width:${sz}px;height:${sz}px;font-size:${Math.max(8,Math.round(sz*.4))}px" aria-hidden="true">${u.s}</span>`;};
 const chipKeyName=k=>`${CHIP_UI[chipKind(k)].n} ${k.endsWith("2")?"2":"1"}`;
 const sgnPts=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(1);
 const sgnInt=v=>(v>=0?"+":"−")+Math.abs(Math.round(v));
 let _chipPlanList=[];
+/* ============================================================
+   CHIPS PAGE v3 (21 Nov 2026, Andy). Header scoreboard per half, season
+   roadmap, Chips Left (a slot per gameweek) and Chips Used, Remaining Plans
+   (a box per chip, three weeks each, hover for where the points come from)
+   and the Best Plan; the Chip Report pop-up holds every season, how well
+   each chip was picked and rivals' chips. Chips show as letter tiles (WC,
+   FH, BB, TC) everywhere. All gains on the Planner's team score; the plan
+   is S.chips, the same schedule the Planner uses.
+   ============================================================ */
 function chipsHTML(){
   if(!S.model)return "";
   const g=S.model.next.id,left=chipsLeft(),played=((S.tracker&&S.tracker.gw)||[]).filter(r=>r.chip).sort((a,b)=>a.event-b.event);
-  const ups=trkChipUplifts(),gained=Object.values(ups).reduce((a,c)=>a+(+c.uplift||0),0);
+  const ups=trkChipUplifts();
   const plans=chipPlans();_chipPlanList=plans;
   const rec=plans[0]?plans[0].pick:{};
-  /* the next chip coming up: planned first, else the earliest best week */
-  const next=left.map(k=>{const e=S.chips[k]||((chipBestWeeks(k)[0]||[])[0]);return e?{k,e,v:((chipCurve(k)[e]||{}).v)}:null;})
-    .filter(Boolean).sort((a,b)=>a.e-b.e)[0];
-  const h1Left=left.filter(k=>k.endsWith("1"));
-  const ev19=(S.events||[]).find(e=>e.id===19);
-  const exp19=ev19&&ev19.deadline?ukFmt(ev19.deadline,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"GW19 deadline";
+  const KORD=["wildcard","freehit","bboost","3xc"],RK={wildcard:"WC",freehit:"FH",bboost:"BB","3xc":"TC"};
+  const LAB={wildcard:"Wild Card",freehit:"Free Hit",bboost:"Bench Boost","3xc":"Triple Captain"};
+  const upOf=k=>{const c=ups[`${LAB[chipKind(k)]} ${k.endsWith("2")?2:1}`];return c&&c.uplift!=null?+c.uplift:null;};
+  /* the week shown for a chip still to play: your plan, else the best
+     plan's week, else its best week; the roadmap, the header, Chips Left
+     and Remaining Plans all use this */
+  const weekOf=k=>S.chips[k]||(rec[k]||[])[0]||(chipBestWeeks(k)[0]||[])[0]||null;
 
-  /* ---- figures ---- */
-  const figs=[
-    figCard("Chips Left","Chips you can still play this season. First-half chips expire at the GW19 deadline.",
-      `${left.length}<span class="cx-of"> of 8</span>`,h1Left.length?`${h1Left.map(chipKeyName).join(", ")} + ${left.length-h1Left.length} second-half`:"all second-half"),
-    figCard("Next Up",next?`The next chip by week: ${S.chips[next.k]===next.e?"your plan":"its best week"}. Gain on the Planner's team score.`:"",
-      next?`${chipTile(chipKind(next.k),24,true)} GW${next.e}`:"—",next?`${chipKeyName(next.k)} · <span class="up">${sgnPts(next.v||0)}</span>`:"no chips left"),
-    h1Left.length&&g<=19?figCard(`${h1Left.length===1?chipKeyName(h1Left[0]):"First-Half Chips"} Expire${h1Left.length===1?"s":""}`,"First-half chips cannot be carried past the GW19 deadline.",
-      "GW19",`${esc(exp19)} · ${19-g+1} gameweek${19-g+1===1?"":"s"} left`)
-      :figCard("Second Half","Second-half chips run from GW20 to GW38.","GW20–38",`${left.length} chip${left.length===1?"":"s"} left`),
-    figCard("Chip Points This Season","Points each chip added this season, worked out by the feed builder the same way as League's chip performance.",
-      `<span class="${gained>=0?"up":"dn"}">${gained>=0?"+":"−"}${Math.abs(gained)}</span>`,
-      Object.values(ups).sort((a,b)=>a.event-b.event).map(c=>`${esc(c.label.replace("Wild Card","Wildcard"))} ${c.uplift>=0?"+":"−"}${Math.abs(c.uplift)}`).join(" · ")||"none played yet")
-  ].join("");
+  /* ---- every season's chip weeks and gains ---- */
+  const SEAS=[curSeasonLabel(),...Object.keys(CHIP_WEEKS)],prevS=SEAS[1];
+  const TH=TRACKER_HISTORY.chips,LBL={"Wild Card 1":"WC1","Wild Card 2":"WC2","Free Hit 1":"FH1","Free Hit 2":"FH2","Bench Boost 1":"BB1","Bench Boost 2":"BB2","Triple Captain 1":"TC1","Triple Captain 2":"TC2"};
+  const seasonOfLabel=l=>`${+l-1}/${String(l).slice(2)}`;
+  const GN={};TH.labels.forEach((l,i)=>{const s=seasonOfLabel(l);GN[s]={};Object.entries(TH.rows).forEach(([n,vals])=>{if(vals[i]!=null)GN[s][LBL[n]]=vals[i];});});
+  const CW=Object.assign({},CHIP_WEEKS,{[curSeasonLabel()]:{}});GN[curSeasonLabel()]={};
+  Object.values(ups).forEach(c=>{const r=LBL[c.label];if(r){CW[curSeasonLabel()][r]=c.event;GN[curSeasonLabel()][r]=c.uplift;}});
+  const H=chipHindsight(),KN={wildcard:"wc",freehit:"fh",bboost:"bb","3xc":"tc"};
+  const hsArr=k=>H?(H[KN[chipKind(k)]]||[]).filter(x=>k.endsWith("2")?x.e>=20:x.e<=19):[];
+
+  /* ---- one chip's facts: week, gain, last season, best week, average ---- */
+  const fact=k=>{const kind=chipKind(k),r=RK[kind]+(k.endsWith("2")?"2":"1"),pe=chipPlayed(k);
+    const last=(GN[prevS]||{})[r]??null;
+    const past=SEAS.slice(1).map(s=>(GN[s]||{})[r]).filter(x=>x!=null),avg=past.length?past.reduce((a,b)=>a+b,0)/past.length:null;
+    if(pe!=null){const v=upOf(k),arr=hsArr(k),best=arr.length?arr.reduce((m,x)=>x.v>m.v?x:m):null;
+      const atPick=(arr.find(x=>x.e===pe)||{}).v,mine=kind==="freehit"||kind==="wildcard"?atPick:v;
+      const pct=best&&mine!=null&&best.v>0?Math.round(clamp(mine/best.v,0,1)*100):null;
+      return{k,kind,st:"played",e:pe,v,last,avg,best,pct,arr};}
+    if(k.endsWith("1")&&g>19)return{k,kind,st:"expired",e:null,v:null,last,avg};
+    const e=weekOf(k);
+    return{k,kind,st:S.chips[k]?"planned":"projected",e,v:e?((chipCurve(k)[e]||{}).v??null):null,last,avg};};
+  const F={};[1,2].forEach(h=>KORD.forEach(kd=>F[kd+h]=fact(kd+h)));
+
+  /* ---- header: a scoreboard for each half ---- */
+  const STL={played:"Played",planned:"Planned",projected:"Best week",expired:"Expired"};
+  const sCell=f=>`<div class="cx-sc ${f.st}" title="${esc(chipKeyName(f.k))}">${chipTile(f.kind,34,f.st==="played",f.st==="planned"?"ring":f.st==="projected"?"dash":"")}
+    <div><span class="cx-scl">${STL[f.st]}</span><b>${f.e?"GW"+f.e:"—"}</b><i class="${f.v==null?"mu":f.v>=0?"up":"dn"}${f.st!=="played"?" pj":""}">${f.v==null?"—":f.st==="played"?sgnInt(f.v):sgnPts(f.v)}</i></div></div>`;
+  const sHalf=h=>{const fs=KORD.map(kd=>F[kd+h]),pl=fs.filter(f=>f.st==="played"),got=pl.reduce((a,f)=>a+(f.v||0),0);
+    const pj=fs.filter(f=>f.st==="planned"||f.st==="projected"),pjv=pj.reduce((a,f)=>a+(f.v||0),0);
+    return `<div class="cx-sh"><div class="cx-shh"><b>GW${h===1?"1–19":"20–38"}</b><span>${pl.length?`<em class="up">${sgnInt(got)}</em> gained`:""}${pl.length&&pj.length?" · ":""}${pj.length?`<em>${sgnPts(pjv)}</em> projected`:""}</span></div>
+      <div class="cx-shc">${fs.map(sCell).join("")}</div></div>`;};
+  const head=`<div class="cx-hdr"><div><div class="cx-kick">GW${g} · ${left.length} of 8 left</div><h1>Chips</h1>
+      <div class="cx-hbtn"><button class="cx-rpt" onclick="act('chippop','report')">${lic("chart-column",15)}Chip Report</button>
+      <button class="cx-rpt sub" onclick="act('chippop','build')" title="Free Hit and Wildcard teams. Moving to the Team Planner.">${lic("users",15)}Team Builder</button></div></div>
+    <div class="cx-strip">${sHalf(1)}${sHalf(2)}</div></div>`;
 
   /* ---- season roadmap ---- */
-  const playedAt={};played.forEach(r=>playedAt[r.event]=r.chip);
-  const plannedAt={};Object.entries(S.chips||{}).forEach(([k,e])=>{if(chipPlayed(k)==null&&e)plannedAt[e]=k;});
-  const recAt={};Object.entries(rec).forEach(([k,[e,v]])=>{if(!S.chips[k])recAt[e]=[k,v];});
-  left.filter(k=>k.endsWith("1")).forEach(k=>{if(!S.chips[k]){const b=chipBestWeeks(k)[0];if(b)recAt[b[0]]=[k,b[1]];}});
-  const cols=[];for(let e=1;e<=38;e++){const m=chipWeekMark(e),pl=playedAt[e],pn=plannedAt[e],rc=recAt[e];
-    const tok=pl?chipTile(pl,26,true):pn?`${chipTile(chipKind(pn),26,false,"ring")}<span class="cx-rv">${sgnInt(((chipCurve(pn)[e]||{}).v)||0)}</span>`
-      :rc?`${chipTile(chipKind(rc[0]),26,false,"dash")}<span class="cx-rv mu">${sgnInt(rc[1])}</span>`:"";
-    const tip=pl?`GW${e}: ${CHIP_UI[pl].n} played`:pn?`GW${e}: ${chipKeyName(pn)} planned`:rc?`GW${e}: ${chipKeyName(rc[0])} recommended`:"";
+  const playedAt={};played.forEach(r=>playedAt[r.event]=r);
+  const onAt={};left.forEach(k=>{const e=weekOf(k);if(e&&!onAt[e])onAt[e]=k;});
+  const cols=[];for(let e=1;e<=38;e++){const m=chipWeekMark(e),pr=playedAt[e],on=onAt[e];
+    const pk=pr?pr.chip+(pr.event>=20?"2":"1"):null,pv=pk?upOf(pk):null;
+    const tok=pr?chipTile(pr.chip,28,true):on?chipTile(chipKind(on),28,false,S.chips[on]?"ring":"dash"):"";
+    const pts=pr?(pv==null?"":`<span class="cx-rp ${pv>=0?"up":"dn"}">${sgnInt(pv)}</span>`):on?`<span class="cx-rp pj">${sgnInt(((chipCurve(on)[e]||{}).v)||0)}</span>`:"";
+    const tip=pr?`GW${e}: ${CHIP_UI[pr.chip].n} played`:on?`GW${e}: ${chipKeyName(on)} ${S.chips[on]?"planned":"recommended"}`:"";
     cols.push(`<div class="cx-rc${e===g?" now":""}${e<g?" past":""}${e===20?" h2":""}"${tip?` title="${esc(tip)}"`:""}>
       <span class="cx-rgw">${e}</span><span class="cx-rfx">${m?`<i class="cx-fx ${m.t==="blank"?"bl":m.p>=0.6?"dl":"dp"}" title="${esc((m.t==="blank"?"Blank":"Double")+" · "+m.why+(m.src==="Crellin"?" (Ben Crellin's forecast)":" (FPL fixtures)"))}">${m.t==="blank"?"BGW":"DGW"}</i>`:""}</span>
-      <span class="cx-rch">${tok}</span></div>`);}
+      <span class="cx-rch">${tok}</span><span class="cx-rpts">${pts}</span></div>`);}
+  const legend=`<span class="cx-lg"><span><i class="cx-sw solid"></i>played</span><span><i class="cx-sw ring"></i>planned</span><span><i class="cx-sw dash"></i>recommended</span><span class="cx-sep"></span>
+    <span><i class="cx-ld bl"></i>blank</span><span><i class="cx-ld dl"></i>likely double</span><span><i class="cx-ld dp"></i>possible double</span></span>`;
   const roadmap=rep("chroad","calendar-range","Season Chip Roadmap",
-    "Every gameweek of the season: chips you played (solid), chips you planned (ring), and the recommended week for any chip not planned yet (dashed). Blank and double gameweeks come from FPL's fixtures once matches are moved, and from Ben Crellin's forecast before that.",
-    `<div class="cx-lg"><span>${chipTile("wildcard",14,true)} played</span><span>${chipTile("wildcard",14,false,"ring")} planned</span><span>${chipTile("wildcard",14,false,"dash")} recommended</span>
-      <span><i class="cx-fx bl">BGW</i> blank</span><span><i class="cx-fx dl">DGW</i> likely double</span><span><i class="cx-fx dp">DGW</i> possible double</span></div>
-     <div class="cx-src">Blanks and doubles not yet in FPL's fixtures: Ben Crellin's 2026/27 forecast, read ${esc(CRELLIN.read)}. FPL's fixtures replace it as matches are moved.</div>
-     <div class="cx-rm"><span class="cx-half">First half · chips expire GW19</span><span class="cx-half h2l">Second half · GW20–38</span>${cols.join("")}</div>`,{wide:true});
+    `Every gameweek of the season: chips you played (solid) with the points they gained, chips you planned (ring) and the recommended week for any chip not planned yet (dashed), with the points each is expected to add. Blank and double gameweeks come from FPL's fixtures once matches are moved, and from Ben Crellin's forecast (read ${CRELLIN.read}) before that.`,
+    `<div class="cx-rm"><span class="cx-half" style="grid-column:1/20">First half · GW1–19</span><span class="cx-half h2l" style="grid-column:20/39">Second half · GW20–38</span>${cols.join("")}</div>`,{wide:true,extra:legend});
 
-  /* ---- best week for every chip left ---- */
+  /* ---- each chip's full chart (opens from Chips Left) ---- */
   const READY={bboost:"What your bench adds to the Planner score that week.",
     "3xc":"Your best player's points again, plus the captain cover.",
     freehit:"The best team you can afford that week, minus yours.",
     wildcard:"The best squad over the next five weeks minus yours, later weeks × 0.85."};
   const bwRow=k=>{const kind=chipKind(k),cv=chipCurve(k),weeks=Object.keys(cv).map(Number).sort((a,b)=>a-b);
     if(!weeks.length)return "";
-    const bests=chipBestWeeks(k),planned=S.chips[k],sel=planned||(bests[0]||[])[0],top3=bests.slice(0,3).map(x=>x[0]);
+    const bests=chipBestWeeks(k),planned=S.chips[k],sel=planned||weekOf(k),top3=bests.slice(0,3).map(x=>x[0]);
     const mx=Math.max(...weeks.map(e=>cv[e].v),0.1);
     const bars=weeks.map(e=>{const o=cv[e],why=chipRuleBreak(k,e),h=Math.max(4,Math.round(Math.max(0,o.v)/mx*72)),f=o.f;
       return `<button class="cx-bw${e===sel?" sel":""}${why&&e!==planned?" no":""}" onclick="act('setchip','${k}',${e})"
         title="${esc(why&&e!==planned?why:`GW${e}: ${sgnPts(o.v)} pts${f?` (${f.t} ${f.why}, weighted for how likely)`:""}. Click to plan.`)}">
-        <span class="cx-bv">${top3.includes(e)||e===sel?sgnPts(o.v):""}</span><span class="cx-bb${f?" fc":""}" style="height:${h}px;--tc:${CHIP_UI[kind].c}"></span>
+        <span class="cx-bv">${top3.includes(e)||e===sel?sgnPts(o.v):""}</span><span class="cx-bb${f?" hx":""}" style="height:${h}px;--tc:${CHIP_UI[kind].c}"></span>
         <span class="cx-bn">${e}</span><span class="cx-bf">${f?`<i class="cx-fx ${f.t==="blank"?"bl":f.p>=0.6?"dl":"dp"}">${f.t==="blank"?"BGW":"DGW"}</i>`:""}</span></button>`;}).join("");
     const b0=bests[0],alts=bests.filter(x=>x[0]!==sel).slice(0,2).map(([e,v])=>`GW${e} ${sgnPts(v)}`).join(" · ");
     const selV=sel?((cv[sel]||{}).v||0):0;
     return `<div class="cx-bwr"><div class="cx-bwi">
         <div class="cx-bwt">${chipTile(kind,30)}<b>${chipKeyName(k)}</b><button class="fci" data-tip="${esc(READY[kind]+(k.endsWith("1")?" First-half chips expire at the GW19 deadline.":""))}" aria-label="About ${esc(chipKeyName(k))}">i</button></div>
-        <div class="cx-bwk"><div><div class="cx-bwl">${planned?"Planned":"Best week"}</div><div class="cx-bwv">GW${sel}</div></div><div class="cx-bwg ${selV>=0?"up":"dn"}">${sgnPts(selV)}<span>pts</span></div></div>
-        <div class="cx-alts">${planned&&b0&&b0[0]!==planned?`Best week: GW${b0[0]} ${sgnPts(b0[1])} · `:""}Next best: ${alts||"—"}</div>
+        <div class="cx-bwk"><div><div class="cx-bwl">${planned?"Planned":"Roadmap week"}</div><div class="cx-bwv">GW${sel}</div></div><div class="cx-bwg ${selV>=0?"up":"dn"}">${sgnPts(selV)}<span>pts</span></div></div>
+        <div class="cx-alts">${b0&&b0[0]!==sel?`Best week: GW${b0[0]} ${sgnPts(b0[1])} · `:""}Next best: ${alts||"—"}</div>
         ${planned?`<div class="cx-btns"><button class="cx-ghost" onclick="act('clearchip','${k}')">Clear plan</button></div>`
           :`<div class="cx-btns"><button class="cx-ghost" onclick="act('setchip','${k}',${sel})">Plan for GW${sel}</button></div>`}
       </div><div class="cx-bwc"><div class="cx-bars">${bars}</div></div></div>`;};
-  /* ---- team builder ---- */
+
+  /* ---- chips left: a slot per gameweek, so every bar is the same width ---- */
+  const leftRow=k=>{const kind=chipKind(k),cv=chipCurve(k),h2=k.endsWith("2"),e=weekOf(k),planned=S.chips[k],v=e?((cv[e]||{}).v||0):0;
+    const mx=Math.max(...Object.values(cv).map(o=>o.v),0.1);let bars="";
+    for(let w=h2?20:1;w<=(h2?38:19);w++){const o=cv[w];
+      bars+=o?`<i class="${w===e?"on":""}${o.f?" hx":""}" style="height:${Math.max(3,Math.round(Math.max(0,o.v)/mx*30))}px;--tc:${CHIP_UI[kind].c}" title="GW${w}: ${sgnPts(o.v)}"></i>`:`<i class="nil"></i>`;}
+    return `<div class="cx-cr" onclick="act('chippop','${k}')" role="button" tabindex="0" title="${esc(chipKeyName(k))}: every week's gain">
+      ${chipTile(kind,30,false,planned?"ring":"")}<span class="cx-crn"><b>${chipKeyName(k)}</b><span>${planned?"Planned":"Best week"}${h2?"":" · expires GW19"}</span></span>
+      <span class="cx-mini">${bars}</span><span class="cx-crw"><b>GW${e||"—"}</b><i class="${v>=0?"up":"dn"}">${sgnPts(v)}</i></span>
+      ${planned?`<button class="cx-ghost" onclick="event.stopPropagation();act('clearchip','${k}')">Clear</button>`
+        :e?`<button class="cx-ghost" onclick="event.stopPropagation();act('setchip','${k}',${e})">Plan GW${e}</button>`:"<span></span>"}</div>`;};
+  const axisRow=h2=>{let a="";for(let w=h2?20:1;w<=(h2?38:19);w++)a+=`<span>${w%2===0?w:""}</span>`;return `<div class="cx-cr ax"><span></span><span></span><span class="cx-mini cx-axis">${a}</span><span></span><span></span></div>`;};
+  const leftH=[1,2].map(h=>left.filter(k=>k.endsWith(String(h)))).filter(a=>a.length);
+  const chipsLeftSec=rep("chleft","target","Chips Left",
+    "Each chip still to play: the week on the roadmap and what it adds to the Planner's team score, with every week's gain as a bar (hatched weeks include Ben Crellin's forecast). Click a chip for its full chart, or Plan to set it.",
+    leftH.map(a=>a.map(leftRow).join("")+axisRow(a[0].endsWith("2"))).join("")||`<p class="note">No chips left this season.</p>`,{wide:true});
+
+  /* ---- chips used ---- */
+  const usedF=Object.values(F).filter(f=>f.st==="played").sort((a,b)=>a.e-b.e);
+  const usedRow=f=>{const d=f.v!=null&&f.last!=null?f.v-f.last:null,pc=f.pct;
+    const pcol=pc==null?"":pc>=80?"var(--mint)":pc>=50?"var(--amber)":"var(--red)";
+    return `<div class="cx-ur">${chipTile(f.kind,30,true)}<span class="cx-crn"><b>${chipKeyName(f.k)}</b><span>GW${f.e}</span></span>
+      <b class="cx-ug ${f.v==null?"":f.v>=0?"up":"dn"}">${f.v==null?"—":sgnInt(f.v)}</b>
+      <span>${f.last==null?`<b class="mu">—</b>`:`<b>${sgnInt(f.last)}</b>${d==null?"":`<i class="${d>=0?"up":"dn"}">${d>=0?"▲":"▼"} ${Math.abs(Math.round(d))}</i>`}`}</span>
+      <span>${f.best?`<b>GW${f.best.e}</b><i class="${f.best.v>=0?"up":"dn"}">${sgnInt(f.best.v)}</i>`:`<b class="mu">—</b>`}</span>
+      <b class="cx-uav">${f.avg==null?"—":sgnInt(f.avg)}</b>
+      <span class="cx-upk">${pc==null?`<b class="mu">—</b>`:`<b style="color:${pcol}">${pc}%</b><span class="cx-pm"><i style="width:${pc}%;background:${pcol}"></i></span>`}</span></div>`;};
+  const chipsUsedSec=rep("chused","circle-check","Chips Used",
+    `Each chip you have played: the points it gained (FPL's figures, as League's chip performance), the same chip last season, the best week it could have been played in hindsight, your average for it over past seasons, and your pick: the points you got as a share of the best week's. The Chip Report has every week.`,
+    usedF.length?`<div class="cx-ur hd"><span></span><span></span><span>Gained</span><span>${esc(prevS)}</span><span>Best week</span><span>Your avg</span><span>Your pick</span></div>${usedF.map(usedRow).join("")}`
+      :`<p class="note">No chips played yet this season.</p>`,{wide:true});
+
+  /* ---- remaining plans: a box per chip, its best three weeks ---- */
+  const tipFor=(k,e)=>{const kind=chipKind(k),ids=effectiveSquadIds(e).ids,sp=ids.map(chipPlayer).filter(Boolean),pv=p=>p.gw[e]?.pts||0;
+    const o=chipCurve(k)[e]||{},v=o.v||0;
+    const row=(p,lbl)=>`<span class="cx-tr"><span class="cx-tpos">${lbl||POS[p.pos]}</span><b>${esc(p.web_name)}</b><span class="cx-tfx">${fxGW(p,e)}</span><span class="cx-tv">${pv(p).toFixed(1)}</span></span>`;
+    let body="",foot="";
+    if(kind==="bboost"){const xi=legalBestXI(sp,pv),bench=sp.filter(p=>!xi.includes(p)),dbl=bench.filter(p=>(p.gw[e]?.fixtures||[]).length>1).length;
+      body=`<span class="cx-tl">Your bench that week, every game it plays:</span>${bench.map(p=>row(p)).join("")}`;
+      foot=dbl?`${dbl} of your bench play twice.`:"";}
+    else if(kind==="3xc"){const xi=legalBestXI(sp,pv),cap=xi.reduce((m,p)=>!m||pv(p)>pv(m)?p:m,null);
+      body=cap?`<span class="cx-tl">Your captain's points count a third time:</span>${row(cap,"C")}`:"";}
+    else{const T=chipTeam(kind,e,false);
+      if(T){const mine=new Set(ids),ins=T.t.xi.concat(T.t.bench).filter(p=>!mine.has(p.id)).sort((a,b)=>pv(b)-pv(a));
+        body=`<span class="cx-tl">${kind==="freehit"?`Free Hit team ${teamScore(T.ids,e,null).toFixed(1)} against yours ${teamScore(ids,e,null).toFixed(1)}. The biggest new names:`:`${ins.length} new players. The biggest that week:`}</span>${ins.slice(0,4).map(p=>row(p)).join("")}`;
+        if(kind==="wildcard")foot="The gain counts five weeks, later weeks a little less.";}}
+    if(o.f)foot+=(foot?" ":"")+`Weighted for Ben Crellin's forecast ${o.f.t} (${o.f.why}).`;
+    return `<span class="cx-htip" role="tooltip"><span class="cx-thh">${chipTile(kind,18,false,"dash")}<b>${chipKeyName(k)} · GW${e}</b><span class="up">${sgnPts(v)}</span></span>${body}<span class="cx-tf">${foot||"Points are the Planner's projections."}</span></span>`;};
+  const rpBox=kind=>{const ks=[kind+"1",kind+"2"],avail=ks.filter(k=>left.includes(k));
+    const sel=avail.includes((S.chipRP||{})[kind])?S.chipRP[kind]:avail[0];
+    const pills=ks.map(k=>{const pe=chipPlayed(k),n=k.slice(-1);
+      if(pe!=null)return `<span class="cx-pp off" title="${esc(chipKeyName(k))}: played GW${pe}">${n} ✓</span>`;
+      if(!avail.includes(k))return `<span class="cx-pp off" title="${esc(chipKeyName(k))}: expired">${n} –</span>`;
+      return avail.length>1?`<button class="cx-pp${k===sel?" pick":""}" onclick="act('chiprp','${kind}','${k}')">${n}</button>`:`<span class="cx-pp pick">${n}</span>`;}).join("");
+    const top=`<div class="cx-rbh">${chipTile(kind,26,!sel,sel&&S.chips[sel]?"ring":sel?"dash":"")}<b>${CHIP_UI[kind].n}</b><span class="cx-pps">${pills}</span></div>`;
+    if(!sel)return `<div class="cx-rbox done" style="--tc:${CHIP_UI[kind].c}">${top}<div class="cx-rdone">${ks.every(k=>chipPlayed(k)!=null)?"Both played":"None left"}</div></div>`;
+    const cv=chipCurve(sel),bests=chipBestWeeks(sel),road=weekOf(sel),planned=S.chips[sel];
+    let opts=bests.slice(0,3).map(x=>x[0]);if(road&&!opts.includes(road))opts=[...opts.slice(0,2),road];
+    opts.sort((a,b)=>((cv[b]||{}).v||0)-((cv[a]||{}).v||0));
+    const tw=(bests[0]||[])[0],clash=!planned&&tw&&tw!==road?(Object.entries(S.chips).find(([k2,e2])=>k2!==sel&&e2===tw)||Object.entries(rec).map(([k2,[e2]])=>[k2,e2]).find(([k2,e2])=>k2!==sel&&e2===tw)):null;
+    const m=road?chipWeekMark(road):null;
+    const note=planned?`Planned${m?` · ${m.t==="blank"?"blank":"double"} week`:""}`:clash?`GW${tw} goes to ${chipKeyName(clash[0])}`:`Best week${m?` · ${m.t==="blank"?"blank":"double"} week`:""}`;
+    return `<div class="cx-rbox" style="--tc:${CHIP_UI[kind].c}">${top}
+      <div class="cx-ro">${opts.map(e=>{const v=(cv[e]||{}).v||0,mk=chipWeekMark(e);
+        return `<button class="cx-roo${e===road?" pick":""}" onclick="act('setchip','${sel}',${e})" aria-label="${esc(`${chipKeyName(sel)} GW${e} ${sgnPts(v)}. Plan it.`)}">${mk?`<i class="cx-fx cx-ft ${mk.t==="blank"?"bl":mk.p>=0.6?"dl":"dp"}">${mk.t==="blank"?"BGW":"DGW"}</i>`:""}<b>GW${e}</b><i class="cx-rov">${sgnPts(v)}</i>${e===road?`<span class="cx-rmk">${planned?"Planned":"Roadmap"}</span>`:""}${tipFor(sel,e)}</button>`;}).join("")}</div>
+      <div class="cx-rbf"><span>${note}</span>${planned?`<button class="cx-ghost" onclick="act('clearchip','${sel}')">Clear</button>`:road?`<button class="cx-ghost" onclick="act('setchip','${sel}',${road})">Plan GW${road}</button>`:""}</div></div>`;};
+  const remainingSec=rep("chrem","layers","Remaining Plans",
+    "One box per chip: its best three weeks by points added, with the roadmap week highlighted. Hover a week to see where the points come from. When both of a chip are left, switch between them. Plans here and on the Team Planner are the same plan.",
+    `<div class="cx-rgrid">${KORD.map(rpBox).join("")}</div>`,{wide:true});
+
+  /* ---- best plan: the top three whole plans for the chips left ---- */
+  const inUse=p=>Object.entries(p.pick).every(([k,[e]])=>S.chips[k]===e);
+  const bestSec=plans.length?rep("chbest","trophy","Best Plan",
+    "The three best ways to play every second-half chip left, one chip per week, by total points added. A Bench Boost or Triple Captain within five weeks of a Wildcard is scored on the Wildcard squad. Use sets every chip in the plan.",
+    plans.slice(0,3).map((p,i)=>{const u=inUse(p);return `<div class="cx-bp${i===0?" top":""}">
+      <span class="cx-bpr">${i+1}</span><div class="cx-bpn"><b>${esc(p.name)}</b>${i===0?`<span class="cx-tag">Best</span>`:""}<button class="fci" data-tip="${esc(String(p.why).replace(/<[^>]*>/g,""))}" aria-label="About ${esc(p.name)}">i</button></div>
+      <span class="cx-bpt up">${sgnPts(p.tot)}</span><button class="cx-ghost" onclick="act('chipplan',${i})"${u?" disabled":""}>${u?"In use":"Use"}</button>
+      <div class="cx-bps">${Object.entries(p.pick).sort((a,b)=>a[1][0]-b[1][0]).map(([k,[e,v]])=>`<span class="cx-bpx" title="${esc(chipKeyName(k)+" GW"+e+" "+sgnPts(v))}">${chipTile(chipKind(k),24,false,i===0?"ring":"")}<b>GW${e}</b><i>${sgnPts(v)}</i></span>`).join("")}</div></div>`;}).join(""),{wide:true}):"";
+
+  /* ---- team builder (moving to the Team Planner) ---- */
   const bk=S.chipBuild==="wc"?"wildcard":"freehit";
   const bKey=left.find(k=>chipKind(k)===bk)||(bk+(g>=20?"2":"1"));
   const weekOpts=[g];if(S.chips[bKey])weekOpts.push(S.chips[bKey]);
@@ -1129,10 +1231,10 @@ function chipsHTML(){
     if(bk==="freehit"&&m.t==="blank")weekOpts.push(e);if(bk==="wildcard"&&m.t==="double"&&e-1>=g)weekOpts.push(e-1);}
   const bw=weekOpts.includes(S.chipWeek)?S.chipWeek:(S.chips[bKey]||g);
   const wl=e=>e===g?`GW${e}`:S.chips[bKey]===e?`GW${e} · planned`:bk==="freehit"?`GW${e} · blank`:`GW${e} · before double`;
-  const T=chipTeam(bk,bw,true),mineIds=effectiveSquadIds(bw).ids;
-  const mineS=teamScore(mineIds,bw,null),teamS=T?teamScore(T.ids,bw,null):0,gain=T?chipGainAt(bk,bw,true,mineIds):0;
-  const how=!T?"":T.t.heuristic?"quick builder":T.t.proven?"proven best":T.t.checking?"best found · checking":"best found";
-  const builder=rep("chbuild","users","Team Builder",
+  const builder=()=>{const T=chipTeam(bk,bw,true),mineIds=effectiveSquadIds(bw).ids;
+    const mineS=teamScore(mineIds,bw,null),teamS=T?teamScore(T.ids,bw,null):0,gain=T?chipGainAt(bk,bw,true,mineIds):0;
+    const how=!T?"":T.t.heuristic?"quick builder":T.t.proven?"proven best":T.t.checking?"best found · checking":"best found";
+    return rep("chbuild","users","Team Builder",
     "The best Free Hit team or Wildcard squad for the week you pick, from the same optimiser as Compare and the Team Rating, scored on the Planner's team score. The Wildcard is judged over the next five weeks.",
     `<div class="cx-tbbar"><span class="cx-seg"><button class="${bk==="freehit"?"on":""}" onclick="act('chipbuild','fh')">${chipTile("freehit",16,true)} Free Hit</button><button class="${bk==="wildcard"?"on":""}" onclick="act('chipbuild','wc')">${chipTile("wildcard",16,true)} Wildcard</button></span>
       <span class="cx-seg">${[...new Set(weekOpts)].sort((a,b)=>a-b).map(e=>`<button class="${e===bw?"on":""}" onclick="act('chipweek',${e})">${wl(e)}</button>`).join("")}</span>
@@ -1142,86 +1244,59 @@ function chipsHTML(){
       <div><span>Gain${bk==="wildcard"?" over 5 weeks":""}</span><b class="${gain>=0?"up":"dn"}">${sgnPts(gain||0)}</b></div><div><span>Cost</span><b>£${T.t.value.toFixed(1)} <i>of £${squadBudget().toFixed(1)}</i></b></div><div><span>Solver</span><b class="sm">${how} · ${T.t.shape}</b></div></div>
     <div class="cx-tbp"><div class="pitch">${[1,2,3,4].map(pos=>{const r=T.t.xi.filter(p=>p.pos===pos);return r.length?`<div class="row">${r.map(p=>chipCard(p,T.t,false,bw)).join("")}</div>`:"";}).join("")}</div>
       <div class="benchbar"><div class="lb">Bench</div><div class="row">${T.t.bench.map(p=>chipCard(p,T.t,false,bw)).join("")}</div></div></div>`
-    :`<p class="note">Not enough data for GW${bw} yet.</p>`}`,{wide:true});
+    :`<p class="note">Not enough data for GW${bw} yet.</p>`}`,{wide:true});};
 
-  /* ---- history: this season ---- */
-  const H=chipHindsight();
-  const hb=(arr,sel,k)=>{if(!arr||!arr.length)return "";const mx=Math.max(...arr.map(x=>Math.abs(x.v||0)),0.1),top=arr.slice().sort((a,b)=>b.v-a.v)[0].e;
-    return `<div class="cx-hb">${arr.map(x=>{const v=x.v||0,h=Math.round(Math.abs(v)/mx*44)+2,lab=x.e===sel||x.e===top;
-      return `<div class="cx-hw${x.e===sel?" sel":""}" title="GW${x.e}: ${v>=0?"+":"−"}${Math.abs(v)}"><span class="z"></span><span class="b${v<0?" n":""}" style="${v<0?"top:58px":"bottom:62px"};height:${h}px;--tc:${CHIP_UI[k].c}"></span>
-        ${lab?`<span class="l" style="${v<0?"top:"+(60+h)+"px":"bottom:"+(64+h)+"px"}">${v>=0?"+":"−"}${Math.abs(v)}</span>`:""}<span class="g">${x.e}</span></div>`;}).join("")}</div>`;};
-  const KN={wildcard:"wc",freehit:"fh",bboost:"bb","3xc":"tc"};
-  const halves=H&&H.tc.some(x=>x.e>=20)?[1,2]:[1];
-  const hRows=H?halves.flatMap(hf=>["3xc","freehit","wildcard","bboost"].map(kind=>{
-    const key=kind+hf,arr=(H[KN[kind]]||[]).filter(x=>hf===1?x.e<=19:x.e>=20);if(!arr.length)return "";
-    const pe=chipPlayed(key),up=Object.values(ups).find(c=>c.event===pe&&c.name===kind);
-    const got=pe!=null?(up?+up.uplift:null):null;
-    const b=arr.slice().sort((a,c)=>c.v-a.v)[0];
-    const atPick=pe!=null?(arr.find(x=>x.e===pe)||{}).v:null;
-    /* the week you picked against the best week, on the bars' own measure */
-    const mine=kind==="freehit"||kind==="wildcard"?atPick:got;
-    const score=pe==null||mine==null||!(b.v>0)?null:Math.round(clamp(mine/b.v,0,1)*100);
-    const note={"3xc":"Bars: your captain's actual points each week.",bboost:"Bars: your bench's actual points each week.",
-      freehit:"Bars: what the app's pre-deadline Free Hit team would have gained each week against the squad you had. Estimate: today's prices.",
-      wildcard:"Bars: the app's pre-deadline Wildcard squad over the next three weeks against the squad you had. Estimate: today's prices and no other transfers."}[kind];
-    return `<div class="cx-hr"><div class="cx-hl">${chipTile(kind,28,pe!=null)}<div><b>${chipKeyName(key)}</b><span>${pe!=null?"GW"+pe:"not played yet"}</span></div></div>
-      <div class="cx-hm"><div><span>You gained</span><b class="${got==null?"":got>=0?"up":"dn"}">${got==null?"—":(got>=0?"+":"−")+Math.abs(got)}</b></div>
-        <div><span>Best week in hindsight</span><b>GW${b.e} <i class="${b.v>=0?"up":"dn"}">${b.v>=0?"+":"−"}${Math.abs(b.v)}</i></b></div>
-        <div><span>Your pick</span><b class="${score==null?"":score>=80?"up":score>=50?"am":"dn"}">${score==null?"—":score+"%"}</b></div></div>
-      ${hb(arr,pe,kind)}<div class="cx-hnote">${note}</div></div>`;})).join(""):"";
-  const hindsight=H?rep("chpicked","target",`How Well You Picked · ${esc(curSeasonLabel())}`,
-    "Every finished week each chip could have been played, scored on what actually happened. Your pick is the points you gained as a share of the best week's.",hRows,{wide:true}):"";
+  /* ---- chip report: every season, how well you picked, rivals ---- */
+  const report=()=>{
+    const ORD=SEAS.slice().reverse(),cur=curSeasonLabel();
+    const allG=Object.values(GN).flatMap(o=>Object.values(o)).filter(v=>v!=null).map(Math.abs),mxAll=Math.max(...allG,1);
+    const KEYS=kd=>[RK[kd]+"1",RK[kd]+"2"];
+    const chipCol=kind=>{const ent=[];KEYS(kind).forEach(r=>ORD.forEach(s=>{const v=(GN[s]||{})[r],w=(CW[s]||{})[r];if(v!=null&&w!=null)ent.push({r,s,w,v});}));
+      const past=ent.filter(x=>x.s!==cur),now=ent.filter(x=>x.s===cur);
+      const best=past.length?past.reduce((a,b)=>b.v>a.v?b:a):null,worst=past.length?past.reduce((a,b)=>b.v<a.v?b:a):null,av=past.length?past.reduce((a,b)=>a+b.v,0)/past.length:null;
+      const nv=now.length?now.reduce((a,b)=>a+b.v,0):null;
+      const lo=Math.min(worst?worst.v:0,nv??0,0),hi=Math.max(best?best.v:0,nv??0,1),pos=v=>((v-lo)/(hi-lo||1)*100).toFixed(1);
+      const sc=v=>Math.round(Math.abs(v)/mxAll*56)+2;
+      const bar=(r,s)=>{const v=(GN[s]||{})[r],w=(CW[s]||{})[r],isCur=s===cur,cls=r.endsWith("1")?"h1":"h2";
+        if(v==null)return `<span class="cx-mbw"${w!=null?` title="${esc(`${s} · GW${w} · gain not recorded`)}"`:""}><span class="cx-mnil${w!=null?" nr":""}"></span></span>`;
+        const h=sc(v),neg=v<0;
+        return `<span class="cx-mbw" title="${esc(`${CHIP_UI[kind].n} ${r.slice(2)} · ${s} · GW${w} · ${sgnInt(v)}`)}"><span class="cx-mbar ${cls}${neg?" n":""}${isCur?" cur":""}" style="${neg?"top:72px":"bottom:56px"};height:${neg?Math.min(h,12):h}px"></span>${isCur?`<span class="cx-mval" style="${neg?"top:"+(74+Math.min(h,12))+"px":"bottom:"+(58+h)+"px"}">${sgnInt(v)}</span>`:""}</span>`;};
+      return `<div class="cx-crc" style="--tc:${CHIP_UI[kind].c}"><div class="cx-crh">${chipTile(kind,26,true)}<b>${CHIP_UI[kind].n}</b><span>${past.length} played before</span></div>
+        <div class="cx-crg"><div class="cx-cre"><span>Worst</span><b class="${worst?(worst.v>=0?"up":"dn"):"mu"}">${worst?sgnInt(worst.v):"—"}</b><i>${worst?`${worst.s} · GW${worst.w}`:""}</i></div>
+          <div class="cx-crn2"><span>This season</span><b class="${nv==null?"mu":nv>=0?"up":"dn"}">${nv==null?"—":sgnInt(nv)}</b><i>${now.map(x=>`${x.r} · GW${x.w}`).join(", ")||"not played yet"}</i></div>
+          <div class="cx-cre r"><span>Best</span><b class="${best?"up":"mu"}">${best?sgnInt(best.v):"—"}</b><i>${best?`${best.s} · GW${best.w}`:""}</i></div></div>
+        ${av!=null?`<div class="cx-crt"><span class="cx-trk"></span><span class="cx-avm" style="left:${pos(av)}%"></span><span class="cx-avt" style="left:${pos(av)}%">avg ${sgnInt(av)}</span>${nv==null?"":`<span class="cx-nowd" style="left:${pos(nv)}%"></span>`}</div>`:""}
+        <div class="cx-mchart"><span class="cx-mzero"></span>${ORD.map(s=>`<div class="cx-mgrp${s===cur?" cur":""}">${KEYS(kind).map(r=>bar(r,s)).join("")}<span class="cx-mseas">${s}</span></div>`).join("")}</div></div>`;};
+    const nSeas=ORD.filter(s=>s!==cur&&Object.keys(CW[s]||{}).length).length;
+    const seasons=rep("chseas","trophy","Your Chips, Season by Season",
+      "Each chip across every season: this season in the middle, your worst and best before it, and where this season sits against your average. The bars are each season's gain, the lighter one the first-half chip and the darker one the second-half chip. Weeks before this season come from your season workbooks, gains from League's chip performance (2020/21 has weeks but no gains); this season from FPL. Until 2025/26 there was one Free Hit, Bench Boost and Triple Captain a season.",
+      `<div class="cx-crs">${KORD.map(chipCol).join("")}</div>`,{wide:true,extra:`<span class="cx-lg"><span><i class="cx-sw2 h1"></i>GW1–19 chip</span><span><i class="cx-sw2 h2"></i>GW20–38 chip</span><span><i class="cx-sw2 cur"></i>this season</span></span>`});
+    const NOTE={"3xc":"your captain's actual points",bboost:"your bench's actual points",freehit:"what the app's pre-deadline Free Hit team would have gained against your squad",wildcard:"the app's pre-deadline Wildcard squad over three weeks against your squad"};
+    const hsMax=Math.max(0,...usedF.flatMap(f=>(f.arr||[]).map(x=>x.e)));
+    const hsRow=f=>{const arr=f.arr||[];if(!arr.length)return "";const vals=arr.map(x=>x.v),mx=Math.max(...vals.map(Math.abs),0.1),pe=f.e,bi=f.best?f.best.e:null;
+      const bars=Array.from({length:hsMax},(_,i)=>arr.find(x=>x.e===i+1)||{e:i+1,nil:true}).map(x=>{if(x.nil)return `<div class="cx-hw"><span class="cx-hg">${x.e}</span></div>`;const v=x.v||0,h=Math.round(Math.abs(v)/mx*46)+3,neg=v<0,me=x.e===pe,bs=x.e===bi;
+        return `<div class="cx-hw${me?" me":""}${bs?" bst":""}" title="GW${x.e}: ${sgnInt(v)}"><span class="cx-hb2${neg?" n":""}" style="${neg?"top:52px":"bottom:36px"};height:${neg?Math.min(h,12):h}px;--tc:${CHIP_UI[f.kind].c}"></span>
+          ${me||bs?`<span class="cx-hl" style="bottom:${neg?40:40+h}px">${bs&&!me?"★ ":""}${sgnInt(v)}</span>`:""}<span class="cx-hg">${x.e}</span></div>`;}).join("");
+      return `<div class="cx-hrow"><div class="cx-hinfo">${chipTile(f.kind,30,true)}<div><b>${chipKeyName(f.k)}</b><span>Played GW${pe}</span></div></div>
+        <div class="cx-hstats"><div><span>You got</span><b class="${f.v==null?"":f.v>=0?"up":"dn"}">${f.v==null?"—":sgnInt(f.v)}</b></div><div><span>Best week</span><b>${f.best?`GW${f.best.e} <i class="${f.best.v>=0?"up":"dn"}">${sgnInt(f.best.v)}</i>`:"—"}</b></div>
+          <div><span>Your pick</span><b class="${f.pct==null?"":f.pct>=80?"up":f.pct>=50?"am":"dn"}">${f.pct==null?"—":f.pct+"%"}</b></div></div>
+        <div class="cx-hchart" style="grid-template-columns:repeat(${hsMax},minmax(0,1fr))" title="Bars: ${esc(NOTE[f.kind])} each finished week">${bars}</div></div>`;};
+    const picked=rep("chpicked","target",`How Well You Picked · ${esc(curSeasonLabel())}`,
+      "Every finished week each chip could have been played, scored on what actually happened: Triple Captain on your captain's points, Bench Boost on your bench's, Free Hit and Wildcard on the app's pre-deadline team against the squad you had (today's prices). Your pick is the points you gained as a share of the best week's.",
+      usedF.some(f=>(f.arr||[]).length)?`<div class="cx-hkey"><span><i class="cx-k me"></i>the week you played it</span><span><i class="cx-k bst"></i>★ the best week in hindsight</span></div>${usedF.map(hsRow).join("")}`:`<p class="note">Nothing finished to score yet.</p>`,{wide:true});
+    const half=g>=20?2:1,ents=(S.rivalsFeed&&S.rivalsFeed.entries)||{};
+    const others=Object.entries(ents).filter(([id])=>String(id)!==String(TEAM_ID)).map(([,e])=>e.chips||[]);
+    const mgrs=others.length+1,inH=e=>half===1?e<=19:e>=20;
+    const holdCards=Object.keys(ents).length?`<div class="cx-rvs">${KORD.map(k=>{const n=(chipPlayed(k+half)==null?1:0)+others.filter(cs=>!cs.some(c=>c.name===k&&inH(c.event))).length;
+      return `<div class="cx-rvc">${chipTile(k,26,true)}<div><b>${n} of ${mgrs}</b><span>still hold a ${half===1?"first":"second"}-half ${CHIP_UI[k].n}${half===1?" · expires GW19":""}</span></div></div>`;}).join("")}</div>`:"";
+    const rivals=rep("chrivals","users","Rivals' Chips",`Which chips each manager in your league has played this half; a dashed tile is still to play.`,holdCards+(chipGridHTML(half)||`<p class="note">The league feed has not loaded.</p>`),{wide:true});
+    return seasons+picked+rivals;};
 
-  /* ---- history: every season ---- */
-  const SEAS=[curSeasonLabel(),...Object.keys(CHIP_WEEKS)];
-  const TH=TRACKER_HISTORY.chips,LBL={"Wild Card 1":"WC1","Wild Card 2":"WC2","Free Hit 1":"FH1","Free Hit 2":"FH2","Bench Boost 1":"BB1","Bench Boost 2":"BB2","Triple Captain 1":"TC1","Triple Captain 2":"TC2"};
-  const seasonOfLabel=l=>`${+l-1}/${String(l).slice(2)}`;
-  const GN={};TH.labels.forEach((l,i)=>{const s=seasonOfLabel(l);GN[s]={};Object.entries(TH.rows).forEach(([n,vals])=>{if(vals[i]!=null)GN[s][LBL[n]]=vals[i];});});
-  const CW=Object.assign({},CHIP_WEEKS,{[curSeasonLabel()]:{}});GN[curSeasonLabel()]={};
-  Object.values(ups).forEach(c=>{const r=LBL[c.label];if(r){CW[curSeasonLabel()][r]=c.event;GN[curSeasonLabel()][r]=c.uplift;}});
-  const ROWS=[["WC1","wildcard"],["WC2","wildcard"],["FH1","freehit"],["FH2","freehit"],["BB1","bboost"],["BB2","bboost"],["TC1","3xc"],["TC2","3xc"]];
-  const cell=(s,r)=>{const w=(CW[s]||{})[r],gn=(GN[s]||{})[r];if(w==null)return `<td class="mu">—</td>`;
-    return `<td><span class="cx-hc"><b>GW${w}</b>${gn==null?`<i class="mu">gain n/a</i>`:`<i class="${gn>0?"up":gn<0?"dn":""}">${gn>0?"+":gn<0?"−":""}${Math.abs(gn)}</i>`}</span></td>`;};
-  const avg=r=>{const v=SEAS.map(s=>(GN[s]||{})[r]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
-  const seasons=rep("chseasons","trophy","Chip History by Season",
-    "The week you played each chip and the points it gained. Weeks before this season come from your season workbooks, gains from League's chip performance; this season from FPL. Until 2025/26 there was one Free Hit, Bench Boost and Triple Captain a season.",
-    `<div class="scroll"><table class="cx-ht"><thead><tr><th>Chip</th>${SEAS.map((s,i)=>`<th class="${i===0?"cur":""}">${s}</th>`).join("")}<th>Average gain</th></tr></thead><tbody>
-      ${ROWS.map(([r,k])=>{const a=avg(r);return `<tr><td class="cx-hcn">${chipTile(k,20,true)} ${CHIP_UI[k].n} ${r.slice(2)}</td>${SEAS.map(s=>cell(s,r)).join("")}<td><b class="${a==null?"":a>=0?"up":"dn"}">${a==null?"—":sgnPts(a)}</b></td></tr>`;}).join("")}
-    </tbody></table></div>`,{wide:true});
-  const rivals=rep("chrivals","users","Rivals' Chips",`Which chips each manager in your league has played this half; a dot is still to play.`,chipGridHTML(g>=20?2:1)||`<p class="note">The league feed has not loaded.</p>`,{wide:true});
-
-  /* ---- one screen (21 Nov 2026, Andy picked layout B: the page was far
-     too long). Chips as compact rows beside the plans; the Team Builder,
-     History and each chip's full chart open full screen. ---- */
-  /* one compact row per chip: tile, name, best (or planned) week, gain,
-     optional mini chart of every week, plan */
-  const chipRow=(k,o)=>{const kind=chipKind(k),cv=chipCurve(k),weeks=Object.keys(cv).map(Number).sort((a,b)=>a-b);
-    const b=chipBestWeeks(k)[0],planned=S.chips[k],e=planned||(b||[])[0],v=e?((cv[e]||{}).v||0):0;
-    const mx=Math.max(...weeks.map(w=>cv[w].v),0.1);
-    const mini=o.mini&&weeks.length?`<span class="cx-mini">${weeks.map(w=>`<i class="${w===e?"on":""}${cv[w].f?" fc":""}" style="height:${Math.max(3,Math.round(Math.max(0,cv[w].v)/mx*30))}px;--tc:${CHIP_UI[kind].c}" title="GW${w}: ${sgnPts(cv[w].v)}"></i>`).join("")}</span>`:"";
-    return `<div class="cx-cr" onclick="act('${o.act}','${k}')" role="button" tabindex="0">
-      ${chipTile(kind,30,false,planned?"ring":"")}<span class="cx-crn"><b>${chipKeyName(k)}</b><span>${planned?"Planned":"Best week"}${k.endsWith("1")?" · expires GW19":""}</span></span>
-      ${mini}<span class="cx-crw"><b>GW${e||"—"}</b><i class="${v>=0?"up":"dn"}">${sgnPts(v)}</i></span>
-      ${o.plan?(planned?`<button class="cx-ghost" onclick="event.stopPropagation();act('clearchip','${k}')">Clear</button>`
-        :`<button class="cx-ghost" onclick="event.stopPropagation();act('setchip','${k}',${e})">Plan GW${e}</button>`):""}</div>`;};
-  const plansCompact=plans.length?`<div class="cx-pgrid stack">${plans.map((p,i)=>`<div class="cx-pc${p.tag?" rec":""}"><div class="cx-pch"><b>${esc(p.name)}</b>${p.tag?`<span class="cx-tag">${esc(p.tag)}</span>`:""}<span class="cx-ptot up">${sgnPts(p.tot)}</span></div>
-      <div class="cx-seqh">${Object.entries(p.pick).sort((a,b)=>a[1][0]-b[1][0]).map(([k,[e,v]])=>`<span class="cx-sth" title="${esc(CHIP_UI[chipKind(k)].n+" GW"+e+" "+sgnPts(v))}">${chipTile(chipKind(k),22)}<b>GW${e}</b></span>`).join("")}</div>
-      <div class="cx-pcf"><span class="cx-why">${p.why}</span><button class="cx-ghost" onclick="act('chipplan',${i})">Use</button></div></div>`).join("")}</div>`:"";
-  const histTabs=[["picked","How Well You Picked"],["seasons","By Season"],["rivals","Rivals' Chips"]];
-  const hk=histTabs.some(([k])=>k===S.chipHist)?S.chipHist:"picked";
-  const histSeg=`<span class="cx-seg">${histTabs.map(([k,n])=>`<button class="${hk===k?"on":""}" onclick="act('chiphist','${k}')">${n}</button>`).join("")}</span>`;
-  const histBody=hk==="seasons"?seasons:hk==="rivals"?rivals:(hindsight||`<p class="note">Nothing finished to score yet.</p>`);
-  /* title and figure cards share one row so the page fits one screen */
-  const head=`<div class="cx-hdr"><div><div class="cx-kick">GW${g}</div><h1>Chips</h1></div><div class="fcgrid cx-figs">${figs}</div></div>`;
-  const pop=S.chipPop==="build"?modalHTML("Team Builder",builder,{wide:true,close:"chippopclose"})
-    :S.chipPop==="history"?modalHTML("Chip History",histBody,{wide:true,close:"chippopclose",ctl:histSeg})
+  const pop=S.chipPop==="build"?modalHTML("Team Builder",builder(),{wide:true,close:"chippopclose"})
+    :S.chipPop==="report"?modalHTML("Chip Report",report(),{wide:true,close:"chippopclose",ctl:`<span class="cx-mhs">Every season from ${esc(SEAS[SEAS.length-1])}</span>`})
     :S.chipPop&&left.includes(S.chipPop)?modalHTML(chipKeyName(S.chipPop),rep("chsel","target","Gain by Week","Each bar is the points the chip adds that week on the Planner's team score. Hatched bars include Ben Crellin's forecast, weighted for how likely. Click any bar to plan the chip for that week.",bwRow(S.chipPop),{wide:true}),{wide:true,close:"chippopclose"}):"";
   return `<div class="cx">${head}${roadmap}
-    <div class="cx-one"><div>${rep("chleft","target","Chips Left","Best week, its gain on the Planner's team score, and every week's gain as a mini chart. Click a chip for its full chart, or Plan to set it.",
-      left.map(k=>chipRow(k,{act:"chippop",plan:true,mini:true})).join("")||`<p class="note">No chips left this season.</p>`,{wide:true})}</div>
-      <div>${plans.length?rep("chplans","layers","Second-Half Plans","Whole second-half plans with one chip per week. Use sets every chip in the plan.",plansCompact,{wide:true}):""}
-        <div class="cx-launch"><button class="cx-big" onclick="act('chippop','build')">${lic("users",18)}<span><b>Team Builder</b><i>Free Hit and Wildcard teams for any week</i></span></button>
-          <button class="cx-big" onclick="act('chippop','history')">${lic("trophy",18)}<span><b>History</b><i>How well you picked, every season, rivals</i></span></button></div></div></div>
+    <div class="cx-one"><div>${chipsLeftSec}${chipsUsedSec}</div><div>${remainingSec}${bestSec}</div></div>
     ${pop}</div>`;
 }
 /* the season label for this season, "2026/27" */
@@ -1236,7 +1311,7 @@ function chipGridHTML(half){
   return `<div class="scroll"><table class="cgridt"><thead><tr><th style="text-align:left">Manager</th>${KIND.map(([k,n])=>`<th>${chipTile(k,16,true)} ${n}</th>`).join("")}<th>Left</th></tr></thead><tbody>
     ${chipRows.map(([n,used,me])=>{const u=used.filter(c=>inHalf(c.event));let left=0;
       return `<tr class="${me?"me":""}"><td style="text-align:left">${esc(n)}</td>${KIND.map(([k])=>{const c=u.find(x=>x.name===k);if(!c)left++;
-        return c?`<td><span class="cused">GW${c.event}</span></td>`:`<td><span class="cleft" title="Still to play">●</span></td>`;}).join("")}<td><b>${left}</b></td></tr>`;}).join("")}
+        return c?`<td><span class="cx-ru">${chipTile(k,22,true)}<i>GW${c.event}</i></span></td>`:`<td><span class="cx-ru off" title="Still to play">${chipTile(k,22,false,"dash")}<i></i></span></td>`;}).join("")}<td><b>${left}</b></td></tr>`;}).join("")}
     </tbody></table></div>`;
 }
 
@@ -2045,7 +2120,7 @@ const SG_TONE={mint:"#3DDC97",red:"#FF5A6E",amber:"#FFB020",grey:"#8A8A8A",ice:"
 function rep(key,icon,title,info,body,o){
   o=o||{};const shut=(S.sigFold||[]).includes(key);
   return `<section class="rep sgcard${o.wide?" wide":""}${o.bare?" bare":""}${shut?" shut":""}" id="r-${key}">
-    <header class="rh"><span class="rhi">${lic(icon,16)}</span><h3>${title}</h3>${o.badge!=null?`<span class="rbadge">${o.badge}</span>`:""}
+    <header class="rh"><span class="rhi">${lic(icon,16)}</span><h3>${title}</h3>${o.badge!=null?`<span class="rbadge">${o.badge}</span>`:""}${o.extra||""}
       ${info?`<button class="fci" data-tip="${esc(info)}" aria-label="About ${esc(title)}">i</button>`:""}
       <button class="rfold sgfold" onclick="act('sigfold','${key}')" aria-expanded="${!shut}" aria-label="${shut?"Open":"Fold"} ${esc(title)}">${lic(shut?"chevron-down":"chevron-up",14)}</button></header>
     ${shut?"":`<div class="rb">${body}</div>`}</section>`;
