@@ -28,7 +28,7 @@ import { CONFIG } from "./lib/config.mjs";
 import { log } from "./lib/util.mjs";
 import { initDataset, pollDataset, datasetStatus, datasetGW, currentDir } from "./lib/dataset.mjs";
 import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus, fplPlayersPayload, fplWeekPayload, currentGw } from "./lib/fpl.mjs";
-import { buildNeighbours, neighboursStatus } from "./lib/neighbours.mjs";
+import { buildField, buildRankBands, recordPrices, fieldStatus } from "./lib/field.mjs";
 import { refreshNews, newsPayload, newsStatus, playerNews } from "./lib/news.mjs";
 import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
 import { buildFeeds, feedsStatus, FEEDS_DIR, SNAP_DIR } from "./lib/feeds.mjs";
@@ -194,7 +194,7 @@ async function handle(req, res) {
         news: newsStatus(),
         odds: oddsStatus(),
         snapshots: snapshotStatus(),
-        neighbours: neighboursStatus(),
+        field: fieldStatus(),
         tv: await tvStatus()
       });
       return;
@@ -292,7 +292,7 @@ async function handle(req, res) {
       const name = path.slice("/data/feeds/".length);
       /* predictions.json (live pre-deadline snapshots) and backtest.json (the
          labelled GW1-6 backtest series) live in the snapshot dir */
-      if (!/^(actuals|rivals|predictions|backtest|neighbours|dc-doubles)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
+      if (!/^(actuals|rivals|predictions|backtest|neighbours|field|rankbands|pricelog|dc-doubles)\.json$/.test(name)) { sendJson(res, method, 404, { error: "not found" }); return; }
       const full = join(/^(predictions|backtest)/.test(name) ? SNAP_DIR() : FEEDS_DIR(), name);
       let mtime = "";
       try { mtime = (await stat(full)).mtime.toISOString(); } catch { /* 404s below */ }
@@ -336,11 +336,16 @@ const jobs = {};
 function job(name, fn) { jobs[name] = { fn, due: 0, busy: false }; }
 
 job("dataset", pollDataset);
-job("fpl", () => fetchBootstrap());
+job("fpl", async () => { await fetchBootstrap(); await recordPrices().catch(() => {}); });
 job("news", refreshNews);
 job("odds", refreshOdds);
 job("feeds", buildFeeds);
-job("neighbours", () => buildNeighbours(currentGw()));
+/* This Week batch 1 (22 Nov 2026): the field sample (near you and the top
+   10k: ownership, effective ownership, captains, chips, transfers, averages)
+   replaces the old neighbours job and still writes neighbours.json; rank
+   bands give the points needed for each overall-rank milestone. */
+job("field", () => buildField(currentGw()));
+job("rankbands", () => buildRankBands(currentGw()));
 /* The Scout: every change to a player's FPL injury note, so "how long has he
    been out" has an answer (FPL keeps only the latest note) */
 job("injuries", async () => { const d = await fplPlayersPayload(); const n = await recordInjuries(d && d.players); if (n) log("scout", `injury log: ${n} changes`); });
@@ -364,7 +369,8 @@ async function tick() {
     runJob("odds", withinHoursOfDeadline(48) ? Math.min(CONFIG.ODDS_POLL_MS, 3600000) : CONFIG.ODDS_POLL_MS);
   if (CONFIG.FEEDS_POLL_MS > 0 && jobs.feeds.due <= now) runJob("feeds", CONFIG.FEEDS_POLL_MS);
   /* once an hour it checks; it only fetches when the gameweek has moved on */
-  if (CONFIG.FEEDS_POLL_MS > 0 && jobs.neighbours.due <= now && currentGw()) runJob("neighbours", 3600000);
+  if (CONFIG.FEEDS_POLL_MS > 0 && jobs.field.due <= now && currentGw()) runJob("field", 3600000);
+  if (CONFIG.FEEDS_POLL_MS > 0 && jobs.rankbands.due <= now && currentGw()) runJob("rankbands", 3600000);
   if (jobs.injuries.due <= now) runJob("injuries", 15 * 60000);
   if (await anyFixtureLive().catch(() => false)) {
     if (!jobs.live) job("live", fetchLive);

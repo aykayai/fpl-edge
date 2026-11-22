@@ -90,6 +90,23 @@ async function main() {
     if (!Object.keys(fplEp).length) fplEp = null;
   } catch (e) { console.error("fpl ep: " + e.message); }
 
+  /* This Week batch 1 (22 Nov 2026): the app's own advice before the
+     deadline, so Captain's and Transfer Record's "against the app" can be
+     graded later: the captain it would pick from your official squad, and
+     its best single transfer (that week's points). Runs the app's own
+     app-squad.js; a failure here never blocks the projections. */
+  let advice = null;
+  try {
+    /* SETPIECE was loaded on its own above; the rest of the file follows */
+    vm.runInContext(read("app-squad.js").replace(setpiece[0], ""), ctx, { filename: "app-squad.js" });
+    advice = get(`(function(){const o=latestOfficialPicks();if(!o)return null;
+      S.squad=o.picks.map(p=>p.id);S.original=S.squad.slice();S.planByGw={};S.captain=null;S.vice=null;S.forceXI=null;S.benchOrder=null;
+      const xi=startingXI(),v=p=>(p.gw[${g}]&&p.gw[${g}].pts)||0,cap=xi.slice().sort((a,b)=>v(b)-v(a))[0];
+      const m=(bestSwaps(1,1)||[])[0];
+      return{from:o.event,captain:cap?cap.id:null,captainPts:cap?Math.round(v(cap)*100)/100:null,
+        move:m?{out:m.out.id,in:m.inn.id,gain:Math.round(m.gain*100)/100}:null};})()`);
+  } catch (e) { console.error("advice: " + e.message); }
+
   let payload = null;
   try { payload = JSON.parse(await readFile(OUT, "utf8")); } catch { /* first run */ }
   if (!payload || payload.season !== SEASON) payload = { season: SEASON, updated: null, gw: {} };
@@ -104,7 +121,8 @@ async function main() {
     propWeight: get("typeof PROP_W!=='undefined'?PROP_W:0"),
     learning: get("typeof LEARN_APPLY!=='undefined'&&LEARN_APPLY"),
     players,
-    fplEp
+    fplEp,
+    advice
   };
   payload.updated = new Date().toISOString();
   await mkdir(dirname(OUT), { recursive: true });

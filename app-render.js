@@ -166,6 +166,54 @@ function kitSm(p,h){const c=teamCodeOf(p),fb=shirtSVG(p.teamName.toUpperCase(),p
 const photoHTML=(p,cls)=>`<img class="${cls}" alt="" src="${imgSrc("player",p.code)}" onerror="this.style.visibility='hidden'">`;
 const dtStar=(cls,sz)=>`<span class="${cls}" title="In FPL's season Dream Team">${lic("star",sz||10)}</span>`;
 
+/* ---------- This Week design parts (22 Nov 2026) ----------
+   One set of parts for every This Week pop-up, header pop-up and the live
+   Planner: words in Geist, figures in Geist Mono; one tile (label, figure,
+   sub-line, one height); one section header (icon, title, controls right);
+   chips as four fixed slots that never wrap; a face (photo, else kit) and a
+   club badge wherever a player or club appears. Classes are ds-. */
+const DS_CHIPS=[["wildcard","WC"],["freehit","FH"],["bboost","BB"],["3xc","TC"]];
+const dsTile=(label,fig,sub,tone)=>`<div class="ds-tile${tone?" "+tone:""}"><em>${label}</em><b>${fig}</b>${sub!=null&&sub!==""?`<i>${sub}</i>`:""}</div>`;
+const dsHead=(icon,title,right)=>`<div class="ds-sh">${lic(icon,15)}<h3>${title}</h3>${right?`<span class="ds-shr">${right}</span>`:""}</div>`;
+const dsFig=(v,tone)=>`<b class="ds-fig${tone?" "+tone:""}">${v}</b>`;
+/* used: chip keys played; active: the key playing this week */
+const dsChips=(used,active)=>`<span class="ds-chips">${DS_CHIPS.map(([k,s])=>{const u=CHIP_UI[k];
+  return `<span class="ds-chip${used.includes(k)?" on":""}${active===k?" act":""}" style="--tc:${u.c}" title="${u.n}${active===k?" · this week":used.includes(k)?" · used":" · not used"}">${s}</span>`;}).join("")}</span>`;
+/* a face: the player's photo, his kit when the photo fails; opens the card */
+const dsFace=(p,cls)=>p?`<span class="ds-face ${cls||""}" onclick="event.stopPropagation();act('card',${p.id})" title="${esc(p.web_name)}: player card"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.onerror=null;this.parentNode.classList.add('kit');this.src='${imgSrc(p.pos===1?"shirtgk":"shirt",teamCodeOf(p))}'"></span>`:"";
+const dsBadge=(t,size)=>t?badgeOrShirt(t,size||24):"";
+/* The 1 / 3 / 5 / ROS switch every This Week pop-up shares (ROS is the
+   rest of the season). off: options greyed out on that pop-up. */
+const HZ4=[1,3,5,"ROS"];
+function hz4HTML(cur,action,off){off=off||[];
+  return `<span class="hz ds-hz" role="group" aria-label="Horizon">${HZ4.map(h=>`<button class="${String(cur)===String(h)?"on":""}${off.includes(h)?" off":""}" ${off.includes(h)?"disabled":`onclick="act('${action}','${h}')"`}>${h==="ROS"?"ROS":h+" GW"}</button>`).join("")}</span>`;}
+/* the number of gameweeks a horizon covers from gameweek g */
+const hzWeeks=(h,g)=>h==="ROS"?Math.max(1,39-g):Math.max(1,+h||1);
+/* Last three gameweeks actual, next three predicted, for one or two
+   players: solid bars actual, dashed predicted; two players show the
+   difference over each pair. */
+function lastNextHTML(players,o){o=o||{};
+  const G=VG(),A=S.playerActuals||{},cols=o.colors||["#FF5A6E","#3DDC97"];
+  const act=(p,e)=>{const a=A[p.id]||A[String(p.id)]||{};const v=a[e]??a[String(e)];return v==null?0:+v;};
+  const ser=players.map((p,i)=>({p,c:players.length===1?(o.color||"#FFB020"):cols[i],act:[G-3,G-2,G-1].map(e=>e>=1?act(p,e):0),pred:[G,G+1,G+2].map(e=>e<=38?hPts(p,e,1):0)}));
+  const all=ser.flatMap(s=>[...s.act,...s.pred]),top=Math.max(8,Math.ceil(Math.max(...all)/4)*4);
+  const Wd=o.w||700,H=o.h||230,pl=30,pb=22,pt=18,slot=(Wd-pl-6)/6,y=v=>pt+(H-pt-pb)*(1-v/top),n=ser.length,bw=Math.min(34,(slot-18)/n);
+  let g="";
+  for(let v=0;v<=top;v+=top/4)g+=`<line class="cgrid" x1="${pl}" x2="${Wd-6}" y1="${y(v)}" y2="${y(v)}"/><text class="cax" x="${pl-6}" y="${y(v)+4}" text-anchor="end">${+v.toFixed(1)}</text>`;
+  g+=`<rect x="${pl+slot*3+2}" y="${pt-14}" width="${slot*3-4}" height="${H-pt-pb+14}" rx="8" fill="rgba(255,255,255,.025)"/><line x1="${pl+slot*3}" x2="${pl+slot*3}" y1="${pt-14}" y2="${H-pb}" stroke="#3A3A3A" stroke-dasharray="3 4"/>`;
+  g+=`<text class="ds-ck" x="${pl+slot*1.5}" y="${pt-4}" text-anchor="middle">Actual</text><text class="ds-ck" x="${pl+slot*4.5}" y="${pt-4}" text-anchor="middle">Predicted</text>`;
+  [G-3,G-2,G-1,G,G+1,G+2].forEach((w,k)=>{const x0=pl+slot*k,pred=k>=3,x1=x0+(slot-bw*n-4*(n-1))/2;
+    ser.forEach((s,j)=>{const v=pred?s.pred[k-3]:s.act[k],x=x1+j*(bw+4);
+      g+=pred?`<rect x="${x}" y="${y(v)}" width="${bw}" height="${y(0)-y(v)}" rx="4" fill="${s.c}" fill-opacity=".28" stroke="${s.c}" stroke-width="1.5" stroke-dasharray="4 3"/>`
+        :`<rect x="${x}" y="${y(v)}" width="${bw}" height="${y(0)-y(v)}" rx="4" fill="${s.c}"/>`;
+      if(n===1)g+=`<text x="${x+bw/2}" y="${y(v)-5}" text-anchor="middle" class="ds-cv">${pred?v.toFixed(1):v}</text>`;});
+    if(n===2){const d=pred?ser[1].pred[k-3]-ser[0].pred[k-3]:ser[1].act[k]-ser[0].act[k],t=Math.max(...ser.map(s=>pred?s.pred[k-3]:s.act[k]));
+      g+=`<text x="${x0+slot/2}" y="${y(t)-6}" text-anchor="middle" class="ds-cd ${d>=0?"up":"dn"}">${sgn1(d)}</text>`;}
+    g+=`<text class="cax${k===3?" ds-now":""}" x="${x0+slot/2}" y="${H-6}" text-anchor="middle">${w>=1&&w<=38?"GW"+w:""}</text>`;});
+  const lg=`<div class="ds-lg">${ser.map(s=>`<span><i style="background:${s.c}"></i>${esc(s.p.web_name)}</span>`).join("")}<span class="ds-lgr"><i class="a"></i>actual <i class="p"></i>predicted</span></div>`;
+  return `<div class="ds-chart">${lg}<svg class="chart" viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Last three actual, next three predicted">${g}</svg></div>`;
+}
+
 function pcardHTML(p,bench){
   const g=VG(),next=S.model.next.id,official=_histSquadActive;
   const {captain:capForGw,vice:viceForGw}=effectiveCaptainVice(g);
