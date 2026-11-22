@@ -173,7 +173,10 @@ function trkCompareHTML(){
 /* Season Against History: the six old tables as one */
 function trkHistory2HTML(){
   const cur=(S.tracker&&S.tracker.gw)||[];
-  const curSeries=key=>key==="rankChange"?trkChange(cur.map(r=>r.orRank)):cur.filter(r=>weekFinal(r.event)).map(r=>r[key]).filter(x=>x!=null);
+  /* Transfer Pts averages only the weeks you made transfers (22 Nov 2026,
+     Andy): a week with none scored 0 and dragged the average down. The
+     history seasons already hold transfer weeks only. */
+  const curSeries=key=>key==="rankChange"?trkChange(cur.map(r=>r.orRank)):cur.filter(r=>weekFinal(r.event)&&(key!=="transferDiff"||r.transfers>0)).map(r=>r[key]).filter(x=>x!=null);
   const seasons=Object.keys(TRACKER_HISTORY.seasons),lastKey=seasons[seasons.length-1];
   const rows=TSTATS.map(st=>{const v=[trkBandVal(curSeries(st.key),"avg",st.dir),trkBandVal(trkSeries(lastKey,st.key),"avg",st.dir),trkBandVal(trkAll(st.key),"avg",st.dir)];
     const c=v.map((x,i)=>[i,x]).filter(([,x])=>x!=null),hi=st.dir==="hi",best=c.length?c.reduce((a,b)=>(hi?b[1]>a[1]:b[1]<a[1])?b:a)[0]:-1;
