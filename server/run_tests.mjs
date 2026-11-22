@@ -12,7 +12,16 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const OLD_REF = process.env.OLD_REF || execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT }).toString().trim();
+/* The regression baseline must be older code than the code under test
+   (audit, 22 Nov 2026): defaulting to HEAD compared the code with itself, so
+   a projection change could never fail. Default to origin/main, and refuse a
+   baseline that is the same commit as HEAD when nothing has changed. */
+const git = a => execFileSync("git", a, { cwd: ROOT }).toString().trim();
+const OLD_REF = process.env.OLD_REF || git(["rev-parse", "--short", "origin/main"]);
+if (git(["rev-parse", OLD_REF]) === git(["rev-parse", "HEAD"]) && !git(["status", "--porcelain", "--", "*.js", "*.mjs", "index.html"])) {
+  console.error("OLD_REF is the same commit as HEAD with nothing changed: the regression suite would compare the code with itself. Set OLD_REF to an older commit.");
+  process.exit(2);
+}
 const SUITES = [
   { name: "gate", file: "test_gate.mjs", env: {} },
   { name: "regression", file: "test_regression.mjs", env: { PORT: "8093", OLD_REF, SERVE_FULL_LAST: "1" } },

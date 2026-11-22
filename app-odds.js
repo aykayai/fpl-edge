@@ -827,7 +827,10 @@ function newsHTML(){
   const daysAgo=d=>Date.now()-d*86400000;
   const sqSeries=[6,5,4,3,2,1,0].map(d=>sq.filter(p=>{const c=flagAt(p,daysAgo(d));return c!=null&&c<100;}).length);
   const ch=nwChanges(),wk=daysAgo(7);
-  const backList=ch.filter(x=>x.b>x.a&&x.t>=wk);
+  /* C14 (audit, 22 Nov 2026): the 24h / 3d / 7d switch now sets every
+     windowed part of the page (it only half-applied before) */
+  const winLbl={24:"Today",72:"Last 3 Days",168:"This Week"}[S.newsWindow]||"This Week";
+  const backList=ch.filter(x=>x.b>x.a&&x.t>=cut);void wk;
   const backSeries=[6,5,4,3,2,1,0].map(d=>backList.filter(x=>x.t>=daysAgo(d+1)&&x.t<daysAgo(d)).length);
   const trf=stories.filter(n=>n.cat==="trf"&&(n.ids||[]).some(i=>mine.has(i)));
   const trfBy={};trf.forEach(n=>n.ids.filter(i=>mine.has(i)).forEach(i=>{const p=nwById(i);if(p)trfBy[p.web_name]=(trfBy[p.web_name]||0)+1;}));
@@ -838,7 +841,7 @@ function newsHTML(){
         <button class="cx-rpt" onclick="act('news')">${lic("refresh-cw",14)}${S.newsState==="loading"?"Loading…":"Refresh"}</button></div></div>
     <div class="nw-figs">
       ${figCard("Squad Flags","Your players with an FPL flag.",String(flagged.length),newToday?`<span class="dn">+${newToday}</span> today`:"None new today",sqSeries,"#FFB020")}
-      ${figCard("Back This Week","Players whose FPL chance rose in the last 7 days.",String(backList.length),backSeries[6]?`<span class="up">+${backSeries[6]}</span> today`:"None today",backSeries,"#2DDC87")}
+      ${figCard("Back "+winLbl,"Players whose FPL chance rose in this window.",String(backList.length),backSeries[6]?`<span class="up">+${backSeries[6]}</span> today`:"None today",backSeries,"#2DDC87")}
       ${figCard("Transfer Talk","Transfer stories naming your players.",String(trf.length),Object.entries(trfBy).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([k,v])=>`${esc(k)} ${v}`).join(" · ")||"None",trfSeries,"#A78BFA")}
       ${figCard("Sources","Sources answering now; Status lists each one.",src.length?`${srcOk} of ${src.length}`:"–",src.length?(srcOk===src.length?"All live":`<span class="dn">${src.length-srcOk} down</span>`):"Not loaded",null)}
     </div></div>`;
@@ -865,16 +868,16 @@ function newsHTML(){
   /* ---- Injury Room ---- */
   const irTab=S.nwIr||"chg";
   let irRows;
-  if(irTab==="chg"){const inWin=ch.filter(x=>x.t>=cut);irRows=(inWin.length>=20?inWin:ch).slice(0,40);}
+  if(irTab==="chg")irRows=ch.filter(x=>x.t>=cut).slice(0,40);
   else irRows=S.model.players.filter(p=>p.avail<1&&p.back&&p.back!=="unknown").map(p=>{const f=flagNow(p)||{};return {p,a:f.was!=null?f.was:100,b:Math.round(p.avail*100),t:f.since||Date.now(),n:p.news||""};})
     .sort((a,b)=>{const d=x=>{const m=/^(\d{2})-([A-Za-z]{3})$/.exec(x.p.back);return m?Date.parse(`${+m[1]} ${m[2]} ${new Date().getFullYear()}`):0;};return d(a)-d(b);}).slice(0,40);
   const injury=rep("nwir","heart-pulse","Injury Room","Every FPL flag change, newest first. Green dot: your player.",
-    S.flags?(irRows.length?`<div class="nw-list nw-scroll">${irRows.map(nwIrRow).join("")}</div>`:sgEmpty(irTab==="chg"?"No flag changes yet.":"No return dates from FPL right now.")):sgEmpty("Reading the flag log…"),
+    S.flags?(irRows.length?`<div class="nw-list nw-scroll">${irRows.map(nwIrRow).join("")}</div>`:sgEmpty(irTab==="chg"?"No flag changes in this window.":"No return dates from FPL right now.")):sgEmpty("Reading the flag log…"),
     {extra:nwSeg([["chg","Changes"],["back","Back Soon"]],irTab,"nwir")});
   /* ---- Social Media ---- */
   const so=S.nwSo||"all",soc=(S.social||[]);
   const pin=soc.filter(n=>n.kind==="pin").sort((a,b)=>b.time-a.time)[0];
-  const others=soc.filter(n=>n.kind!=="pin"&&n.time>=Date.now()-Math.max(S.newsWindow,72)*3600000&&(so==="all"||(so==="yt"?n.kind==="yt":n.kind==="bs")));
+  const others=soc.filter(n=>n.kind!=="pin"&&n.time>=cut&&(so==="all"||(so==="yt"?n.kind==="yt":n.kind==="bs")));
   const social=rep("nwso","users","Social Media","Ben Crellin pinned, then Creators' YouTube and Bluesky posts.",
     (pin||others.length)?`<div class="nw-list nw-scroll">${pin&&so==="all"?nwSoRow(pin):""}${(c=>others.filter(n=>(c[n.src]=(c[n.src]||0)+1)<=4))({}).slice(0,30).map(nwSoRow).join("")}</div>`:sgEmpty(S.newsState==="loading"?"Reading the feeds…":"Nothing posted yet."),
     {extra:nwSeg([["all","All"],["yt","Videos"],["bs","Posts"]],so,"nwso")});
@@ -1149,7 +1152,10 @@ function topbarHTML(o){
     ${navLinksHTML()}
     <div class="tr">
       <span class="tbfig"><span>Predicted <b class="mint">${o.pred.toFixed(1)}</b></span><span>Bank <b${o.bank<0?' style="color:var(--red)"':""}>£${o.bank.toFixed(1)}</b></span><span>FT <b>${o.ftTxt}</b></span></span>
-      <span class="gwsw"><button onclick="act('startgw',${Math.max(1,o.gv-1)})" aria-label="Previous gameweek">‹</button><b>GW${o.gv}</b><button onclick="act('startgw',${Math.min(38,o.gv+1)})" aria-label="Next gameweek">›</button></span>
+      ${/* C15 (audit, 22 Nov 2026): the arrows only move the pages that read the
+         viewed week; elsewhere they changed nothing but their own label */
+        ["fixtures","chips","news","tracker","rivals","xfpl","odds"].includes(S.tab)?`<span class="gwsw"><b>GW${o.gv}</b></span>`
+        :`<span class="gwsw"><button onclick="act('startgw',${Math.max(1,o.gv-1)})" aria-label="Previous gameweek">‹</button><b>GW${o.gv}</b><button onclick="act('startgw',${Math.min(38,o.gv+1)})" aria-label="Next gameweek">›</button></span>`}
       ${dl?`<span class="dl" title="Deadline ${esc(dl.full)}"><span class="dlk">Deadline</span><b>${esc(dl.when)}</b><span class="dlk${dl.soon?" soon":""}">${dl.left}</span></span>`:""}
       <a class="live ${ss.cls}" href="${routeFor("xfpl")}" onclick="return go(event,'xfpl')" title="${esc(ss.plain)}. Opens Status." aria-label="Data status: ${esc(ss.plain)}"><i></i></a>
     </div></div></header>`;
