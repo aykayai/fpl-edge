@@ -1813,6 +1813,9 @@ function buildModel(){
         xMins=clamp(rel*66+preSignal*0.22, 6, 86);
         minsSrc="no history";
       }
+      /* M3: 3 to 9 appearances count in proportion against the no-history
+         estimate, before this season's minutes take over below */
+      if(appMins!=null){const w=clamp((nApps-2)/8,0,1);xMins=xMins*(1-w)+appMins*w;minsSrc="appearances (blend)";}
       /* D15 (12 Oct 2026). This season's minutes per gameweek take over from
          the estimate gradually, fully from MINS_RAMP_GW weeks played, instead
          of replacing it for 300+ players in one step at GW3. */
@@ -1825,8 +1828,6 @@ function buildModel(){
         xMins=xMins*(1-w)+clamp(mins/gwP,0,90)*w;
         minsSrc=w>=1?"this season":"this season (blend)";
       }
-      /* M3: 3 to 9 appearances count in proportion, 10 or more fully */
-      if(appMins!=null){const w=clamp((nApps-2)/8,0,1);xMins=xMins*(1-w)+appMins*w;minsSrc="appearances (blend)";}
     }
     /* D9: the normal role, before any flag. The flag is applied once, to the
        points of the week it is about, so a return date can bring him back. */

@@ -193,6 +193,11 @@ function normalise(text, isNew) {
     t = t.replace(/ FPL (?=Predicted )/, " ");
   }
   t = t.replace(/expire [^▲▼]+/g, "expire ");                          /* chips expiry was hard-coded */
+  /* PLANNED (Bundle A, 22 Nov 2026): the Sub Tracker fills from the feed's
+     autoSubs (C9), and M3 changes how many players reach 45+ minutes */
+  t = t.replace(/Sub tracker.*?(?=Historical performance)/, "Sub tracker ");
+  t = t.replace(/\(\d+ players on 45\+ expected minutes\)/, "(N players on 45+ expected minutes)");
+  t = t.replace(/PositionNPredictedActualMAEBias.*?(?= Actual is)/, "PositionNPredictedActualMAEBias");
   /* PLANNED (21 Nov 2026): seasons read "25/26" instead of "2026" */
   t = t.replace(/(\d{2})\/(\d{2})/g, (m, a, b) => +b === +a + 1 && +a >= 18 && +a <= 40 ? "20" + b : m);
   /* PLANNED (redesign wave 1): new signal key and labels, League tabs,
