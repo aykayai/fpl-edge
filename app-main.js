@@ -250,7 +250,7 @@ function act(k,a,b,c){
       if(cur.filter(i=>P(i)?.team===p.team).length>=3){toast("Max 3 per club");break;}
       {const gw=editableGw();if(gw==null)break;
        const nb=+(planBank()-p.price).toFixed(1);
-       if(nb<-0.001){toast(`Not enough in the bank: £${(-nb).toFixed(1)} short for ${p.web_name}`,{warn:true});break;}
+       if(nb<-0.001)toast(`Over budget by £${(-nb).toFixed(1)} for ${p.web_name}. Plan it, but Save stays off until the bank is back to £0.0`,{warn:true});
        writePlan(gw,[...cur,p.id],{bank:nb});saveState();}break;}
     case"doswap":if(applySwap(a,b)){S.pendingOpt=null;toast("Transfer made");}break;
     case"opt":{S.forceXI=null;
@@ -277,7 +277,7 @@ function act(k,a,b,c){
         if(why){toast(why,{warn:true});break;}
         next[a+half]=w;}
       S.chips=next;saveState();break;}
-    case"save":{if(S.bank<-0.001){toast("You're £"+Math.abs(S.bank).toFixed(1)+" over budget — sell someone first");break;}
+    case"save":{const bk=planBank();if(bk<-0.001){toast("Over budget by £"+Math.abs(bk).toFixed(1)+": sell someone or pick cheaper players before saving",{warn:true});break;}
       S.original=S.squad;saveState();toast("Squad saved");break;}
     case"reset":{
       /* Scope the reset: wipe planned changes for the live week and everything

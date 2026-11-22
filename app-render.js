@@ -235,8 +235,8 @@ function plannerHeadHTML(){
   return `<div class="phead pz-head"><span class="pseg"><button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button><button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
     ${gwScrollerHTML()}
     <span class="placts"><button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button><button onclick="act('opt')">Optimise</button>
-      <button onclick="act('reset')">Reset</button><button class="pri" onclick="act('save')">Save</button></span></div>
-    <div class="pz-wl">${planWeekLine()}${(()=>{const cw=capWarnHTML().replace(/^ · /,"");return cw?` · <span class="pz-warn" role="status">${cw}</span>`:"";})()}</div>`;
+      <button onclick="act('reset')">Reset</button><button class="pri${planBank()<-0.001?" blocked":""}" onclick="act('save')"${planBank()<-0.001?` title="Over budget: Save is off until the bank is back to £0.0" aria-disabled="true"`:""}>Save</button></span></div>
+    <div class="pz-wl">${planWeekLine()}${planBank()<-0.001?` · <span class="pz-warn">Over budget £${(-planBank()).toFixed(1)}</span>`:""}${(()=>{const cw=capWarnHTML().replace(/^ · /,"");return cw?` · <span class="pz-warn" role="status">${cw}</span>`:"";})()}</div>`;
 }
 /* ---------- the stats strip ---------- */
 function plannerStatsHTML(o){
