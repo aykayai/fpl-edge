@@ -20,7 +20,10 @@
 const BACKUP=typeof location!=="undefined"&&(/\.github\.io$/.test(String(location.hostname||""))
   ||/[?&]backup=1\b/.test(String(location.search||"")));
 const REPO=BACKUP?"https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/main/data":"/data/insights";
-const SEASON="2026-2027", LAST="2025-2026";
+/* S7 (audit, 22 Nov 2026): one season, worked out from the date (a season
+   starts in August), instead of being hard-coded in eight places */
+const SEASON_Y=(()=>{const d=new Date(),y=d.getUTCFullYear();return d.getUTCMonth()>=7?y:y-1;})();
+const SEASON=SEASON_Y+"-"+(SEASON_Y+1), LAST=(SEASON_Y-1)+"-"+SEASON_Y;
 /* Live "actuals" feed: team GW history, per-player actual points, chips. Built
    locally by the server (scripts/build-actuals.mjs run every 15 minutes) and
    served same-origin, so Andy's own entry data never touches a public repo.
@@ -39,7 +42,7 @@ const SEASON="2026-2027", LAST="2025-2026";
    Unreachable or not yet built: every consumer already renders a clean waiting
    state, so this fails silently rather than blocking the main load. */
 /* the season label the feed builder writes (FPL_SEASON) */
-const FEED_SEASON="2027";
+const FEED_SEASON=String(SEASON_Y+1);
 /* a season as "25/26" (21 Nov 2026, Andy): takes "2025/26" or the year a
    season ends ("2026") */
 /* C8 (audit, 22 Nov 2026): the dataset's kickoff_time is UTC written without
@@ -56,7 +59,7 @@ const imgSrc=(kind,code)=>BACKUP
   ?(kind==="shirt"||kind==="shirtgk"?`https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${esc(String(code||""))}${kind==="shirtgk"?"_1":""}-220.png`
     :kind==="badge"?`https://resources.premierleague.com/premierleague/badges/50/t${esc(String(code||""))}.png`
     :`https://resources.premierleague.com/premierleague25/photos/players/110x140/${esc(String(code||""))}.png`)
-  :`/img/${kind}/${esc(String(code||""))}.png${kind==="player"?"?s=2526":""}`;
+  :`/img/${kind}/${esc(String(code||""))}.png${kind==="player"?"?s="+String(SEASON_Y-1).slice(2)+String(SEASON_Y).slice(2):""}`;
 /* ---------- instant start ----------
    The last good copy of every data file (dataset CSVs and both feeds) is kept
    in IndexedDB, which has room for it where localStorage did not. On open the
@@ -273,7 +276,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.20.0";
+const APP_VERSION="13.21.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

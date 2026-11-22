@@ -42,13 +42,22 @@ export async function buildFeeds() {
     });
     let err = "";
     child.stderr.on("data", d => { err += d; });
-    child.on("error", () => resolve({ code: -1, err: "spawn failed" }));
-    child.on("close", c => resolve({ code: c, err }));
+    /* S4 (audit, 22 Nov 2026): a build that hangs is killed after 8 minutes
+       rather than holding the job forever with no error shown */
+    const kill = setTimeout(() => { err += "\nkilled after 8 minutes"; child.kill("SIGKILL"); }, 8 * 60000);
+    child.on("error", () => { clearTimeout(kill); resolve({ code: -1, err: "spawn failed" }); });
+    child.on("close", c => { clearTimeout(kill); resolve({ code: c, err }); });
   });
   if (code.code === 0) {
     state.lastOk = new Date().toISOString();
     state.error = null;
-    log("feeds.build", "ok", Date.now() - t0);
+    /* S5 (audit): a build can exit 0 with parts missing (a week's live data
+       skipped, standings from the fallback roster, a rival's history
+       omitted). Those warnings were thrown away; the first is kept so the
+       status dot can turn amber. */
+    const warn = String(code.err).split("\n").map(l => l.trim()).filter(l => /unavailable|skipped|fallback|failed|omitted/i.test(l));
+    state.warning = warn.length ? warn[0].slice(0, 200) + (warn.length > 1 ? ` (+${warn.length - 1} more)` : "") : null;
+    log("feeds.build", "ok" + (state.warning ? " with warnings: " + state.warning : ""), Date.now() - t0);
   } else {
     state.error = `exit ${code.code}: ${String(code.err).split("\n")[0].slice(0, 200)}`;
     log("feeds.build", "fail " + state.error, Date.now() - t0);
@@ -67,6 +76,7 @@ export async function feedsStatus() {
     lastOk: state.lastOk,
     ageMinutes: state.lastOk ? Math.round((Date.now() - Date.parse(state.lastOk)) / 60000) : null,
     error: state.error,
+    warning: state.warning || null,
     actuals: await file("actuals.json"),
     rivals: await file("rivals.json")
   };

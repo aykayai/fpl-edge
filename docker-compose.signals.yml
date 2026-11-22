@@ -19,6 +19,12 @@ services:
       - default
       - fpl-scout
     restart: unless-stopped
+    # S9 (audit, 22 Nov 2026): container logs rotate instead of growing forever
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   signals-state:

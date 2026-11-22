@@ -922,8 +922,19 @@ function statusState(){
     if(ds.stale)txt=`Waiting on FPL Core Insights · <b>last good copy ${ukHHMM(ds.committedAt||ds.fetchedAt||Date.now())}</b>`,cls="wait";
     else if(fpl.error)txt=`Waiting on FPL · <b>last good copy ${ukHHMM(fpl.fetchedAt||Date.now())}</b>`,cls="wait";
     else if(feeds.error)txt=`Waiting on the feed builder · <b>last good copy ${ukHHMM(feeds.lastOk||Date.now())}</b>`,cls="wait";
+    /* S4 (audit, 22 Nov 2026): age, not only errors. A job that hangs or a
+       download that stalls never sets an error, so the dot stayed green while
+       the data aged. FPL refreshes every 15 minutes, the feeds every 15, and
+       the dataset lands about three times a day. */
+    else if(agoMin(fpl.fetchedAt)!=null&&agoMin(fpl.fetchedAt)>45)txt=`FPL not refreshed · <b>last ${agoText(fpl.fetchedAt)}</b>`,cls="wait";
+    else if(agoMin(feeds.lastOk)!=null&&agoMin(feeds.lastOk)>45)txt=`Feed builder not refreshed · <b>last ${agoText(feeds.lastOk)}</b>`,cls="wait";
+    else if(agoMin(ds.committedAt)!=null&&agoMin(ds.committedAt)>26*60)txt=`FPL Core Insights not updated · <b>last ${agoText(ds.committedAt)}</b>`,cls="wait";
     else if(liveAge!=null&&liveAge<=10){cls="live";txt=`Live · <b>updated ${agoText(fpl.liveFetchedAt)}</b>`;}
     else txt=`Up to date · <b>checked ${S.statusAt?agoText(S.statusAt):"just now"}</b>`;
+    /* S5: a feed build that finished with parts missing */
+    if(feeds.warning&&!feeds.error){if(cls!=="wait")cls="wait";txt+=` · feed built with gaps`;}
+    /* S3: an odds refresh that failed keeps the last prices but says so */
+    if(st.odds&&st.odds.error){if(cls!=="wait")cls="wait";txt+=` · odds not refreshing`;}
   }
   /* a news source failing for over an hour turns the dot amber (Andy, 22 Nov 2026) */
   const nDown=newsDown();

@@ -1,0 +1,10 @@
+# S8 (audit, 22 Nov 2026): keep secrets and working files out of the image.
+# .env.signals holds the odds key; compose passes it at run time instead.
+.env*
+.git
+.github
+state
+node_modules
+design
+docs
+*.md

@@ -154,5 +154,7 @@ export function oddsPayload() {
 
 export function oddsStatus() {
   if (!CONFIG.ODDS_API_KEY) return { state: "nokey", fetchedAt: null };
-  return { state: state.cache?.state || "loading", fetchedAt: state.cache?.fetchedAt || null };
+  /* S3 (audit, 22 Nov 2026): a failed refresh keeps the last good rows but
+     records an error; status now carries it, so the chip can turn amber */
+  return { state: state.cache?.state || "loading", fetchedAt: state.cache?.fetchedAt || null, error: state.cache?.error || null };
 }
