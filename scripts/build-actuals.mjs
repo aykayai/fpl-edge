@@ -569,6 +569,20 @@ async function main() {
        the app call its score "so far" until FPL marks the week finished. */
     const ev = events.find(e => e.id === r.event);
     if (ev) { row.finished = !!ev.finished; row.dataChecked = !!ev.data_checked; }
+    /* Audit C4 (22 Nov 2026): during a week in play FPL's history total lags
+       its live player scores (GW11 read 38 against a live 52 with Bench
+       Boost on), so the Tracker disagreed with Rivals and Signals. While the
+       week is unfinished its score is rebuilt from the live scores and the
+       picks' multipliers (a Bench Boost bench has multiplier 1), less hits. */
+    const live = gwPoints.get(r.event);
+    if (ev && !ev.finished && live && r.picks?.length) {
+      const sum = r.picks.reduce((s, p) => s + (live.get(p.id) ?? 0) * (p.multiplier ?? 0), 0) - (r.transferCost || 0);
+      if (sum > row.points) {
+        const before = row.totalPoints != null ? row.totalPoints - row.points : null;
+        row.points = sum;
+        if (before != null) row.totalPoints = before + sum;
+      }
+    }
     return row;
   });
 

@@ -18,8 +18,21 @@ export function log(action, result, ms) {
   console.log(`${ukStamp()} ${action} ${result}${ms != null ? " " + ms + "ms" : ""}`);
 }
 
+/* A state dir holding a .frozen file is a test fixture (audit, 22 Nov 2026):
+   the scheduler already skips it, and now no on-demand route may reach an
+   upstream either. The finished-week route and the per-player news search had
+   been writing live FPL weeks and Google results into the frozen test state. */
+import { existsSync } from "node:fs";
+import { join as joinPath, resolve as resolvePath } from "node:path";
+let _frozen = null;
+export function upstreamBlocked() {
+  if (_frozen == null) _frozen = existsSync(joinPath(resolvePath(process.env.STATE_DIR || "./state"), ".frozen"));
+  return _frozen;
+}
+
 /* fetch with a hard timeout, returning the Response or throwing. */
 export async function fetchT(url, opts = {}, ms = 20000) {
+  if (upstreamBlocked()) throw new Error("frozen test state: no upstream fetches");
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), ms);
   try {

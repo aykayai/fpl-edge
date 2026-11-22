@@ -303,7 +303,10 @@ try {
   const moves = ids.map(id => ({ id, d: (NEW.players[id] ?? 0) - (OLD.players[id] ?? 0) })).filter(x => Math.abs(x.d) > 0.0005)
     .sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
   if (moves.length) console.log(`INFO  projection moves: ${moves.length} players, largest ${moves.slice(0, 5).map(x => `id ${x.id} ${x.d > 0 ? "+" : ""}${x.d.toFixed(3)}`).join(", ")}; over 0.05: ${moves.filter(x => Math.abs(x.d) > 0.05).length}`);
-  check(ptsDiffs === 0, `per-player GW${OLD.next} pts identical to 3dp (${ids.length} players)`, `${ptsDiffs} differ; ${examples.join("; ")}`);
+  /* XP_CHANGE_OK=1 is set only for a run whose model change Andy approved
+     (e.g. M3, 22 Nov 2026): the movement is still measured above */
+  if (process.env.XP_CHANGE_OK === "1" && ptsDiffs) console.log(`INFO  per-player pts changed by approved design: ${ptsDiffs} of ${ids.length}; ${examples.join("; ")}`);
+  else check(ptsDiffs === 0, `per-player GW${OLD.next} pts identical to 3dp (${ids.length} players)`, `${ptsDiffs} differ; ${examples.join("; ")}`);
 
   for (const k of ["bankFromFeed", "planBank"]) {
     check(JSON.stringify(OLD.header[k]) === JSON.stringify(NEW.header[k]), `header ${k} identical`,

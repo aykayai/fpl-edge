@@ -465,9 +465,9 @@ function plannerStatsHTML(o){
   const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
   return `<section class="panel pz-stats">
     <div class="pz-id"><h1>${esc(IDENTITY.team)}</h1><span>${esc(IDENTITY.manager)} · ${IDENTITY.id}</span></div>
-    ${st("Overall Rank",`Your overall rank after GW${S.entryRankGw||"—"}.`,
+    ${st("Overall Rank",S.entryRankLive?`Your overall rank, live during GW${S.entryRankGw}.`:`Your overall rank after GW${S.entryRankGw||"—"}.`,
       S.entryRank?S.entryRank.toLocaleString():"—",
-      ln(S.entryRank&&prev&&last&&prev.orRank&&last.orRank?chg(prev.orRank-last.orRank,x=>Math.round(x).toLocaleString(),true):"",S.entryRank?"GW"+S.entryRankGw:"waiting"),
+      ln(S.entryRank&&prev&&last&&prev.orRank&&last.orRank?chg(prev.orRank-last.orRank,x=>Math.round(x).toLocaleString(),true):"",S.entryRank?"GW"+S.entryRankGw+(S.entryRankLive?" live":""):"waiting"),
       fRows.filter(r=>r.orRank).slice(-8).map(r=>-r.orRank),null,null,"rank")}
     ${st("GW Rank",`Your rank for GW${lastG?lastG.event:"—"} alone.`,
       lastG?lastG.gwRank.toLocaleString():"—",
@@ -476,9 +476,9 @@ function plannerStatsHTML(o){
     ${st("Team Rating",`Your predicted score against the best XI £${rating?rating.budget.toFixed(1):"—"} could buy this week.`,
       `<span style="color:${rateCol}">${rating?rating.pct:"—"}</span>`,rating?`<i>Best XI ${rating.best.toFixed(1)}</i>`:"",null,null,
       rating?`<span class="pz-ring" style="--v:${rating.pct};--rc:${rateCol}"></span>`:"","rating")}
-    ${st("Squad Value",`Your ${o.n} players at today's prices.${fv?` FPL value £${fv.value.toFixed(1)} with bank.`:""}`,
-      `£${o.sv.toFixed(1)}`,o.raised>0?`<i>£${o.raised.toFixed(1)} from sales</i>`:ln(prev&&last&&prev.value!=null?chg(last.value-prev.value,x=>x.toFixed(1),true):"",""),
-      fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value),"#8A8A8A")}
+    ${st("Squad Value",`Your ${o.n} players at today's prices, without the bank.${fv?` FPL's team value, bank included, is £${fv.value.toFixed(1)}.`:""}`,
+      `£${o.sv.toFixed(1)}`,o.raised>0?`<i>£${o.raised.toFixed(1)} from sales</i>`:ln(prev&&last&&prev.value!=null?chg((last.value-(last.bank||0))-(prev.value-(prev.bank||0)),x=>x.toFixed(1),true):"",""),
+      fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value-(+r.bank||0)),"#8A8A8A")}
     ${st("Bank",`Money left after this week's planned transfers. FT: free transfers (max 5).`,
       `<span${o.bank<0?' style="color:var(--red)"':""}>£${o.bank.toFixed(1)}</span>`,`<i>${o.ftTxt} FT</i>`)}
   </section>`;
@@ -882,7 +882,12 @@ function swapCardHTML(m,g){
    gameweeks, so a double counts twice and a blank counts zero.
    ============================================================ */
 const TG_GOAL=9, TG_CS=31;
-function tgOne(t,opp,home){const gf=fdrCalc(t,opp,home,"xgf"),gc=fdrCalc(t,opp,home,"xgc"),cs=Math.exp(-gc);
+/* M5 (Andy, 22 Nov 2026): a real fixture the bookmakers have priced uses
+   their expected goals, as the projections do (D10), so a club's Teams score
+   and its players' projections agree; unpriced fixtures and the season-wide
+   colour cuts use the ratings. */
+function tgOne(t,opp,home,real){const od=real&&S.oddsTeams?S.oddsTeams[(t.short||"")+"|"+(opp.short||"")+(home?"|H":"|A")]:null;
+  const gf=od?od.xg:fdrCalc(t,opp,home,"xgf"),gc=od?od.xgc:fdrCalc(t,opp,home,"xgc"),cs=Math.exp(-gc);
   return{gf,gc,cs,pts:TG_GOAL*gf+TG_CS*cs};}
 /* Overall fixture colour: where the points sit among the season's 760
    fixture-sides, with the attack mix (6% red, 15% darkest green) */
@@ -898,13 +903,13 @@ function tgCuts(){
 function tgBand(t,x,lens){
   if(lens==="att")return fdrOf(x.opp,x.home,t,"att");
   if(lens==="def")return fdrOf(x.opp,x.home,t,"def");
-  const c=tgCuts(),p=tgOne(t,x.opp,x.home).pts;
+  const c=tgCuts(),p=tgOne(t,x.opp,x.home,true).pts;
   for(let i=0;i<4;i++)if(p<c[i])return 5-i;
   return 1;
 }
 const tgFx=(t,e)=>((S.model&&S.model.byEv[e])||[]).filter(f=>f.ht===t||f.at===t).map(f=>({f,opp:f.ht===t?f.at:f.ht,home:f.ht===t}));
 function tgScore(t,a,b){let gf=0,cs=0,pts=0;
-  for(let e=a;e<=b;e++)tgFx(t,e).forEach(x=>{const v=tgOne(t,x.opp,x.home);gf+=v.gf;cs+=v.cs;pts+=v.pts;});
+  for(let e=a;e<=b;e++)tgFx(t,e).forEach(x=>{const v=tgOne(t,x.opp,x.home,true);gf+=v.gf;cs+=v.cs;pts+=v.pts;});
   const n=Math.max(1,b-a+1);return{gf:gf/n,cs:cs/n,pts:pts/n};}
 /* results so far, from the fixtures the app already loads */
 const tgPlayed=()=>(S.fixtures||[]).filter(f=>f.ht&&f.at&&f.hs!=null&&f.as!=null&&f.finished!==false);
@@ -1042,7 +1047,7 @@ const TG_TARGETS={
 function tgTargetRows(){
   const g=S.model.next.id,win=tgWin(),g2=win==="ros"?38:Math.min(38,g+win-1),n=g2-g+1;
   const rows=S.model.teams.map(t=>{let gf=0,gc=0,cs=0;const fx=[];
-    for(let e=g;e<=g2;e++)tgFx(t,e).forEach(x=>{const v=tgOne(t,x.opp,x.home);gf+=v.gf;gc+=v.gc;cs+=v.cs;fx.push({e,...x});});
+    for(let e=g;e<=g2;e++)tgFx(t,e).forEach(x=>{const v=tgOne(t,x.opp,x.home,true);gf+=v.gf;gc+=v.gc;cs+=v.cs;fx.push({e,...x});});
     return{t,gf:gf/n,gc:gc/n,cs:cs/n,fx};});
   return{g,g2,win,rows};
 }
@@ -1214,14 +1219,19 @@ function buildOptimal(kind,gw,budget,full,form,opt){
 }
 /* The answer to show now: the full-pool result when it exists, else the fast
    one, with the full solve queued in the background. */
+/* C7 (audit, 22 Nov 2026): counts full optimiser runs, so the chip curves
+   (cached on chipSig) refresh once the full Free Hit team replaces the quick one */
+let _optDone=0;
 function optimalSquad(kind,gw,budget,form,opt){
   const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full"+optKey(opt);
   if(_sqCache[fullKey])return _sqCache[fullKey];
   const fast=buildOptimal(kind,gw,budget,false,form,opt);
   if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
     _optPending[fullKey]=1;
-    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form,opt);}finally{delete _optPending[fullKey];}
-      if(S.tab==="chips"||S.cmp)render();},60);
+    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form,opt);}finally{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;}
+      /* only a stored result is worth a redraw: without the solver nothing is
+         stored, and redrawing would schedule the same run again every 60 ms */
+      if(_sqCache[fullKey]&&(S.tab==="chips"||S.cmp))render();},60);
   }
   return fast?Object.assign({},fast,{checking:!!_optPending[fullKey]}):null;
 }
@@ -3603,7 +3613,7 @@ function pdHeadHTML(rows,r){
       </div>
       <div class="pdsigs"><span class="pdl">Signals <span class="mu">tap to filter · hover any icon for why</span></span>
         <div class="pdchips">${SIG_ORDER.map(k=>{const[ic,tone,label]=SIGNAL[k],on=S.iconF.includes(k);
-          return `<button class="pdsigchip${on?" on":""}" style="--tc:${tone==="NAVY"?"#7AA2FF":tone}" onclick="act('iconf','${k}')" aria-pressed="${on}" title="${esc(SIG_RULE[k](S.horizon||1))}"><span class="tile">${lic(ic)}</span>${label}<b>${cnt[k]||0}</b></button>`;}).join("")}</div>
+          return `<button class="pdsigchip${on?" on":""}" style="--tc:${tone==="NAVY"?"#7AA2FF":tone}" onclick="act('iconf','${k}')" aria-pressed="${on}" title="${esc(SIG_RULE[k](sigH()))}"><span class="tile">${lic(ic)}</span>${label}<b>${cnt[k]||0}</b></button>`;}).join("")}</div>
       </div>
     </div>`;
 }

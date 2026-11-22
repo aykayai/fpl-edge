@@ -313,7 +313,12 @@ function trkFinishesHTML(){
 
 /* ---------- sub tracker (awaiting feed — see contract in the notes) ---------- */
 function trkSubTrackerHTML(){
-  const rows=(S.tracker&&S.tracker.gw)||[];
+  /* C9 (audit, 22 Nov 2026): the feed publishes autoSubs [{out, in}] (player
+     ids); this read r.subs, which nothing sends, so the panel never filled.
+     Names come from the model and points from the week's actual scores. */
+  const nm=id=>{const p=S.model&&S.model.players.find(q=>q.id===id);return p?p.web_name:null;};
+  const pt=(id,g)=>{const v=typeof actOf==="function"?actOf(id,g):null;return v==null?0:v;};
+  const rows=((S.tracker&&S.tracker.gw)||[]).map(r=>Array.isArray(r.subs)&&r.subs.length?r:{...r,subs:(r.autoSubs||[]).map(s=>({outId:s.out,inId:s.in,outName:nm(s.out),inName:nm(s.in),outPts:pt(s.out,r.event),inPts:pt(s.in,r.event)}))});
   const withSubs=rows.filter(r=>Array.isArray(r.subs)&&r.subs.length);
   if(!withSubs.length){
     return `<div class="panel"><div class="phead"><h2>Sub tracker</h2></div>

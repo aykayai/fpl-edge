@@ -17,6 +17,7 @@ import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { CONFIG } from "./config.mjs";
+import { upstreamBlocked } from "./util.mjs";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36";
 const DIR = () => join(CONFIG.STATE_DIR, "scout");
@@ -83,6 +84,7 @@ const INJURY = /injur|fitness|hamstring|thigh|calf|knee|ankle|groin|muscle|scan|
 const UNREADABLE = /(^|\.)(msn\.com|yahoo\.com|nytimes\.com|theathletic\.com|telegraph\.co\.uk|thetimes\.co\.uk)$/i;
 
 async function getText(url, ms = 12000) {
+  if (upstreamBlocked()) throw new Error("frozen test state: no upstream fetches");
   const r = await fetch(url, { headers: { "User-Agent": UA, "Accept-Language": "en-GB,en;q=0.9" }, redirect: "follow", signal: AbortSignal.timeout(ms) });
   if (!r.ok) throw new Error("HTTP " + r.status);
   const buf = Buffer.from(await r.arrayBuffer());
