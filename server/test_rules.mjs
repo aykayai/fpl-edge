@@ -92,6 +92,83 @@ try {
   S.startGW = NEXT; g.render();
   const clean = snapshot();
 
+  /* ---------- This Week batch 3 (22 Nov 2026): Team News, Price Watch, Fixture Outlook, Performance ---------- */
+  {
+    const b3 = vm.runInContext(`({tnRisk,tnStatus,tnOpen,wpStats,pwDue,pwRate,pwNextChange,foRun,pmWeeks,hPts,LS,squadPlayers,startingXI,VG})`, ctx);
+    const G = NEXT, sq3 = b3.squadPlayers(), app = () => doc.getElementById("app"), q = s => [...doc.querySelectorAll(s)];
+    const fx = (d, extra) => ({ opp: "AAA", home: true, diff: d, diffAtt: d, diffDef: d, ...(extra || {}) });
+    const fake = o => ({ id: -1, pos: 3, avail: 1, status: "a", roleMins: 85, xMins: 85, news: "", gw: { [G]: { pts: 5, fixtures: [fx(3)] }, [G + 1]: { pts: 5, fixtures: [fx(3)] }, [G + 2]: { pts: 5, fixtures: [fx(3)] } }, ...o });
+    const noYc = new Map([[-1, { yellow_cards: 0 }]]), fourYc = new Map([[-1, { yellow_cards: 4 }]]);
+    /* the one risk rule (approved maths change) */
+    check(!b3.tnRisk(fake(), G, 3, noYc), "Team News risk rule: a fit starter with three fixtures is not at risk");
+    check(b3.tnRisk(fake({ avail: 0.75 }), G, 1, noYc), "Team News risk rule: a doubt (chance under 100) is at risk");
+    check(b3.tnRisk(fake({ xMins: 50 }), G, 1, noYc), "Team News risk rule: a starter whose expected minutes dropped under 60 is at risk");
+    check(G > 19 || b3.tnRisk(fake(), G, 1, fourYc), "Team News risk rule: one yellow from a ban is at risk");
+    { const p = fake(); p.gw[G + 2] = { pts: 0, blank: true, fixtures: [] };
+      check(b3.tnRisk(p, G, 3, noYc) && !b3.tnRisk(p, G, 1, noYc), "Team News risk rule: a blank counts only inside the window"); }
+    check(b3.tnStatus(fake({ avail: 0, status: "i", news: "Hamstring injury - Expected back 29 Nov" }), G, noYc).k === "inj"
+      && b3.tnStatus(fake({ status: "s" }), G, noYc).k === "sus" && b3.tnStatus(fake({ avail: 0.5, status: "d" }), G, noYc).l === "50% to play"
+      && b3.tnStatus(fake({ xMins: 5, roleMins: 5 }), G, noYc).k === "bk", "Team News status: injured, suspended, doubt and back-up read from FPL's flag");
+    /* the pop-up: your 15, a cell per gameweek, BGW/DGW wording, no Replace column */
+    b3.LS.set("tnSeen", { t: 1700000000000, sc: {}, yc: {}, pen: {} });
+    S.tab = "squad"; S.tnOpen = false; S.tnH = 5; g.act("pop", "warn");
+    const tn = app().querySelector(".wp.tn");
+    check(!!tn && q(".tn-rows .tn-row").length === sq3.length, "Team News lists your whole squad", tn ? String(q(".tn-rows .tn-row").length) : "no pop-up");
+    check(S.tnSince === 1700000000000 && b3.LS.get("tnSeen").t > 1700000000000, "Team News: what's changed counts from when you last opened it, and the time is saved");
+    const cells = q(".tn-rows .tn-row")[0].querySelectorAll(".tn-c").length;
+    check(cells === Math.min(5, 39 - G), "Team News: one availability cell per gameweek in the window", String(cells));
+    const tnText = tn ? tn.textContent : "";
+    check(!/Blank|×2|Replace|Fitness and Risk/.test(tnText) && /Open on News page/.test(tnText) && /What's changed/.test(tnText), "Team News: BGW/DGW wording, no Replace column, a link to the News page");
+    g.act("tnh", "ROS");
+    check(q(".tn-rows .tn-row")[0].querySelectorAll(".tn-c").length === Math.min(8, 39 - G), "Team News: ROS shows up to eight gameweek cells");
+    /* Price Watch */
+    check(b3.pwDue({ pcp: 101 })[0] === "Tonight" && b3.pwDue({ pcp: 50, pcProj: [[0, 80, 3], [1, 105, 3]] })[0] === "Tomorrow"
+      && b3.pwDue({ pcp: -60, pcProj: [[0, -70, -3], [1, -80, -3], [2, -90, -3]] })[0] === "> 2 days" && b3.pwDue({ pcp: 90, pcLock: new Date(Date.now() + 3600000).toISOString() })[0] === "Locked",
+      "Price Watch: due is the first night FPL projects 100%, locked players never move");
+    { const nx = b3.pwNextChange(), lon = new Date(nx).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+      check(nx > Date.now() && nx - Date.now() <= 86400000 && lon === "01:30", "Price Watch: the next change is the coming 01:30 UK time", lon); }
+    { const keep = S.priceLog, now = Date.now(), cut = b3.pwNextChange() - 86400000, a = Math.max(cut + 60000, now - 3 * 3600000);
+      if (now - a >= 0.6 * 3600000) {
+        S.priceLog = { samples: [{ t: a, p: { 1: 40 } }, { t: now, p: { 1: 40 + 10 * (now - a) / 3600000 } }] };
+        const r = b3.pwRate(1); check(r != null && Math.abs(r - 10) < 0.01, "Price Watch: per hour comes from the price log", String(r));
+      }
+      S.priceLog = { samples: [{ t: now, p: { 1: 40 } }] }; check(b3.pwRate(1) === null, "Price Watch: per hour waits for two samples");
+      S.priceLog = keep; }
+    g.act("pop", "price");
+    const pw = app().querySelector(".wp.pw");
+    check(!!pw && q(".pw-rows .pw-r").length === sq3.length && q(".pw-t .ds-tile").length === 6 && !/Price Moves/.test(pw.textContent), "Price Watch: one view, six tiles, your squad, no Price Moves tab");
+    { const other = S.model.players.find(p => !sq3.includes(p));
+      g.act("pwstar", other.id); g.act("pwtab", "watch");
+      check(q(".pw-rows .pw-r").length === 1 && q(".pw-rows .ds-name")[0].textContent === other.web_name, "Price Watch: a starred player shows on the watchlist");
+      g.act("pwstar", other.id); g.act("pwtab", "mine"); }
+    /* Fixture Outlook: the one method */
+    { const p = fake(); p.gw[G] = { pts: 5, fixtures: [fx(2, { diffAtt: 1 })] }; p.gw[G + 1] = { pts: 0, blank: true, fixtures: [] }; p.gw[G + 2] = { pts: 9, fixtures: [fx(4), fx(2)] };
+      check(Math.abs(b3.foRun(p, G, 3, "all") - 3) < 1e-9 && Math.abs(b3.foRun(p, G, 3, "att") - (1 + 5 + 2) / 3) < 1e-9, "Fixture Outlook: the chip scale averaged, a blank counts 5, a double one easier"); }
+    S.foH = 5; S.foLens = "all"; g.act("pop", "out");
+    const fo = app().querySelector(".wp.fo");
+    check(!!fo && q(".fo-rows .fo-r").length === sq3.length && q(".fo-cl.up").length === 3 && q(".fo-cl.dn").length === 3 && /Fixture Grid/.test(fo.textContent), "Fixture Outlook: your 15, three clubs to target, three to avoid, a link to the Fixture Grid");
+    { const p0 = [...sq3].sort((a, b) => a.pos - b.pos || b3.hPts(b, G, 5) - b3.hPts(a, G, 5))[0], tot = q(".fo-rows .fo-r")[0].querySelector(".fo-tot").textContent;
+      check(tot === b3.hPts(p0, G, 5).toFixed(1), "Fixture Outlook: the xPts column is the projected points over the window", tot); }
+    g.act("folens", "def");
+    check(/class="on"[^>]*>Defence/.test(app().innerHTML), "Fixture Outlook: the Attack/Defence toggle switches the lens");
+    /* Performance */
+    g.act("pop", "form");
+    const pm = app().querySelector(".wp.pm");
+    check(!!pm && q(".pm-rows .pm-r").length === sq3.length && /Positive/.test(pm.textContent) && /Negative/.test(pm.textContent) && /Expected vs actual/.test(pm.textContent), "Performance: your 15, the scatter, and Hot and Cold as Positive and Negative");
+    { const vp = q(".pm-rows .pm-r").map(r => r.children[4].textContent).filter(t => t !== "–").map(t => +t.replace("−", "-"));
+      check(vp.every((v, i) => !i || vp[i - 1] >= v), "Performance: the board is sorted by points against prediction", vp.join(",")); }
+    { const names = new Set(sq3.map(p => p.web_name));
+      const targets = [...pm.querySelectorAll(".pm-hr.tg")].map(r => r.querySelector(".ds-name").textContent);
+      check(targets.every(n => !names.has(n)), "Performance: Targets are players you do not own", targets.join(", ")); }
+    g.act("pmwin", "3");
+    check(b3.pmWeeks(3).length === Math.min(3, NEXT - 1) && /class="on"[^>]*>Last 3/.test(app().innerHTML), "Performance: the window switch sets the weeks");
+    g.act("popclose");
+    /* the four cards, renamed */
+    S.tab = "squad"; S.startGW = NEXT; g.render();
+    const its = q(".pz-it").map(e => e.textContent);
+    check(["Team News", "Price Watch", "Fixture Outlook", "Performance"].every(t => its.includes(t)) && !its.includes("Fitness and Risk") && !its.includes("Form"), "This Week cards: Team News, Price Watch, Fixture Outlook, Performance", its.join(", "));
+  }
+
   /* ---------- F26 selling price ---------- */
   /* The rule itself, on the estimate path (no recorded purchase prices): the
      app then takes the purchase price as today's price less the season's
