@@ -1725,11 +1725,9 @@ function thisWeekHTML(){
    wp- (shared), tn- Team News, pw- Price Watch, fo- Fixture Outlook,
    pm- Performance (pf- is the pool filters).
    ============================================================ */
+/* the Planner's modalHTML with its opts.icon, tinted per pop-up */
 function wkPopModal(icon,tone,title,right,body,cls){
-  return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="if(event.target===this)act('popclose')">
-    <div class="mbox mfull wide wp${cls?" "+cls:""}"><div class="mhead"><h2 class="wp-title" style="--tc:${tone}">${lic(icon,18)}${esc(title)}</h2>${right||""}
-      <button class="mx" onclick="act('popclose')" aria-label="Close">${lic("x",18)}</button></div>
-    <div class="mbody">${body}</div></div></div>`;
+  return modalHTML(esc(title),body,{wide:true,cls:"wp"+(cls?" "+cls:""),ctl:right||"",icon:`<span style="display:inline-flex;color:${tone}">${lic(icon,18)}</span>`});
 }
 const wpNm=(p,sub)=>`<span class="wp-nm"><span class="ds-name">${esc(p.web_name)}</span><span class="ds-sub">${sub!=null?sub:`${esc(p.teamName)} · ${POSL[p.pos]}`}</span></span>`;
 const wpTeam=p=>(S.teams||[]).find(t=>t.id===p.team)||null;
