@@ -415,21 +415,21 @@ function plannerStatsHTML(o){
   const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
   return `<section class="panel pz-stats">
     <div class="pz-id"><h1>${esc(IDENTITY.team)}</h1><span>${esc(IDENTITY.manager)} · ${IDENTITY.id}</span></div>
-    ${st("Overall Rank","Your overall rank after the last finished gameweek, from FPL. The line rises as your rank improves.",
+    ${st("Overall Rank",`Your overall rank after GW${S.entryRankGw||"—"}.`,
       S.entryRank?S.entryRank.toLocaleString():"—",
       ln(S.entryRank&&prev&&last&&prev.orRank&&last.orRank?chg(prev.orRank-last.orRank,x=>Math.round(x).toLocaleString(),true):"",S.entryRank?"GW"+S.entryRankGw:"waiting"),
       fRows.filter(r=>r.orRank).slice(-8).map(r=>-r.orRank))}
-    ${st("GW Rank",`Your rank for GW${lastG?lastG.event:"—"} alone, from FPL. The line rises as the week's rank improves.`,
+    ${st("GW Rank",`Your rank for GW${lastG?lastG.event:"—"} alone.`,
       lastG?lastG.gwRank.toLocaleString():"—",
       ln(prevG&&lastG?chg(prevG.gwRank-lastG.gwRank,x=>Math.round(x).toLocaleString(),true):"",lastG?"GW"+lastG.event:""),
       fRows.filter(r=>r.gwRank).slice(-8).map(r=>-r.gwRank))}
-    ${st("Team Rating",`Your team score (the Planner's: best XI, captain, bench and vice cover) against the best XI your budget (selling value plus bank, £${rating?rating.budget.toFixed(1):"—"}) could buy this week: the same Free Hit team the Chips page and Compare show.`,
+    ${st("Team Rating",`Your predicted score against the best XI £${rating?rating.budget.toFixed(1):"—"} could buy this week.`,
       `<span style="color:${rateCol}">${rating?rating.pct:"—"}</span>`,rating?`<i>Best XI ${rating.best.toFixed(1)}</i>`:"",null,null,
       rating?`<span class="pz-ring" style="--v:${rating.pct};--rc:${rateCol}"></span>`:"")}
-    ${st("Squad Value",`Today's buy prices of the ${o.n} players in this plan.${fv?` FPL's own team value after GW${fv.event} is £${fv.value.toFixed(1)}, bank included; the line is that value by gameweek.`:""}`,
+    ${st("Squad Value",`Your ${o.n} players at today's prices.${fv?` FPL value £${fv.value.toFixed(1)} with bank.`:""}`,
       `£${o.sv.toFixed(1)}`,o.raised>0?`<i>£${o.raised.toFixed(1)} from sales</i>`:ln(prev&&last&&prev.value!=null?chg(last.value-prev.value,x=>x.toFixed(1),true):"",""),
       fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value),"#8A8A8A")}
-    ${st("Bank",`Bank to spend in this week's plan, after planned transfers and any sales, and free transfers into this week (maximum 5${ftSource()==="feed"?", worked out from your FPL history: FPL does not publish the count":""}).`,
+    ${st("Bank",`Money left after this week's planned transfers. FT: free transfers (max 5).`,
       `<span${o.bank<0?' style="color:var(--red)"':""}>£${o.bank.toFixed(1)}</span>`,`<i>${o.ftTxt} FT</i>`)}
   </section>`;
 }
@@ -443,7 +443,7 @@ function plannerChipsHTML(){
     return `<button class="pz-cb${used?" used":""}${active?" active":""}" style="--tc:${u.c}"${call?` onclick="${call}"`:" disabled"} aria-pressed="${active}">
       ${chipTile(kind,28,active)}<span><b>${u.n}</b><i>${line}</i></span>
       ${active&&!locked?`<span class="pz-cx" role="button" tabindex="0" title="Cancel ${u.n}" onclick="event.stopPropagation();act('achip','none')">${lic("x",14)}</span>`:used||locked?"":lic("chevron-right",16)}</button>`;};
-  return `<div class="pz-chipbar"><span class="pz-cbl">Chips<button class="fci" aria-label="About" data-tip="One set of chips for GW1–19, played by the GW19 deadline. All four come back for GW20–38. A played chip is greyed out until then. Free Hit and Wildcard open the best team for the week in Compare.">i</button></span>
+  return `<div class="pz-chipbar"><span class="pz-cbl">Chips<button class="fci" aria-label="About" data-tip="Each chip once in GW1–19 and again in GW20–38.">i</button></span>
     <div class="pz-cbs">${["bboost","3xc","wildcard","freehit"].map(btn).join("")}</div>
     <a class="pz-link" href="${routeFor("chips")}" onclick="return go(event,'chips')" title="Chips page">${lic("arrow-right",16)}</a></div>`;
 }
@@ -1776,7 +1776,7 @@ function thisWeekHTML(){
   const rival=R?card("rival","swords","#B388FF","Rivals",diffs[0]?esc(diffs[0].p.web_name):"No differentials",
       block("Differentials","up",diffs.slice(0,3).map(x=>rv(x,"#5B4A80")))+block("Threats","dn",D.threats.slice(0,3).map(t=>rv(t,"#B388FF"))))
     :card("rival","swords","#B388FF","Rivals","—",`<span class="mu">League feed not loaded</span>`);
-  return `<section class="pz-sec"><div class="pz-sh"><h2>This Week</h2><button class="fci" aria-label="About" data-tip="Moves, captain, risks and the outlook for the gameweek in view. Each card opens the full detail. Fixture runs use the fixture chips' difficulty scale over the next three gameweeks; a blank week counts as 5 and a double counts one easier.">i</button></div>
+  return `<section class="pz-sec"><div class="pz-sh"><h2>This Week</h2><button class="fci" aria-label="About" data-tip="This gameweek at a glance. Open a card for the detail.">i</button></div>
     <div class="pz-ins">${move}${cap}${warn}${strength}${price}${outlook}${form}${rival}</div></section>`;
 }
 /* what each strip card opens */

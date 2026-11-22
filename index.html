@@ -1695,6 +1695,11 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pk-nsl{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
 .pk-ns{display:flex;flex-direction:column;gap:3px;padding:9px 0;border-bottom:1px solid #222;color:inherit;text-decoration:none}.pk-ns:last-child{border:0}.pk-ns:hover b{color:#fff;text-decoration:underline}
 .pk-ns b{font-size:13px;font-weight:600}.pk-ns span{font-size:12.5px;color:#9A9A9A;line-height:1.4}.pk-ns small{font-size:11px;color:#7A7A7A}
+/* Header (i) notes (22 Nov 2026): the strip is a .panel, which clips its
+   overflow, so a note cut off at the strip's edge; it now shows over the
+   Planner, and the last two tiles open theirs leftwards to stay on screen */
+.panel.pz-stats{overflow:visible;position:relative;z-index:20}
+.pz-st:nth-last-child(-n+2) .fci::after{left:auto;right:-8px}
 </style>
 </head>
 <body>
