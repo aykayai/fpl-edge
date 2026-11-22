@@ -8,6 +8,8 @@
    No browser and no packages (Andy chose this over Playwright, 13 Oct). */
 
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG } from "./config.mjs";
@@ -20,6 +22,12 @@ const SCRIPT = join(REPO_ROOT, "scripts", "snapshot-node.mjs");
 const OFFSETS_MIN = [60, 15];
 
 const state = { fired: new Set(), last: null, next: null, lastResult: null, running: false };
+/* S11 (audit, 22 Nov 2026): the last result is kept on disk, so a restart
+   no longer loses it, and a run that hangs is killed after 10 minutes, so
+   it cannot block every later snapshot */
+const RESULT = () => join(SNAP_DIR(), "last-result.json");
+try { state.lastResult = JSON.parse(readFileSync(RESULT(), "utf8")); } catch { /* none yet */ }
+const keep = r => { state.lastResult = r; writeFile(RESULT(), JSON.stringify(r)).catch(() => {}); };
 
 export function runSnapshot(why) {
   if (state.running) return;
@@ -36,14 +44,17 @@ export function runSnapshot(why) {
   let out = "";
   child.stdout.on("data", d => { out += d; });
   child.stderr.on("data", d => { out += d; });
+  const kill = setTimeout(() => { out += "\nkilled after 10 minutes"; child.kill("SIGKILL"); }, 10 * 60000);
   child.on("error", e => {
+    clearTimeout(kill);
     state.running = false;
-    state.lastResult = { ok: false, at: new Date().toISOString(), msg: String(e.message || e) };
+    keep({ ok: false, at: new Date().toISOString(), msg: String(e.message || e) });
   });
   child.on("close", code => {
+    clearTimeout(kill);
     state.running = false;
     const msg = out.trim().split("\n").pop() || "";
-    state.lastResult = { ok: code === 0, at: new Date().toISOString(), msg };
+    keep({ ok: code === 0, at: new Date().toISOString(), msg });
     log("snapshot", `${why}: ${code === 0 ? "ok" : "FAILED"} ${msg}`, Date.now() - t0);
   });
 }

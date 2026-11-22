@@ -30,16 +30,25 @@ export function upstreamBlocked() {
   return _frozen;
 }
 
-/* fetch with a hard timeout, returning the Response or throwing. */
+/* fetch with a hard timeout, returning the Response or throwing. S4 (audit,
+   22 Nov 2026): the limit now covers reading the body too; it used to stop
+   once the headers arrived, leaving a stalled download to Node's own 300 s. */
 export async function fetchT(url, opts = {}, ms = 20000) {
   if (upstreamBlocked()) throw new Error("frozen test state: no upstream fetches");
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), ms);
+  let r;
   try {
-    return await fetch(url, { ...opts, signal: ctl.signal });
-  } finally {
+    r = await fetch(url, { ...opts, signal: ctl.signal });
+  } catch (e) {
     clearTimeout(timer);
+    throw e;
   }
+  for (const m of ["text", "json", "arrayBuffer"]) {
+    const read = r[m].bind(r);
+    r[m] = async () => { try { return await read(); } finally { clearTimeout(timer); } };
+  }
+  return r;
 }
 
 /* Quote-aware CSV parser. Returns { header: [..], rows: [[..]], ragged }.

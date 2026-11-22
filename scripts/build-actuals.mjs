@@ -26,7 +26,8 @@ import { dirname, join } from "node:path";
 
 const API = "https://fantasy.premierleague.com/api";
 const ENTRY_ID = String(process.env.FPL_ENTRY_ID || "301830");
-const SEASON = process.env.FPL_SEASON || "2027";
+/* S7 (audit): the season's second year, from the date unless FPL_SEASON is set */
+const SEASON = process.env.FPL_SEASON || String((() => { const d = new Date(), y = d.getUTCFullYear(); return d.getUTCMonth() >= 7 ? y : y - 1; })() + 1);
 const OUT = process.env.FPL_OUT || "data/actuals.json";
 const RIVALS_OUT = process.env.FPL_RIVALS_OUT || "data/rivals.json";
 /* per-match DefCon for players with two matches in a gameweek (12 Nov 2026) */
@@ -99,8 +100,11 @@ async function getJson(path, { attempts = 4, quiet = false } = {}) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
+      /* S4 (audit, 22 Nov 2026): a hard 20 s limit per attempt, body
+         included, so a slow FPL cannot hold the feed job open */
       const res = await fetch(API + path, {
-        headers: { "User-Agent": UA, Accept: "application/json" }
+        headers: { "User-Agent": UA, Accept: "application/json" },
+        signal: AbortSignal.timeout(20000)
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
       return await res.json();
@@ -435,8 +439,26 @@ async function main() {
      dataset's per-match rows cannot (their DefCon column is blank). Kept
      only for players with more than one match in a gameweek. */
   const dcDoubles = { updated: new Date().toISOString(), gws: {} };
+  /* S6 (audit, 22 Nov 2026): every run re-fetched the live file of every
+     started week, about 44 FPL calls each 15 minutes. A week FPL has marked
+     data_checked no longer changes, so its file is kept beside the feeds
+     and read back; only the open weeks are fetched. */
+  const liveDir = process.env.FPL_OUT ? join(dirname(process.env.FPL_OUT), "live-cache") : null;
+  const checked = new Set(events.filter(e => e.data_checked).map(e => e.id));
   for (const gw of liveGws) {
-    const live = await getJson(`/event/${gw}/live/`, { attempts: 3, quiet: true });
+    let live = null;
+    /* the deadline date in the name keeps one season's GW5 from being read
+       back as the next season's (S7) */
+    const dl = String(events.find(e => e.id === gw)?.deadline_time || "").slice(0, 10);
+    const cacheFile = liveDir && dl ? join(liveDir, `gw${gw}-${dl}.json`) : null;
+    if (cacheFile && checked.has(gw)) live = await readJson(cacheFile);
+    if (!live?.elements) {
+      live = await getJson(`/event/${gw}/live/`, { attempts: 3, quiet: true });
+      if (live?.elements && cacheFile && checked.has(gw)) {
+        await mkdir(liveDir, { recursive: true }).catch(() => {});
+        await writeFile(cacheFile, JSON.stringify(live)).catch(() => {});
+      }
+    }
     if (!live?.elements) {
       console.warn(`  GW${gw}: live data unavailable, skipped`);
       continue;

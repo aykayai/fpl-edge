@@ -56,19 +56,34 @@ const TYPES = {
   ".md": "text/plain; charset=utf-8"
 };
 
+/* S9 (audit, 22 Nov 2026): security headers on every response. The policy
+   allows only this server, the LP solver from unpkg, Google Fonts and the
+   Premier League's images; the app's inline handlers need 'unsafe-inline'. */
+const SECURITY = {
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+};
 function send(res, method, status, headers, body) {
-  res.writeHead(status, headers);
+  res.writeHead(status, { ...SECURITY, ...headers });
   res.end(method === "HEAD" ? undefined : body);
 }
 
 function sendJson(res, method, status, obj, extra = {}) {
-  const body = JSON.stringify(obj);
-  send(res, method, status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-cache",
-    "Content-Length": Buffer.byteLength(body),
-    ...extra
-  }, body);
+  let body = Buffer.from(JSON.stringify(obj));
+  const head = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-cache", ...extra };
+  /* S10 (audit): the API's JSON went out uncompressed (the player list is
+     217 KB, the news 102 KB); compress it when the browser accepts gzip */
+  const req = res.req;
+  if (body.length > 1024 && /\bgzip\b/.test((req && req.headers["accept-encoding"]) || "")) {
+    body = gzipSync(body, { level: 6 });
+    head["Content-Encoding"] = "gzip";
+    head["Vary"] = "Accept-Encoding";
+  }
+  head["Content-Length"] = body.length;
+  send(res, method, status, head, body);
 }
 
 /* Decode and reject anything that could escape a base directory. */
@@ -311,7 +326,8 @@ async function handle(req, res) {
       return;
     }
     const ext = extname(name).toLowerCase();
-    if (!TYPES[ext]) { sendJson(res, method, 404, { error: "not found" }); return; }
+    /* S9 (audit): the repo's README files are not part of the app */
+    if (!TYPES[ext] || ext === ".md") { sendJson(res, method, 404, { error: "not found" }); return; }
     await serveFile(res, method, join(REPO_ROOT, name));
   } catch (e) {
     sendJson(res, method, 500, { error: "server error" });

@@ -7,7 +7,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CONFIG, UA } from "./config.mjs";
-import { log, fetchT, parseCSV } from "./util.mjs";
+import { log, fetchT, parseCSV, upstreamBlocked } from "./util.mjs";
 import { currentDir } from "./dataset.mjs";
 
 const DIR = () => join(CONFIG.STATE_DIR, "fpl");
@@ -91,7 +91,7 @@ export async function fetchLive() {
   try {
     const d = await getJson(`/event/${gw}/live/`);
     await mkdir(DIR(), { recursive: true });
-    await writeFile(join(DIR(), `live-gw${gw}.json`), JSON.stringify(d));
+    await writeFile(weekFile("live", gw), JSON.stringify(d));
     state.liveFetchedAt = new Date().toISOString();
     log("fpl.live", "ok gw=" + gw, Date.now() - t0);
   } catch (e) {
@@ -197,21 +197,30 @@ export async function fplNamesPayload() {
    player's points, minutes, match events and that week's Dream Team, and
    the week's fixtures with their scores. A finished week never changes, so
    a week not on disk is fetched from FPL once and kept. */
+/* S7 (audit, 22 Nov 2026): a kept week is named by season, so next
+   season's GW5 is never served this season's file. A frozen test fixture
+   still holds the old unseasoned names, which it may read but never writes. */
+function weekFile(kind, gw) { return join(DIR(), `${kind}-${CONFIG.SEASON}-gw${gw}.json`); }
+async function readWeek(kind, gw) {
+  try { return JSON.parse(await readFile(weekFile(kind, gw), "utf8")); } catch { /* not kept yet */ }
+  if (upstreamBlocked()) { try { return JSON.parse(await readFile(join(DIR(), `${kind}-gw${gw}.json`), "utf8")); } catch { /* none */ } }
+  return null;
+}
 const _week = new Map();
 export async function fplWeekPayload(gwIn) {
   const gw = Math.round(+gwIn), cur = state.currentGw || state.gw || 0;
   if (!(gw >= 1 && gw <= 38)) return { gw, players: {}, fixtures: [] };
   const hit = _week.get(gw);
   if (hit && (gw < cur || Date.now() - hit.at < 50000)) return hit.body;
-  const lp = join(DIR(), `live-gw${gw}.json`), fp = join(DIR(), `fixtures-gw${gw}.json`);
+  const lp = weekFile("live", gw), fp = weekFile("fixtures", gw);
   let live = null, fx = null;
-  try { live = JSON.parse(await readFile(lp, "utf8")); } catch { /* not kept yet */ }
+  live = await readWeek("live", gw);
   /* batch 5: the week in play is fetched again; a finished one is kept */
   if ((!live || (cur && gw >= cur)) && (!cur || gw <= cur)) {
     try { live = await getJson(`/event/${gw}/live/`); await mkdir(DIR(), { recursive: true }); await writeFile(lp, JSON.stringify(live)); }
     catch (e) { log("fpl.week", "live fail gw=" + gw + " " + e.message, 0); }
   }
-  try { fx = JSON.parse(await readFile(fp, "utf8")); } catch { /* not kept yet */ }
+  fx = await readWeek("fixtures", gw);
   if ((!fx || (cur && gw >= cur)) && (!cur || gw <= cur)) {
     try { fx = await getJson(`/fixtures/?event=${gw}`); await mkdir(DIR(), { recursive: true }); await writeFile(fp, JSON.stringify(fx)); }
     catch (e) { log("fpl.week", "fixtures fail gw=" + gw + " " + e.message, 0); }
