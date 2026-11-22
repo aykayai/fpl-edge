@@ -1618,6 +1618,11 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pv-vs{font-size:10.5px;color:var(--mute)}
 .pv-note{font-size:12px}.pv-note.dn{color:var(--red)}.pv-note.up{color:var(--mint)}
 .pv-kv{display:flex;justify-content:space-between;gap:10px;font-size:12.5px}.pv-kv span{color:var(--mute)}.pv-kv b{font-weight:600;text-align:right}
+/* Header (i) notes (22 Nov 2026): the strip is a .panel, which clips its
+   overflow, so a note cut off at the strip's edge; it now shows over the
+   Planner, and the last two tiles open theirs leftwards to stay on screen */
+.panel.pz-stats{overflow:visible;position:relative;z-index:20}
+.pz-st:nth-last-child(-n+2) .fci::after{left:auto;right:-8px}
 </style>
 </head>
 <body>
@@ -1631,13 +1636,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.12.0"></script>
-<script src="./app-squad.js?v=13.12.0"></script>
-<script src="./app-render.js?v=13.12.0"></script>
-<script src="./app-odds.js?v=13.12.0"></script>
-<script src="./app-tracker.js?v=13.12.0"></script>
-<script src="./app-main.js?v=13.12.0"></script>
-<script src="./app-scout.js?v=13.12.0"></script>
+<script src="./app-core.js?v=13.12.1"></script>
+<script src="./app-squad.js?v=13.12.1"></script>
+<script src="./app-render.js?v=13.12.1"></script>
+<script src="./app-odds.js?v=13.12.1"></script>
+<script src="./app-tracker.js?v=13.12.1"></script>
+<script src="./app-main.js?v=13.12.1"></script>
+<script src="./app-scout.js?v=13.12.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
