@@ -78,7 +78,7 @@ try {
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
-    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,
+    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,
     
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
@@ -546,6 +546,21 @@ try {
     check(tl.length > 0 && tl.every(r => r.chip || (r.out && r.inn && r.out.pos === r.inn.pos)), "Transfer Record: every move pairs players of one position; chips are blocks");
     g.act("pop", "trec");
     check(doc.querySelectorAll(".modal .xr-rows .xr-r").length === tl.length, "Transfer Record: one row a move or chip block");
+    g.act("pop", null);
+  }
+
+  /* ---------- This Week batch 4 (22 Nov 2026) ---------- */
+  {
+    g.act("pop", "rank");
+    check(!!doc.querySelector(".modal .rk-g") && doc.querySelectorAll(".modal .rk-t .ds-tile").length === 6, "Rank: the header pop-up opens with six tiles and the season chart");
+    const heads = [...doc.querySelectorAll(".pz-stats .pz-stc")].map(e => e.getAttribute("onclick") || "");
+    check(heads.length === 3 && heads.filter(x => x.includes("'rank'")).length === 2 && heads.some(x => x.includes("'rating'")), "Rank: Overall Rank and GW Rank open Rank, Team Rating opens its own", heads.join(" | "));
+    g.act("pop", "rating");
+    const rt = g.teamRating(), ring = doc.querySelector(".modal .rt-v");
+    check(!!rt && !!ring && +ring.textContent === rt.pct, "Team Rating: the pop-up's rating is the header's", ring ? ring.textContent + " vs " + (rt && rt.pct) : "none");
+    check(doc.querySelectorAll(".modal .rt-pos .rt-row:not(.rt-rh)").length === 5, "Team Rating: position by position covers the four lines and the bench");
+    g.act("pop", "str");
+    check(!!doc.querySelector(".modal .rt-hero"), "Squad Strength's pop-up now opens Team Rating");
     g.act("pop", null);
   }
 

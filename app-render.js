@@ -460,21 +460,22 @@ function plannerStatsHTML(o){
   const ln=(c,wk)=>`<i>${c}${c&&wk?" · ":""}${wk||""}</i>`;
   const tipB=t=>`<button class="fci" aria-label="About" data-tip="${esc(t)}">i</button>`;
   const fv=valueFromFeed();
-  const st=(label,tip,fig,line,series,tone,extra)=>`<div class="pz-st"><span class="pz-stl">${label}${tipB(tip)}</span><b>${fig}</b>${line||""}${series&&series.length>1?spark(series,tone||"#3DDC97"):""}${extra||""}</div>`;
+  /* 22 Nov 2026 (batch 4): Overall Rank and GW Rank open Rank, Team Rating its own */
+  const st=(label,tip,fig,line,series,tone,extra,pop)=>`<div class="pz-st${pop?" pz-stc":""}"${pop?` role="button" tabindex="0" onclick="act('pop','${pop}')" onkeydown="if(event.key==='Enter')act('pop','${pop}')"`:""}><span class="pz-stl">${label}${tipB(tip)}</span><b>${fig}</b>${line||""}${series&&series.length>1?spark(series,tone||"#3DDC97"):""}${extra||""}</div>`;
   const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
   return `<section class="panel pz-stats">
     <div class="pz-id"><h1>${esc(IDENTITY.team)}</h1><span>${esc(IDENTITY.manager)} · ${IDENTITY.id}</span></div>
     ${st("Overall Rank",`Your overall rank after GW${S.entryRankGw||"—"}.`,
       S.entryRank?S.entryRank.toLocaleString():"—",
       ln(S.entryRank&&prev&&last&&prev.orRank&&last.orRank?chg(prev.orRank-last.orRank,x=>Math.round(x).toLocaleString(),true):"",S.entryRank?"GW"+S.entryRankGw:"waiting"),
-      fRows.filter(r=>r.orRank).slice(-8).map(r=>-r.orRank))}
+      fRows.filter(r=>r.orRank).slice(-8).map(r=>-r.orRank),null,null,"rank")}
     ${st("GW Rank",`Your rank for GW${lastG?lastG.event:"—"} alone.`,
       lastG?lastG.gwRank.toLocaleString():"—",
       ln(prevG&&lastG?chg(prevG.gwRank-lastG.gwRank,x=>Math.round(x).toLocaleString(),true):"",lastG?"GW"+lastG.event:""),
-      fRows.filter(r=>r.gwRank).slice(-8).map(r=>-r.gwRank))}
+      fRows.filter(r=>r.gwRank).slice(-8).map(r=>-r.gwRank),null,null,"rank")}
     ${st("Team Rating",`Your predicted score against the best XI £${rating?rating.budget.toFixed(1):"—"} could buy this week.`,
       `<span style="color:${rateCol}">${rating?rating.pct:"—"}</span>`,rating?`<i>Best XI ${rating.best.toFixed(1)}</i>`:"",null,null,
-      rating?`<span class="pz-ring" style="--v:${rating.pct};--rc:${rateCol}"></span>`:"")}
+      rating?`<span class="pz-ring" style="--v:${rating.pct};--rc:${rateCol}"></span>`:"","rating")}
     ${st("Squad Value",`Your ${o.n} players at today's prices.${fv?` FPL value £${fv.value.toFixed(1)} with bank.`:""}`,
       `£${o.sv.toFixed(1)}`,o.raised>0?`<i>£${o.raised.toFixed(1)} from sales</i>`:ln(prev&&last&&prev.value!=null?chg(last.value-prev.value,x=>x.toFixed(1),true):"",""),
       fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value),"#8A8A8A")}
@@ -1697,11 +1698,13 @@ function thisWeekHTML(){
     D.warn.slice(0,2).map(({p,inXI})=>`<span class="pz-rk">${photoHTML(p,"pz-ph lg")}<span><b>${esc(p.web_name)}</b> ${p.avail<1?(p.avail>0?Math.round(p.avail*100)+"% to play":"out"):Math.round(p.xMins||0)+" mins"}${inXI?"":" · bench"}<br><span class="mu">${esc(String(p.news||"").split(/[-–(]/)[0].trim().slice(0,34))}</span></span></span>`).join("")
       ||`<span class="mu">Every player fit and expected to start</span>`,
     d.xiPts!=null?`Points at risk <b>${(d.riskPts||0).toFixed(1)}</b> of ${d.xiPts.toFixed(1)}`:"");
-  /* Squad Strength */
-  const st=d.strength||{},POS4=[1,2,3,4].filter(k=>st[k]);
-  const tg=POS4.reduce((a,k)=>a+st[k].got,0),tb=POS4.reduce((a,k)=>a+st[k].best,0);
-  const strength=card("str","shield","#3DDC97","Squad Strength",`${tg.toFixed(0)} <small>of best ${tb.toFixed(0)}</small>`,
-    POS4.map(k=>{const pc=Math.round(st[k].pct*100);return `<span class="pz-br"><span class="pz-bn">${POSL[k]}</span>${barI(pc,pc>=90?"var(--mint)":pc>=75?"var(--amber)":"var(--red)")}<b>${pc}%</b></span>`;}).join(""),
+  /* Team Rating (22 Nov 2026, batch 4): Squad Strength folded into the
+     header's Team Rating, the same method; this card opens its pop-up until
+     Your Week takes the slot */
+  const TRt=teamRating(),FHt=(chipTeam("freehit",g,true)||{}).t,vG=p=>p.gw[g]?.pts||0,myXIt=legalBestXI(squadPlayers(),vG);
+  const posPc=k=>{const a=myXIt.filter(p=>p.pos===k).reduce((s,p)=>s+vG(p),0),b2=FHt?FHt.xi.filter(p=>p.pos===k).reduce((s,p)=>s+vG(p),0):0;return b2>0?Math.round(Math.min(1,a/b2)*100):null;};
+  const strength=card("rating","gauge","#3DDC97","Team Rating",TRt?`${TRt.pct} <small>of the best XI</small>`:"—",
+    [1,2,3,4].map(k=>{const pc=posPc(k);return pc==null?"":`<span class="pz-br"><span class="pz-bn">${POSL[k]}</span>${barI(pc,pc>=90?"var(--mint)":pc>=75?"var(--amber)":"var(--red)")}<b>${pc}%</b></span>`;}).join(""),
     (d.conc||[])[0]?`${d.conc[0].n} from ${esc(d.conc[0].team)} · ${esc(d.conc[0].fix)}`:"");
   /* Price Watch: FPL's progress to the next change, rising over falling */
   const pw=(p,up)=>row(p,barI(Math.abs(L(p).pcp||0),up?"var(--mint)":"var(--red)"),`${Math.round(L(p).pcp)}%`,up?"up":"dn");
@@ -1763,7 +1766,8 @@ function popHTML(){
       <p class="note" style="margin-top:10px">FPL's own price predictor: progress towards tonight's change (100% = it changes), and where it projects the next three nights. Refreshed every 15 minutes.</p>`,{wide:true,ctl:tabs([["watch","Price Watch"],["moves","Price Moves"]],PT)});
   }
   /* This Week's new pop-ups: the Squad Dashboard's detail */
-  if(k==="str")return modalHTML("Squad Strength",dashHTML(["str"]),{});
+  if(k==="rank")return rankPopHTML();
+  if(k==="rating"||k==="str")return ratingPopHTML();
   if(k==="out"){const runOf=p=>{let t=0,n=0;for(let e=g;e<g+3&&e<=38;e++){const q=p.gw[e];if(!q||q.blank||!q.fixtures.length){t+=5;n++;continue;}t+=q.fixtures.reduce((a,f)=>a+fdrBand(posDiff(p,f)),0)/q.fixtures.length-(q.fixtures.length>1?1:0);n++;}return n?t/n:5;};
     const rs=squadPlayers().map(p=>({p,v:runOf(p)})).sort((a,b)=>a.v-b.v);
     return modalHTML("Fixture Outlook",`<table class="mkt"><thead><tr><th>Player</th><th>Next 3</th><th>Run</th></tr></thead><tbody>${rs.map(x=>`<tr><td>${esc(x.p.web_name)} <span class="mu">${esc(x.p.teamName)}</span></td><td>${fxNext(x.p,g,3,"sm")}</td><td><b>${x.v.toFixed(1)}</b></td></tr>`).join("")}</tbody></table>`+dashHTML(["aout","dout"]),{wide:true});}
@@ -2057,6 +2061,117 @@ function transferRecordHTML(){
     lesson("sparkles","z","Against the app",null,(S.predLive&&Object.values(S.predLive.gw||{}).some(x=>x.advice))?"the app's saved picks are graded once those weeks finish":"the app's pick is saved before each deadline from now on","–")].join("");
   return modalHTML("Transfer Record",`<div class="ds-tiles-wrap">${tiles}</div><div class="xr-g">${list}<div class="xr-rc"><section class="panel xr-col">${dsHead("activity","Points from transfers, season",`<span class="ds-sub">${win==="held"?"while held, net of hits":"over the window"}</span>`)}${chart}</section><section class="panel xr-col">${dsHead("info","Lessons")}${ls}</section></div></div>`,
     {wide:true,cls:"tw xr",icon:lic("arrow-right-left",18),ctl:`<span class="tw-sp"></span><span class="tw-ft">GW1–${S.model.next.id-1} · finished weeks</span>${sw}`});
+}
+/* ============================================================
+   THIS WEEK BATCH 4 (22 Nov 2026, Andy approved the mocks): the header's
+   Rank pop-up (Overall Rank and GW Rank tiles) and Team Rating pop-up
+   (Team Rating tile), which takes over Squad Strength.
+   ============================================================ */
+const rkK=v=>v==null?"—":v>=1e6?(v/1e6).toFixed(v>=1e7?1:2).replace(/\.?0+$/,"")+"M":v>=1000?Math.round(v/1000)+"k":String(v);
+function rankRows(){const T=S.tracker;return T&&T.gw?T.gw.filter(r=>r.orRank!=null&&r.event<S.model.next.id).sort((a,b)=>a.event-b.event):[];}
+/* the points needed for each band, from the rank-bands job */
+function rankMilestones(){
+  const B=S.rankBands,rows=rankRows(),me=rows.length?rows[rows.length-1]:null;if(!B||!B.bands||!me)return null;
+  const total=(B.me&&B.me.total)||me.totalPoints,rank=(B.me&&B.me.rank)||me.orRank;
+  const bands=B.bands.map(b=>({rank:b.rank,need:b.total,d:b.total-total+(b.rank<rank?1:0)}));
+  /* ranks a point buys at your rank: the slope between the bands either side */
+  const lo=B.bands.filter(b=>b.rank<=rank).slice(-1)[0],hi=B.bands.find(b=>b.rank>rank);
+  const perPt=lo&&hi&&lo.total!==hi.total?Math.round((hi.rank-lo.rank)/(lo.total-hi.total)):null;
+  return{bands,total,rank,perPt,gw:B.gw};
+}
+function rankPopHTML(){
+  const rows=rankRows();if(!rows.length)return modalHTML("Rank",`<p class="note">No finished gameweeks yet.</p>`,{wide:true,cls:"tw rk",icon:lic("trending-up",18)});
+  const last=rows[rows.length-1],tp=S.tracker.totalPlayers||null,evs=S.events||[],avg=e=>(evs.find(x=>x.id===e)||{}).avg||null;
+  const seasonAvg=rows.reduce((a,r)=>a+(avg(r.event)||0),0),bestGw=rows.filter(r=>r.gwRank).reduce((a,r)=>!a||r.gwRank<a.gwRank?r:a,null);
+  const greens=rows.filter((r,i)=>i&&r.orRank<rows[i-1].orRank).length,M=rankMilestones();
+  const next=M?M.bands.filter(b=>b.rank<M.rank).sort((a,b)=>b.rank-a.rank)[0]:null;
+  /* career, from the season history the League page already holds */
+  const H=typeof TRACKER_HISTORY!=="undefined"?TRACKER_HISTORY.seasons||{}:{},fin=Object.keys(H).sort().map(k=>{const o=H[k].orRank||[];return o.length?o[o.length-1]:null;}).filter(Boolean);
+  const bestFin=fin.length?Math.min(...fin):null,last3=fin.slice(-3),avg3=last3.length?Math.round(last3.reduce((a,b)=>a+b,0)/last3.length):null;
+  const tiles=`<div class="ds-tiles rk-t">${dsTile("Overall rank",last.orRank.toLocaleString(),tp?`top ${(last.orRank/tp*100).toFixed(1)}% of ${rkK(tp)}`:`after GW${last.event}`,"up")}
+    ${dsTile("Points",last.totalPoints,seasonAvg?`${last.totalPoints-seasonAvg>=0?"+":"−"}${Math.abs(last.totalPoints-seasonAvg)} on the average`:"",last.totalPoints>=seasonAvg?"up":null)}
+    ${dsTile("Best GW rank",bestGw?rkK(bestGw.gwRank):"—",bestGw?`GW${bestGw.event} · ${bestGw.points} pts`:"")}
+    ${dsTile("Green arrows",`${greens} of ${Math.max(0,rows.length-1)}`,rows.filter((r,i)=>i&&r.orRank>rows[i-1].orRank).map(r=>"GW"+r.event).slice(-3).join(", ")?"red "+rows.filter((r,i)=>i&&r.orRank>rows[i-1].orRank).map(r=>"GW"+r.event).slice(-3).join(", "):"")}
+    ${dsTile("Next milestone",next?"Top "+rkK(next.rank):"—",next?`${next.d} point${next.d===1?"":"s"} away`:"waiting for rank bands")}
+    <button class="ds-tile rk-car" onclick="act('tab','tracker')"><em>Career ${lic("arrow-right",11)}</em><b>${bestFin?rkK(bestFin):"—"}</b><i>best finish${avg3?` · last 3 avg ${rkK(avg3)}`:""}</i></button></div>`;
+  /* rank over the season: overall rank line, GW rank bars (log scale) */
+  const mode=S.rkMode==="pts"?"pts":"rank";let chart;
+  if(mode==="rank"){const vals=rows.flatMap(r=>[r.orRank,r.gwRank].filter(Boolean)),lg=v=>Math.log10(v),lo=lg(Math.max(1,Math.min(...vals)*0.8)),hi=lg(Math.max(...vals)*1.25),Wd=640,Hh=420,pl=46,pr=10,pt=14,pb=24,X=i=>pl+(rows.length<2?0.5:i/(rows.length-1))*(Wd-pl-pr),Y=v=>pt+(Hh-pt-pb)*((lg(v)-lo)/((hi-lo)||1));
+    const ticks=[1e3,2.5e3,5e3,1e4,2.5e4,5e4,1e5,2.5e5,5e5,1e6,2.5e6,5e6,1e7].filter(v=>lg(v)>=lo&&lg(v)<=hi);
+    let g=ticks.map(v=>`<line class="cgrid" x1="${pl}" x2="${Wd-pr}" y1="${Y(v)}" y2="${Y(v)}"/><text class="cax" x="${pl-6}" y="${Y(v)+4}" text-anchor="end">${rkK(v)}</text>`).join("");
+    rows.forEach((r,i)=>{if(r.gwRank)g+=`<rect x="${X(i)-7}" y="${Y(r.gwRank)}" width="14" height="${Math.max(2,Y(Math.pow(10,hi))-Y(r.gwRank))}" rx="3" fill="#2A2A3A"><title>GW${r.event} rank ${r.gwRank.toLocaleString()}</title></rect>`;});
+    g+=`<polyline points="${rows.map((r,i)=>`${X(i)},${Y(r.orRank)}`).join(" ")}" fill="none" stroke="#3DDC97" stroke-width="2.5" stroke-linejoin="round"/>`+rows.map((r,i)=>`<circle cx="${X(i)}" cy="${Y(r.orRank)}" r="3.5" fill="#3DDC97"><title>GW${r.event}: ${r.orRank.toLocaleString()}</title></circle><text class="cax" x="${X(i)}" y="${Hh-6}" text-anchor="middle">GW${r.event}</text>`).join("");
+    g+=`<text x="${X(rows.length-1)-6}" y="${Y(last.orRank)-10}" text-anchor="end" class="rk-lb">${rkK(last.orRank)}</text>`;
+    chart=`<div class="ds-lg"><span><i style="background:#3DDC97"></i>Overall rank</span><span><i style="background:#2A2A3A"></i>GW rank</span><span class="ds-lgr">higher is better</span></div><svg class="chart" viewBox="0 0 ${Wd} ${Hh}" role="img" aria-label="Rank over the season">${g}</svg>`;}
+  else chart=colChart(rows.map(r=>"GW"+r.event),[{name:"You",values:rows.map(r=>r.points),color:"#3DDC97"},{name:"FPL average",values:rows.map(r=>avg(r.event)),color:"#4A4A4A"}],[],{h:420,w:640,label:"Points by gameweek",legend:true});
+  const ms=M?`<section class="panel tw-col">${dsHead("flag-triangle-right","Milestones",`<span class="ds-sub">points needed after GW${M.gw}${M.perPt?` · <b class="rk-ppr">1 pt ≈ ${rkK(M.perPt)} ranks here</b>`:""}</span>`)}
+      <div class="rk-ms">${M.bands.map(b=>{const done=b.rank>=M.rank,isNext=next&&b.rank===next.rank;return `<div class="rk-s${done?" done":""}${isNext?" next":""}"><b>Top ${rkK(b.rank)}</b><span class="ds-fig">${b.need}</span><i class="${b.d<=0?"up":"dn"}">${b.d<=0?"✓ "+Math.abs(b.d)+" clear":b.d+" to go"}</i></div>`;}).join("")}</div>
+      <div class="rk-you"><span class="rk-dot"></span><span><b>${rkK(M.rank)}</b> now${next?` · <b class="up">${next.d} point${next.d===1?"":"s"}</b> to top ${rkK(next.rank)}`:""}</span></div></section>`
+    :`<section class="panel tw-col">${dsHead("flag-triangle-right","Milestones")}<p class="note">The points needed for each rank band arrive after the next server run.</p></section>`;
+  /* the season against the benchmarks, over the weeks the field sample covers */
+  const F=S.field&&S.field.gws?S.field.gws:null,fk=F?Object.keys(F).map(Number).sort((a,b)=>a-b):[];
+  let bench=`<section class="panel tw-col">${dsHead("users","Season against the benchmarks")}<p class="note">The field sample fills this in from GW${S.model.next.id} on.</p></section>`;
+  if(fk.length){const lastF=F[fk[fk.length-1]],mine=fk.map(e=>rows.find(r=>r.event===e)).filter(Boolean),n=mine.length||1;
+    const av=(k,s)=>{const v=fk.map(e=>F[e][s]&&F[e][s].avg?F[e][s].avg[k]:null).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
+    const meAv=k=>mine.reduce((a,r)=>a+(+r[k]||0),0)/n,f1=v=>v==null?"—":v.toFixed(1),ovTot=rows.reduce((a,r)=>a+(avg(r.event)||0),0);
+    const R=[["Season total",String(last.totalPoints),lastF.top10k?String(Math.round(lastF.top10k.avg.total)):"—",lastF.near?String(Math.round(lastF.near.avg.total)):"—",ovTot?String(ovTot):"—"],
+      ["Points per GW",f1(meAv("points")),f1(av("pts","top10k")),f1(av("pts","near")),f1(fk.reduce((a,e)=>a+(avg(e)||0),0)/fk.length)],
+      ["Bench per GW",f1(meAv("bench")),f1(av("bench","top10k")),f1(av("bench","near")),"—"],
+      ["Hits per GW",f1(mine.reduce((a,r)=>a+(r.transferCost||0)/4,0)/n),f1(av("hits","top10k")),f1(av("hits","near")),"—"],
+      ["Team value",`£${(+last.value||0).toFixed(1)}`,lastF.top10k?`£${lastF.top10k.avg.value.toFixed(1)}`:"—",lastF.near?`£${lastF.near.avg.value.toFixed(1)}`:"—","—"]];
+    const gap=lastF.top10k?Math.round(lastF.top10k.avg.total-last.totalPoints):null;
+    bench=`<section class="panel tw-col">${dsHead("users","Season against the benchmarks",gap!=null?`<span class="ds-sub">gap to top 10k <b class="ds-fig ${gap>0?"dn":"up"}">${gap>0?"−"+gap:"+"+(-gap)}</b></span>`:"")}
+      <div class="rk-bm rk-bmh ds-th"><span></span><span class="me">You</span><span>Top 10k</span><span>Near you</span><span>Overall</span></div>
+      ${R.map(([l,...v])=>`<div class="rk-bm"><span class="ds-sub rk-bml">${l}</span>${v.map((x,i)=>`<span class="${i===0?"me":""}">${dsFig(x,i===0?"up":"")}</span>`).join("")}</div>`).join("")}</section>`;}
+  const hist=`<section class="panel tw-col">${dsHead("calendar","Gameweek by gameweek")}<div class="rk-h rk-hh ds-th"><span>GW</span><span>Pts</span><span>Avg</span><span>GW rank</span><span>Overall</span><span>Move</span></div>
+    <div class="rk-hs">${rows.slice().reverse().map((r,i,a)=>{const prev=a[i+1],mv=prev?prev.orRank-r.orRank:null;return `<div class="rk-h"><span class="ds-sub">GW${r.event}</span>${dsFig(r.points)}<span class="ds-sub">${avg(r.event)||"—"}</span>${dsFig(rkK(r.gwRank))}${dsFig(rkK(r.orRank))}${mv==null?`<span class="ds-sub">—</span>`:`<b class="ds-fig ${mv>=0?"up":"dn"}">${mv>=0?"▲":"▼"} ${rkK(Math.abs(mv))}</b>`}</div>`;}).join("")}</div></section>`;
+  const tog=`<span class="hz">${[["rank","Overall"],["pts","Points"]].map(([k,n])=>`<button class="${mode===k?"on":""}" onclick="act('rkmode','${k}')">${n}</button>`).join("")}</span>`;
+  return modalHTML("Rank",`${tiles}<div class="rk-g"><section class="panel tw-col">${dsHead("trending-up","Rank over the season",tog)}${chart}</section><div class="rk-rc">${ms}${bench}${hist}</div></div>`,
+    {wide:true,cls:"tw rk",icon:lic("trending-up",18),ctl:`<span class="tw-sp"></span><span class="tw-ft">after GW${last.event}</span>`});
+}
+/* Team Rating: your team score against the best your budget could field:
+   the Free Hit XI this week, the best Wildcard squad over 3 or 5 weeks. It
+   takes over Squad Strength (position by position) and adds the team's
+   shape against the top 10k. */
+function ratingPopHTML(){
+  const g=VG(),h=[1,3,5].includes(+S.trH)?+S.trH:1,budget=squadBudget(),mineIds=effectiveSquadIds(g).ids;
+  const r=h===1?(chipTeam("freehit",g,true)||{}).t:optimalSquad("wildcard",g,budget,null,{weeks:h});
+  const hz=`<span class="hz ds-hz">${[1,3,5].map(x=>`<button class="${x===h?"on":""}" onclick="act('trh',${x})">${x} GW</button>`).join("")}</span>`;
+  if(!r)return modalHTML("Team Rating",`<p class="note">No best team for this budget yet.</p>`,{wide:true,cls:"tw rt",icon:lic("gauge",18),ctl:`<span class="tw-sp"></span>${hz}`});
+  const bestIds=r.xi.concat(r.bench).map(p=>p.id),span=ids=>{let s=0;for(let e=g;e<g+h&&e<=38;e++)s+=teamScore(ids,e,null);return s;};
+  const mine=span(mineIds),best=Math.max(0.1,span(bestIds)),pct=Math.round(clamp(mine/best,0,1)*100);
+  const P=id=>S.model.players.find(p=>p.id===id),v=p=>{let s=0;for(let e=g;e<g+h&&e<=38;e++)s+=p.gw[e]?.pts||0;return s;};
+  const myXI=legalBestXI(mineIds.map(P).filter(Boolean),v),myBench=mineIds.map(P).filter(p=>p&&!myXI.includes(p)),bXI=r.xi,bBench=r.bench;
+  const same=myXI.filter(p=>bXI.some(q=>q.id===p.id)).length,benchPts=myBench.reduce((a,p)=>a+v(p),0);
+  const outs=mineIds.filter(i=>!bestIds.includes(i)).length;
+  const ring=`<svg viewBox="0 0 130 130" width="110" height="110"><circle cx="65" cy="65" r="52" fill="none" stroke="#262626" stroke-width="12"/><circle cx="65" cy="65" r="52" fill="none" stroke="${pct>=85?"#3DDC97":pct>=70?"#FFB020":"#FF5A6E"}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(2*Math.PI*52*pct/100).toFixed(1)} ${(2*Math.PI*52).toFixed(1)}" transform="rotate(-90 65 65)"/><text x="65" y="76" text-anchor="middle" class="rt-v">${pct}</text></svg>`;
+  const hero=`<section class="panel rt-hero">${ring}<div class="rt-h"><span class="ds-sub">Team Rating · ${wkSpan(g,h)}</span><b>${mine.toFixed(1)} <span>of ${best.toFixed(1)} possible</span></b>
+    <div class="ds-tiles rt-k">${dsTile("Gap",twSg(mine-best),"points","dn")}${dsTile("Same players",`${same} of 11`,"in both XIs")}${dsTile("Moves to close",outs,outs>freeLeft(g)?`−${(outs-freeLeft(g))*HIT} hit after ${freeLeft(g)} FT`:"within your free transfers")}${dsTile("Bench",benchPts.toFixed(1),"points on the bench")}</div></div>
+    <div class="rt-a"><button class="pri" onclick="act('cmpopen','${h===1?"fh":"wc"}')">${lic("arrow-right-left",14)} Open in Compare</button></div></section>`;
+  /* the rating for each week ahead (the quick builder past this week) */
+  const ahead=[];for(let e=g;e<g+5&&e<=38;e++){const t=e===g?(chipTeam("freehit",e,true)||{}).t:(chipTeam("freehit",e,false)||{}).t;if(!t)continue;const b=teamScore(t.xi.concat(t.bench).map(p=>p.id),e,null);ahead.push([e,b>0?Math.round(clamp(teamScore(effectiveSquadIds(e).ids,e,null)/b,0,1)*100):null]);}
+  const trend=colChart(ahead.map(x=>"GW"+x[0]),[{name:"Rating",values:ahead.map(x=>x[1]),color:"#3DDC97"}],[],{h:150,w:420,min:0,label:"Rating by week"});
+  /* team shape: how far your XI follows the top 10k, by line */
+  const F=twField(),eo=F&&F.top10k?F.top10k.own:null;let shape;
+  if(eo){const line=k=>{const mineK=myXI.filter(p=>p.pos===k);if(!mineK.length)return null;const got=mineK.reduce((a,p)=>a+(eo[p.id]||0),0);
+      const topK=S.model.players.filter(p=>p.pos===k).map(p=>eo[p.id]||0).sort((a,b)=>b-a).slice(0,mineK.length).reduce((a,b)=>a+b,0);return topK>0?Math.round(got/topK*100):null;};
+    const L=[[1,"GK"],[2,"DEF"],[3,"MID"],[4,"FWD"]].map(([k,n])=>[n,line(k)]).filter(x=>x[1]!=null);
+    const all=Math.round(myXI.reduce((a,p)=>a+(eo[p.id]||0),0)/Math.max(1,S.model.players.map(p=>eo[p.id]||0).sort((a,b)=>b-a).slice(0,11).reduce((a,b)=>a+b,0))*100);
+    const lab=all>=80?"template":all>=60?"moderately differential":"differential",T=F.top10k.avg,last=rankRows().slice(-1)[0]||{};
+    shape=`<section class="panel tw-col">${dsHead("shield","Team shape",`<span class="ds-sub">against the top 10k</span>`)}
+      <div class="rt-sh"><div class="rt-big"><b>${all}%</b><span>Template rating</span><em>${lab}</em></div><div class="rt-l">${L.map(([n,x])=>`<div class="rt-r"><span class="ds-sub">${n}</span><span class="tw-bt"><i style="width:${clamp(x,0,100)}%"></i></span>${dsFig(x+"%")}</div>`).join("")}</div></div>
+      <div class="ds-tiles rt-2">${dsTile("Squad value",`£${(+last.value||0).toFixed(1)}`,`top 10k avg £${T.value.toFixed(1)}`,(+last.value||0)>=T.value?"up":"dn")}${dsTile("In the bank",`£${planBank().toFixed(1)}`,`top 10k avg £${T.bank.toFixed(1)}`)}</div></section>`;}
+  else shape=`<section class="panel tw-col">${dsHead("shield","Team shape")}<p class="note">The top-10k sample fills this in after the next deadline.</p></section>`;
+  const chip=(list,other,side)=>list.map(p=>{const only=!other.some(o=>o.id===p.id);return `<span class="rt-p${only?" "+side:""}">${dsFace(p)}<span class="ds-name">${esc(p.web_name)}</span>${dsFig(v(p).toFixed(1))}</span>`;}).join("");
+  const row=(label,mineL,bestL)=>{const a=mineL.reduce((s,p)=>s+v(p),0),b=bestL.reduce((s,p)=>s+v(p),0),pc=b>0?Math.min(100,Math.round(a/b*100)):100;
+    return `<div class="rt-row"><div class="rt-lb"><b>${label}</b><span class="tw-bt"><i style="width:${clamp(pc,0,100)}%;background:${pc>=90?"#3DDC97":pc>=75?"#FFB020":"#FF5A6E"}"></i></span><span class="ds-sub">${a.toFixed(1)} of ${b.toFixed(1)} · <b class="${pc>=90?"up":pc>=75?"am":"dn"}">${pc}%</b></span></div>
+      <div class="rt-ps">${chip(mineL,bestL,"out")}</div>${lic("arrow-right",14)}<div class="rt-ps">${chip(bestL,mineL,"in")}</div><b class="ds-fig ${b-a>0.05?"dn":"up"} rt-g">${b-a>0.05?"−"+(b-a).toFixed(1):"best"}</b></div>`;};
+  const pos=`<section class="panel tw-col rt-pos">${dsHead("users","Position by position",`<span class="rt-key"><span class="rt-p out"><span class="ds-name">only yours</span></span><span class="rt-p in"><span class="ds-name">in the best XI</span></span></span>`)}
+    <div class="rt-row rt-rh ds-th"><span>Position</span><span>Your XI</span><span></span><span>Best ${h===1?"XI":"squad"} for £${budget.toFixed(1)}</span><span>Gap</span></div>
+    ${[[1,"Goalkeeper"],[2,"Defenders"],[3,"Midfielders"],[4,"Forwards"]].map(([k,n])=>row(n,myXI.filter(p=>p.pos===k).sort((a,b)=>v(b)-v(a)),bXI.filter(p=>p.pos===k).sort((a,b)=>v(b)-v(a)))).join("")}
+    ${row("Bench",myBench,bBench)}</section>`;
+  return modalHTML("Team Rating",`<div class="rt-top">${hero}<section class="panel tw-col">${dsHead("activity","Rating by week ahead",`<span class="ds-sub">GW${g}–${g+ahead.length-1}</span>`)}${trend}</section>${shape}</div>${pos}`,
+    {wide:true,cls:"tw rt",icon:lic("gauge",18),ctl:`<span class="tw-sp"></span>${hz}`});
 }
 /* ---------- Compare v3 (21 Nov 2026, Andy approved the mock) ----------
    Two squads side by side, each on the Planner's own pitch (kits, transfer
