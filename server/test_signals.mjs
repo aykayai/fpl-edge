@@ -108,7 +108,8 @@ try {
   const showTab = t => { S.tab = "signals"; g.act("sgtab", t); };
   /* 12 Nov 2026: Value by Price Band and Minutes Watch moved to Players */
   /* 22 Nov 2026 (batch 3): five reports moved into the Performance pop-up */
-  const WANT = { squad: 8, teams: 6, players: 6 };
+  /* Bundle C (22 Nov 2026, Andy): Players / Clubs / My Season */
+  const WANT = { season: 6, clubs: 4, players: 6 };
   let allText = "";
   for (const [t, n] of Object.entries(WANT)) {
     showTab(t);
@@ -131,7 +132,9 @@ try {
   stats.forEach(r => { const id = r.id, gw = +r.gw; if (!latest[id] || gw > +latest[id].gw) latest[id] = r; });
   const POSNAME = { GKP: ["Goalkeeper", "GKP", "1"], DEF: ["Defender", "DEF", "2"], MID: ["Midfielder", "MID", "3"], FWD: ["Forward", "FWD", "4"] };
   showTab("players");
-  const scorersCard = cardBy2("scorers");
+  /* Leaders by Position, Scored: the old Top Scorers card */
+  g.act("sglead", "scored");
+  const scorersCard = cardBy2("pred");
   const cols = scorersCard ? [...scorersCard.querySelectorAll(".sgcol")] : [];
   check(cols.length === 4, "scorer card has four position columns", `found ${cols.length}`);
   for (const col of cols) {
@@ -145,6 +148,7 @@ try {
     const bad = pageRows.filter((r, i) => { const tied = ours.filter(o => o.pts === r.pts).map(o => o.name); return !tied.includes(r.name); });
     check(bad.length === 0, `${pos} top-5 names are the right players`, bad.map(b => b.name + " " + b.pts).join(", "));
   }
+  g.act("sglead", "pred");
 
   /* ---------- 1b. independent: goals conceded by team ---------- */
   const teams = csv(await get(`/data/insights/${season}/teams.csv`));
@@ -174,13 +178,15 @@ try {
   /* ---------- 1c. independent: the game's weekly average (25 Oct 2026) ---------- */
   const sums = csv(await get(`/data/insights/${season}/gameweek_summaries.csv`))
     .filter(r => String(r.finished).toLowerCase() === "true").sort((a, b) => +a.id - +b.id);
-  showTab("squad");
-  const latest2 = doc.querySelector("#r-vsgame .rlatest");
+  showTab("season");
+  /* the chart's own Average points (its hover data), the note under it is gone */
+  const avgTips = [...doc.querySelectorAll("#r-vsgame circle[data-tip]")].map(c => c.getAttribute("data-tip")).filter(t => /\|Average /.test(t));
+  const latest2 = avgTips[avgTips.length - 1] || "";
   const tracked = (S.tracker && S.tracker.gw || []).map(r => r.event);
   const lastFin = sums.filter(r => tracked.includes(Math.round(+r.id))).pop();
-  const m = latest2 ? /GW(\d+): you \d+ · average (\d+)/.exec(latest2.textContent) : null;
+  const m = /GW(\d+)\|Average (\d+)/.exec(latest2);
   check(!!lastFin && !!m && +m[1] === Math.round(+lastFin.id) && +m[2] === Math.round(+lastFin.average_entry_score),
-    "score vs game: latest finished week's average matches gameweek_summaries", `page ${latest2 ? latest2.textContent : "none"} vs raw GW${lastFin && lastFin.id} ${lastFin && lastFin.average_entry_score}`);
+    "score vs game: latest finished week's average matches gameweek_summaries", `page ${latest2 || "none"} vs raw GW${lastFin && lastFin.id} ${lastFin && lastFin.average_entry_score}`);
 
   /* ---------- 1d. Heating Up / Cooling Off by position (12 Nov 2026) ---------- */
   const G0 = S.model.next.id;
@@ -252,35 +258,43 @@ try {
 
   /* ---------- 2. behaviour ---------- */
   const squadNames = new Set(S.model.players.filter(p => (S.squad || []).includes(p.id)).map(p => p.web_name));
-  showTab("squad");
-  /* batch 3 (22 Nov 2026): My Squad In Form moved into the Performance pop-up */
-  check(!doc.querySelector("#r-sqform"), `My Squad "In Form" is gone (Performance pop-up has it)`);
-  const availNames = [...doc.querySelectorAll("#r-sqflag .sgwho b")].map(b => b.textContent.trim());
-  check(availNames.every(n => squadNames.has(n)), `My Squad "Availability" names only squad players`, availNames.join(", "));
+  showTab("season");
+  /* batch 3 and Bundle C: In Form, Availability and Captaincy left My Season
+     (the Performance, Team News and Captain pop-ups have them) */
+  check(["sqform", "sqflag", "captaincy"].every(k => !doc.querySelector("#r-" + k)), "My Season has no In Form, Availability or Captaincy");
+  /* C2: the Chips card counts what is left over both halves */
+  { const me = doc.querySelector("#r-rchips tr.me td:last-child");
+    check(!!me && +me.textContent > 0, `Chips: "Left" counts the second-half chips too (${me ? me.textContent : "none"})`); }
   showTab("transfers");
-  check(S.sgTab === "squad" && ![...doc.querySelectorAll(".sgtabs button")].some(b => /Transfers/.test(b.textContent)), "Signals has no Transfers tab; asking for it lands on My Squad", S.sgTab);
+  check(S.sgTab === "players" && ![...doc.querySelectorAll(".sgtabs button")].some(b => /Transfers/.test(b.textContent)), "Signals has no Transfers tab; asking for it lands on Players", S.sgTab);
+  showTab("squad");
+  check(S.sgTab === "season", "an old My Squad link lands on My Season", S.sgTab);
 
   showTab("players");
-  g.act("sigpos", 3);
-  check(!cardBy2("scorers").querySelector(".sgcol") && cardBy2("scorers").querySelectorAll(".hbr").length > 0, "position filter MID leaves one ranking");
   { const fn = [...cardBy2("form").querySelectorAll(".hbl b")].map(x => x.textContent.trim());
     check(fn.length > 0 && fn.every(n => !squadNames.has(n)), `Players "In Form" names only players you do not own`, fn.filter(n => squadNames.has(n)).join(", ")); }
-  check(["threat", "xg", "dream", "minwatch"].every(k => !doc.querySelector("#r-" + k)), "Underlying Threat, Goals Against xG, Dream Team Appearances and Minutes Watch are gone (Performance has them)");
-  const posTags = [...cardBy2("form").querySelectorAll(".sgpos")].map(s => s.textContent);
-  check(posTags.length > 0 && posTags.every(t => t === "MID"), "position filter MID applies to the In Form leaderboard", posTags.join(","));
-  g.act("sigpos", 0);
-  g.act("sigh", 5);
-  const tip = cardBy2("pred").querySelector(".fci").getAttribute("data-tip");
-  check(/next 5/.test(tip), "horizon Next 5 relabels Top Predicted", tip);
-  g.act("sigh", 3);
-  g.act("sigfold", "scorers");
-  check(cardBy2("scorers").classList.contains("shut") && !cardBy2("scorers").querySelector(".rb"), "fold hides a report's body");
+  check(["threat", "xg", "dream", "minwatch", "takers", "popular"].every(k => !doc.querySelector("#r-" + k)), "Players has no Underlying Threat, Goals Against xG, Dream Team, Minutes Watch, Takers table or old Most Captained table");
+  check(doc.querySelectorAll("#r-pred .hbr .ds-face").length >= 20, "Leaders rows carry faces");
+  /* the 1 / 3 / 5 / ROS switch: Leaders show each player's points summed over the window */
+  g.act("sigh", "5");
+  { const G = S.model.next.id, row = cardBy2("pred").querySelector(".sgcol .hbr"), name = row.querySelector(".hbl b").textContent.trim();
+    const p = S.model.players.find(x => x.web_name === name && x.pos === 1), want = p ? [0, 1, 2, 3, 4].reduce((s, k) => s + ((p.gw[G + k] || {}).pts || 0), 0) : null;
+    check(p && Math.abs(want - +row.querySelector(".hbv").textContent) < 0.051, "5 GW: the top keeper's figure is his points over the next five", `${name} page ${row.querySelector(".hbv").textContent} vs ${want && want.toFixed(2)}`); }
+  g.act("sigh", "ROS");
+  check(S.sigH === "ros" && /ROS/.test(doc.querySelector(".sgpage .hz button.on")?.textContent || ""), "ROS is a window", String(S.sigH));
+  g.act("sigh", "3");
+  g.act("sigfold", "pred");
+  check(cardBy2("pred").classList.contains("shut") && !cardBy2("pred").querySelector(".rb"), "fold hides a report's body");
   const saved = JSON.parse(w.localStorage.getItem("fpl3:sig") || "{}");
-  check(Array.isArray(saved.fold) && saved.fold.includes("scorers") && saved.h === 3 && saved.pos === 0 && saved.tab === "players", "tab, position, horizon and folds are remembered", JSON.stringify(saved));
-  g.act("sigfold", "scorers");
-  check(!cardBy2("scorers").classList.contains("shut"), "unfold brings it back");
-  showTab("teams");
-  check(/#\/signals\/teams$/.test(w.location.hash), "each tab has its own link", w.location.hash);
+  check(Array.isArray(saved.fold) && saved.fold.includes("pred") && saved.h === 3 && saved.tab === "players", "tab, horizon and folds are remembered", JSON.stringify(saved));
+  g.act("sigfold", "pred");
+  check(!cardBy2("pred").classList.contains("shut"), "unfold brings it back");
+  showTab("clubs");
+  check(/#\/signals\/clubs$/.test(w.location.hash), "each tab has its own link", w.location.hash);
+  /* M6: Fixture Runs rank on the Teams page's Overall score */
+  { const runs = [...doc.querySelectorAll("#r-runs .hbr .hbv")].slice(0, 5).map(x => +x.textContent);
+    check(runs.length === 5 && runs.every((v, i) => !i || v <= runs[i - 1] + 1e-9), "Fixture Runs: easiest ranked high to low on the Overall score", runs.join(",")); }
+  check(doc.querySelectorAll("#r-ftab tbody tr").length === 20, "Form Table lists all 20 clubs");
 } catch (e) {
   fail++; console.log("FAIL  run aborted -- " + (e && e.stack || e));
 } finally {

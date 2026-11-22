@@ -298,7 +298,7 @@ function trkFinishesHTML(){
   const pending=doneRows.length
     ?{pts:doneRows.reduce((s,r)=>s+(r.points||0),0),n:doneRows.length,
       gw:doneRows[doneRows.length-1].event,rank:doneRows[doneRows.length-1].orRank}:null;
-  const pendingRow=`<tr class="trkpending"><td>2026/27${pending?` <span class="note" style="font-style:normal">to GW${pending.gw}</span>`:""}</td>
+  const pendingRow=`<tr class="trkpending"><td>${seasonShort(SEASON.replace("-","/"))}${pending?` <span class="note" style="font-style:normal">to GW${pending.gw}</span>`:""}</td>
       <td>${pending?pending.pts:"—"}</td>
       <td>${pending?`${(pending.pts/pending.n).toFixed(1)} <span class="note" style="font-style:normal">(${pending.n} GW${pending.n===1?"":"s"})</span>`:"—"}</td>
       <td>${pending&&pending.rank!=null?pending.rank.toLocaleString("en-GB"):"—"}</td>

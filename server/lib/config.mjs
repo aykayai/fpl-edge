@@ -11,12 +11,15 @@ const int = (v, d) => {
   return Number.isFinite(n) ? n : d;
 };
 
+/* S7 (audit, 22 Nov 2026): the season comes from the date (it starts in
+   August), or SIGNALS_SEASON_YEAR for the season's first year */
+const SEASON_Y = int(env.SIGNALS_SEASON_YEAR, (() => { const d = new Date(), y = d.getUTCFullYear(); return d.getUTCMonth() >= 7 ? y : y - 1; })());
 export const CONFIG = {
   PORT: int(env.PORT, 8090),
   STATE_DIR: resolve(env.STATE_DIR || "./state"),
 
-  SEASON: "2026-2027",
-  LAST: "2025-2026",
+  SEASON: `${SEASON_Y}-${SEASON_Y + 1}`,
+  LAST: `${SEASON_Y - 1}-${SEASON_Y}`,
 
   ODDS_API_KEY: env.ODDS_API_KEY || "",
   FPL_LEAGUE_ID: env.FPL_LEAGUE_ID || "391690",

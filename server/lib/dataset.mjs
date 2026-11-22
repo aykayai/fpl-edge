@@ -146,7 +146,19 @@ async function pull(sha, committedAt) {
     files.push(`${CONFIG.SEASON}/By Gameweek/GW${gw}/playermatchstats.csv`);
     files.push(`${CONFIG.SEASON}/By Gameweek/GW${gw}/matches.csv`);
   }
-  const bytes = await pool(files.map(f => () => reuseOrDownload(sha, f, tmp)), 8);
+  /* S1 (audit, 22 Nov 2026): last season's per-gameweek match files. The app
+     asks for all 76 to give promoted clubs a starting profile and players with
+     under three matches a minutes fallback; they were never mirrored, so every
+     request 404'd and the server's model differed from the Pages backup. They
+     are optional (a missing one does not fail the pull) and, like the rest of
+     last season, downloaded once and reused. */
+  const optional = [];
+  for (let gw = 1; gw <= 38; gw++) {
+    optional.push(`${CONFIG.LAST}/By Gameweek/GW${gw}/playermatchstats.csv`);
+    optional.push(`${CONFIG.LAST}/By Gameweek/GW${gw}/matches.csv`);
+  }
+  const bytes = await pool(files.map(f => () => reuseOrDownload(sha, f, tmp))
+    .concat(optional.map(f => () => reuseOrDownload(sha, f, tmp).catch(() => 0))), 8);
 
   await validate(tmp);
 
@@ -194,6 +206,10 @@ export async function pollDataset() {
     await pull(sha, committedAt);
   } catch (e) {
     state.lastError = "pull rejected: " + e.message;
+    /* S2 (audit): the ETag was saved before the pull, so after a failed pull
+       the next poll got a 304 and nothing retried until upstream committed
+       again (6-10 hours). Forget it, so the next poll tries this commit again. */
+    state.etag = null;
     log("dataset.pull", "fail " + e.message, Date.now() - t0);
     /* leave the temp dir behind for inspection? no: tidy it */
     await rm(join(DS(), "tmp-" + sha.slice(0, 12)), { recursive: true, force: true }).catch(() => {});

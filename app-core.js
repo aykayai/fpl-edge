@@ -20,7 +20,10 @@
 const BACKUP=typeof location!=="undefined"&&(/\.github\.io$/.test(String(location.hostname||""))
   ||/[?&]backup=1\b/.test(String(location.search||"")));
 const REPO=BACKUP?"https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/main/data":"/data/insights";
-const SEASON="2026-2027", LAST="2025-2026";
+/* S7 (audit, 22 Nov 2026): one season, worked out from the date (a season
+   starts in August), instead of being hard-coded in eight places */
+const SEASON_Y=(()=>{const d=new Date(),y=d.getUTCFullYear();return d.getUTCMonth()>=7?y:y-1;})();
+const SEASON=SEASON_Y+"-"+(SEASON_Y+1), LAST=(SEASON_Y-1)+"-"+SEASON_Y;
 /* Live "actuals" feed: team GW history, per-player actual points, chips. Built
    locally by the server (scripts/build-actuals.mjs run every 15 minutes) and
    served same-origin, so Andy's own entry data never touches a public repo.
@@ -39,7 +42,7 @@ const SEASON="2026-2027", LAST="2025-2026";
    Unreachable or not yet built: every consumer already renders a clean waiting
    state, so this fails silently rather than blocking the main load. */
 /* the season label the feed builder writes (FPL_SEASON) */
-const FEED_SEASON="2027";
+const FEED_SEASON=String(SEASON_Y+1);
 /* a season as "25/26" (21 Nov 2026, Andy): takes "2025/26" or the year a
    season ends ("2026") */
 /* C8 (audit, 22 Nov 2026): the dataset's kickoff_time is UTC written without
@@ -56,7 +59,7 @@ const imgSrc=(kind,code)=>BACKUP
   ?(kind==="shirt"||kind==="shirtgk"?`https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${esc(String(code||""))}${kind==="shirtgk"?"_1":""}-220.png`
     :kind==="badge"?`https://resources.premierleague.com/premierleague/badges/50/t${esc(String(code||""))}.png`
     :`https://resources.premierleague.com/premierleague25/photos/players/110x140/${esc(String(code||""))}.png`)
-  :`/img/${kind}/${esc(String(code||""))}.png${kind==="player"?"?s=2526":""}`;
+  :`/img/${kind}/${esc(String(code||""))}.png${kind==="player"?"?s="+String(SEASON_Y-1).slice(2)+String(SEASON_Y).slice(2):""}`;
 /* ---------- instant start ----------
    The last good copy of every data file (dataset CSVs and both feeds) is kept
    in IndexedDB, which has room for it where localStorage did not. On open the
@@ -262,12 +265,14 @@ function routeFor(tab){return "#/"+(TABPATH[tab]||"planner");}
 /* A pop-up belongs to the page it was opened on: leaving the page closes it
    (audit 22 Nov 2026: one opened from #/transfers stayed over the next page) */
 function closePops(){S.pop=null;S.popTab=null;S.cmp=null;S.cardId=null;S.pMenu=null;}
+const sgTabKey=k=>({transfers:"players",squad:"season",teams:"clubs"})[k]||(["players","clubs","season"].includes(k)?k:"players");
 function applyHash(){
   const h=(location.hash||"").replace(/^#\/?/,"").replace(/\/$/,"");
   /* Signals tabs have their own links: #/signals/transfers and so on */
-  const sg=/^signals\/(transfers|squad|teams|players)$/.exec(h);
-  /* old links to Signals › Transfers land on My Squad */
-  if(sg&&sg[1]==="transfers")sg[1]="squad";
+  const sg=/^signals\/(transfers|squad|teams|players|clubs|season)$/.exec(h);
+  /* Bundle C (22 Nov 2026): the tabs are Players, Clubs and My Season; old
+     links (Transfers, My Squad, Teams) land on their new homes */
+  if(sg)sg[1]=sgTabKey(sg[1]);
   if(sg){const ch=S.tab!=="signals"||S.sgTab!==sg[1];if(ch)closePops();S.tab="signals";S.sgTab=sg[1];return ch;}
   const t=FROM_ROUTE[h];
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}

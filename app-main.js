@@ -155,9 +155,16 @@ function act(k,a,b,c){
     case"poolmore":S.poolLimit=Math.min(150,(S.poolLimit||50)+50);break;
     case"pdless":S.pdLimit=PD_PAGE;break;
     case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});break;
-    case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[],tab:S.sgTab});break;
-    /* Signals tabs (25 Oct 2026) */
-    case"sgtab":closePops();S.sgTab=["squad","teams","players"].includes(a)?a:"squad";
+    /* Bundle C (22 Nov 2026): one 1 / 3 / 5 / ROS switch */
+    case"sigh":S.sigH=/^ros$/i.test(String(a))?"ros":(+a||3);LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[],tab:S.sgTab});break;
+    /* Signals' own small switches: Leaders Predicted/Scored, The Game's
+       Picks metric and week, Value position */
+    case"sglead":S.sgLead=a==="scored"?"scored":"pred";break;
+    case"sgpick":S.sgPick=["capt","sel","bought","top"].includes(a)?a:"bought";break;
+    case"sgpickgw":S.sgPickGw=+a||null;break;
+    case"sgvpos":S.sgVPos=clamp(+a||3,1,4);break;
+    /* Signals tabs (25 Oct 2026; Players / Clubs / My Season from Bundle C) */
+    case"sgtab":closePops();S.sgTab=sgTabKey(a);
       LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});
       try{history.replaceState({},"","#/signals/"+S.sgTab);}catch(e){}break;
     case"sigfold":{const f=new Set(S.sigFold||[]);f.has(a)?f.delete(a):f.add(a);S.sigFold=[...f];
@@ -457,7 +464,7 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   S.weekH=LS.get("weekh")||1;
   {const pd=LS.get("pd")||{};S.pShow=pd.show||"all";S.pOwn=pd.own||"all";S.pdMore=false;}
   S.pTicks=[];
-  {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];S.sgTab=["squad","teams","players"].includes(sg.tab)?sg.tab:"squad";}
+  {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h==="ros"?"ros":(sg.h||3);S.sigFold=sg.fold||[];S.sgTab=sgTabKey(sg.tab||"players");}
   /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
      quota on some browsers; the server is close now) and everything odds,
      which lives on the server. Every key that is Andy's own work (state,

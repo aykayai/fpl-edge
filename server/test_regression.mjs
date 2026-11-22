@@ -181,7 +181,7 @@ function normalise(text, isNew) {
   if (isNew || /FPL Signals/.test(text)) {
     t = t.replace(/Signals(?=\s*Player Data)/g, "");                     /* the new Signals menu entry */
     t = t.replace(/FPL Signals v[\d.]+.*$/, "");                       /* provenance footer */
-    t = t.replace(/(Server unreachable|Up to date|Live|Waiting on)[^]*?Check now/g, ""); /* status chip */
+    t = t.replace(/(Server unreachable|Up to date|Live|Waiting on|FPL not refreshed|Feed builder not refreshed|FPL Core Insights not updated)[^]*?Check now/g, ""); /* status chip */
     t = t.replace(/FPL Signals/g, "FPL Edge");                         /* brand */
     t = t.replace(/\s(GMT|BST)\b/g, "");                               /* zone labels are new */
   } else {
@@ -198,6 +198,9 @@ function normalise(text, isNew) {
   t = t.replace(/Sub tracker.*?(?=Historical performance)/, "Sub tracker ");
   t = t.replace(/\(\d+ players on 45\+ expected minutes\)/, "(N players on 45+ expected minutes)");
   t = t.replace(/PositionNPredictedActualMAEBias.*?(?= Actual is)/, "PositionNPredictedActualMAEBias");
+  /* PLANNED (Bundle B, S7): the Tracker's pending row reads "26/27" from the
+     derived season instead of a hard-coded "2026/27" */
+  t = t.replace(/\b20(\d{2})\/(\d{2})\b/g, "$1/$2");
   /* PLANNED (21 Nov 2026): seasons read "25/26" instead of "2026" */
   t = t.replace(/(\d{2})\/(\d{2})/g, (m, a, b) => +b === +a + 1 && +a >= 18 && +a <= 40 ? "20" + b : m);
   /* PLANNED (redesign wave 1): new signal key and labels, League tabs,
