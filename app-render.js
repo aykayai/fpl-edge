@@ -418,8 +418,13 @@ function listHTML(){
   const budget=+(planBank()+raised).toFixed(1);   // the header's bank, not the drifting S.bank (as F41)
   const outP=flags.map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
   const cols=[["price","£"],["xmins","xMins"],["total","Pts"],["form","Form"],["pred","xPts"],["pred3","3GW"]];
-  const head=`<div class="lhead"><span style="flex:1" data-k="name" class="${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
-    ${cols.map(([k,n])=>`<span class="lc ${S.lSort===k?"act":""}" data-k="${k}" onclick="act('lsort','${k}')">${n}</span>`).join("")}</div>`;
+  /* compact two-line rows (22 Nov 2026): line 1 name, Player Data's XI /
+     Bench / C / VC tag, injury, signals; line 2 club, position, next three */
+  const head=`<div class="lhead pr2-h"><span data-k="name" class="pr2-hp ${S.lSort==="name"?"act":""}" onclick="act('lsort','name')">Player</span>
+    ${cols.map(([k,n])=>`<span class="${S.lSort===k?"act":""}" data-k="${k}" onclick="act('lsort','${k}')">${n}</span>`).join("")}</div>`;
+  const xiSet=new Set(startingXI().map(p=>p.id)),cv=effectiveCaptainVice(g);
+  const tagOf=p=>!ownIds.includes(p.id)?"":p.id===cv.captain?`<span class="pdrole c" title="Your captain">C</span>`:p.id===cv.vice?`<span class="pdrole v" title="Your vice-captain">VC</span>`
+    :xiSet.has(p.id)?`<span class="pdrole xi" title="In your starting XI">XI</span>`:`<span class="pdrole bn" title="On your bench">Bench</span>`;
   /* F77 (bundle 9): the pool was 84% of the Planner's page (150 rows, ~4,000
      elements); 50 at a time, more on request */
   const plim=S.poolLimit||50;
@@ -432,25 +437,18 @@ function listHTML(){
     /* against whoever is being sold in this position, if any */
     const out=outP.find(o=>o.pos===p.pos);
     const delta=out?hPts(p,g,S.horizon)-hPts(out,g,S.horizon):null;
-    return `<button class="prow ${own?"own":""}" onclick="act('listpick',${p.id})"
+    return `<button class="prow pr2${own?" mine":""}" onclick="act('listpick',${p.id})"
       title="${afford?"":"Over budget by £"+(p.price-budget).toFixed(1)}"
       style="${p.avail===0?"opacity:.35;":""}${!afford?"opacity:.42;":""}">
-      ${kitSm(p,34)}
-      <span style="flex:1;min-width:0">
-        <span style="display:flex;align-items:center;gap:5px">
-          <span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.web_name)}</span>
-          ${INJ(p)}</span>
-        <span style="display:block;font-size:10px;color:var(--mute);margin-top:1px">${esc(p.teamName)} · ${POS[p.pos]}${own?' · <span style="color:var(--mint)">in squad</span>':""}</span>
-        <span style="display:block;margin-top:2px">${fix3(p,g)}</span>
-        <span class="poolsigs">${sigHTML(p,g)}</span></span>
-      <span class="lc mono" style="font-size:11px">£${p.price.toFixed(1)}${arw(p.priceChange)}</span>
-      <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.xMins}′</span>
-      <span class="lc mono" style="font-size:11px">${p.total}</span>
-      <span class="lc mono" style="font-size:11px;color:var(--mute)">${p.form.toFixed(1)}</span>
-      <span class="lc mono" style="font-size:12px;font-weight:700;color:${
-        delta==null?"var(--mint)":(delta<0?"var(--red)":"var(--mint)")}">${
-        delta==null?hPts(p,g,S.horizon).toFixed(1):sgn1(delta)}</span>
-      <span class="lc mono" style="font-size:11px;color:var(--cyan)">${hPts(p,g,3).toFixed(1)}</span>
+      ${kitSm(p,30)}
+      <span class="pr2-who"><span class="pr2-l1"><b>${esc(p.web_name)}</b>${tagOf(p)}${p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(p.news||"Doubt")}">${lic("triangle-alert",11)}<i>${Math.round(p.avail*100)}%</i></span>`:""}<span class="pr2-sig">${sigHTML(p,g)}</span></span>
+        <span class="pr2-l2"><i>${esc(p.teamName)} · ${POS[p.pos]}</i>${fix3(p,g)}</span></span>
+      <span class="pr2-c pr2-price">£${p.price.toFixed(1)}${arw(p.priceChange)}</span>
+      <span class="pr2-c mu">${p.xMins}′</span>
+      <span class="pr2-c">${p.total}</span>
+      <span class="pr2-c mu">${p.form.toFixed(1)}</span>
+      <span class="pr2-c pr2-xp" style="color:${delta==null?"var(--mint)":(delta<0?"var(--red)":"var(--mint)")}">${delta==null?hPts(p,g,S.horizon).toFixed(1):sgn1(delta)}</span>
+      <span class="pr2-c cy">${hPts(p,g,3).toFixed(1)}</span>
     </button>`;}).join("")+(plim<150?pmore:"");
 }
 /* A plain range slider packs many possible values into a short drag distance —
