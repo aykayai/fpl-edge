@@ -162,13 +162,13 @@ try {
     /* the Planner card (21 Nov 2026): a click opens the player card, a right-click the menu */
     const kit = doc.querySelector(".pz-c[data-pid]");
     check(!!kit && /'card',\d+\)/.test(kit.getAttribute("onclick") || "") && /act\('pmenu',\d+\)/.test(kit.getAttribute("oncontextmenu") || ""), "a Planner shirt opens the player card, a right-click the menu");
-    for (const k of ["move", "cap", "price", "warn", "rival"]) { g.act("pop", k);
+    for (const k of ["move", "cap", "price", "warn", "trec"]) { g.act("pop", k);
       check(!!doc.querySelector(".modal .mbox.mfull"), `the ${k} pop-up is full screen`); g.act("pop", null); }
     g.act("pop", "move");
     const tabs = [...doc.querySelectorAll(".modal .poptabs button")].map(b => b.textContent.trim());
-    check(tabs.join("|") === "Best Moves|Five-Week Plan|Funding|All Transfers", "Top Moves splits into four tabs", tabs.join("|"));
-    g.act("poptab", "all");
-    check(!!doc.querySelector(".modal .xfgrid .xfpos"), "All Transfers lays out in columns");
+    check(tabs.join("|") === "Optimal Moves|Plan|Sell & Fund|Rivals", "Transfers splits into four tabs", tabs.join("|"));
+    g.act("poptab", "fund");
+    check(!!doc.querySelector(".modal .tw-pick .tw-pk"), "Sell & Fund shows the squad to pick from");
     g.act("pop", null); show("table");
   }
   /* player card, the Dossier (20 Nov 2026): full screen, opened from a Planner shirt */
@@ -296,11 +296,11 @@ try {
   show("odds");
   check(S.tab === "fixtures" && S.fixMode === "matches" && !!doc.querySelector(".tg-mp"), "W8 the Odds route opens Teams > Matches", `${S.tab} ${S.fixMode}`);
   show("transfers");
-  check(S.tab === "squad" && S.pop === "move" && /Plan your transfers/.test(doc.querySelector(".modal") ? doc.querySelector(".modal").textContent : ""), "W8 the Transfers route opens the Top Move pop-up with the transfer tools", `${S.tab} ${S.pop}`);
+  check(S.tab === "squad" && S.pop === "move" && /Optimal Moves/.test(doc.querySelector(".modal") ? doc.querySelector(".modal").textContent : ""), "W8 the Transfers route opens the Top Move pop-up with the transfer tools", `${S.tab} ${S.pop}`);
   S.pop = null; S.fixMode = "grid";
 
   /* F10 behaviour: Enter presses a role=button element; Escape closes a card */
-  show("signals");
+  show("signals"); g.act("sgtab", "players"); /* batch 3: My Squad In Form, its first ranked list, moved to Performance */
   /* jsdom in this mode does not run inline onclick attributes, so the check
      is on what the key handler owns: Enter and Space press the element */
   const rowEl = doc.querySelector(".sgpage .hbr[role='button'], .sgpage .sbrow[role='button'], .sgrow[role='button']");

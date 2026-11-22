@@ -78,7 +78,8 @@ try {
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
-    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,
+    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,
+    
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
@@ -596,6 +597,48 @@ try {
     S.pop = "cap"; g.act("tab", "fixtures");
     check(S.pop === null, "Audit fix: switching tab closes the pop-up");
     S.tab = "squad"; g.render();
+  }
+
+  /* ---------- This Week batch 2 (22 Nov 2026) ---------- */
+  {
+    const P = g.planWeeks(5), moves = P ? P.weeks.filter(x => !x.roll) : [];
+    const bought = new Set(), churn = [];
+    moves.forEach(x => { if (bought.has(x.out.id)) churn.push(x.out.web_name); bought.add(x.inn.id); });
+    const sold = new Set(moves.map(x => x.out.id)), back = moves.filter(x => sold.has(x.inn.id)).map(x => x.inn.web_name);
+    check(!!P && churn.length === 0 && back.length === 0, "Plan: never sells a player it bought, never buys back one it sold", JSON.stringify([churn, back]));
+    g.act("pop", "move");
+    const pop = () => doc.querySelector(".modal") ? doc.querySelector(".modal").textContent : "";
+    check(/Transfers/.test(doc.querySelector(".modal h2").textContent) && !!doc.querySelector(".modal .tw-hero .tw-duel") && doc.querySelectorAll(".modal .tw-row").length > 0, "Transfers: Optimal Moves shows the chosen move and the list");
+    g.act("poptab", "plan");
+    check(!!doc.querySelector(".modal .tw-weeks .tw-wk") && doc.querySelectorAll(".modal .ds-hz button[disabled]").length === 2, "Transfers: Plan shows its weeks; 1 GW and ROS are off");
+    g.act("poptab", "rivals");
+    check(/Threats to cover/.test(pop()) && /Your differentials/.test(pop()), "Transfers: Rivals tab shows threats and differentials");
+    g.act("pop", "cap");
+    const capFig = doc.querySelector(".modal .ca-big b"), xi = g.startingXI(), best = Math.max(...xi.map(p => g.hPts(p, g.VG(), 1))) * 2;
+    check(!!capFig && Math.abs(+capFig.textContent - best) < 0.06, "Captain: the headline figure is the doubled best option, as on the card", capFig ? capFig.textContent + " vs " + best.toFixed(1) : "none");
+    g.act("poptab", "record");
+    const rec = g.capRecord();
+    check(rec.length > 0 && rec.every(w => w.bp >= w.cp) && doc.querySelectorAll(".modal .cr-rows .cr-row").length === rec.length, "Captain: Season Record has a row a finished week, best in squad never below your captain");
+    const tl = g.transferLog();
+    check(tl.length > 0 && tl.every(r => r.chip || (r.out && r.inn && r.out.pos === r.inn.pos)), "Transfer Record: every move pairs players of one position; chips are blocks");
+    g.act("pop", "trec");
+    check(doc.querySelectorAll(".modal .xr-rows .xr-r").length === tl.length, "Transfer Record: one row a move or chip block");
+    g.act("pop", null);
+  }
+
+  /* ---------- This Week batch 4 (22 Nov 2026) ---------- */
+  {
+    g.act("pop", "rank");
+    check(!!doc.querySelector(".modal .rk-g") && doc.querySelectorAll(".modal .rk-t .ds-tile").length === 6, "Rank: the header pop-up opens with six tiles and the season chart");
+    const heads = [...doc.querySelectorAll(".pz-stats .pz-stc")].map(e => e.getAttribute("onclick") || "");
+    check(heads.length === 3 && heads.filter(x => x.includes("'rank'")).length === 2 && heads.some(x => x.includes("'rating'")), "Rank: Overall Rank and GW Rank open Rank, Team Rating opens its own", heads.join(" | "));
+    g.act("pop", "rating");
+    const rt = g.teamRating(), ring = doc.querySelector(".modal .rt-v");
+    check(!!rt && !!ring && +ring.textContent === rt.pct, "Team Rating: the pop-up's rating is the header's", ring ? ring.textContent + " vs " + (rt && rt.pct) : "none");
+    check(doc.querySelectorAll(".modal .rt-pos .rt-row:not(.rt-rh)").length === 5, "Team Rating: position by position covers the four lines and the bench");
+    g.act("pop", "str");
+    check(!!doc.querySelector(".modal .rt-hero"), "Squad Strength's pop-up now opens Team Rating");
+    g.act("pop", null);
   }
 
   /* ---------- F60 best combination ---------- */

@@ -104,11 +104,11 @@ try {
   await waitForServer();
   const { w, g, S } = await runApp();
   const doc = w.document;
-  /* 25 Oct 2026: Signals has four tabs (Transfers, My Squad, Teams, Players) */
+  /* 22 Nov 2026: Signals › Transfers removed; its tools live in the Planner's Transfers pop-up */
   const showTab = t => { S.tab = "signals"; g.act("sgtab", t); };
   /* 12 Nov 2026: Value by Price Band and Minutes Watch moved to Players */
   /* 22 Nov 2026 (batch 3): five reports moved into the Performance pop-up */
-  const WANT = { transfers: 11, squad: 8, teams: 6, players: 6 };
+  const WANT = { squad: 8, teams: 6, players: 6 };
   let allText = "";
   for (const [t, n] of Object.entries(WANT)) {
     showTab(t);
@@ -258,10 +258,7 @@ try {
   const availNames = [...doc.querySelectorAll("#r-sqflag .sgwho b")].map(b => b.textContent.trim());
   check(availNames.every(n => squadNames.has(n)), `My Squad "Availability" names only squad players`, availNames.join(", "));
   showTab("transfers");
-  const sellOut = [...doc.querySelectorAll("#r-sqrep .mvh .dn")].map(b => b.textContent.trim());
-  check(sellOut.every(n => squadNames.has(n)), "Sell names only squad players", sellOut.join(", "));
-  const sellIn = [...doc.querySelectorAll("#r-sqrep .mvh .up")].filter(b => b.tagName === "SPAN").map(b => b.textContent.trim());
-  check(sellIn.every(n => !squadNames.has(n)), "every suggested swap is a player you do not own", sellIn.join(", "));
+  check(S.sgTab === "squad" && ![...doc.querySelectorAll(".sgtabs button")].some(b => /Transfers/.test(b.textContent)), "Signals has no Transfers tab; asking for it lands on My Squad", S.sgTab);
 
   showTab("players");
   g.act("sigpos", 3);
