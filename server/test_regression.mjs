@@ -55,7 +55,9 @@ const TABS = ["squad", "chips", "rivals", "tracker", "table", "fixtures", "news"
 /* the Players page (table) was rebuilt in redesign wave 3 */
 /* Teams (fixtures) gained the Clubs tab in wave 5 */
 /* the Chips page was rebuilt on 20 Nov 2026 (test_rules checks its chip states) */
-const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table" && t !== "fixtures" && t !== "chips" && t !== "squad");
+/* Bundle D (22 Nov 2026): League › Tracker and Status were redesigned on
+   purpose, so their text is no longer compared word for word */
+const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table" && t !== "fixtures" && t !== "chips" && t !== "squad" && t !== "tracker" && t !== "xfpl");
 
 /* ---------- old code out of git ---------- */
 function materialiseOld() {

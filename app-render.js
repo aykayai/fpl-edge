@@ -64,12 +64,13 @@ function playerCardHTML(){
   const hrows=[];
   for(let e=G-1;e>=1;e--){const ms=((S.hist||{})[p.code]||[]).filter(r=>r.tag==="now"&&r.gw===e),o=opp(e),v=pts(e);
     if(!ms.length&&v==null&&!o)continue;
-    const fx=(S.model.byEv[e]||[]).filter(f=>f.ht===team||f.at===team).map(f=>`${esc((f.ht===team?f.at:f.ht).short)} (${f.ht===team?"H":"A"})`).join(", ");
+    /* D6 (Bundle D): the fixture strip, never text */
+    const fxs=(S.model.byEv[e]||[]).filter(f=>f.ht===team||f.at===team),fx=fxs.length?fxRun(fxs.map(f=>{const home=f.ht===team,o=home?f.at:f.ht;return fxChip(o.short,home,fdrOf(o,home,team,p.pos<=2?"def":"att"),{cls:"sm"});}).join("")):"";
     const sm=k=>ms.reduce((a,r)=>a+(+r[k]||0),0),mins=sm("mins");
     const third=p.pos===1?["Saves",sm("sv")]:p.pos===2?["CS",mins>=60&&ms.length&&ms.every(r=>!(+r.tgc))?1:0]:["SoT",sm("sot")];
     hrows.push({e,fx:fx||"–",v,mins,g:sm("g"),a:sm("a"),xg:sm("xg"),xa:sm("xa"),t:third,dc:sm("dc")});}
   const third=hrows[0]?hrows[0].t[0]:(p.pos===1?"Saves":p.pos===2?"CS":"SoT");
-  const hist=`<div class="pkpanel pkhistw"><div class="pkh">Game History<span>this season, latest first</span></div><div class="pkhs"><table class="pkhist"><thead><tr><th>GW</th><th>Opponent</th><th>Pts</th><th>Mins</th><th>G</th><th>A</th><th>xG</th><th>xA</th><th>${third}</th><th>DefCon</th></tr></thead><tbody>${
+  const hist=`<div class="pkpanel pkhistw"><div class="pkh">Game History</div><div class="pkhs"><table class="pkhist"><thead><tr><th>GW</th><th>Opponent</th><th>Pts</th><th>Mins</th><th>G</th><th>A</th><th>xG</th><th>xA</th><th>${third}</th><th>DefCon</th></tr></thead><tbody>${
     hrows.map(r=>`<tr><td>GW${r.e}</td><td>${r.fx}</td><td class="pp" style="color:${r.v==null?"#5A5A5A":r.v>=10?"var(--mint)":r.v>=6?"#9BE7C4":r.v<3?"#FF8FAB":"#E4E4E4"}">${r.v??"–"}</td><td>${r.mins||"–"}</td><td>${r.g}</td><td>${r.a}</td><td>${r.xg.toFixed(2)}</td><td>${r.xa.toFixed(2)}</td><td>${r.t[1]}</td><td>${r.dc}</td></tr>`).join("")
     ||'<tr><td colspan="10" style="text-align:left;color:#6E6E6E">No league matches yet this season.</td></tr>'}</tbody></table></div></div>`;
   const body=`<div class="pk2">${hero}<div class="pkright">
@@ -810,7 +811,10 @@ function xfplHTML(){
 
   const foot=`<div class="panel"><div class="pbody"><p class="note" style="margin:0">Richer per-gameweek actuals — live points, bonus, minutes — come from the official FPL API, which the browser can't read directly. A scheduled job publishes them to the data repo, and the model reads them like every other file.</p></div></div>`;
 
-  return compare+status+calib+pva+movers+foot;
+  /* Bundle D: the Status page takes the parts it shows as cards; the
+     Projection Movers panel never filled and the footnote panel is gone (C16) */
+  if(arguments[0]==="parts")return{compare,status,calib,pva};
+  return compare+status+calib+pva;
 }
 function swapCardHTML(m,g){
   return `<div class="tcard"><div class="tline">
@@ -940,7 +944,7 @@ function teamGridHTML(){
   const key=`<span class="tg-key"><span>Easy</span>${[1,2,3,4,5].map(d=>{const[b,c]=pdFdr(d);return `<i style="background:${b};color:${c}">${d}</i>`;}).join("")}<span>Hard</span></span>`;
   const card=`<div class="pdcard"><div class="pdbar">
     <div class="pdctl"><span class="pdl">Colour fixtures by</span>${seg(lens,[["att","Attack"],["def","Defence"],["all","Overall"]],"tlens")}</div>
-    <div class="pdctl"><span class="pdl">Scores for</span>${seg(win,[[1,"Next GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS"]],"twin")}</div>
+    <div class="pdctl"><span class="pdl">Scores for</span>${seg(win,[[1,"1 GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS"]],"twin")}</div>
     <span class="pdsp"></span><div class="pdctl"><span class="pdl">Fixture rating</span>${key}</div></div></div>`;
   const arrow=k=>sk===k?(dir<0?" ↓":" ↑"):"";
   const sth=(k,n,sub,cls,tip)=>`<th class="${cls||""}${sk===k?" act":""}" onclick="act('tsort','${k}')" title="${esc(tip)}">${n}${arrow(k)}${sub?`<small>${sub}</small>`:""}</th>`;
@@ -1015,7 +1019,7 @@ function tgTargetRows(){
 const tgRanked=(rows,d)=>rows.slice().sort((a,b)=>d.dir*(b[d.k]-a[d.k])||String(a.t.name).localeCompare(b.t.name));
 const tgOpps=r=>[...new Set(r.fx.slice(0,3).map(x=>x.opp.short))].join(" · ");
 function tgTargetsHTML(){
-  const{win,rows}=tgTargetRows(),wl=win===1?"Next GW":win==="ros"?"ROS":win+" GW";
+  const{win,rows}=tgTargetRows(),wl=win===1?"1 GW":win==="ros"?"ROS":win+" GW";
   return `<div class="wkrow tg-row4">${Object.entries(TG_TARGETS).map(([key,d])=>{const L=tgRanked(rows,d),a=L[0];
     const line=d.mode.startsWith("vs")?`Own ${d.mode==="vs-att"?"defenders":"attackers"} of <b>${esc(tgOpps(a))||"no one"}</b>`
       :`${esc(L[1].t.name)} ${d.f(L[1])} · ${esc(L[2].t.name)} ${d.f(L[2])}`;
@@ -1031,7 +1035,7 @@ function tgTargetPopHTML(key){
       :tgBand(x.opp,{opp:r.t,home:!x.home},d.mode==="vs-att"?"def":"att");
     const[b,c]=pdFdr(band),home=vs?!x.home:x.home;
     return fxChip(x.opp.short,home,band,{title:`GW${x.e}: ${vs?x.opp.name+(home?" at home to ":" away at ")+r.t.name:(home?"v ":"at ")+x.opp.name}`});}).join("")+(r.fx.length>6?`<em>+${r.fx.length-6}</em>`:"");
-  const ctl=`<span class="hz">${[[1,"Next GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS"]].map(([k,n])=>`<button class="${String(win)===String(k)?"on":""}" onclick="act('twin','${k}')">${n}</button>`).join("")}</span>`;
+  const ctl=`<span class="hz">${[[1,"1 GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS"]].map(([k,n])=>`<button class="${String(win)===String(k)?"on":""}" onclick="act('twin','${k}')">${n}</button>`).join("")}</span>`;
   const body=`<p class="note" style="margin:0 0 10px">${d.why} ${vs?"Fixtures show the clubs that face them, coloured for those clubs' players.":"Fixtures are their own, coloured for their players."}</p>
     <table class="tg-pt"><thead><tr><th></th><th class="l">Club</th><th>${d.unit}</th><th class="l">${vs?"Faced by":"Fixtures"}</th></tr></thead><tbody>
     ${L.map((r,i)=>`<tr><td class="mu">${i+1}</td><td><span class="tg-pc">${badgeOrShirt(r.t,20)}<b>${esc(r.t.name)}</b></span></td><td class="tg-pn">${d.f(r)}</td><td><span class="tg-ch">${chips(r)||'<span class="mu">no match</span>'}</span></td></tr>`).join("")}</tbody></table>`;
@@ -1354,7 +1358,7 @@ function chipsHTML(){
   const legend=`<span class="cx-lg"><span><i class="cx-sw solid"></i>played</span><span><i class="cx-sw ring"></i>planned</span><span><i class="cx-sw dash"></i>suggested</span><span class="cx-sep"></span>
     <span><i class="cx-ld bl"></i>blank</span><span><i class="cx-ld dl"></i>likely double</span><span><i class="cx-ld dp"></i>possible double</span></span>`;
   const roadmap=rep("chroad","calendar-range","Season Chip Roadmap",
-    `Every gameweek of the season: chips you played (solid) with the points they gained, chips you planned (ring) and the suggested week for any chip not planned yet (dashed), with the points each is expected to add. Drag a chip to another week, or click it and then a week; the Team Planner follows. Blank and double gameweeks come from FPL's fixtures once matches are moved, and from Ben Crellin's forecast (read ${CRELLIN.read}) before that.`,
+    `Every gameweek with the chips you played, planned and could play.`,
     `<div class="cx-rm${pick?" picking":""}"><span class="cx-half" style="grid-column:1/20">First half · GW1–19</span><span class="cx-half h2l" style="grid-column:20/39">Second half · GW20–38</span>${cols.join("")}</div>`,{wide:true,extra:(pick?`<span class="cx-pickh">Click a week for ${esc(chipKeyName(pick))} <button class="cx-ghost sm" onclick="event.stopPropagation();act('chippick','')">Cancel</button></span>`:"")+legend});
 
   /* ---- each chip's full chart (opens from Chips Left) ---- */
@@ -1393,7 +1397,7 @@ function chipsHTML(){
   const axisRow=h2=>{let a="";for(let w=h2?20:1;w<=(h2?38:19);w++)a+=`<span>${w%2===0?w:""}</span>`;return `<div class="cx-cr ax"><span></span><span></span><span class="cx-mini cx-axis">${a}</span><span></span></div>`;};
   const leftH=[1,2].map(h=>left.filter(k=>k.endsWith(String(h)))).filter(a=>a.length);
   const chipsLeftSec=rep("chleft","target","Chips Left",
-    "Each chip still to play: the week on the roadmap and what it adds to the Planner's team score, with every week's gain as a bar (hatched weeks include Ben Crellin's forecast). Click a bar to plan the chip for that week (click it again to clear), or the chip's name for its full chart.",
+    "Each chip still to play and its best weeks.",
     leftH.map(a=>a.map(leftRow).join("")+axisRow(a[0].endsWith("2"))).join("")||`<p class="note">No chips left this season.</p>`,{wide:true});
 
   /* ---- chips used ---- */
@@ -1407,7 +1411,7 @@ function chipsHTML(){
       <b class="cx-uav">${f.avg==null?"—":sgnInt(f.avg)}</b>
       <span class="cx-upk">${pc==null?`<b class="mu">—</b>`:`<b style="color:${pcol}">${pc}%</b><span class="cx-pm"><i style="width:${pc}%;background:${pcol}"></i></span>`}</span></div>`;};
   const chipsUsedSec=rep("chused","circle-check","Chips Used",
-    `Each chip you have played: the points it gained (FPL's figures, as League's chip performance), the same chip last season, the best week it could have been played in hindsight, your average for that chip over every time you played it before, and your pick: the points you got as a share of the best week's. The Chip Report has every week.`,
+    `Each chip you played and what it gained.`,
     usedF.length?`<div class="cx-ur hd"><span></span><span></span><span>Gained</span><span>${esc(seasonShort(prevS))}</span><span>Best week</span><span>Your avg</span><span>Your pick</span></div>${usedF.map(usedRow).join("")}`
       :`<p class="note">No chips played yet this season.</p>`,{wide:true});
 
@@ -1458,17 +1462,17 @@ function chipsHTML(){
         return `<button class="cx-roo${e===road?" pick":""}" onclick="act('chipset','${sel}',${e})" aria-label="${esc(`${chipKeyName(sel)} GW${e} ${sgnPts(v)}. ${e===planned?"Clear the plan.":"Plan it."}`)}">${mk?`<i class="cx-fx cx-ft ${mk.t==="blank"?"bl":mk.p>=0.6?"dl":"dp"}">${mk.t==="blank"?"BGW":"DGW"}</i>`:""}<b>GW${e}</b><i class="cx-rov">${sgnPts(v)}</i>${e===road?`<span class="cx-rmk">${planned?"Planned":"Suggested"}</span>`:""}${tipFor(sel,e)}</button>`;}).join("")}</div>
       <div class="cx-rbf"><span>${note}</span></div></div>`;};
   const remainingSec=rep("chrem","layers","My Plan",
-    "One box per chip: its best three weeks by points added, with the selected week highlighted (the week you planned, or the suggested one). Click a week to plan it, or the planned week again to clear it. Hover a week to see where the points come from. Switch between 1 and 2: a played chip shows the week you played it, then the two best weeks you could have played it in. Plans here and on the Team Planner are the same plan.",
+    "Each chip's best three weeks; click a week to plan it.",
     `<div class="cx-rgrid">${KORD.map(rpBox).join("")}</div>`,{wide:true});
 
   /* ---- best plan: the top three whole plans for the chips left ---- */
   const inUse=p=>Object.entries(p.pick).every(([k,[e]])=>S.chips[k]===e);
   const selD=sel&&plans[0]?sel.tot-plans[0].tot:0;
-  const selRow=sel?`<div class="cx-bp mine"><span class="cx-bpr">${lic("circle-check",14)}</span><div class="cx-bpn"><b>Selected Plan</b><button class="fci" data-tip="Your planned chips in their weeks, and any chip not planned yet at its suggested week. This is what the roadmap shows and what the Team Planner uses." aria-label="About Selected Plan">i</button></div>
+  const selRow=sel?`<div class="cx-bp mine"><span class="cx-bpr">${lic("circle-check",14)}</span><div class="cx-bpn"><b>Selected Plan</b><button class="fci" data-tip="Your planned chips, the rest at their suggested weeks." aria-label="About Selected Plan">i</button></div>
       <span class="cx-bpt">${sgnPts(sel.tot)}</span><span class="cx-bpd ${selD>=-0.05?"up":"dn"}">${Math.abs(selD)<0.05?"Matches best":sgnPts(selD)+" v best"}</span>
       <div class="cx-bps">${Object.entries(sel.pick).sort((a,b)=>a[1][0]-b[1][0]).map(([k,[e,v]])=>`<span class="cx-bpx" title="${esc(chipKeyName(k)+" GW"+e+" "+sgnPts(v)+(S.chips[k]?" (planned)":" (suggested)"))}">${chipTile(chipKind(k),24,false,S.chips[k]?"ring":"dash")}<b>GW${e}</b><i>${sgnPts(v)}</i></span>`).join("")}</div></div>`:"";
   const bestSec=plans.length?rep("chbest","trophy","Best Plan",
-    "Your selected plan (planned chips where you put them, the rest at their suggested weeks) against the two best available plans for every second-half chip left, one chip per week, highest total first. A Bench Boost or Triple Captain within five weeks of a Wildcard is scored on the Wildcard squad. Use sets every chip in a plan.",
+    "Your selected plan against the two best plans.",
     selRow+plans.slice(0,2).map((p,i)=>{const u=inUse(p);return `<div class="cx-bp${i===0?" top":""}">
       <span class="cx-bpr">${i+1}</span><div class="cx-bpn"><b>${esc(p.name)}</b>${i===0?`<span class="cx-tag">Best</span>`:""}<button class="fci" data-tip="${esc(String(p.why).replace(/<[^>]*>/g,""))}" aria-label="About ${esc(p.name)}">i</button></div>
       <span class="cx-bpt up">${sgnPts(p.tot)}</span><button class="cx-ghost" onclick="act('chipplan',${i})"${u?" disabled":""}>${u?"In use":"Use"}</button>
@@ -1497,11 +1501,11 @@ function chipsHTML(){
         <div class="cx-mchart"><span class="cx-mzero"></span>${ORD.map(s=>`<div class="cx-mgrp${s===cur?" cur":""}">${KEYS(kind).map(r=>bar(r,s)).join("")}<span class="cx-mseas">${seasonShort(s)}</span></div>`).join("")}</div></div>`;};
     const nSeas=ORD.filter(s=>s!==cur&&Object.keys(CW[s]||{}).length).length;
     const seasons=rep("chseas","trophy","Your Chips, Season by Season",
-      "Each chip across every season: this season in the middle, your worst and best before it, and where this season sits against your average. The bars are each season's gain on this chip's own scale, the lighter one the first-half chip and the darker one the second-half chip. The average is every time you played the chip before this season. Weeks before this season come from your season workbooks, gains from League's chip performance (20/21, and Bench Boosts before 24/25, have weeks but no gains); this season from FPL. Until 25/26 there was one Free Hit, Bench Boost and Triple Captain a season.",
+      "Each chip across every season: worst, best and this season.",
       `<div class="cx-crs">${KORD.map(chipCol).join("")}</div>`,{wide:true,extra:`<span class="cx-lg"><span><i class="cx-sw2 h1"></i>GW1–19 chip</span><span><i class="cx-sw2 h2"></i>GW20–38 chip</span><span><i class="cx-sw2 cur"></i>this season</span></span>`});
     const NOTE={"3xc":"Other weeks: your captain's points that week.",bboost:"Other weeks: your bench's points that week.",
       freehit:"Other weeks: what the app's pre-deadline Free Hit team would have scored above the squad you had.",
-      wildcard:"Other weeks: what the app's pre-deadline Wildcard team would have scored above the squad you had, in that week (as FPL's figure counts the Wildcard week only)."};
+      wildcard:"Other weeks: what a Wildcard team would have added."};
     const hsMax=Math.max(0,...usedF.flatMap(f=>(f.arr||[]).map(x=>x.e)),...usedF.map(f=>f.e));
     const hsRow=f=>{const arr=f.arr||[],mx=Math.max(...arr.map(x=>Math.abs(x.v)),0.1),pe=f.e,bi=f.best?f.best.e:null;
       const bars=Array.from({length:hsMax},(_,i)=>arr.find(x=>x.e===i+1)||{e:i+1,nil:true}).map(x=>{
@@ -1519,7 +1523,7 @@ function chipsHTML(){
         <div class="cx-hchart2" style="grid-template-columns:repeat(${hsMax},minmax(0,1fr))">${bars}</div>
         <button class="fci" data-tip="${esc(tip)}" aria-label="About ${esc(chipKeyName(f.k))}">i</button></div>`;};
     const picked=rep("chpicked","target",`How Well You Picked · ${esc(seasonShort(curSeasonLabel()))}`,
-      "Each chip you played against every finished week it could have been played in. Your week (outlined in white) shows the points you actually got, FPL's figure, the same as Chips Used. Every other week shows what the chip would have added there: Triple Captain your captain's points, Bench Boost your bench's points, Free Hit and Wildcard the app's pre-deadline team against the squad you had (today's prices, the chip week only). The best week is starred. Your pick is what you got as a share of the best week. Each row's (i) says it in words.",
+      "Your chip week against every week you could have played it.",
       usedF.length?`<div class="cx-hr2 hd"><span></span><span>You got</span><span>Best week</span><span>Your pick</span><span>Every finished week · you outlined, best ★</span><span></span></div>${usedF.map(hsRow).join("")}`:`<p class="note">No chips played yet.</p>`,{wide:true});
     const half=g>=20?2:1,ents=(S.rivalsFeed&&S.rivalsFeed.entries)||{};
     const others=Object.entries(ents).filter(([id])=>String(id)!==String(TEAM_ID)).map(([,e])=>e.chips||[]);
@@ -1533,10 +1537,11 @@ function chipsHTML(){
       ["all","Overall",k=>{const c=fe&&(fe.chips||[]).find(x=>x.name===k);return c&&N?c.n/N*100:null;}]];
     const tiers=Fd?rep("chtier","users",`Chips by Rank Tier · GW${Fd.gw}`,"Share of each group that played the chip at the last deadline.",
       `<div class="cx-tier cx-tierh"><span></span>${tierCols.map(([,n])=>`<span>${n}</span>`).join("")}</div>${KORD.map(k=>`<div class="cx-tier">${chipTile(k,24,true)}<b>${CHIP_UI[k].n}</b>${tierCols.map(([,,fn])=>{const v=fn(k);return `<span class="mono">${v==null?"—":v.toFixed(1)+"%"}</span>`;}).join("")}</div>`).join("")}`,{wide:true}):"";
-    return seasons+picked+rivals+tiers;};
+    /* Bundle D (D13): Rivals' Chips moved to Signals › My Season (one home) */
+    void rivals;return seasons+(tiers?`<div class="cx-pt2">${picked}${tiers}</div>`:picked);};
 
   const pop=S.chipPop==="report"?modalHTML("Chip Report",report(),{wide:true,close:"chippopclose",ctl:`<span class="cx-mhs">Every season from ${esc(seasonShort(SEAS[SEAS.length-1]))}</span>`})
-    :S.chipPop&&left.includes(S.chipPop)?modalHTML(chipKeyName(S.chipPop),rep("chsel","target","Gain by Week","Each bar is the points the chip adds that week on the Planner's team score. Hatched bars include Ben Crellin's forecast, weighted for how likely. Click any bar to plan the chip for that week.",bwRow(S.chipPop),{wide:true}),{wide:true,close:"chippopclose"}):"";
+    :S.chipPop&&left.includes(S.chipPop)?modalHTML(chipKeyName(S.chipPop),rep("chsel","target","Gain by Week","Points each chip adds each week; hatched bars include forecasts.",bwRow(S.chipPop),{wide:true}),{wide:true,close:"chippopclose"}):"";
   return `<div class="cx">${head}${roadmap}
     <div class="cx-quad">${remainingSec}${bestSec}${chipsLeftSec}${chipsUsedSec}</div>
     ${pop}</div>`;
@@ -3744,14 +3749,14 @@ function colChart(cats,bars,lines,o){
         g+=`<rect class="cbar" x="${(x0+(slot-bw)/2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(.5,y0-y1).toFixed(1)}" rx="3" fill="${b.color}" data-tip="${esc(c)}|${esc(b.name)} ${fmt(v)}|"/>`;});}
     else{const n=bars.length||1,bw=Math.min(26,(slot*.7)/n);
       bars.forEach((b,k)=>{const v=b.values[i];if(v==null)return;const yt=y(Math.max(v,0)),yb=y(Math.min(v,0));
-        g+=`<rect class="cbar" x="${(x0+(slot-bw*n)/2+bw*k).toFixed(1)}" y="${yt.toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${Math.max(.5,yb-yt).toFixed(1)}" rx="4" fill="${b.color}" data-tip="${esc(c)}|${esc(b.name)} ${fmt(v)}|${esc((b.notes||[])[i]||"")}"/>`;});}
+        g+=`<rect class="cbar" x="${(x0+(slot-bw*n)/2+bw*k).toFixed(1)}" y="${yt.toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${Math.max(.5,yb-yt).toFixed(1)}" rx="4" fill="${typeof b.color==="function"?b.color(v,i):b.color}" data-tip="${esc(c)}|${esc(b.name)} ${fmt(v)}|${esc((b.notes||[])[i]||"")}"/>`;});}
     g+=`<text class="cax" x="${(x0+slot/2).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(c)}</text>`;
   });
   lines.forEach(l=>{const pts=l.values.map((v,i)=>v==null?null:[pl+slot*i+slot/2,y(v)]);
     const seg=pts.filter(Boolean).map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
     if(!l.dotsOnly)g+=`<polyline points="${seg}" fill="none" stroke="${l.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${l.dash?' stroke-dasharray="4 4"':""}/>`;
     pts.forEach((p,i)=>{if(p)g+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${l.dotsOnly?4:3}" fill="${l.color}" data-tip="${esc(cats[i])}|${esc(l.name)} ${fmt(l.values[i])}|"/>`;});});
-  const legend=[...bars.map(b=>[b.name,b.color,"sq"]),...lines.map(l=>[l.name,l.color,l.dotsOnly?"dot":"ln"])];
+  const legend=[...bars.map(b=>[b.name,typeof b.color==="function"?(b.key||"#8A8A8A"):b.color,"sq"]),...lines.map(l=>[l.name,l.color,l.dotsOnly?"dot":"ln"])];
   return `<div class="chartbox"><svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label||"Chart")}">${g}</svg>
     ${legend.length>1||o.legend?`<div class="clegend">${legend.map(([n,c,k])=>`<span><i class="${k}" style="background:${c}"></i>${esc(n)}</span>`).join("")}</div>`:""}</div>`;
 }
@@ -4102,7 +4107,7 @@ function pdRows(){
 }
 /* the projection window as one of the three buttons, or 0 for a custom one */
 function pdWin(r){const g=S.model.next.id;if(r.from!==g)return 0;
-  if(r.to===38&&r.count>5)return "ros";return r.count===3?3:r.count===5?5:0;}
+  if(r.to===38&&r.count>5)return "ros";return r.count===1?1:r.count===3?3:r.count===5?5:0;}
 const pdWinLabel=r=>{const w=pdWin(r);return w==="ros"?"ROS":w?w+" GW":r.from===r.to?"GW"+r.from:"GW"+r.from+"–"+r.to;};
 /* the price slider's top end: the dearest player, to the next 0.5 */
 const pdPriceTop=()=>Math.ceil(Math.max(...S.model.players.map(p=>p.price))*2)/2;
@@ -4144,7 +4149,7 @@ function playerDataHTML(){
   const body=rows.slice(0,lim).map(p=>{const on=ticks.includes(p.id),own=mine.has(p.id),sg=signals(p,g),proj=D.C.proj.val(p)||0;
     return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
       <td class="nm"><span class="pcell"><span class="pdshirt">${kitSm(p,34)}<input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></span>
-        <span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${role(p)}</span><span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}</span></span></span></td>
+        <span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${role(p)}</span><span class="prow2">${dsBadge(sgTeamOf(p),13)} ${esc(p.teamName)} · ${POS[p.pos]}</span></span></span></td>
       <td class="fig pdprice">${D.C.price.cell(p)}</td>
       <td class="pdbestc">${D.C.best.cell(p)}</td>
       <td class="sgc">${sg.length?`<span class="sigcell">${sg.slice(0,4).map(([k,t,b])=>pdTile(k,t,b)).join("")}${sg.length>4?`<span class="sgmore" title="${esc(sg.slice(4).map(x=>SIGNAL[x[0]][2]).join(", "))}">+${sg.length-4}</span>`:""}</span>`:""}</td>
@@ -4180,12 +4185,12 @@ function pdHeadHTML(rows,r){
   const any=nMore||S.lSearch||S.lTeam||lo>3.5||hi<top||S.iconF.length||S.lPos;
   const box=(on,label,action)=>`<label class="pdchk"><input type="checkbox" ${on?"checked":""} onchange="act('${action}')"> ${label}</label>`;
   return `<div class="pagetabs"><h1>Player Data <span class="pdcount">${rows.length} players${nMine?` · <b>${nMine}</b> from your squad`:""}</span></h1>
-      <span style="display:flex;gap:8px;align-items:center">${ticks.length?"":`<span class="note">Tick up to 5 players to compare</span>`}</span></div>
+      <span style="display:flex;gap:8px;align-items:center">${ticks.length?"":`<button class="fci" data-tip="Tick up to 5 players to compare them." aria-label="About comparing">i</button>`}</span></div>
     <div class="pdcard">
       <div class="pdbar">
         <label class="pdsearch">${lic("search",15)}<input id="srch-l" placeholder="Search players" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" aria-label="Search players"></label>
         <div class="pdctl"><span class="pdl">Position</span>${seg(S.lPos||0,[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],"lpos","Position")}</div>
-        <div class="pdctl"><span class="pdl">Projection</span>${seg(win,[[3,"3 GW"],[5,"5 GW"],["ros","ROS",`Rest of season, GW${g}–38`]],"pwin","Projection window")}</div>
+        <div class="pdctl"><span class="pdl">Projection</span>${seg(win,[[1,"1 GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS",`Rest of season, GW${g}–38`]],"pwin","Projection window")}</div>
         <div class="pdctl"><span class="pdl">Club</span><select class="pdsel" onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.slice().sort((x,y)=>String(x.name).localeCompare(y.name)).map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select></div>
         <div class="pdctl pdpricectl"><span class="pdl">Price <b id="pdpricel">£${lo.toFixed(1)} – £${hi.toFixed(1)}</b></span>
           <span class="pdrange"><i class="tr"></i><i class="fl" style="left:${((lo-3.5)/(top-3.5)*100).toFixed(1)}%;right:${(100-(hi-3.5)/(top-3.5)*100).toFixed(1)}%"></i>
@@ -4205,7 +4210,7 @@ function pdHeadHTML(rows,r){
             <div class="pdpopf"><button class="pdreset" onclick="act('pdreset')">Reset all</button><button class="pri" onclick="act('pdmorefilters')">Done</button></div>
           </div>`:""}</span></div>
       </div>
-      <div class="pdsigs"><span class="pdl">Signals <span class="mu">tap to filter · hover any icon for why</span></span>
+      <div class="pdsigs"><span class="pdl">Signals <button class="fci" data-tip="Tap a signal to filter; hover an icon for why." aria-label="About signals">i</button></span>
         <div class="pdchips">${SIG_ORDER.map(k=>{const[ic,tone,label]=SIGNAL[k],on=S.iconF.includes(k);
           return `<button class="pdsigchip${on?" on":""}" style="--tc:${tone==="NAVY"?"#7AA2FF":tone}" onclick="act('iconf','${k}')" aria-pressed="${on}" title="${esc(SIG_RULE[k](sigH()))}"><span class="tile">${lic(ic)}</span>${label}<b>${cnt[k]||0}</b></button>`;}).join("")}</div>
       </div>
