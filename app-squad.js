@@ -687,20 +687,23 @@ function planWeeks(H){
   const byId=new Map(S.model.players.map(p=>[p.id,p]));
   let squad=S.squad.slice(),bank=planBank(),ft=freeTransfers(),total=0;
   const weeks=[];
+  /* 22 Nov 2026 (Andy): a player the plan buys is kept to its end, and one it
+     sells is not bought back, so the plan does not churn */
+  const bought=new Set(),sold=new Set();
   for(let k=0;k<H&&g0+k<=38;k++){
     const w=g0+k,rem=Math.min(H-k,39-w);
-    const top=engineMoves({squad,bank,g:w,h:rem,byId})[0];
+    const top=engineMoves({squad,bank,g:w,h:rem,byId,outs:squad.filter(i=>!bought.has(i)),exclude:[...sold]})[0];
     const best=top?{o:top.out,p:top.inn,gain:top.gain,sell:top.sell}:null;
     const bar=ft>0?FT_VALUE:FT_VALUE+HIT;
     if(best&&best.gain>bar){
       const hit=ft>0?0:HIT;
       bank=+(bank+best.sell-best.p.price).toFixed(1);
-      weeks.push({w,ft,out:best.o,inn:best.p,gain:best.gain,hit,bank});
+      weeks.push({w,ft,out:best.o,inn:best.p,gain:best.gain,hit,bank,sell:best.sell,squad:squad.map(i=>i===best.o.id?best.p.id:i)});
       total+=best.gain-hit;
-      squad=squad.map(i=>i===best.o.id?best.p.id:i);
+      squad=squad.map(i=>i===best.o.id?best.p.id:i);bought.add(best.p.id);sold.add(best.o.id);
       ft=Math.min(FT_MAX,Math.max(0,ft-1)+1);
     }else{
-      weeks.push({w,ft,roll:true,best:best?{out:best.o,inn:best.p,gain:best.gain}:null,bar});
+      weeks.push({w,ft,roll:true,best:best?{out:best.o,inn:best.p,gain:best.gain}:null,bar,squad:squad.slice()});
       ft=Math.min(FT_MAX,ft+1);
     }
   }

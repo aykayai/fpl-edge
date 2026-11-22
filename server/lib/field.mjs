@@ -113,10 +113,10 @@ export async function buildField(gw) {
     const me = await getJson(`/entry/${CONFIG.FPL_TEAM_ID}/`);
     const rank = me.summary_overall_rank;
     if (!rank) throw new Error("no overall rank yet");
-    const pages = [...new Set([Math.ceil(Math.max(1, rank - EACH_SIDE) / 50), Math.ceil((rank + EACH_SIDE) / 50)])];
+    const pages = [...new Set([Math.ceil(Math.max(1, rank - 50) / 50), Math.ceil(rank / 50), Math.ceil((rank + 50) / 50)])];
     let rows = [];
     for (const p of pages) { const s = await getJson(`/leagues-classic/${OVERALL}/standings/?page_standings=${p}`); rows = rows.concat((s.standings && s.standings.results) || []); await sleep(GAP_MS); }
-    const near = rows.filter(r => Math.abs(r.rank - rank) <= EACH_SIDE).map(r => r.entry);
+    const near = rows.slice().sort((a, b) => Math.abs(a.rank - rank) - Math.abs(b.rank - rank)).slice(0, EACH_SIDE * 2 + 1).map(r => r.entry);
     let top = [];
     for (const p of TOP_PAGES) { const s = await getJson(`/leagues-classic/${OVERALL}/standings/?page_standings=${p}`); top = top.concat(((s.standings && s.standings.results) || []).map(r => r.entry)); await sleep(GAP_MS); }
     const nearT = await sample(near, gw, CONFIG.FPL_TEAM_ID), topT = await sample(top, gw, CONFIG.FPL_TEAM_ID);

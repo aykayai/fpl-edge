@@ -34,6 +34,16 @@ function act(k,a,b,c){
     case"pop":S.pop=a||null;S.popTab=null;break;
     case"poptab":S.popTab=a;break;
     case"popclose":S.pop=null;break;
+    /* This Week batch 2: Transfers, Captain, Transfer Record controls */
+    case"twh":S.twH=a==="ROS"?"ROS":+a;break;
+    case"planh":S.planH=+a===3?3:5;break;
+    case"twpos":S.twPos=+a||0;S.twSel=null;break;
+    case"twsel":S.twSel=a;break;
+    case"capsel":S.capSel=+a;break;
+    case"caph":S.capH=a==="ROS"?"ROS":+a;break;
+    case"trwin":S.trWin=a;break;
+    case"trfilt":S.trFilt=a;break;
+    case"cmpmove":{S.pop=null;S.cmp=cmpNew("cur","plan");const ids=effectiveSquadIds(VG()).ids.map(i=>i===a?b:i);S.cmp.ed.B={ids};break;}
     /* wave 3: Players hub */
     /* Teams (redesign 12 Nov 2026): Fixture Grid and Matches */
     case"tsort":if(S.tSort===a)S.tDir=S.tDir==="asc"?"desc":"asc";else{S.tSort=a;S.tDir="desc";}break;
@@ -128,7 +138,7 @@ function act(k,a,b,c){
     case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});break;
     case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[],tab:S.sgTab});break;
     /* Signals tabs (25 Oct 2026) */
-    case"sgtab":closePops();S.sgTab=["transfers","squad","teams","players"].includes(a)?a:"transfers";
+    case"sgtab":closePops();S.sgTab=["squad","teams","players"].includes(a)?a:"squad";
       LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});
       try{history.replaceState({},"","#/signals/"+S.sgTab);}catch(e){}break;
     case"sigfold":{const f=new Set(S.sigFold||[]);f.has(a)?f.delete(a):f.add(a);S.sigFold=[...f];
@@ -424,7 +434,7 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   S.weekH=LS.get("weekh")||1;
   {const pd=LS.get("pd")||{};S.pShow=pd.show||"all";S.pOwn=pd.own||"all";S.pdMore=false;}
   S.pTicks=[];
-  {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];S.sgTab=sg.tab||"transfers";}
+  {const sg=LS.get("sig")||{};S.sigPos=sg.pos||0;S.sigH=sg.h||3;S.sigFold=sg.fold||[];S.sgTab=["squad","teams","players"].includes(sg.tab)?sg.tab:"squad";}
   /* Retired keys from the GitHub Pages era: the 7.8 MB dataset copy (over
      quota on some browsers; the server is close now) and everything odds,
      which lives on the server. Every key that is Andy's own work (state,
