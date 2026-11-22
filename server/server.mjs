@@ -26,6 +26,7 @@ import { join, dirname, resolve, sep, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG } from "./lib/config.mjs";
 import { log } from "./lib/util.mjs";
+import { pngHalf } from "./lib/png.mjs";
 import { initDataset, pollDataset, datasetStatus, datasetGW, currentDir } from "./lib/dataset.mjs";
 import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus, fplPlayersPayload, fplWeekPayload, currentGw } from "./lib/fpl.mjs";
 import { buildField, buildRankBands, recordPrices, fieldStatus } from "./lib/field.mjs";
@@ -57,14 +58,14 @@ const TYPES = {
 };
 
 /* S9 (audit, 22 Nov 2026): security headers on every response. The policy
-   allows only this server, the LP solver from unpkg, Google Fonts and the
+   allows only this server (the LP solver is served from here), Google Fonts and the
    Premier League's images; the app's inline handlers need 'unsafe-inline'. */
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
   "X-Frame-Options": "DENY",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 };
 function send(res, method, status, headers, body) {
   res.writeHead(status, { ...SECURITY, ...headers });
@@ -298,6 +299,20 @@ async function handle(req, res) {
           await writeFile(full + ".tmp", Buffer.from(await r.arrayBuffer()));
           await rename(full + ".tmp", full);
         } catch { sendJson(res, method, 502, { error: "image source unavailable" }); return; }
+      }
+      /* audit follow-up (22 Nov 2026): ?w=110 serves a half-size photo for the
+         small faces (about a quarter of the bytes), made once and kept */
+      if (im[1] === "player" && u.searchParams.get("w") === "110") {
+        const sdir = join(CONFIG.STATE_DIR, "img", "player25-110"), small = join(sdir, im[2] + ".png");
+        let ok = false;
+        try { ok = (await stat(small)).isFile(); } catch { /* not made yet */ }
+        if (!ok) {
+          try {
+            const half = pngHalf(await readFile(full), 200); /* an old 110px photo is already small */
+            if (half) { await mkdir(sdir, { recursive: true }); await writeFile(small + ".tmp", half); await rename(small + ".tmp", small); ok = true; }
+          } catch { /* fall back to the full photo */ }
+        }
+        if (ok) { await serveFile(res, method, small, { "Cache-Control": "public, max-age=604800" }); return; }
       }
       await serveFile(res, method, full, { "Cache-Control": "public, max-age=604800" });
       return;

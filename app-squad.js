@@ -903,10 +903,13 @@ function squadBudget(){
    (1 - P(captain plays)) x vice. A starter who does not play is replaced by
    the bench in order: the keeper by the bench keeper, outfielders by the
    outfield bench, each used with the probability that at least that many
-   outfield starters miss (formation limits ignored). */
-function coverPts(xi,bench,cap,vice,e,capMult){
+   outfield starters miss (formation limits ignored).
+   vf (audit follow-up, 22 Nov 2026): score the cover the same way as the XI.
+   With a forecast naming clubs, teamScore scales those players' points; the
+   cover used their full points, so a forecast blank still counted in full. */
+function coverPts(xi,bench,cap,vice,e,capMult,vf){
   const pp=p=>{const q=p&&p.gw[e];return q&&!q.blank&&q.pPlay!=null?q.pPlay:1;};
-  const pts=p=>(p&&p.gw[e]&&p.gw[e].pts)||0;
+  const pts=p=>!p?0:vf?vf(p):((p.gw[e]&&p.gw[e].pts)||0);
   let s=0;
   if(cap&&vice&&vice!==cap&&xi.includes(vice))s+=(1-pp(cap))*pts(vice)*((capMult||2)-1);
   const gkS=xi.find(p=>p.pos===1), gkB=bench.find(p=>p.pos===1);
@@ -1194,7 +1197,7 @@ function teamScore(ids,e,chip,adj){
   if(chip==="3xc"&&cap)s+=v(cap);
   /* M4 (Andy, 22 Nov 2026): a Bench Boost keeps the vice-captain cover;
      only the bench cover goes, as the bench already scores */
-  s+=chip==="bboost"?coverPts(xi,[],cap,vice,e,2):coverPts(xi,orderBench(bench),cap,vice,e,chip==="3xc"?3:2);
+  s+=chip==="bboost"?coverPts(xi,[],cap,vice,e,2,v):coverPts(xi,orderBench(bench),cap,vice,e,chip==="3xc"?3:2,v);
   return s;
 }
 /* FPL's own doubles and blanks for a week */

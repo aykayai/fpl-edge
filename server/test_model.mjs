@@ -56,7 +56,9 @@ function loadJSDOM() {
   process.exit(2);
 }
 const { JSDOM } = loadJSDOM();
-const FILES = ["app-core.js", "app-squad.js", "app-render.js", "app-odds.js", "app-tracker.js", "app-main.js"];
+/* the LP solver first, as the page loads it (self-hosted since 22 Nov 2026),
+   so the Free Hit checks cover the full optimiser, not the fallback */
+const FILES = ["lp-solver-1.0.3.js", "app-core.js", "app-squad.js", "app-render.js", "app-odds.js", "app-tracker.js", "app-main.js"];
 
 let pass = 0, fail = 0;
 const check = (ok, name, detail) => {
@@ -152,6 +154,7 @@ async function runApp(get) {
   w.console = { log() {}, warn() {}, error() {} };
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   vm.runInContext(`window.__g={get S(){return S},render,act,hPts,teamScore,chipTeam,chipCurve,chipWeighted,effectiveSquadIds,
+    optimalSquad,get optPending(){return _optPending},get solverOn(){return typeof solver!=="undefined"&&!!solver.Solve},
     squadBudget,startingXI,weekPtsFor,chipForWeek,VG,hitsOver,get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
@@ -544,14 +547,17 @@ function bestXIsum(sp, v) {
   return best;
 }
 const ppOf = (p, e) => { const q = p && p.gw[e]; return q && !q.blank && q.pPlay != null ? q.pPlay : 1; };
-function cover(xi, bench, cap, vice, e, mult) {
+/* v: the same points the XI is scored on (a forecast factor applies to the
+   cover too, audit follow-up 22 Nov 2026) */
+function cover(xi, bench, cap, vice, e, mult, v) {
+  const pt = v || (p => ptsOf(p, e));
   let s = 0;
-  if (cap && vice && vice !== cap && xi.includes(vice)) s += (1 - ppOf(cap, e)) * ptsOf(vice, e) * (mult - 1);
+  if (cap && vice && vice !== cap && xi.includes(vice)) s += (1 - ppOf(cap, e)) * pt(vice) * (mult - 1);
   const gs = xi.find(p => p.pos === 1), gb = bench.find(p => p.pos === 1);
-  if (gs && gb) s += (1 - ppOf(gs, e)) * ptsOf(gb, e);
+  if (gs && gb) s += (1 - ppOf(gs, e)) * pt(gb);
   let dist = [1];
   xi.filter(p => p.pos !== 1).forEach(p => { const q = 1 - ppOf(p, e), nd = new Array(dist.length + 1).fill(0); dist.forEach((x, k) => { nd[k] += x * (1 - q); nd[k + 1] += x * q; }); dist = nd; });
-  bench.filter(p => p.pos !== 1).forEach((p, i) => { s += dist.slice(i + 1).reduce((a, x) => a + x, 0) * ptsOf(p, e); });
+  bench.filter(p => p.pos !== 1).forEach((p, i) => { s += dist.slice(i + 1).reduce((a, x) => a + x, 0) * pt(p); });
   return s;
 }
 /* bench order: keeper first, then the saved order (unknown last), else by
@@ -562,7 +568,7 @@ function orderB(bench, order, gView) {
   return [...gk, ...out.slice().sort((a, b) => ptsOf(b, gView) - ptsOf(a, gView))];
 }
 function myTeam(MM, ids, e, o) {
-  const sp = ids.map(i => MM.byId.get(i)).filter(Boolean), v = p => ptsOf(p, e);
+  const sp = ids.map(i => MM.byId.get(i)).filter(Boolean), v = p => ptsOf(p, e) * (o.adj ? (o.adj.get(p.id) ?? 1) : 1);
   const xi = greedyXI(sp, v);
   const cap = xi.reduce((m, p) => (!m || v(p) > v(m)) ? p : m, null);
   const vice = xi.filter(p => p !== cap).reduce((m, p) => (!m || v(p) > v(m)) ? p : m, null);
@@ -570,11 +576,11 @@ function myTeam(MM, ids, e, o) {
   return { sp, xi, cap, vice, bench, xiPts: xi.reduce((a, p) => a + v(p), 0) };
 }
 function myScore(MM, ids, e, chip, o) {
-  const T = myTeam(MM, ids, e, o), v = p => ptsOf(p, e);
+  const T = myTeam(MM, ids, e, o), v = p => ptsOf(p, e) * (o.adj ? (o.adj.get(p.id) ?? 1) : 1);
   let s = T.xiPts + (T.cap ? v(T.cap) : 0);
-  if (chip === "bboost") s += T.bench.reduce((a, p) => a + v(p), 0) + cover(T.xi, [], T.cap, T.vice, e, 2);
-  else if (chip === "3xc") s += (T.cap ? v(T.cap) : 0) + cover(T.xi, T.bench, T.cap, T.vice, e, 3);
-  else s += cover(T.xi, T.bench, T.cap, T.vice, e, 2);
+  if (chip === "bboost") s += T.bench.reduce((a, p) => a + v(p), 0) + cover(T.xi, [], T.cap, T.vice, e, 2, v);
+  else if (chip === "3xc") s += (T.cap ? v(T.cap) : 0) + cover(T.xi, T.bench, T.cap, T.vice, e, 3, v);
+  else s += cover(T.xi, T.bench, T.cap, T.vice, e, 2, v);
   return s;
 }
 
@@ -669,6 +675,19 @@ try {
     check(!off.none.length, `Team score without a chip matches ours, GW${NEXT}-${NEXT + 4} (best XI, top scorer captain, vice and bench cover)`, off.none.join("; "));
     check(!off.bb.length && !off.bbDef.length, "Bench Boost: the team score is XI + captain + bench xP + the vice-captain's cover (M4)", [...off.bb, ...off.bbDef].join("; "));
     check(!off.tc.length && !off.tcDef.length, "Triple Captain: the gain is the captain's xP (plus the vice's extra cover at x3)", [...off.tc, ...off.tcDef].join("; "));
+    /* a forecast blank for a bench player's club: his cover counts nothing
+       (audit follow-up, 22 Nov 2026 - the cover used his full points) */
+    {
+      const e = NEXT, ids = g.effectiveSquadIds(e).ids, o = { order, gView: NEXT }, T = myTeam(MA, ids, e, o);
+      const b = T.bench.find(p => p.pos !== 1 && ptsOf(p, e) > 0), club = b && b.team && b.team.code;
+      const adj = new Map(T.sp.filter(p => p.team && p.team.code === club).map(p => [p.id, 0]));
+      const app = b ? g.teamScore(ids, e, null, adj) : NaN, mine = b ? myScore(MA, ids, e, null, { ...o, adj }) : NaN;
+      const Ta = b ? myTeam(MA, ids, e, { ...o, adj }) : null, va = p => ptsOf(p, e) * (adj.get(p.id) ?? 1);
+      const old = b ? mine - cover(Ta.xi, Ta.bench, Ta.cap, Ta.vice, e, 2, va) + cover(Ta.xi, Ta.bench, Ta.cap, Ta.vice, e, 2) : NaN;
+      check(!!b && Math.abs(app - mine) < 0.01 && Math.abs(old - mine) > 0.01,
+        `A forecast blank scores the cover too: ${b ? b.name : "no bench player"}'s club blanks, team score ${f2(app)} (the old way gave ${f2(old)})`,
+        `app ${f2(app)} mine ${f2(mine)}`);
+    }
     /* the Chips page's curves, rounded to 0.1 */
     const bad = [];
     for (const kind of ["bboost", "3xc"]) {
@@ -686,8 +705,15 @@ try {
   /* M1: no single bench swap improves the Free Hit team by more than the
      optimiser's own 0.05 threshold */
   {
-    const res = [];
+    const res = [], full = [];
     for (const e of [NEXT, NEXT + 1]) {
+      /* the first call answers with the quick solve and starts the full one;
+         wait for it, then ask again for the full optimum */
+      g.chipTeam("freehit", e, true);
+      const until = Date.now() + 120000;
+      while (Date.now() < until && Object.keys(g.optPending).length) await new Promise(r => setTimeout(r, 200));
+      const os = g.optimalSquad("freehit", e, g.squadBudget());
+      full.push({ e, ok: !!os && !os.checking });
       const T = g.chipTeam("freehit", e, true); if (!T) { res.push({ e, err: "no team" }); continue; }
       const budget = g.squadBudget(), ids = T.ids, sp = ids.map(i => MA.byId.get(i)).filter(Boolean), o = { order, gView: NEXT };
       const cnt = { 1: 0, 2: 0, 3: 0, 4: 0 }, club = {}; sp.forEach(p => { cnt[p.pos]++; club[p.team.code] = (club[p.team.code] || 0) + 1; });
@@ -706,6 +732,7 @@ try {
       const myGain = Math.max(0, base - myScore(MA, own, e, null, o));
       res.push({ e, legal, cost: cost.toFixed(1), budget, best, appGain, myGain });
     }
+    check(g.solverOn && full.every(f => f.ok), "Free Hit: the LP solver loaded and the full optimiser finished for both weeks (not the fallback)", JSON.stringify({ solver: g.solverOn, full }));
     check(res.every(r => r.legal), "Free Hit: the team is 15 legal players (2/5/5/3, three a club, within budget)", JSON.stringify(res.map(r => [r.e, r.legal, r.cost, r.budget])));
     check(res.every(r => r.best && r.best.g <= 0.06), "Free Hit (M1): no single bench swap would add more than the optimiser's 0.05 threshold",
       res.map(r => `GW${r.e} best swap +${r.best ? r.best.g.toFixed(2) : "?"} ${r.best && r.best.sw || ""}`).join("; "));

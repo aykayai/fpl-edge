@@ -210,6 +210,9 @@ function normalise(text, isNew) {
   t = t.replace(/(\d{2})\/(\d{2})/g, (m, a, b) => +b === +a + 1 && +a >= 18 && +a <= 40 ? "20" + b : m);
   /* PLANNED (redesign wave 1): new signal key and labels, League tabs,
      Status page around the xFPL model, Player Data renamed Players */
+  /* PLANNED (audit follow-up, 22 Nov 2026): Rivals shares the League
+     header (kicker, tabs and four figure cards) */
+  t = t.replace(/^[^]{0,120}?League ?Tracker ?Rivals ?Overall Rank[^]*?(in the bank|Your overall rank\.) ?/, "");
   t = t.replace(/^League ?Tracker ?Rivals ?/, "");
   t = t.replace(/^Players (?=\d+ players)/, "Player Data ").replace(/ Odds →/, "");
   t = t.replace(/All Players →/g, "Full Player Data →");

@@ -40,7 +40,7 @@ const SUITES = [
    no FAIL line, so a block that silently stops running is caught. Raise a
    floor when checks are added; EXTRA suites are matched by file name. */
 const FLOORS = { "gate": 35, "regression": 17, "planner history": 16, "signals": 42, "broken items": 84, "extra": 14,
-  "the scout": 26, "model": 43, "pages": 18, "test_rules.mjs": 161 };
+  "the scout": 26, "model": 45, "pages": 18, "test_rules.mjs": 161 };
 
 const t0 = Date.now();
 const run = s => new Promise(res => {

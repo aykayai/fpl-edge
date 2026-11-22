@@ -1,0 +1,2 @@
+# the self-hosted LP solver must keep its exact bytes (index.html checks its hash)
+lp-solver-1.0.3.js -text
