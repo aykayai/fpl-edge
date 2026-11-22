@@ -368,7 +368,7 @@ function pastReviewHTML(g){
   if(W&&W.players){const dts=Object.entries(W.players).filter(([,s])=>s.dt),mine=row.picks.filter(pk=>(W.players[pk.id]||{}).dt).map(pk=>P(pk.id)).filter(Boolean);
     const tot=dts.reduce((a,[,s])=>a+(s.p||0),0),mx=Math.max(1,...mine.map(p=>actOf(p.id,g)||0));
     if(dts.length)dtBlk=`<div class="pv-blk"><em>${lic("star",13)} GW${g} Dream Team · ${mine.length} of yours</em>${mine.map(p=>line(p,p.web_name,bar(actOf(p.id,g)||0,mx,"#FFD23F"),fmtPts(actOf(p.id,g)))).join("")||`<span class="mu">None of yours this week</span>`}<div class="pv-kv"><span>Dream Team total</span><b>${tot}</b></div></div>`;}
-  return `<div class="panel pv-rev"><div class="phead"><h2>GW${g} Review</h2><span class="pv-chip">${row.chipLabel?esc(row.chipLabel):"No chip"}</span></div>${capBlk}${xfer}${perf}${benchBlk}${dtBlk}</div>`;
+  return `<div class="panel pv-rev">${pnlHead("calendar-check",`GW${g} Review`,"How your week went against the prediction.",`<span class="pv-chip">${row.chipLabel?esc(row.chipLabel):"No chip"}</span>`)}${capBlk}${xfer}${perf}${benchBlk}${dtBlk}</div>`;
 }
 function plannerPitchHTML(){
   const xi=startingXI();
@@ -2759,7 +2759,7 @@ function lkSumHTML(g){
 }
 /* ---------- the Live panel, where the Player Pool sits ---------- */
 function lkPanelHTML(g){
-  const L=lkCalc(g);if(!L)return `<div class="panel pv-rev lv4"><div class="phead"><h2>Live</h2></div><p class="note" style="padding:16px">Loading the live gameweek…</p></div>`;
+  const L=lkCalc(g);if(!L)return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","Your edge and threats as the week plays.")}<p class="note" style="padding:16px">Loading the live gameweek…</p></div>`;
   const F=[["near","Near you"],["top10k","Top 10k"],["overall","Overall"]];
   const fsw=`<span class="hz lv4-f">${F.map(([k,n])=>`<button class="${L.filt===k?"on":""}" onclick="act('lkf','${k}')">${n}</button>`).join("")}</span>`;
   const mode=S.lkL==="live"?"live":"season";
@@ -2778,7 +2778,7 @@ function lkPanelHTML(g){
     ${dsFig(x.st.s==="tp"&&!x.pts?"–":sgn1(x.vf),x.vf>0.05?"up":x.vf<-0.05?"dn":"")}<span class="ds-fig rk4 ${x.rk>0.5?"up":x.rk<-0.5?"dn":""}">${Math.abs(x.rk)<0.5?"–":lkSg(x.rk,lkK)}</span></div>`;
   const ep=L.edge.filter(x=>x.vf>0).reduce((a,x)=>a+x.vf,0),tp=L.threats.reduce((a,x)=>a+x.vf,0);
   const tot=(v,tone)=>`<b class="ds-fig ${tone}">${sgn1(v)}</b><span class="ds-sub">pts</span><b class="ds-fig ${tone}">${lkSg(v*L.rpp,lkK)}</b><span class="ds-sub">ranks</span>`;
-  return `<div class="panel pv-rev lv4"><div class="phead lv4-ph"><h2>Live</h2>${fsw}</div><div class="lv4-sc">
+  return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","Your edge and threats as the week plays.",`<span class="lv4-ph">${fsw}</span>`)}<div class="lv4-sc">
     ${league}
     <div class="lv4-blk">${dsHead("gem","Your edge",tot(ep,"up"))}${eh}${L.edge.slice(0,8).map(er).join("")}</div>
     <div class="lv4-blk">${dsHead("triangle-alert","Threats",tot(tp,"dn"))}${eh}${L.threats.slice(0,6).map(er).join("")||`<p class="ds-sub">No threats against this field</p>`}</div></div></div>`;
@@ -3673,6 +3673,9 @@ function rep(key,icon,title,info,body,o){
       <button class="rfold sgfold" onclick="act('sigfold','${key}')" aria-expanded="${!shut}" aria-label="${shut?"Open":"Fold"} ${esc(title)}">${lic(shut?"chevron-down":"chevron-up",14)}</button></header>
     ${shut?"":`<div class="rb">${body}</div>`}</section>`;
 }
+/* the card header for a fixed panel (Planner: Player Pool, GW Review, Live):
+   icon, title, controls right, (i); no fold, the panel fills its column */
+const pnlHead=(icon,title,info,extra)=>`<header class="rh pnl-h"><span class="rhi">${lic(icon,16)}</span><h3>${title}</h3>${extra||""}${info?`<button class="fci" data-tip="${esc(info)}" aria-label="About ${esc(title)}">i</button>`:""}</header>`;
 const sgEmpty=t=>`<p class="sgempty">${t}</p>`;
 /* key figures: [{label, value, sub, tone}] */
 const rkv=figs=>`<div class="rkv">${figs.map(f=>`<div><span>${f.label}</span><b class="${f.tone||""}">${f.value}</b>${f.sub?`<em>${f.sub}</em>`:""}</div>`).join("")}</div>`;

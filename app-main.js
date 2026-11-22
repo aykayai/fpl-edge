@@ -367,6 +367,7 @@ function act(k,a,b,c){
     case"oddspv":S.oddsPv=a;break;
     case"rivalpick":S.rivalPick=a;break;
     case"rivalgw":S.rivalGwView=a;break;
+    case"lgview":S.lgView=a==="season"?"season":"gw";break;
   }
   render();
 }

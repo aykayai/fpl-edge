@@ -731,6 +731,54 @@ try {
     check(shape, "Gameweek Brief: every card has a headline figure, at most three rows and a footer");
   }
 
+  /* ---------- League: Rivals folded in (22 Nov 2026) ---------- */
+  {
+    const feed = S.rivalsFeed, TID = String(vm.runInContext("TEAM_ID", ctx));
+    S.pop = null; S.tab = "tracker"; S.lgView = "gw"; S.rivalGwView = "next"; S.rivalPick = null; g.render();
+    const grid = doc.querySelector(".trkpage .repgrid"), ids = grid ? [...grid.children].map(e => e.id) : [];
+    check(!doc.querySelector(".trkpage .sgtabs") && ids[0] === "r-lgtable" && ids[1] === "r-lgh2h" && ids[2] === "r-trkweek",
+      "League: no Tracker/Rivals tabs; the mini-league table and Head to Head lead, then the Tracker cards", ids.slice(0, 3).join(","));
+    w.location.hash = "#/league/rivals"; g.applyHash();
+    check(S.tab === "tracker", "League: old Rivals links open League", S.tab);
+    w.location.hash = "#/league"; g.applyHash(); S.tab = "tracker"; g.render();
+    if (feed && feed.standings && feed.standings.length > 1) {
+      const rows = [...doc.querySelectorAll("#r-lgtable tbody tr")];
+      check(rows.length === feed.standings.length, `League table: one row per manager (${feed.standings.length})`, rows.length);
+      /* pick a rival that is not the default, and Head to Head follows */
+      const other = feed.standings.filter(r => String(r.entryId) !== TID).slice(-1)[0];
+      g.act("rivalpick", String(other.entryId));
+      const nm = (doc.querySelector("#r-lgh2h .lg-snap .lg-nm b") || {}).textContent;
+      const sel = doc.querySelector("#r-lgtable tr.lg-sel .lg-nm b");
+      check(nm === other.entryName && sel && sel.textContent === other.entryName, "Head to Head: picking a rival in the table switches the card and marks the row", `${nm} / ${sel && sel.textContent}`);
+      /* the edge, worked out here from the feed: projected points of the players only one side owns */
+      const ent = feed.entries[other.entryId], last = ent && ent.gw && ent.gw[ent.gw.length - 1];
+      if (last && last.picks) {
+        const theirs = new Set(last.picks.map(p => p.id ?? p)), mine = new Set(S.squad), P = id => S.model.players.find(p => p.id === id);
+        const pts = p => g.hPts(p, NEXT, S.horizon);
+        const ys = g.squadPlayers().filter(p => !theirs.has(p.id)).reduce((a, p) => a + pts(p), 0);
+        const ts = [...theirs].map(P).filter(p => p && !mine.has(p.id)).reduce((a, p) => a + pts(p), 0);
+        const shown = [...doc.querySelectorAll("#r-lgh2h .lg-es b")].map(b => b.textContent);
+        const want = [ys.toFixed(1), ts.toFixed(1), (ys - ts >= 0 ? "+" : "−") + Math.abs(ys - ts).toFixed(1)];
+        check(JSON.stringify(shown) === JSON.stringify(want), "Head to Head: Yours, Theirs and Edge match the squads in the feed", `${shown} vs ${want}`);
+      }
+      /* the season view: totals from each manager's weeks */
+      g.act("lgview", "season");
+      const me = feed.entries[TID], heads = [...doc.querySelectorAll("#r-lgtable thead th")].map(t => t.textContent);
+      const myRow = doc.querySelector("#r-lgtable tr.me"), cells = myRow ? [...myRow.children].map(c => c.textContent.trim()) : [];
+      const moves = me && me.gw ? me.gw.reduce((a, r) => a + (+r.transfers || 0), 0) : null;
+      check(heads.includes("Best GW") && cells[heads.indexOf("Moves")] === String(moves), "League table, Season: your moves are the sum of your weeks", `${cells[heads.indexOf("Moves")]} vs ${moves}`);
+      g.act("lgview", "gw"); S.rivalPick = null;
+    }
+    /* the Planner panels carry the card header, not the old one */
+    S.tab = "squad"; S.startGW = NEXT; g.render();
+    const pool = doc.querySelector(".poolpanel .pnl-h h3");
+    check(pool && pool.textContent === "Player Pool" && !doc.querySelector(".poolpanel .phead"), "Planner: Player Pool has the card header");
+    S.startGW = NEXT - 2; g.render();
+    const rev = doc.querySelector(".pv-rev .pnl-h h3");
+    check(rev && /^GW\d+ Review$/.test(rev.textContent) && !doc.querySelector(".pv-rev .phead"), "Planner: GW Review has the card header", rev && rev.textContent);
+    S.startGW = NEXT; S.tab = "squad"; g.render();
+  }
+
   /* ---------- F60 best combination ---------- */
   const outIds = sq.filter(p => p.pos >= 2).slice(0, 3).map(p => p.id);
   const combo = g.bestCombo(outIds);
