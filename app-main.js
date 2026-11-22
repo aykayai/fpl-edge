@@ -43,6 +43,8 @@ function act(k,a,b,c){
     case"caph":S.capH=a==="ROS"?"ROS":+a;break;
     case"trwin":S.trWin=a;break;
     case"trfilt":S.trFilt=a;break;
+    case"rkmode":S.rkMode=a==="pts"?"pts":"rank";break;
+    case"trh":S.trH=[1,3,5].includes(+a)?+a:1;break;
     case"cmpmove":{S.pop=null;S.cmp=cmpNew("cur","plan");const ids=effectiveSquadIds(VG()).ids.map(i=>i===a?b:i);S.cmp.ed.B={ids};break;}
     /* wave 3: Players hub */
     /* Teams (redesign 12 Nov 2026): Fixture Grid and Matches */
