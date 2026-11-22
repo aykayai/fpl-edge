@@ -55,11 +55,12 @@ const ACTUALS_URL=BACKUP?"data/actuals.json":"/data/feeds/actuals.json";
 const RIVALS_URL=BACKUP?null:"/data/feeds/rivals.json";
 const DCD_URL=BACKUP?"data/dc-doubles.json":"/data/feeds/dc-doubles.json";
 /* badges and photos: our server's cache, or the Premier League directly on Pages */
-const imgSrc=(kind,code)=>BACKUP
+/* w=110: the half-size photo for small faces (audit follow-up) */
+const imgSrc=(kind,code,w)=>BACKUP
   ?(kind==="shirt"||kind==="shirtgk"?`https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_${esc(String(code||""))}${kind==="shirtgk"?"_1":""}-220.png`
     :kind==="badge"?`https://resources.premierleague.com/premierleague/badges/50/t${esc(String(code||""))}.png`
     :`https://resources.premierleague.com/premierleague25/photos/players/110x140/${esc(String(code||""))}.png`)
-  :`/img/${kind}/${esc(String(code||""))}.png${kind==="player"?"?s="+String(SEASON_Y-1).slice(2)+String(SEASON_Y).slice(2):""}`;
+  :`/img/${kind}/${esc(String(code||""))}.png${kind==="player"?"?s="+String(SEASON_Y-1).slice(2)+String(SEASON_Y).slice(2)+(w?"&w="+w:""):""}`;
 /* ---------- instant start ----------
    The last good copy of every data file (dataset CSVs and both feeds) is kept
    in IndexedDB, which has room for it where localStorage did not. On open the
@@ -278,7 +279,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.2.1";
+const APP_VERSION="14.3.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

@@ -500,7 +500,7 @@ function rivalsHTML(){
   moves.sort((a,b)=>b.n-a.n);
 
   const miniRow=(p,right,sub)=>`<div class="prow" style="cursor:pointer" onclick="act('card',${p.id})">
-    ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
+    ${dsFace(p)}${dsBadge(sgTeamOf(p),16)}
     <span style="flex:1;min-width:0">
       <span style="font-size:12.5px;font-weight:600">${esc(p.web_name)}</span>
       <span style="display:block;font-size:10px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)}${sub?" · "+sub:""}</span></span>
@@ -611,7 +611,7 @@ const nwTag=k=>{const c=NW_CAT[k]||NW_CAT.news;return `<span class="nw-tg" style
 const nwAgo=t=>{const h=(Date.now()-t)/3600000;return h<1?Math.max(1,Math.round(h*60))+"m":h<24?Math.round(h)+"h":Math.round(h/24)+"d";};
 const nwById=id=>(S.model.players||[]).find(p=>p.id===id);
 const nwKit=p=>((KITS[p.teamName]||KITS._d||{b:"#444"}).b);
-const nwFace=(p,cls)=>`<span class="nw-face ${cls||""}" style="--cc:${nwKit(p)}"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.visibility='hidden'"></span>`;
+const nwFace=(p,cls)=>`<span class="nw-face ${cls||""}" style="--cc:${nwKit(p)}"><img alt="" src="${imgSrc("player",p.code,110)}" onerror="this.style.visibility='hidden'"></span>`;
 const nwSquad=()=>new Set(S.squad||[]);
 /* the player a story is mostly about: one of yours first */
 function nwLead(n){const mine=nwSquad(),ids=n.ids||[];const id=ids.find(i=>mine.has(i))||ids[0];return id?nwById(id):null;}
@@ -940,7 +940,7 @@ function renderPage(){
   else if(S.tab==="xfpl")main=statusPageHTML();
   else if(S.tab==="chips")main=chipsHTML();
   else if(S.tab==="fixtures")main=fixturesHTML();
-  else if(S.tab==="rivals")main=leagueTabsHTML()+rivalsHTML();
+  else if(S.tab==="rivals")main=trkHeadHTML()+rivalsHTML();   /* audit follow-up: the League header on both tabs */
   else if(S.tab==="news")main=newsHTML();
   else if(S.tab==="signals")main=signalsHTML();
   }catch(e){
@@ -1013,11 +1013,6 @@ function topbarHTML(o){
 }
 
 
-/* League (wave 1): Tracker is the default tab, Rivals the second */
-function leagueTabsHTML(){
-  return `<div class="pagetabs"><h1>League</h1><span class="pseg">${[["tracker","Tracker"],["rivals","Rivals"]].map(([k,n])=>
-    `<a class="${S.tab===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')">${n}</a>`).join("")}</span></div>`;
-}
 /* Status (wave 1): data freshness (moved from the footer), the signal key,
    then the xFPL model page. Wave 7 adds model vs FPL, fixture accuracy,
    odds status and options. */

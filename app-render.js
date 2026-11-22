@@ -82,7 +82,7 @@ function playerCardHTML(){
   /* News tab (22 Nov 2026): the flag, his chance of starting, the one flag
      log, minutes by gameweek, and every story and post naming him */
   const pStories=pkStories(p),flagged=p.avail<1;
-  const tabs=`<span class="hz pk-tabs"><button class="${S.cardTab!=="news"?"on":""}" onclick="act('cardtab','overview')">Overview</button><button class="${S.cardTab==="news"?"on":""}" onclick="act('cardtab','news')">News${pStories.length||flagged?` <i class="${flagged?"warn":""}">${pStories.length}</i>`:""}</button></span>`;
+  const tabs=`<span class="hz pk-tabs"><button class="${S.cardTab!=="news"?"on":""}" onclick="act('cardtab','overview')">Overview</button><button class="${S.cardTab==="news"?"on":""}" onclick="act('cardtab','news')">News${pStories.length||flagged?` <i class="${flagged?"pk-wn":""}">${pStories.length}</i>`:""}</button></span>`;
   const out=S.cardTab==="news"?`<div class="pk2">${hero}<div class="pkright">${pkNewsHTML(p,pStories)}</div></div>`:body;
   return modalHTML(`${esc(p.web_name)} · ${esc(p.teamName)}`,out,{wide:true,close:"card",cls:"pkcard",ctl:tabs});
 }
@@ -136,7 +136,7 @@ function kitHTML(p,cls){
 }
 function kitSm(p,h){const c=teamCodeOf(p),fb=shirtSVG(p.teamName.toUpperCase(),p.pos===1,h);
   return c==null?fb:`<span class="kitsm" style="--kh:${h}px"><img alt="" src="${imgSrc(p.pos===1?"shirtgk":"shirt",c)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'"><span style="display:none">${fb}</span></span>`;}
-const photoHTML=(p,cls)=>`<img class="${cls}" alt="" src="${imgSrc("player",p.code)}" onerror="this.style.visibility='hidden'">`;
+const photoHTML=(p,cls)=>`<img class="${cls}" alt="" src="${imgSrc("player",p.code,110)}" onerror="this.style.visibility='hidden'">`;
 const dtStar=(cls,sz)=>`<span class="${cls}" title="In FPL's season Dream Team">${lic("star",sz||10)}</span>`;
 
 /* ---------- This Week design parts (22 Nov 2026) ----------
@@ -153,7 +153,7 @@ const dsFig=(v,tone)=>`<b class="ds-fig${tone?" "+tone:""}">${v}</b>`;
 const dsChips=(used,active)=>`<span class="ds-chips">${DS_CHIPS.map(([k,s])=>{const u=CHIP_UI[k];
   return `<span class="ds-chip${used.includes(k)?" on":""}${active===k?" act":""}" style="--tc:${u.c}" title="${u.n}${active===k?" · this week":used.includes(k)?" · used":" · not used"}">${s}</span>`;}).join("")}</span>`;
 /* a face: the player's photo, his kit when the photo fails; opens the card */
-const dsFace=(p,cls)=>p?`<span class="ds-face ${cls||""}" onclick="event.stopPropagation();act('card',${p.id})" title="${esc(p.web_name)}: player card"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.onerror=null;this.parentNode.classList.add('kit');this.src='${imgSrc(p.pos===1?"shirtgk":"shirt",teamCodeOf(p))}'"></span>`:"";
+const dsFace=(p,cls)=>p?`<span class="ds-face ${cls||""}" onclick="event.stopPropagation();act('card',${p.id})" title="${esc(p.web_name)}: player card"><img alt="" src="${imgSrc("player",p.code,110)}" onerror="this.onerror=null;this.parentNode.classList.add('kit');this.src='${imgSrc(p.pos===1?"shirtgk":"shirt",teamCodeOf(p))}'"></span>`:"";
 const dsBadge=(t,size)=>t?badgeOrShirt(t,size||24):"";
 /* The 1 / 3 / 5 / ROS switch every This Week pop-up shares (ROS is the
    rest of the season). off: options greyed out on that pop-up. */
@@ -3827,7 +3827,7 @@ function sgPicksHTML(){
   const svg=`<svg class="chart" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="The game's pick each week and his points"><line class="czero" x1="10" x2="${W-10}" y1="${Hh-54}" y2="${Hh-54}"/>${wk.map((x,j)=>{const cx=40+j*slot+slot/2-10,h=(x.v||0)/mx*(Hh-90);
     return `<rect x="${(cx-bw/2).toFixed(1)}" y="${(Hh-54-h).toFixed(1)}" width="${bw}" height="${Math.max(1.5,h).toFixed(1)}" rx="4" fill="#3DDC97" opacity="${x.e===ev.id?1:.55}"/>
       <text class="ds-cv" x="${cx.toFixed(1)}" y="${(Hh-60-h).toFixed(1)}" text-anchor="middle">${x.v??"—"}</text>
-      ${x.p?`<image href="${imgSrc("player",x.p.code)}" x="${(cx-11).toFixed(1)}" y="${Hh-48}" width="22" height="28" preserveAspectRatio="xMidYMin slice"><title>${esc(x.p.web_name)}</title></image>`:""}
+      ${x.p?`<image href="${imgSrc("player",x.p.code,110)}" x="${(cx-11).toFixed(1)}" y="${Hh-48}" width="22" height="28" preserveAspectRatio="xMidYMin slice"><title>${esc(x.p.web_name)}</title></image>`:""}
       <text class="cax${x.e===ev.id?" ds-now":""}" x="${cx.toFixed(1)}" y="${Hh-6}" text-anchor="middle">GW${x.e}</text>`;}).join("")}</svg>`;
   const nav=`<span class="sx-gw"><button ${i<=0?"disabled":""} onclick="act('sgpickgw',${i>0?evs[i-1].id:ev.id})" aria-label="Previous gameweek">‹</button>GW${ev.id}<button ${i>=evs.length-1?"disabled":""} onclick="act('sgpickgw',${i<evs.length-1?evs[i+1].id:ev.id})" aria-label="Next gameweek">›</button></span>`;
   const tog=`<span class="sx-tog sm">${[["capt","Captained"],["sel","Selected"],["bought","Bought"],["top","Top Scorer"]].map(([k,l])=>`<button class="${pick===k?"on":""}" onclick="act('sgpick','${k}')">${l}</button>`).join("")}</span>`;
@@ -4119,7 +4119,7 @@ function playerDataHTML(){
       <td class="fig${lvl("vsb",D.C.vsb.val(p))}">${D.C.vsb.cell(p)}</td>
       <td class="fig">${D.C.own.cell(p)}</td>
       <td class="fig${lvl("rivals",D.C.rivals.val(p))}">${D.C.rivals.cell(p)}</td>
-      <td class="fig${(p.xMins||0)<60?" warn":lvl("xmins",D.C.xmins.val(p))}">${D.C.xmins.cell(p)}</td>
+      <td class="fig${(p.xMins||0)<60?" pdwarn":lvl("xmins",D.C.xmins.val(p))}">${D.C.xmins.cell(p)}</td>
       ${D.extra.map((k,j)=>`<td class="fig${j?"":" gs"}${lvl(k,D.C[k].val(p))}">${D.C[k].cell(p)}</td>`).join("")}
       <td class="acts"><button class="pdstar${S.stars.includes(p.id)?" on":""}" onclick="act('star',${p.id})" title="Shortlist" aria-label="Shortlist ${esc(p.web_name)}" aria-pressed="${S.stars.includes(p.id)}">★</button>${own?"":`<button class="pdadd" onclick="act('addplan',${p.id})" title="Add to the Planner" aria-label="Add ${esc(p.web_name)} to the Planner">+</button>`}</td></tr>`;}).join("");
   const more=rows.length>lim?`<div class="pdmore"><span class="note">Showing ${lim} of ${rows.length} players</span>
@@ -4151,7 +4151,7 @@ function pdHeadHTML(rows,r){
         <div class="pdctl"><span class="pdl">Projection</span>${seg(win,[[1,"1 GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS",`Rest of season, GW${g}–38`]],"pwin","Projection window")}</div>
         <div class="pdctl"><span class="pdl">Club</span><select class="pdsel" onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.slice().sort((x,y)=>String(x.name).localeCompare(y.name)).map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select></div>
         <div class="pdctl pdpricectl"><span class="pdl">Price <b id="pdpricel">£${lo.toFixed(1)} – £${hi.toFixed(1)}</b></span>
-          <span class="pdrange"><i class="tr"></i><i class="fl" style="left:${((lo-3.5)/(top-3.5)*100).toFixed(1)}%;right:${(100-(hi-3.5)/(top-3.5)*100).toFixed(1)}%"></i>
+          <span class="pdrange"><i class="pdtr"></i><i class="fl" style="left:${((lo-3.5)/(top-3.5)*100).toFixed(1)}%;right:${(100-(hi-3.5)/(top-3.5)*100).toFixed(1)}%"></i>
             <input type="range" min="3.5" max="${top}" step="0.1" value="${lo}" oninput="pdPriceInput(this)" onchange="act('lmin',this.value)" aria-label="Lowest price">
             <input type="range" min="3.5" max="${top}" step="0.1" value="${hi}" oninput="pdPriceInput(this)" onchange="act('lmax',this.value)" aria-label="Highest price"></span></div>
         <div class="pdsp"></div>
