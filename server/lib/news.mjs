@@ -143,9 +143,10 @@ async function fetchYouTube([name, id]) {
     keep(key, "social", items);
   } catch (e) { fail(key, "social", e); log("news.youtube", "fail " + name + " " + e.message, Date.now() - t0); }
 }
-/* FFScout's live-match posts ("⚽ | GOAL - McBurnie ...", "🅰 | ASSIST - ...")
-   are left out (Andy, 22 Nov 2026): they crowded out everything else */
-export const matchEventPost = t => /\|\s*(GOAL|ASSIST)\s*-/i.test(String(t || ""));
+/* FFScout's live-match posts (goals, assists, red cards, DefCon points:
+   "⚽ | GOAL - McBurnie ...", "✅ | DEF CON POINTS ...") are left out (Andy,
+   22 Nov 2026): they crowded out everything else */
+export const matchEventPost = t => /\|\s*(GOAL|ASSIST|RED CARD)\s*-|\|\s*DEF ?CON POINTS/i.test(String(t || ""));
 async function fetchBluesky([name, handle]) {
   const key = "Bluesky · " + name, t0 = Date.now();
   try {
