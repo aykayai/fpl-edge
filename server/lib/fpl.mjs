@@ -178,3 +178,39 @@ export async function fplPlayersPayload() {
   _slim = { at: state.fetchedAt, body };
   return body;
 }
+
+/* One gameweek for the Planner's finished-week view (22 Nov 2026): each
+   player's points, minutes, match events and that week's Dream Team, and
+   the week's fixtures with their scores. A finished week never changes, so
+   a week not on disk is fetched from FPL once and kept. */
+const _week = new Map();
+export async function fplWeekPayload(gwIn) {
+  const gw = Math.round(+gwIn), cur = state.currentGw || state.gw || 0;
+  if (!(gw >= 1 && gw <= 38)) return { gw, players: {}, fixtures: [] };
+  const hit = _week.get(gw);
+  if (hit && (gw < cur || Date.now() - hit.at < 120000)) return hit.body;
+  const lp = join(DIR(), `live-gw${gw}.json`), fp = join(DIR(), `fixtures-gw${gw}.json`);
+  let live = null, fx = null;
+  try { live = JSON.parse(await readFile(lp, "utf8")); } catch { /* not kept yet */ }
+  if (!live && (!cur || gw <= cur)) {
+    try { live = await getJson(`/event/${gw}/live/`); await mkdir(DIR(), { recursive: true }); await writeFile(lp, JSON.stringify(live)); }
+    catch (e) { log("fpl.week", "live fail gw=" + gw + " " + e.message, 0); }
+  }
+  try { fx = JSON.parse(await readFile(fp, "utf8")); } catch { /* not kept yet */ }
+  if ((!fx || (cur && gw >= cur)) && (!cur || gw <= cur)) {
+    try { fx = await getJson(`/fixtures/?event=${gw}`); await mkdir(DIR(), { recursive: true }); await writeFile(fp, JSON.stringify(fx)); }
+    catch (e) { log("fpl.week", "fixtures fail gw=" + gw + " " + e.message, 0); }
+  }
+  const players = {};
+  for (const e of (live && live.elements) || []) {
+    const t = e.stats || {};
+    const dc = (e.explain || []).some(x => (x.stats || []).some(y => y.identifier === "defensive_contribution" && y.points > 0));
+    players[e.id] = { p: t.total_points ?? 0, m: t.minutes ?? 0, g: t.goals_scored || 0, a: t.assists || 0, cs: t.clean_sheets || 0,
+      b: t.bonus || 0, sv: t.saves || 0, yc: t.yellow_cards || 0, rc: t.red_cards || 0, og: t.own_goals || 0,
+      ps: t.penalties_saved || 0, pm: t.penalties_missed || 0, dc: dc ? 1 : 0, dt: t.in_dreamteam ? 1 : 0 };
+  }
+  const fixtures = (Array.isArray(fx) ? fx : []).map(f => ({ h: f.team_h, a: f.team_a, hs: f.team_h_score, as: f.team_a_score, done: !!f.finished }));
+  const body = { gw, players, fixtures };
+  _week.set(gw, { at: Date.now(), body });
+  return body;
+}

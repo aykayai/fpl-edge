@@ -214,6 +214,19 @@ try {
     check(draggable === 15, `Planner: all 15 players can be dragged in an editable week (${draggable})`);
     S.forceXI = keepXI; g.render();
   }
+  /* ---------- a finished week (22 Nov 2026): summary, results, events, prediction pills, review ---------- */
+  {
+    const fin = ((S.tracker && S.tracker.gw) || []).filter(r => Array.isArray(r.picks) && r.picks.length && r.event < NEXT).map(r => r.event).sort((a, b) => b - a)[0];
+    if (fin) {
+      g.act("startgw", fin); await new Promise(r => setTimeout(r, 2500)); g.render();
+      const cards = doc.querySelectorAll(".pz-pitch.past .pz-c");
+      check(cards.length === 15 && doc.querySelectorAll(".pz-pitch.past .pv-pills").length === 15 && doc.querySelectorAll(".pz-pitch.past .pv-res").length >= 15 && !doc.querySelector(".pz-pitch.past .pz-xf"),
+        `Finished week GW${fin}: every card has its result and prediction pills, and no edit buttons`, cards.length);
+      check(!!doc.querySelector(".pv-sum") && /GW\d+ points/.test(doc.querySelector(".pv-sum")?.textContent || "") && !!doc.querySelector(".pv-rev") && !doc.querySelector(".poolpanel") && /read-only/.test(doc.querySelector(".pz-head")?.textContent || ""),
+        `Finished week GW${fin}: the summary bar, the GW Review in place of the Player Pool, read-only head`);
+      g.act("startgw", NEXT);
+    } else check(false, "Finished week setup: an official week before the next deadline");
+  }
   /* ---------- Compare v3, the List view, the Player Pool filters (21 Nov 2026) ---------- */
   {
     g.act("compare");

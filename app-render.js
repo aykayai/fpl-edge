@@ -145,7 +145,10 @@ function pcardHTML(p,bench){
   const basePred=snapPred!=null?snapPred:(isPast?null:hPts(p,g,S.horizon));
   const hasPred=basePred!=null,shownPts=hasPred?basePred*capMult:null;
   const feed=(S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]))||null;
-  const actRaw=feed?feed[g]??feed[String(g)]:null,hasAct=actRaw!=null,actShown=hasAct?actRaw*capMult:null;
+  let actRaw=feed?feed[g]??feed[String(g)]:null;
+  const wkSt=isPast&&S.wkLive&&S.wkLive[g]&&S.wkLive[g].players?S.wkLive[g].players[p.id]:null;
+  if(actRaw==null&&wkSt)actRaw=wkSt.p;
+  const hasAct=actRaw!=null,actShown=hasAct?actRaw*capMult:null;
   const diff=(hasAct&&hasPred)?actShown-shownPts:null;
   const noData=isPast&&!p.gw[g]&&snapPred==null&&!hasAct;
   const shownVal=hasAct?actShown:(hasPred?shownPts:0);
@@ -162,11 +165,11 @@ function pcardHTML(p,bench){
   const click=official?`act('card',${p.id})`:`act(S.subFrom!=null?'sub':'card',${p.id})`;
   return `<div class="pz-c${fl?" dim":""}${sub?" subsel":""}${menu?" open":""}" data-pid="${p.id}" onclick="${click}"${official?"":` oncontextmenu="event.preventDefault();act('pmenu',${p.id})" draggable="true" ondragstart="pzDrag(event,${p.id})" ondragover="pzOver(event)" ondragleave="this.classList.remove('drop')" ondrop="pzDrop(event,${p.id})"`} title="${esc(p.web_name)}">
     <div class="pz-k">${kitHTML(p,"pz-kit")}
-      <span class="pz-l">${official?"":`<button class="pz-xf${fl?" on":""}" onclick="event.stopPropagation();act('flag',${p.id})" title="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}" aria-label="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}">${lic("arrow-right-left",11)}</button>`}${armband}${inDT(p)?dtStar("pz-dt"):""}</span>
+      <span class="pz-l">${official?"":`<button class="pz-xf${fl?" on":""}" onclick="event.stopPropagation();act('flag',${p.id})" title="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}" aria-label="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}">${lic("arrow-right-left",11)}</button>`}${armband}${isPast?(wkSt&&wkSt.dt?`<span class="pz-dt pv-gdt" title="In GW${g}'s Dream Team">${lic("star",10)}</span>`:""):(inDT(p)?dtStar("pz-dt"):"")}</span>
       <span class="pz-r"><span class="pz-ow" title="Selected by ${p.owned}%">${p.owned}%</span>${inj}</span>
-      <span class="pz-pt" style="background:${noData?"var(--ink3)":col[0]};color:${noData?"var(--mute)":col[1]}${elite?";box-shadow:0 0 0 2px #EAFFEF,0 0 12px rgba(125,251,158,.85)":""}" title="${esc(ptsTip)}">${noData?"—":(hasAct?actShown.toFixed(1):(hasPred?shownPts.toFixed(1):"—"))}</span></div>
+      <span class="pz-pt" style="background:${noData?"var(--ink3)":col[0]};color:${noData?"var(--mute)":col[1]}${elite?";box-shadow:0 0 0 2px #EAFFEF,0 0 12px rgba(125,251,158,.85)":""}" title="${esc(ptsTip)}">${noData?"—":(hasAct?(isPast?fmtPts(actShown):actShown.toFixed(1)):(hasPred?shownPts.toFixed(1):"—"))}</span></div>
     <div class="pz-n"><b>${esc(p.web_name)}</b><i>£${p.price.toFixed(1)}${arw(p.priceChange)}</i></div>
-    <div class="pz-x">${strip}</div>${under}${menu?pmenuHTML(p,bench):""}</div>`;
+    ${isPast?pastRowsHTML(p,g,shownPts,actShown,hasPred,sp):`<div class="pz-x">${strip}</div>${under}`}${menu?pmenuHTML(p,bench):""}</div>`;
 }
 /* the right-click menu, with the site's icons */
 function pmenuHTML(p,bench){
@@ -180,13 +183,139 @@ function pmenuHTML(p,bench){
     ${inXI?it(`<span class="pz-mb v">V</span>`,"Vice-captain",vice===p.id,`act('vice',${p.id})`):""}
     ${it(lic("info",15),"Player card",false,`act('card',${p.id})`)}</div>`;
 }
+/* ---------- a finished week (22 Nov 2026, Andy approved the mock) ----------
+   Each card gets the result, the match events (drawn icons) and the
+   prediction against the actual as two pills; a summary bar sits under the
+   gameweek scroller; a GW Review replaces the Player Pool. The week's own
+   figures come from /api/fpl-week/<gw> (FPL's gameweek file and fixtures). */
+function weekLive(g){
+  if(BACKUP)return null;
+  S.wkLive=S.wkLive||{};
+  if(!(g in S.wkLive)){S.wkLive[g]=null;
+    dataText("/api/fpl-week/"+g).then(t=>{try{S.wkLive[g]=JSON.parse(t);}catch(_){S.wkLive[g]={players:{},fixtures:[]};}render();})
+      .catch(()=>{S.wkLive[g]={players:{},fixtures:[]};});}
+  return S.wkLive[g];
+}
+const fmtPts=v=>v==null?"—":Number.isInteger(+v)?String(+v):(+v).toFixed(1);
+const EVSV=(inner,fill)=>`<svg viewBox="0 0 24 24" width="13" height="13" fill="${fill||"none"}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+const EV_ICON={
+  g:EVSV('<circle cx="12" cy="12" r="9"/><path d="M12 7.5l3.8 2.8-1.5 4.4H9.7L8.2 10.3z" fill="currentColor"/><path d="M12 3v4.5M20.6 9.6l-4.8.7M17.3 19.4l-3-4.7M6.7 19.4l3-4.7M3.4 9.6l4.8.7"/>'),
+  a:EVSV('<path d="M4 15.5c2.5 0 4-.6 5.6-2.4l2.6-3 4 1.8c1.6.7 2.3 1.7 2.3 3.1V17H4z"/><path d="M4 17h14.5M9 12l2 1.5M11 10l2 1.5"/>'),
+  cs:EVSV('<path d="M12 3l7.5 3v5.4c0 4.4-3.1 7.7-7.5 9.6-4.4-1.9-7.5-5.2-7.5-9.6V6z"/><path d="M8.6 12.2l2.4 2.4 4.6-4.8"/>'),
+  sv:EVSV('<path d="M7.5 21v-4.2L4.6 13a1.6 1.6 0 0 1 2.4-2.1l1.8 1.8V5.5a1.4 1.4 0 0 1 2.8 0V11V4.2a1.4 1.4 0 0 1 2.8 0V11V5.3a1.4 1.4 0 0 1 2.8 0V11V8a1.3 1.3 0 0 1 2.6 0v6.4c0 2.5-1.2 4.6-3.2 6.6"/>'),
+  b:EVSV('<circle cx="12" cy="9" r="5.5"/><path d="M8.6 13.4L7 21l5-2.6 5 2.6-1.6-7.6"/>'),
+  dc:EVSV('<rect x="3.5" y="5" width="7" height="5" rx="1"/><rect x="13.5" y="5" width="7" height="5" rx="1"/><rect x="8.5" y="14" width="7" height="5" rx="1"/><path d="M3.5 16.5h3M17.5 16.5h3"/>'),
+  card:c=>`<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="7" y="3.5" width="10" height="17" rx="2" fill="${c}" transform="rotate(8 12 12)"/></svg>`,
+  mins:EVSV('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  og:EVSV('<circle cx="12" cy="12" r="9"/><path d="M8 8l8 8M16 8l-8 8"/>'),
+  pen:EVSV('<circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 16h.01"/>')};
+const evChip=(icon,tone,title,n)=>`<span class="pv-ev" style="--ec:${tone}" title="${esc(title)}">${icon}${n?`<i>${n}</i>`:""}</span>`;
+/* the match events of one player in one week */
+function evRowHTML(p,st){
+  if(!st)return "";
+  const c=[];if(st.m===0)c.push(evChip(EV_ICON.mins,"#FF5A6E","Did not play","0′"));
+  if(st.g)c.push(evChip(EV_ICON.g,"#3DDC97",st.g===1?"Goal":st.g+" goals",st.g>1?st.g:""));
+  if(st.a)c.push(evChip(EV_ICON.a,"#7AA2FF",st.a===1?"Assist":st.a+" assists",st.a>1?st.a:""));
+  if(st.cs&&p.pos<=3&&st.m>=60)c.push(evChip(EV_ICON.cs,"#22D3EE","Clean sheet"));
+  if(st.sv&&p.pos===1)c.push(evChip(EV_ICON.sv,"#5EEAD4",st.sv+" save"+(st.sv===1?"":"s"),st.sv));
+  if(st.ps)c.push(evChip(EV_ICON.sv,"#3DDC97","Penalty saved","P"));
+  if(st.dc)c.push(evChip(EV_ICON.dc,"#A78BFA","Defensive contribution"));
+  if(st.b)c.push(evChip(EV_ICON.b,"#FFB020",st.b+" bonus point"+(st.b===1?"":"s"),st.b));
+  if(st.pm)c.push(evChip(EV_ICON.pen,"#FF5A6E","Penalty missed"));
+  if(st.og)c.push(evChip(EV_ICON.og,"#FF5A6E","Own goal"));
+  if(st.yc)c.push(evChip(EV_ICON.card("#FFD23F"),"#FFD23F","Yellow card"));
+  if(st.rc)c.push(evChip(EV_ICON.card("#FF5A6E"),"#FF5A6E","Red card"));
+  return c.join("");
+}
+/* result rows for his club that week (two in a double, none in a blank) */
+function resHTML(p,W){
+  const fx=(W&&W.fixtures||[]).filter(f=>f.h===p.team||f.a===p.team);
+  const short=id=>((S.teams||[]).find(t=>t.id===id)||{}).short||"?";
+  if(!fx.length)return `<div class="pv-res"><span class="pv-wdl B">–</span><b>No game</b></div>`;
+  return fx.slice(0,2).map(f=>{const home=f.h===p.team,us=home?f.hs:f.as,them=home?f.as:f.hs,opp=short(home?f.a:f.h);
+    const r=us==null||them==null?"":us>them?"W":us<them?"L":"D";
+    return `<div class="pv-res${fx.length>1?" dbl":""}"><span class="pv-wdl ${r||"N"}">${r||"·"}</span><b>${us==null?"–":`${us}–${them}`}</b><span class="pv-opp">${home?esc(opp):esc(opp).toLowerCase()}</span><span class="pv-ha">${home?"H":"A"}</span></div>`;}).join("");
+}
+/* the card's lower half on a finished week */
+function pastRowsHTML(p,g,shownPts,actShown,hasPred,sp){
+  const W=weekLive(g),st=W&&W.players?W.players[p.id]:null;
+  const d=hasPred&&actShown!=null?actShown-shownPts:null;
+  return `${W?resHTML(p,W):`<div class="pv-res"><b class="mu">…</b></div>`}
+    <div class="pv-row"><span class="pv-evs">${evRowHTML(p,st)||`<span class="pv-none">—</span>`}</span></div>
+    <div class="pv-pills">${hasPred?`<span class="pv-pred" title="${esc(sp&&sp.why||"Predicted before the deadline")}">${sp&&sp.src==="backtest"?"Backtest":"Pred"} <b>${shownPts.toFixed(1)}</b></span>`:`<span class="pv-pred off">No prediction</span>`}${d!=null?`<span class="pv-diff ${d>=0?"up":"dn"}" title="Actual against predicted">${d>=0?"▲":"▼"} ${Math.abs(d).toFixed(1)}</span>`:""}</div>`;
+}
+/* the official row for a finished week, and the week before it */
+const offRowOf=g=>((S.tracker&&S.tracker.gw)||[]).find(r=>r.event===g&&Array.isArray(r.picks)&&r.picks.length)||null;
+const actOf=(id,g)=>{const W=S.wkLive&&S.wkLive[g],st=W&&W.players?W.players[id]:null;if(st)return st.p;
+  const f=S.playerActuals&&(S.playerActuals[id]||S.playerActuals[String(id)]);const v=f?f[g]??f[String(g)]:null;return v==null?null:+v;};
+/* the summary bar under the scroller */
+function pastSummaryHTML(g){
+  const row=offRowOf(g);if(!row)return "";
+  const tr=((S.tracker&&S.tracker.gw)||[]).slice().sort((a,b)=>a.event-b.event),prev=tr.filter(r=>r.event<g).pop();
+  const ev=(S.events||[]).find(e=>e.id===g)||{};
+  const P=id=>S.model.players.find(p=>p.id===id);
+  let pred=0,have=0;row.picks.slice(0,11).forEach(pk=>{const p=P(pk.id),sp=p&&pastPred(p,g);if(sp){pred+=sp.v*(pk.multiplier||1);have++;}});
+  const pts=row.points,dp=have>=9?pts-pred:null;
+  const chg=(a,b)=>a&&b?`<i class="${b<a?"up":"dn"}">${b<a?"▲":"▼"} ${Math.abs(a-b).toLocaleString()}</i>`:"";
+  const cell=(l,v,x)=>`<div><span>${l}</span><b>${v}</b>${x||""}</div>`;
+  return `<div class="pv-sum">
+    <div class="pv-big"><span>GW${g} points</span><b>${pts}</b>${dp!=null?`<i class="${dp>=0?"up":"dn"}">${dp>=0?"▲":"▼"} ${Math.abs(dp).toFixed(1)} vs predicted ${pred.toFixed(1)}</i>`:""}</div>
+    ${cell("Average",ev.avg??"—",ev.avg?`<i class="${pts>=ev.avg?"up":"dn"}">${pts>=ev.avg?"+":"−"}${Math.abs(pts-ev.avg)}</i>`:"")}
+    ${cell("Highest",ev.high??"—")}
+    ${cell("GW rank",row.gwRank?row.gwRank.toLocaleString():"—",chg(prev&&prev.gwRank,row.gwRank))}
+    ${cell("Overall rank",row.orRank?row.orRank.toLocaleString():"—",chg(prev&&prev.orRank,row.orRank))}
+    ${cell("Transfers",row.transfers||0,`<i>${row.transferCost>0?`<span class="dn">−${row.transferCost} hit</span>`:"no hit"}${row.chipLabel?" · "+esc(row.chipLabel):""}</i>`)}</div>`;
+}
+/* the GW Review, where the Player Pool sits on an editable week */
+function pastReviewHTML(g){
+  const row=offRowOf(g);if(!row)return "";
+  const W=weekLive(g),P=id=>S.model.players.find(p=>p.id===id);
+  const tr=((S.tracker&&S.tracker.gw)||[]).slice().sort((a,b)=>a.event-b.event),prev=tr.filter(r=>r.event<g&&Array.isArray(r.picks)&&r.picks.length).pop();
+  const xi=row.picks.slice(0,11),bn=row.picks.slice(11);
+  const bar=(v,mx,col)=>`<span class="pz-bt"><i style="width:${Math.round(Math.min(1,Math.abs(v)/Math.max(1,mx))*100)}%;background:${col}"></i></span>`;
+  const line=(p,label,b,val,cls)=>p?`<span class="pz-bw">${photoHTML(p,"pz-ph")}<span class="pz-bn">${esc(label)}</span>${b}<b class="${cls||""}">${val}</b></span>`:"";
+  /* captain against the best he could have had */
+  const capPk=xi.find(pk=>pk.multiplier>=2)||xi.find(pk=>pk.isC),mult=capPk?Math.max(2,capPk.multiplier||2):2;
+  const best=xi.map(pk=>({pk,v:actOf(pk.id,g)})).filter(x=>x.v!=null).sort((a,b)=>b.v-a.v)[0];
+  const capV=capPk?actOf(capPk.id,g):null,cp=capPk&&P(capPk.id),bp=best&&P(best.pk.id);
+  const capBlk=cp?`<div class="pv-blk"><em>${lic("crown",13)} Captain</em><div class="pv-cap"><span>${photoHTML(cp,"pz-ph")}<b>${esc(cp.web_name)}</b><i>${fmtPts(capV)} × ${mult} = ${fmtPts(capV==null?null:capV*mult)}</i></span>
+      ${bp&&bp!==cp?`<span class="pv-vs">best option</span><span>${photoHTML(bp,"pz-ph")}<b>${esc(bp.web_name)}</b><i class="up">${fmtPts(best.v)} × ${mult} = ${fmtPts(best.v*mult)}</i></span>`:`<span class="pv-vs">the best option</span><span></span>`}</div>
+      ${bp&&bp!==cp&&capV!=null&&best.v>capV?`<div class="pv-note dn">Missed ${fmtPts((best.v-capV)*(mult-1))} points on the armband</div>`:capV!=null?`<div class="pv-note up">The right call</div>`:""}</div>`:"";
+  /* transfers in and out, and what they scored that week */
+  let xfer="";
+  if(prev){const was=new Set(prev.picks.map(pk=>pk.id)),now=new Set(row.picks.map(pk=>pk.id));
+    const ins=row.picks.filter(pk=>!was.has(pk.id)).map(pk=>P(pk.id)).filter(Boolean),outs=prev.picks.filter(pk=>!now.has(pk.id)).map(pk=>P(pk.id)).filter(Boolean);
+    if(ins.length&&!row.chip?.match?.(/freehit|wildcard/)){const si=ins.reduce((a,p)=>a+(actOf(p.id,g)||0),0),so=outs.reduce((a,p)=>a+(actOf(p.id,g)||0),0),net=si-so-(row.transferCost||0);
+      const mx=Math.max(1,...ins.concat(outs).map(p=>actOf(p.id,g)||0));
+      xfer=`<div class="pv-blk"><em>${lic("arrow-right-left",13)} Transfer${ins.length>1?"s":""}</em>${ins.map(p=>line(p,p.web_name+" in",bar(actOf(p.id,g)||0,mx,"var(--mint)"),fmtPts(actOf(p.id,g)||0),"up")).join("")}${outs.map(p=>line(p,p.web_name+" out",bar(actOf(p.id,g)||0,mx,"#5A5A5A"),fmtPts(actOf(p.id,g)||0))).join("")}
+        <div class="pv-note ${net>=0?"up":"dn"}">${net>=0?"+":"−"}${fmtPts(Math.abs(net))} from the transfer${ins.length>1?"s":""}${row.transferCost?` after the −${row.transferCost} hit`:""}</div></div>`;}
+    else xfer=`<div class="pv-blk"><em>${lic("arrow-right-left",13)} Transfers</em><div class="pv-kv"><span>${row.chip&&/freehit|wildcard/.test(row.chip)?esc(row.chipLabel||"Chip")+" week":"No transfers"}</span><b>${ins.length?ins.length+" changes":"—"}</b></div></div>`;}
+  /* best, and worst against the prediction */
+  const scored=xi.map(pk=>{const p=P(pk.id),v=actOf(pk.id,g),sp=p&&pastPred(p,g);return p&&v!=null?{p,pk,v:v*(pk.multiplier||1),d:sp?v*(pk.multiplier||1)-sp.v*(pk.multiplier||1):null}:null;}).filter(Boolean);
+  const top=scored.slice().sort((a,b)=>b.v-a.v).slice(0,3),mxv=Math.max(1,...top.map(x=>x.v));
+  const worst=scored.filter(x=>x.d!=null).sort((a,b)=>a.d-b.d).slice(0,3),mxd=Math.max(1,...worst.map(x=>Math.abs(x.d)));
+  const lab=x=>x.p.web_name+(x.pk.multiplier>=2?" (C)":"");
+  const perf=`<div class="pv-blk"><em class="up">Best</em>${top.map(x=>line(x.p,lab(x),bar(x.v,mxv,"var(--mint)"),fmtPts(x.v),"up")).join("")}
+    ${worst.length?`<em class="dn">Worst against prediction</em>${worst.map(x=>line(x.p,lab(x),bar(x.d,mxd,x.d<0?"var(--red)":"var(--mint)"),(x.d>=0?"+":"−")+Math.abs(x.d).toFixed(1),x.d<0?"dn":"up")).join("")}`:""}</div>`;
+  /* the bench, and who came on */
+  const benchPts=bn.reduce((a,pk)=>a+(actOf(pk.id,g)||0),0),mxb=Math.max(1,...bn.map(pk=>actOf(pk.id,g)||0));
+  const subs=(row.autoSubs||[]).map(s=>`${esc((P(s.in)||{}).web_name||"?")} on for ${esc((P(s.out)||{}).web_name||"?")}`).join(", ");
+  const benchBlk=`<div class="pv-blk"><em>${lic("users",13)} Bench · ${fmtPts(benchPts)} point${benchPts===1?"":"s"} left</em>${bn.map(pk=>{const p=P(pk.id);return line(p,p?p.web_name:"",bar(actOf(pk.id,g)||0,mxb,"#5A7A6A"),fmtPts(actOf(pk.id,g)));}).join("")}
+    ${subs?`<div class="pv-kv"><span>Auto-sub${(row.autoSubs||[]).length>1?"s":""}</span><b>${subs}</b></div>`:""}</div>`;
+  /* that week's Dream Team */
+  let dtBlk="";
+  if(W&&W.players){const dts=Object.entries(W.players).filter(([,s])=>s.dt),mine=row.picks.filter(pk=>(W.players[pk.id]||{}).dt).map(pk=>P(pk.id)).filter(Boolean);
+    const tot=dts.reduce((a,[,s])=>a+(s.p||0),0),mx=Math.max(1,...mine.map(p=>actOf(p.id,g)||0));
+    if(dts.length)dtBlk=`<div class="pv-blk"><em>${lic("star",13)} GW${g} Dream Team · ${mine.length} of yours</em>${mine.map(p=>line(p,p.web_name,bar(actOf(p.id,g)||0,mx,"#FFD23F"),fmtPts(actOf(p.id,g)))).join("")||`<span class="mu">None of yours this week</span>`}<div class="pv-kv"><span>Dream Team total</span><b>${tot}</b></div></div>`;}
+  return `<div class="panel pv-rev"><div class="phead"><h2>GW${g} Review</h2><span class="pv-chip">${row.chipLabel?esc(row.chipLabel):"No chip"}</span></div>${capBlk}${xfer}${perf}${benchBlk}${dtBlk}</div>`;
+}
 function plannerPitchHTML(){
   const xi=startingXI();
   if(!xi.length)return `<div class="pbody" style="text-align:center"><p class="note">No squad loaded.</p>
     <button class="pri" onclick="act('seed')">Load my squad</button></div>`;
   const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
   const rows=[1,2,3,4].map(pos=>xi.filter(p=>p.pos===pos)).filter(r=>r.length);
-  return `<div class="pz-pitch"><svg class="pz-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="24" y="0" width="52" height="13"/><rect x="38" y="0" width="24" height="5"/><path d="M42 13 Q50 18 58 13"/><line x1="0" y1="100" x2="100" y2="100"/><path d="M40 100 A10 12 0 0 1 60 100"/></svg>
+  return `<div class="pz-pitch${VG()<S.model.next.id?" past":""}"><svg class="pz-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="24" y="0" width="52" height="13"/><rect x="38" y="0" width="24" height="5"/><path d="M42 13 Q50 18 58 13"/><line x1="0" y1="100" x2="100" y2="100"/><path d="M40 100 A10 12 0 0 1 60 100"/></svg>
     ${rows.map(r=>`<div class="pz-row">${r.map(p=>pcardHTML(p)).join("")}</div>`).join("")}
     ${bench.length?`<div class="pz-bench">${bench.map((p,i)=>`<div class="pz-bs"><div class="pz-bl">${p.pos===1?"GKP":`${i}. ${POSL[p.pos]}`}</div>${pcardHTML(p,{slot:i+1,cycle:p.pos!==1})}</div>`).join("")}</div>`:""}</div>`;
 }
@@ -234,9 +363,10 @@ function gwScrollerHTML(){
 function plannerHeadHTML(){
   return `<div class="phead pz-head"><span class="pseg"><button class="${S.sqView!=="list"?"on":""}" onclick="act('sqview','pitch')">Pitch</button><button class="${S.sqView==="list"?"on":""}" onclick="act('sqview','list')">List</button></span>
     ${gwScrollerHTML()}
-    <span class="placts"><button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button><button onclick="act('opt')">Optimise</button>
+    ${offRowOf(VG())&&VG()<S.model.next.id?`<span class="placts"><span class="pv-lock">${lic("lock",13)} Official · read-only</span></span></div>
+    <div class="pz-wl">${planWeekLine()}</div>${pastSummaryHTML(VG())}`:`<span class="placts"><button class="${S.cmp?"on":""}" onclick="act('compare')">Compare</button><button onclick="act('opt')">Optimise</button>
       <button onclick="act('reset')">Reset</button><button class="pri${planBank()<-0.001?" blocked":""}" onclick="act('save')"${planBank()<-0.001?` title="Over budget: Save is off until the bank is back to £0.0" aria-disabled="true"`:""}>Save</button></span></div>
-    <div class="pz-wl">${planWeekLine()}${planBank()<-0.001?` · <span class="pz-warn">Over budget £${(-planBank()).toFixed(1)}</span>`:""}${(()=>{const cw=capWarnHTML().replace(/^ · /,"");return cw?` · <span class="pz-warn" role="status">${cw}</span>`:"";})()}</div>`;
+    <div class="pz-wl">${planWeekLine()}${planBank()<-0.001?` · <span class="pz-warn">Over budget £${(-planBank()).toFixed(1)}</span>`:""}${(()=>{const cw=capWarnHTML().replace(/^ · /,"");return cw?` · <span class="pz-warn" role="status">${cw}</span>`:"";})()}</div>`}`;
 }
 /* ---------- the stats strip ---------- */
 function plannerStatsHTML(o){
