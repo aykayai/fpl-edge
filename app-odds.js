@@ -996,7 +996,7 @@ function renderPage(){
       <div class="poolcol">
         <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
         <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">Player Data →</a></div>
-        ${replHTML()}${filtersHTML(true)}<div class="plist">${listHTML()}</div>
+        ${replHTML()}${poolFiltersHTML()}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
           <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}</div></div></div>
