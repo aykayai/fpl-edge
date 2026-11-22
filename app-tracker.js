@@ -338,10 +338,134 @@ function trkSubTrackerHTML(){
       <tbody>${rowsHtml}</tbody></table></div></div>`;
 }
 
+/* ============================================================
+   LEAGUE › TRACKER, Bundle D (22 Nov 2026, Andy's approved mocks 7 and
+   7b): a header of figure cards; Weekly Breakdown with a Table | Charts
+   toggle; Gameweek Comparison in the Signals chart style (this season's
+   bars, last season's line, your all-time average as dots); the six old
+   history tables (each with a coloured stripe) as one table; Career
+   Finishes, Chip Performance, Sub Tracker and Transfers as cards.
+   ============================================================ */
+function trkHeadHTML(){
+  const t=S.tracker,rows=(t&&t.gw)||[],last=rows[rows.length-1],prev=rows[rows.length-2];
+  const tp=(t&&t.totalPlayers)||TRACKER_HISTORY.totalPlayers["2026"];
+  const st=((S.rivalsFeed&&S.rivalsFeed.standings)||[]).slice().sort((a,b)=>a.rank-b.rank);
+  const me=st.find(s=>String(s.entryId)===String(TEAM_ID));
+  const lg=(S.rivalsFeed&&S.rivalsFeed.leagueName)||"Your league";
+  const live=last&&!weekFinal(last.event);
+  const kick=`${last?`GW${last.event}${live?" in play":""}`:""}${me?` · ${esc(lg)} ${me.rank===1?"1st":me.rank===2?"2nd":me.rank===3?"3rd":me.rank+"th"} of ${st.length}`:""}`;
+  const tabs=`<span class="pseg sgtabs">${[["tracker","Tracker"],["rivals","Rivals"]].map(([k,n])=>`<button class="${S.tab===k?"on":""}" onclick="return go(event,'${k}')">${n}</button>`).join("")}</span>`;
+  const evs=(S.events||[]).filter(e=>e.finished);
+  const avgSum=rows.filter(r=>weekFinal(r.event)).reduce((s,r)=>{const e=evs.find(x=>x.id===r.event);return s+(e&&e.avg!=null?r.points-e.avg:0);},0);
+  const figs=last?[
+    figCard("Overall Rank",live?`Your overall rank, live during GW${last.event}.`:`Your overall rank after GW${last.event}.`,trkRank(last.orRank),
+      prev&&prev.orRank&&last.orRank&&prev.orRank!==last.orRank?`<span class="${prev.orRank>last.orRank?"up":"dn"}">${prev.orRank>last.orRank?"▲":"▼"} ${trkRank(Math.abs(prev.orRank-last.orRank))}</span>`:"",rows.filter(r=>r.orRank).slice(-10).map(r=>-r.orRank),"#3DDC97"),
+    figCard("Top %","Where your rank sits among all managers.",last.orRank&&tp?trkNum(last.orRank/tp*100,2)+"%":"—",tp?`of ${trkCompact(tp)} managers`:"",null),
+    figCard("Season Points","Your points so far, after hits.",String(last.totalPoints??rows.reduce((s,r)=>s+(r.points||0),0)),
+      `<span class="${avgSum>=0?"up":"dn"}">${avgSum>=0?"+":""}${Math.round(avgSum)}</span> vs average`,rows.map((r,i)=>rows.slice(0,i+1).reduce((s,x)=>s+(x.points||0),0)),"#3DDC97"),
+    figCard("Team Value","FPL's team value, bank included.","£"+trkNum(last.value,1),`£${trkNum(last.bank||0,1)} in the bank`,rows.filter(r=>r.value!=null).slice(-10).map(r=>+r.value),"#22D3EE")]
+    :[figCard("Overall Rank","Your overall rank.","—","",null)];
+  return `<div class="sx-hdr"><div><div class="cx-kick">${kick}</div><h1>League</h1><div class="sx-ctl">${tabs}</div></div><div class="nw-figs sx-figs">${figs.join("")}</div></div>`;
+}
+/* Weekly Breakdown: the table, or six small charts of the same rows */
+function trkWeeklyHTML(){
+  const t=S.tracker,rows=(t&&t.gw)||[];
+  const view=S.trkView==="charts"?"charts":"table";
+  const tog=`<span class="sx-tog">${[["table","Table"],["charts","Charts"]].map(([k,l])=>`<button class="${view===k?"on":""}" onclick="act('trkview','${k}')">${l}</button>`).join("")}</span>`;
+  if(!rows.length)return rep("trkweek","gauge","Weekly Breakdown","Your points and ranks each gameweek.",sgEmpty("Weekly rows appear once the season's feed is connected."),{wide:true});
+  let body;
+  if(view==="table"){
+    const tp=t.totalPlayers||1,pct=r=>r?trkNum(r/tp*100,2):"—";
+    const cols=["GW","Pts","GW Rank","GW %","OR Rank","OR %","Rank Δ","Rank Δ%","Off 1m","Off 500k","Off 100k","Capt","Bench","Trans","Trans Δ","Value"];
+    body=`<div class="scroll"><table class="ax-t ax-wb"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>${rows.map((r,i)=>{const prev=i?rows[i-1].orRank:null,rc=prev?prev-r.orRank:null;
+      return `<tr><td>${r.event}</td><td>${r.points}${weekFinal(r.event)?"":LIVE_TAG}</td><td>${trkRank(r.gwRank)}</td><td>${pct(r.gwRank)}</td><td>${trkRank(r.orRank)}</td><td>${pct(r.orRank)}</td>
+        <td><span class="${rc>0?"up":rc<0?"dn":""}">${trkSigned(rc)}</span></td><td>${prev?trkNum((prev-r.orRank)/prev*100,1)+"%":"—"}</td><td>${r.off1m??"—"}</td><td>${r.off500k??"—"}</td><td>${r.off100k??"—"}</td>
+        <td>${r.captain??"—"}</td><td>${r.bench??"—"}</td><td>${r.transfers??"—"}</td><td>${r.transferDiff??"—"}</td><td>£${trkNum(r.value,1)}</td></tr>`;}).join("")}</tbody></table></div>`;
+  }else{
+    const evs=(S.events||[]).filter(e=>e.finished),cats=rows.map(r=>"GW"+r.event);
+    const avg=rows.map(r=>{const e=evs.find(x=>x.id===r.event);return e?e.avg:null;});
+    const rc=rows.map((r,i)=>i&&rows[i-1].orRank&&r.orRank?Math.round((rows[i-1].orRank-r.orRank)/1000):null);
+    const sm=(title,chart)=>`<div class="ax-sm"><div class="ax-smh"><b>${title}</b></div>${chart}</div>`;
+    const o={w:440,h:190};
+    body=`<div class="ax-sm3">
+      ${sm("Points",colChart(cats,[{name:"You",values:rows.map(r=>r.points),color:SG_TONE.mint}],[{name:"Average",values:avg,color:SG_TONE.grey}],{...o,label:"Points against the average"}))}
+      ${sm("Overall Rank",colChart(cats,[],[{name:"Overall rank",values:rows.map(r=>r.orRank?-Math.round(r.orRank/1000):null),color:SG_TONE.cyan}],{...o,fmt:v=>Math.abs(Math.round(v))+"k",label:"Overall rank, thousands; higher on the chart is better"}))}
+      ${sm("Rank Change",colChart(cats,[{name:"Places gained (thousands)",values:rc,color:v=>v>=0?SG_TONE.mint:"#FF5A6E",key:SG_TONE.mint,notes:rc.map(v=>v==null?"":v>=0?"climbed":"fell")}],[],{...o,fmt:v=>(v>0?"+":"")+Math.round(v)+"k",label:"Rank change, thousands"}))}
+      ${sm("Captain Points",colChart(cats,[{name:"Captain",values:rows.map(r=>r.captain??null),color:SG_TONE.amber}],[],{...o,label:"Captain points"}))}
+      ${sm("Bench Points",colChart(cats,[{name:"Bench",values:rows.map(r=>r.bench??null),color:"#FF5A6E"}],[],{...o,label:"Points left on the bench"}))}
+      ${sm("Team Value",colChart(cats,[],[{name:"Team value",values:rows.map(r=>r.value!=null?+r.value:null),color:SG_TONE.purple}],{...o,min:Math.floor(Math.min(...rows.filter(r=>r.value!=null).map(r=>+r.value),100)-1),fmt:v=>"£"+v.toFixed(1),label:"Team value"}))}</div>`;
+  }
+  return rep("trkweek","gauge","Weekly Breakdown","Your points and ranks each gameweek.",body,{wide:true,extra:tog});
+}
+/* Gameweek Comparison: this season's bars against last season (line) and
+   your average for each gameweek over every season on record (dots) */
+function trkCompareHTML(){
+  const key=["points","gwRank","captain"].includes(S.trkStat)?S.trkStat:"points";
+  const cur=((S.tracker&&S.tracker.gw)||[]).filter(r=>weekFinal(r.event));
+  const n=cur.length;if(!n)return rep("trkcmp","activity","Gameweek Comparison","This season against last season and your average.",sgEmpty("No finished gameweeks yet."));
+  const seasons=Object.keys(TRACKER_HISTORY.seasons),lastKey=seasons[seasons.length-1];
+  const sc=key==="gwRank"?1000:1,fmt=v=>key==="gwRank"?Math.round(v)+"k":Math.round(v);
+  const now=cur.map(r=>r[key]!=null?r[key]/sc:null),lastS=trkSeries(lastKey,key).slice(0,n).map(v=>v==null?null:v/sc);
+  const avg=cur.map((r,i)=>{const v=seasons.map(s=>trkSeries(s,key)[i]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length/sc:null;});
+  const better=(a,b)=>a!=null&&b!=null&&(key==="gwRank"?a<b:a>b);
+  const chart=colChart(cur.map(r=>"GW"+r.event),[{name:seasonShort(S.tracker.season||FEED_SEASON),values:now,color:SG_TONE.mint}],
+    [{name:seasonShort(lastKey),values:lastS,color:SG_TONE.grey},{name:"Your average",values:avg,color:SG_TONE.amber,dotsOnly:true}],{fmt,label:"This season against last and your average"});
+  const beatL=now.filter((v,i)=>better(v,lastS[i])).length,beatA=now.filter((v,i)=>better(v,avg[i])).length;
+  const bi=now.reduce((b,v,i)=>b<0||better(v,now[b])?i:b,-1);
+  const tiles=`<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr);margin-top:8px">${dsTile("Beat Last Season",`${beatL} of ${n}`,"weeks",beatL*2>=n?"up":"")}${dsTile("Above Your Average",`${beatA} of ${n}`,"weeks",beatA*2>=n?"up":"")}${dsTile("Best Week",bi>=0?"GW"+cur[bi].event:"—",bi>=0?fmt(now[bi])+(key==="captain"?" captain pts":key==="gwRank"?" rank":" pts"):"","up")}</div>`;
+  const sw=`<span class="sx-tog">${[["points","Points"],["gwRank","GW Rank"],["captain","Captain"]].map(([k,l])=>`<button class="${key===k?"on":""}" onclick="act('trkstat','${k}')">${l}</button>`).join("")}</span>`;
+  return rep("trkcmp","activity","Gameweek Comparison","This season against last season and your average.",chart+tiles,{extra:sw});
+}
+/* Season Against History: the six old tables as one */
+function trkHistory2HTML(){
+  const cur=(S.tracker&&S.tracker.gw)||[];
+  const curSeries=key=>key==="rankChange"?trkChange(cur.map(r=>r.orRank)):cur.filter(r=>weekFinal(r.event)).map(r=>r[key]).filter(x=>x!=null);
+  const seasons=Object.keys(TRACKER_HISTORY.seasons),lastKey=seasons[seasons.length-1];
+  const rows=TSTATS.map(st=>{const v=[trkBandVal(curSeries(st.key),"avg",st.dir),trkBandVal(trkSeries(lastKey,st.key),"avg",st.dir),trkBandVal(trkAll(st.key),"avg",st.dir)];
+    const c=v.map((x,i)=>[i,x]).filter(([,x])=>x!=null),hi=st.dir==="hi",best=c.length?c.reduce((a,b)=>(hi?b[1]>a[1]:b[1]<a[1])?b:a)[0]:-1;
+    return `<tr><td class="w">${st.name.replace(" (Gross)","")}</td>${v.map((x,i)=>`<td>${i===best?`<span class="st">${st.fmt(x)} ★</span>`:st.fmt(x)}</td>`).join("")}</tr>`;}).join("");
+  const pts=curSeries("points"),ors=cur.map(r=>r.orRank).filter(Boolean);
+  const bestW=trkMax(pts),worstW=trkMin(pts),bestR=ors.length?Math.min(...ors):null;
+  const tiles=`<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr);margin-top:12px">${dsTile("Best GW",bestW??"—","this season","up")}${dsTile("Best Rank",bestR?trkCompact(bestR):"—","this season")}${dsTile("Worst GW",worstW??"—","this season","dn")}</div>`;
+  return rep("trkhist","crown","Season Against History","This season against last and your all-time; ★ marks the best.",
+    `<table class="ax-t"><thead><tr><th>Average</th><th>${seasonShort(S.tracker&&S.tracker.season||FEED_SEASON)}</th><th>${seasonShort(lastKey)}</th><th>All-Time</th></tr></thead><tbody>${rows}</tbody></table>${tiles}`);
+}
+function trkCareerHTML(){
+  const done=((S.tracker&&S.tracker.gw)||[]).filter(r=>weekFinal(r.event));
+  const pts=done.reduce((s,r)=>s+(r.points||0),0),lastR=done.length?done[done.length-1].orRank:null;
+  const bestPct=Math.min(...TRACKER_FINISHES.map(r=>r[3]));
+  const row=(s,p,per,rank,pct,me)=>`<tr${me?' class="me"':""}><td class="w">${s}</td><td>${p}</td><td>${per}</td><td>${rank}</td><td>${pct}</td></tr>`;
+  const body=row(seasonShort(SEASON.replace("-","/")),done.length?pts.toLocaleString("en-GB"):"—",done.length?(pts/done.length).toFixed(1):"—",lastR?lastR.toLocaleString("en-GB"):"—","—",true)
+    +TRACKER_FINISHES.slice(0,8).map(([s,p,rank,pct])=>row(seasonShort(s),p.toLocaleString("en-GB"),(p/38).toFixed(1),rank.toLocaleString("en-GB"),pct===bestPct?`<span class="st">${pct}% ★</span>`:pct+"%")).join("");
+  return rep("trkcareer","wallet","Career Finishes","Every season, official FPL, after hits.",`<table class="ax-t"><thead><tr><th>Season</th><th>Points</th><th>Per GW</th><th>Overall Rank</th><th>Top %</th></tr></thead><tbody>${body}</tbody></table>`);
+}
+function trkChips2HTML(){
+  const c=TRACKER_HISTORY.chips,up=trkChipUplifts(),raw=(S.tracker&&S.tracker.chips)||{};
+  const KEY={"Wild Card 1":"wildcard","Wild Card 2":"wildcard","Wildcard 1":"wildcard","Wildcard 2":"wildcard","Free Hit 1":"freehit","Free Hit 2":"freehit","Bench Boost 1":"bboost","Bench Boost 2":"bboost","Triple Captain 1":"3xc","Triple Captain 2":"3xc"};
+  const cell=v=>v==null?`<td><span style="color:#444">—</span></td>`:`<td><span class="${v>0?"up":v<0?"dn":""}">${v>0?"+":""}${v}</span></td>`;
+  const curCell=name=>{const ch=up[name];if(ch&&ch.uplift!=null)return cell(ch.uplift);if(raw[name]!=null||ch)return `<td><span class="mu" title="The gain is not published yet">used</span></td>`;return cell(null);};
+  const rows=Object.keys(c.rows).map(name=>{const k=KEY[name];
+    return `<tr><td class="w">${k?`<span class="ax-ct">${chipTile(k,20,true)}</span>`:""}${esc(name.replace("Wild Card","Wildcard"))}</td>${curCell(name)}${c.rows[name].map(cell).join("")}</tr>`;}).join("");
+  return rep("trkchips","calendar","Chip Performance","Points each chip gained, by season.",
+    `<table class="ax-t"><thead><tr><th>Chip</th><th>${seasonShort(FEED_SEASON)}</th>${c.labels.map(l=>`<th>${seasonShort(l)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`);
+}
+function trkSubs2HTML(){
+  const P=id=>S.model&&S.model.players.find(q=>q.id===id);
+  const pt=(id,g)=>{const v=actOf(id,g);return v==null?0:v;};
+  const rows=((S.tracker&&S.tracker.gw)||[]).flatMap(r=>(r.autoSubs||[]).map(s=>({e:r.event,o:P(s.out),i:P(s.in),d:pt(s.in,r.event)-pt(s.out,r.event)}))).reverse();
+  const bench=((S.tracker&&S.tracker.gw)||[]).reduce((s,r)=>s+(r.bench||0),0),saved=rows.reduce((s,x)=>s+x.d,0);
+  const list=rows.length?rows.slice(0,5).map(x=>`<div class="ax-s"><span class="ax-g">GW${x.e}</span>${dsFace(x.o,"sm")}<span class="dn">${esc(x.o?x.o.web_name:"?")}</span><span class="mu">→</span>${dsFace(x.i,"sm")}<span class="up">${esc(x.i?x.i.web_name:"?")}</span><em class="${x.d>0?"up":x.d<0?"dn":""}">${x.d>0?"+":""}${x.d} pts</em></div>`).join(""):sgEmpty("No automatic substitutions yet.");
+  return rep("trksubs","users","Sub Tracker","Automatic substitutions and their points.",
+    list+`<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr);margin-top:12px">${dsTile("Auto-Subs",rows.length,"this season")}${dsTile("Points Saved",(saved>0?"+":"")+saved,"net",saved>0?"up":"")}${dsTile("Bench Points",bench,"left on the bench")}</div>`);
+}
+function trkTransfersHTML(){
+  const rows=((S.tracker&&S.tracker.gw)||[]).filter(r=>weekFinal(r.event));
+  const made=rows.reduce((s,r)=>s+(r.transfers||0),0),hits=rows.reduce((s,r)=>s+(r.transferCost||0),0),net=rows.reduce((s,r)=>s+(r.transferDiff||0),0);
+  const chart=colChart(rows.map(r=>"GW"+r.event),[{name:"Net from transfers",values:rows.map(r=>r.transferDiff??null),color:SG_TONE.mint,notes:rows.map(r=>`${r.transfers||0} transfer${r.transfers===1?"":"s"}${r.transferCost?`, -${r.transferCost} hit`:""}`)}],[],{h:150,label:"Points gained from each week's transfers"});
+  return rep("trktrans","arrow-right-left","Transfers","Transfers made and what they earned in their week.",
+    `<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px">${dsTile("Transfers",made,"made")}${dsTile("Hits",hits?"-"+hits:"0","points",hits?"dn":"")}${dsTile("Net Gain",(net>0?"+":"")+net,"in their weeks",net>0?"up":net<0?"dn":"")}</div>${chart}`);
+}
 function trackerHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
-  return trkSummaryHTML()+trkTableHTML()+trkSubTrackerHTML()+
-    `<div class="trkband-title">Historical performance · ★ = best ever · shaded column = this season</div>`+
-    trkHistoryHTML()+trkChartHTML()+
-    `<div class="trkrow2">${trkFinishesHTML()}${trkChipHTML()}</div>`;
+  return `<div class="sgpage trkpage">${trkHeadHTML()}<div class="repgrid">${trkWeeklyHTML()}${trkCompareHTML()}${trkHistory2HTML()}${trkCareerHTML()}${trkChips2HTML()}${trkSubs2HTML()}${trkTransfersHTML()}</div></div>`;
 }

@@ -574,7 +574,9 @@ try {
     const down = g.newsDown(), stt = g.statusState();
     check(down.join() === "Gone" && /1 news source down/.test(stt.txt) && stt.cls === "wait", "Status: a news source down for over an hour turns the status amber; a blip does not", JSON.stringify([down, stt.cls, stt.plain]));
     S.tab = "xfpl"; g.render();
-    check(/News Sources/.test(doc.getElementById("app").textContent) && /Down since/.test(doc.getElementById("app").textContent), "Status: the page lists each news source and its state");
+    /* Bundle D: a compact grid; the state is the dot, the detail is the hover */
+    { const rowsN = [...doc.querySelectorAll("#r-stnews .ax-s")], gone = rowsN.find(r => /Gone/.test(r.textContent)), blip = rowsN.find(r => /Blip/.test(r.textContent));
+      check(/News Sources/.test(doc.getElementById("app").textContent) && !!gone && !!gone.querySelector(".sdot.bad") && !!blip && !!blip.querySelector(".sdot.amb"), "Status: the page lists each news source and its state"); }
     S.status = keepStatus;
     [S.news, S.social, S.squadNews, S.newsState, S.newsWindow, S.newsSources] = keepNews; S.flags = keepFlags;
     p.avail = keepP.avail; p.news = keepP.news; S.tab = "squad"; g.render();

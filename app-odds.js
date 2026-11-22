@@ -974,7 +974,7 @@ function renderPage(){
       ${isLiveWk(g)?lkLowerHTML(g):thisWeekHTML()}`;
   }
   else if(S.tab==="table")main=playerDataHTML();
-  else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();
+  else if(S.tab==="tracker")main=trackerHTML();   /* Bundle D: the Tracker draws its own header */
   else if(S.tab==="xfpl")main=statusPageHTML();
   else if(S.tab==="chips")main=chipsHTML();
   else if(S.tab==="fixtures")main=fixturesHTML();
@@ -1059,15 +1059,105 @@ function leagueTabsHTML(){
 /* Status (wave 1): data freshness (moved from the footer), the signal key,
    then the xFPL model page. Wave 7 adds model vs FPL, fixture accuracy,
    odds status and options. */
+/* Status, Bundle D (22 Nov 2026, Andy's approved mock 6): a header of figure
+   cards, then paired cards in the Signals style. The old full-width panels'
+   explanatory notes moved into (i); the dead Projection Movers panel and the
+   footnote panel are gone (C16). */
+function stMvf(){
+  const A=S.playerActuals,rows=[];let tm=0,tf=0,tn=0,tb=0;
+  for(let g=1;g<=38;g++){
+    if(!weekFinal(g))continue;
+    const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g],back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
+    const snap=live||back;if(!snap||!snap.players||!A)continue;
+    const ep=snap.fplEp||null;let n=0,em=0,ef=0,b=0;const both=[];
+    Object.entries(snap.players).forEach(([id,pred])=>{const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
+      const f=ep?ep[id]:null;if(ep&&f==null)return;n++;em+=Math.abs(pred-pts);b+=pred-pts;if(ep){ef+=Math.abs(f-pts);both.push({pred,f,pts});}});
+    if(!n)continue;
+    const t10=k=>both.slice().sort((x,y)=>y[k]-x[k]).slice(0,10).reduce((s,x)=>s+x.pts,0)/Math.min(10,both.length||1);
+    rows.push({g,n,mae:em/n,bias:b/n,fpl:ep?ef/n:null,tM:both.length?t10("pred"):null,tF:both.length?t10("f"):null});
+    if(ep){tm+=em;tf+=ef;tn+=n;tb+=b;}
+  }
+  return{rows,tm,tf,tn,tb};
+}
+function stFix(){
+  if(!S.model||!S.ratingsReady)return null;
+  const done=(S.fixtures||[]).filter(f=>f.finished&&f.hs!=null&&f.as!=null&&f.ht&&f.at);if(!done.length)return null;
+  let n=0,e=0,eB=0,hit=0,games=0,tot=0;done.forEach(f=>{tot+=f.hs+f.as;});const base=tot/(2*done.length);
+  done.forEach(f=>{const ph=fdrCalc(f.ht,f.at,true,"xgf"),pa=fdrCalc(f.at,f.ht,false,"xgf");e+=Math.abs(ph-f.hs)+Math.abs(pa-f.as);eB+=Math.abs(base-f.hs)+Math.abs(base-f.as);n+=2;
+    const pr=ph-pa>0.25?1:pa-ph>0.25?-1:0,ac=f.hs>f.as?1:f.as>f.hs?-1:0;if(pr!==0){games++;if(pr===ac)hit++;}});
+  return{err:e/n,base:eB/n,avg:base,skill:1-e/eB,hit,games,n:done.length};
+}
+/* every source the server reports, with its age and state */
+function stSources(){
+  const st=S.status||{},ds=st.dataset||{},fpl=st.fpl||{},feeds=st.feeds||{},odds=st.odds||{},news=st.news||{};
+  const per=Object.values(news.perSource||{}),nOk=per.filter(s=>s.ok!==false).length,nDown=newsDown().length;
+  const st1=(ok,warn)=>ok?(warn?"amb":"ok"):"bad";
+  return [
+    ["FPL Core Insights",ds.committedAt,st1(!ds.lastError,ds.stale)],
+    ["FPL prices and flags",fpl.fetchedAt,st1(!fpl.error,agoMin(fpl.fetchedAt)>45)],
+    ["FPL live",fpl.liveFetchedAt,"ok"],
+    ["Your team and rivals",feeds.lastOk,st1(!feeds.error,!!feeds.warning||agoMin(feeds.lastOk)>45)],
+    [`News · ${per.length||"—"} sources`,news.fetchedAt,st1(true,nDown>0)],
+    [`Odds${odds.state==="nokey"?" · no key":""}`,odds.fetchedAt,st1(odds.state!=="fail",!!odds.error)],
+    ["TV channels",st.tv&&st.tv.fetchedAt,st1(true,agoMin(st.tv&&st.tv.fetchedAt)>8*1440)],
+    ["Price predictor",S.fplLive&&S.fplLive.fetchedAt,"ok"],
+    ["Snapshots",st.snapshots&&st.snapshots.result&&st.snapshots.result.at,st1(!(st.snapshots&&st.snapshots.result&&st.snapshots.result.ok===false))],
+    ["Field sample",st.field&&(st.field.builtAt||st.field.at||st.field.lastOk),"ok"]
+  ].map(([n,at,c])=>({n,at,c,okN:nOk}));
+}
+/* a panel's body without its own header, for use inside a card */
+const stBody=h=>String(h||"").replace(/^\s*<div class="panel">/,"<div>").replace(/<div class="phead">[\s\S]*?<\/div>/,"");
+/* News sources as a compact grid (the per-source list the News work agreed),
+   live first; the hover gives kind, items, last good copy and any error */
+function stNewsHTML(){
+  const ps=((S.status||{}).news||{}).perSource||{},rows=Object.entries(ps);
+  if(!rows.length)return sgEmpty(BACKUP?"News runs on the FPL Signals server only.":"No news check reported yet.");
+  const down=new Set(newsDown());
+  rows.sort((a,b)=>(down.has(b[0])-down.has(a[0]))||((a[1].kind==="social")-(b[1].kind==="social"))||a[0].localeCompare(b[0]));
+  return `<div class="ax-src4">${rows.map(([k,v])=>{const c=v.ok?"ok":down.has(k)?"bad":"amb";
+    const tip=`${k}: ${v.kind==="social"?"social media":"news"}, ${+v.count||0} items, last good copy ${v.fetchedAt?agoText(v.fetchedAt):"never"}${v.error?". "+v.error:""}`;
+    return `<div class="ax-s" title="${esc(tip)}"><i class="sdot ${c}"></i><span class="ax-nm">${esc(k)}</span><em>${+v.count||0}</em></div>`;}).join("")}</div>`;
+}
+/* Options as three tiles, each with its one action (Bundle D) */
+function stOptionsHTML(){
+  const drafts=LS.get("drafts")||[],ign=(S.ignored||[]).map(id=>S.model&&S.model.players.find(p=>p.id===id)).filter(Boolean),st=S.stars||[];
+  const t=(l,n,sub,btn)=>`<div class="ds-tile st-opt"><em>${l}</em><b>${n}</b><i>${sub}</i>${btn||""}</div>`;
+  return `<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr)">
+    ${t("Compare Drafts",drafts.length,drafts.length?"saved":"none saved",drafts.length?`<button onclick="act(cleardrafts)">Delete All</button>`:"")}
+    ${t("Not Suggesting",ign.length,ign.length?esc(ign.slice(0,2).map(p=>p.web_name).join(", "))+(ign.length>2?" …":""):"every player can be suggested",ign.length?`<button onclick="act(unignore,${ign[0].id})">Restore ${esc(ign[0].web_name)}</button>`:"")}
+    ${t("Shortlist",st.length,st.length?"players":"tap ★ on Player Data",st.length?`<button onclick="act(clearstars)">Clear</button>`:"")}</div>`;
+}
 function statusPageHTML(){
-  return `<div class="pagetabs"><h1>Status</h1>${statusChipHTML()}</div>
-    <div class="panel"><div class="phead"><h2>Data Freshness</h2></div>${provHTML()}</div>
-    <div class="panel"><div class="phead"><h2>News Sources</h2>${(n=>n?`<span class="note" style="color:var(--amber)">${n} down for over an hour</span>`:"")(newsDown().length)}</div>${newsSourcesHTML()}</div>
-    <div class="panel"><div class="phead"><h2>Model vs FPL</h2><span class="note">each finished gameweek, prediction against points scored</span></div>${modelVsFplHTML()}</div>
-    <div class="panel"><div class="phead"><h2>Signal Hit Rates</h2><span class="note">did the flagged players beat their prediction?</span></div>${signalHitsHTML()}</div>
-    <div class="panel"><div class="phead"><h2>Fixture Ratings</h2><span class="note">projected goals against this season's results</span></div>${fixtureAccuracyHTML()}</div>
-    <div class="panel"><div class="phead"><h2>Odds</h2><a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Bookmaker markets →</a></div>${oddsStatusHTML()}</div>
-    <div class="panel"><div class="phead"><h2>Options</h2></div>${optionsHTML()}</div>
-    <div class="panel"><div class="phead"><h2>Signal Key</h2><span class="note">hover a tile for its rule</span></div>${legendHTML()}</div>
-    ${xfplHTML()}`;
+  const M=stMvf(),cmp=M.rows.filter(r=>r.fpl!=null),fx=stFix(),src=stSources();
+  const down=src.filter(s=>s.c!=="ok").length;
+  const figs=[
+    figCard("Model Error","Average points the model missed by, per player.",M.tn?(M.tm/M.tn).toFixed(2):"—",cmp.length>1?`<span class="${cmp[cmp.length-1].mae<=cmp[cmp.length-2].mae?"up":"dn"}">${cmp[cmp.length-1].mae<=cmp[cmp.length-2].mae?"▼":"▲"} ${Math.abs(cmp[cmp.length-1].mae-cmp[cmp.length-2].mae).toFixed(2)}</span>`:"",cmp.map(r=>-r.mae),"#3DDC97"),
+    figCard("Model vs FPL","How much closer the model was than FPL's own.",M.tn?`<span class="${M.tf>M.tm?"up":"dn"}">${sgn1((M.tf-M.tm)/M.tn)}</span>`:"—",`${cmp.filter(r=>r.mae<r.fpl).length} of ${cmp.length} weeks better`,null),
+    figCard("Goals Error","Average goals the fixture ratings missed by.",fx?fx.err.toFixed(2):"—","goals per side",null),
+    figCard("Sources","Data sources answering now.",`${src.length-down} of ${src.length}`,down?`<span style="color:#FFB020">${down} need a look</span>`:"All live",null)];
+  /* Model vs FPL: error each week, model against FPL */
+  const mvf=cmp.length?colChart(cmp.map(r=>"GW"+r.g),[],[{name:"Model",values:cmp.map(r=>+r.mae.toFixed(2)),color:SG_TONE.mint},{name:"FPL",values:cmp.map(r=>+r.fpl.toFixed(2)),color:SG_TONE.grey,dash:true}],{fmt:v=>v.toFixed(1),min:0,label:"Prediction error each week, lower is better",legend:true})
+    +`<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr);margin-top:8px">${dsTile("Model Bias",sgn1(M.tb/(M.tn||1)),"points per player")}${dsTile("Top 10 Picks",(cmp.reduce((s,r)=>s+(r.tM||0),0)/cmp.length).toFixed(1),`FPL's top 10: ${(cmp.reduce((s,r)=>s+(r.tF||0),0)/cmp.length).toFixed(1)}`)}${dsTile("Weeks Better",`${cmp.filter(r=>r.mae<r.fpl).length} of ${cmp.length}`,"than FPL","up")}</div>`
+    :sgEmpty("No finished gameweek with a saved prediction yet.");
+  /* Predicted vs Actual: your squad's predicted score (saved before each deadline) against what it scored */
+  const T=((S.tracker&&S.tracker.gw)||[]).filter(r=>weekFinal(r.event)&&r.predicted!=null);
+  const pva=T.length?colChart(T.map(r=>"GW"+r.event),[{name:"Predicted",values:T.map(r=>+(+r.predicted).toFixed(1)),color:"rgba(154,154,154,.4)"},{name:"Actual",values:T.map(r=>r.points),color:SG_TONE.mint}],[],{label:"Your predicted and actual points each week",legend:true})
+    +`<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr);margin-top:8px">${dsTile("Avg Predicted",(T.reduce((s,r)=>s+(+r.predicted),0)/T.length).toFixed(1),"per week")}${dsTile("Avg Actual",(T.reduce((s,r)=>s+r.points,0)/T.length).toFixed(1),"per week","up")}${dsTile("Beat Prediction",`${T.filter(r=>r.points>r.predicted).length} of ${T.length}`,"weeks")}</div>`
+    :sgEmpty("Your weekly predictions appear once the feed has saved them.");
+  const srcList=`<div class="ax-src2">`+src.map(s=>`<div class="ax-s" title="${s.at?esc(s.n+": "+ukWhen(s.at)):esc(s.n+": no time reported")}"><i class="sdot ${s.c}"></i>${esc(s.n)}<em>${s.at?esc(agoText(s.at)):"—"}</em></div>`).join("")+`</div>`;
+  const fxBody=fx?`<div class="ds-tiles" style="grid-template-columns:repeat(3,1fr)">${dsTile("Goals Error",fx.err.toFixed(2),"goals per side","up")}${dsTile("Baseline Error",fx.base.toFixed(2),`average ${fx.avg.toFixed(2)} goals`)}${dsTile("Skill",Math.round(fx.skill*100)+"%","vs the average",fx.skill>0?"up":"dn")}${dsTile("Favourite Won",fx.games?Math.round(fx.hit/fx.games*100)+"%":"—",`${fx.hit} of ${fx.games} matches`)}${dsTile("Matches",fx.n,"rated")}${dsTile("Odds Used",`${(S.odds||[]).length}`,"fixtures priced")}</div>`:sgEmpty("Ratings not ready.");
+  const P=xfplHTML("parts")||{};
+  return `<div class="sgpage stpage"><div class="sx-hdr"><div><div class="cx-kick">Data and model health</div><h1>Status</h1><div class="sx-ctl">${statusChipHTML()}</div></div><div class="nw-figs sx-figs">${figs.join("")}</div></div>
+    <div class="repgrid">
+      ${rep("stmvf","gauge","Model vs FPL","Prediction error each finished week; backtest for GW1-6.",mvf)}
+      ${rep("stpva","crown","Predicted vs Actual","Your squad's predicted and actual points.",pva)}
+      ${rep("stsrc","clock-alert","Data Sources","Each source and when it last answered.",srcList)}
+      ${rep("sthit","sparkles","Signal Hit Rates","How far flagged players beat their prediction; three signals are graded.",stBody(`<div class="panel"><div class="phead"></div>${signalHitsHTML()}</div>`))}
+      ${rep("stnews","newspaper","News Sources","Each news source, its items now, and whether it answers.",stNewsHTML(),{wide:true})}
+      ${rep("stfix","target","Fixture Ratings","How well the ratings predicted goals.",fxBody)}
+      ${rep("stodds","activity","Odds","The bookmakers' markets the model reads.",oddsStatusHTML()+`<p style="margin:10px 0 0"><a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Bookmaker markets →</a></p>`)}
+      ${rep("stmodel","sparkles","xFPL Model","The model's state, accuracy by position and calibration; learning is off.",`<div class="split2"><div>${stBody(P.status)}${stBody(P.pva)}</div><div id="r-stcal"><h4 class="rsub">Calibration</h4>${stBody(P.calib)}</div></div>`,{wide:true})}
+      ${rep("stkey","sparkles","Signal Key","What each signal icon means.",legendHTML())}
+      ${rep("stopt","calendar","Options","Your saved drafts and lists.",stOptionsHTML())}
+    </div></div>`;
 }

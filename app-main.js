@@ -84,7 +84,7 @@ function act(k,a,b,c){
     case"pown":S.pOwn=["rank","eo"].includes(a)?a:"all";LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
     case"pstart":S.pStarters=!S.pStarters;break;
     case"pdmorefilters":S.pdMore=!S.pdMore;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
-    case"pwin":{const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=a==="ros"?38:Math.min(38,g0+([3,5].includes(+a)?+a:5)-1);break;}
+    case"pwin":{const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=a==="ros"?38:Math.min(38,g0+([1,3,5].includes(+a)?+a:5)-1);break;}
     case"pdreset":S.lSearch="";S.lTeam=0;S.lMax=16;S.lMin=0;S.lPos=0;S.pShow="all";S.pOwn="all";S.pStarters=false;S.starOnly=false;S.iconF=[];S.lWin=38;
       {const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=Math.min(38,g0+4);}break;
     case"tick":{const t=S.pTicks||[];S.pTicks=t.includes(a)?t.filter(x=>x!==a):(t.length>=5?t:[...t,a]);
@@ -159,6 +159,7 @@ function act(k,a,b,c){
     case"sigh":S.sigH=/^ros$/i.test(String(a))?"ros":(+a||3);LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[],tab:S.sgTab});break;
     /* Signals' own small switches: Leaders Predicted/Scored, The Game's
        Picks metric and week, Value position */
+    case"trkview":S.trkView=a==="charts"?"charts":"table";break;
     case"sglead":S.sgLead=a==="scored"?"scored":"pred";break;
     case"sgpick":S.sgPick=["capt","sel","bought","top"].includes(a)?a:"bought";break;
     case"sgpickgw":S.sgPickGw=+a||null;break;

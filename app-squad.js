@@ -60,11 +60,11 @@ const SIG_RULE={
   rise:()=>"FPL's predictor: 100%+ progress to a rise tonight",
   fall:()=>"FPL's predictor: 100%+ progress to a fall tonight",
   mins:()=>"Doubt, out, or under 60 expected minutes",
-  heat:()=>"Heating Up. Midfielders: last-4 xGI/90 at least 1.5x his season rate. Keepers and defenders: his team's xG against over the last 4 at most 0.7x its season rate. Forwards: his team's xG over the last 4 at least 1.3x its season rate",
-  cool:()=>"Cooling Off. Midfielders: last-4 xGI/90 at most 0.6x his season rate, or his DefCon hit rate down 30 points. Keepers, defenders and forwards: losing his place (his share of the team's minutes over its last 4 at most 0.75x his season share, or 2 or fewer starts in the last 4 after starting 75%+). Keepers also: goals prevented over the last 4 at least 0.3 per 90 below his season rate",
-  defcon:()=>`DefCon Monster: reached the DefCon target in at least 2 of every 3 matches this season, with ${DCM_HITS}+ hits. Solid when the next match is strong too: model chance ${Math.round(DCM_CHANCE*100)}%+ against a side whose opponents reach DefCon ${DCM_GIVEN}+ times a match`,
+  heat:()=>"Heating Up: his recent threat, or his team's form, is well above its season rate",
+  cool:()=>"Cooling Off: his recent threat is down, or he is losing his place",
+  defcon:()=>"DefCon Monster: reaches the DefCon target in two of every three matches",
   rival:()=>"Owned by managers around you, not by you",
-  diff:()=>"Differential: predicted in the top 10% of his position next gameweek (among players expected to play 60+ minutes) and under 5% owned. Bright when none of your league rivals own him, which also lets in players up to 15% owned",
+  diff:()=>"Differential: top 10% predicted in his position, and rarely owned",
   pen:()=>"First-choice penalty taker",
   set:()=>"First choice on corners or free kicks"};
 function sigTile(k,tip,bright){
