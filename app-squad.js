@@ -1257,63 +1257,61 @@ function dashHTML(pick){
   </div>`;
 }
 
+/* The Planner's List view (21 Nov 2026, Andy's columns): Player, Sells (paid
+   under it), Pts, Form, xMins, xPts (the pitch's own pill), 3GW, Owned,
+   Rivals, Next 3, then the transfer button and the menu. Every header
+   sorts (again to reverse); sorted by Player it groups by position with the
+   bench last, any other sort is one list with the bench marked SUB. */
+function cardPts(p){
+  const g=VG(),next=S.model.next.id,official=_histSquadActive;
+  const {captain:capForGw}=effectiveCaptainVice(g);
+  const isC=_histCaptain!=null?_histCaptain===p.id:capForGw===p.id;
+  const capMult=official?((_histMult&&_histMult[p.id]>=2)?_histMult[p.id]:1):(isC?(chipForWeek(g)==="3xc"?3:2):1);
+  const isPast=g<next,sp=isPast?pastPred(p,g):null,snap=sp?sp.v:null;
+  const base=snap!=null?snap:(isPast?null:hPts(p,g,S.horizon));
+  const feed=(S.playerActuals&&(S.playerActuals[p.id]||S.playerActuals[String(p.id)]))||null;
+  const act1=feed?feed[g]??feed[String(g)]:null;
+  const v=act1!=null?act1*capMult:(base!=null?base*capMult:null);
+  const col=ptsCol((v||0)/Math.max(1,S.horizon));
+  return{v,col,elite:col[2]==="elite"&&v!=null,actual:act1!=null};
+}
+/* the next three gameweeks on the fixture chips' difficulty scale (as This
+   Week's Fixture Outlook: a blank counts 5, a double one easier) */
+function runOf3(p,g){let s=0,n=0;for(let e=g;e<g+3&&e<=38;e++){const q=p.gw[e];
+  if(!q||q.blank||!q.fixtures.length){s+=5;n++;continue;}
+  s+=q.fixtures.reduce((a,f)=>a+fdrBand(posDiff(p,f)),0)/q.fixtures.length-(q.fixtures.length>1?1:0);n++;}
+  return n?s/n:5;}
 function squadListHTML(){
-  const g=VG(), xi=startingXI();
-  const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
-  const all=squadPlayers();
-  /* Official past week: the armbands actually worn, and no edit controls,
-     the same rule the pitch cards follow. */
-  const official=_histSquadActive;
-  const capId=official?_histCaptain:S.captain, viceId=official?_histVice:S.vice;
-  const key=S.sqSort||"pos", dir=S.sqDir||"asc";
-  const val={
-    pos:p=>p.pos*100-(xi.includes(p)?50:0),
-    name:p=>p.web_name.toLowerCase(),
-    buy:p=>purchaseOf(p).paid,
-    sell:p=>sellPrice(p),
-    form:p=>p.form, xmins:p=>p.xMins,
-    pred:p=>p.gw[g]?.pts||0, p3:p=>hPts(p,g,3), p5:p=>hPts(p,g,5)
-  }[key]||(p=>p.pos);
-  const rows=[...all].sort((a,b)=>{
-    const x=val(a),y=val(b);
-    const c=typeof x==="string"?x.localeCompare(y):x-y;
-    return dir==="asc"?c:-c;});
-  const cols=[["name","Player"],["buy","Bought"],["sell","Sells"],["form","Form"],
-    ["xmins","xMins"],["pred","xFPL"],["p3","3GW"],["p5","5GW"]];
+  const g=VG(),xi=startingXI(),sp=squadPlayers(),official=_histSquadActive;
+  const cv=effectiveCaptainVice(g),capId=official?_histCaptain:cv.captain,viceId=official?_histVice:cv.vice;
+  const R=rivalOwn(),pts=new Map(sp.map(p=>[p.id,cardPts(p)]));
+  const key=S.sqSort||"pos",dir=S.sqDir||"asc";
+  const val={pos:p=>p.pos,sell:p=>sellPrice(p),total:p=>p.total,form:p=>p.form,xmins:p=>p.xMins,
+    pred:p=>pts.get(p.id).v??-1,p3:p=>hPts(p,g,3),own:p=>p.owned,riv:p=>R&&R.n?(R.own[p.id]||0):0,next:p=>runOf3(p,g)}[key]||(p=>p.pos);
+  const cols=[["pos","Player"],["sell","Sells"],["total","Pts"],["form","Form"],["xmins","xMins"],["pred","xPts"],["p3","3GW"],["own","Owned"],["riv","Rivals"],["next","Next 3"]];
   const arrow=k=>key===k?(dir==="asc"?" ↑":" ↓"):"";
-  const head=`<tr>${cols.map(([k,n])=>`<th class="${key===k?"act":""}"
-      style="text-align:${k==="name"?"left":"right"}" onclick="act('sqsort','${k}')">${n}${arrow(k)}</th>`).join("")}
-    <th style="text-align:center">Position stats</th>
-    <th style="text-align:center">Next 3</th><th></th></tr>`;
-  const body=rows.map(p=>{
-    const starting=xi.includes(p);
-    const q=p.gw[g]||{fixtures:[]};
-    const buy=purchaseOf(p).paid;
-    const sell=sellPrice(p);
-    return `<tr class="${starting?"":"sub"}">
-      <td class="nm"><span style="display:flex;align-items:center;gap:8px">
-        ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,22)}
-        <span style="min-width:0">
-          <button class="lname" onclick="act('card',${p.id})">${esc(p.web_name)}</button>
-          ${capId===p.id?'<span class="tag c">C</span>':""}${viceId===p.id?'<span class="tag v">V</span>':""}
-          ${starting?"":'<span class="tag s">SUB</span>'}
-          <span style="display:block;font-size:10px;color:var(--mute)">${esc(p.teamName)} · ${POS[p.pos]}</span>
-        </span></span></td>
-      <td class="mono" style="text-align:right">£${buy.toFixed(1)}</td>
-      <td class="mono" style="text-align:right;color:${sell>buy?"var(--mint)":sell<buy?"var(--red)":"var(--cream)"}">£${sell.toFixed(1)}</td>
-      <td class="mono" style="text-align:right">${p.form.toFixed(1)}</td>
-      <td class="mono" style="text-align:right">${p.xMins}′</td>
-      <td class="mono" style="text-align:right;color:var(--mint);font-weight:700">${(q.pts||0).toFixed(1)}</td>
-      <td class="mono" style="text-align:right;color:var(--cyan)">${hPts(p,g,3).toFixed(1)}</td>
-      <td class="mono" style="text-align:right;color:var(--cyan)">${hPts(p,g,5).toFixed(1)}</td>
-      <td style="white-space:nowrap"><span class="psrow">${posStats(p).map(([k,v])=>
-        `<span class="ps"><span class="k">${k}</span><span class="v">${v}</span></span>`).join("")}</span></td>
-      <td style="text-align:center;white-space:nowrap">${fix3(p,g)}</td>
-      <td style="text-align:right;white-space:nowrap">${official?"":`
-        <button class="mini" onclick="act('sub',${p.id})" title="Substitute">⇄</button>
-        <button class="mini" onclick="act('cap',${p.id})" title="Captain">C</button>
-        <button class="mini" onclick="act('flag',${p.id})" title="Transfer out">✕</button>`}</td></tr>`;}).join("");
-  return `<div class="scroll"><table class="sqtable"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  const head=`<div class="lv-h">${cols.map(([k,n])=>`<button class="lv-hc lv-${k}${key===k?" act":""}" onclick="act('sqsort','${k}')" aria-sort="${key===k?(dir==="asc"?"ascending":"descending"):"none"}">${n}${arrow(k)}</button>`).join("")}<span class="lv-act"></span></div>`;
+  const row=p=>{const on=xi.includes(p),buy=purchaseOf(p).paid,sell=sellPrice(p),c=pts.get(p.id),menu=S.pMenu===p.id&&!official,fl=S.flagged.includes(p.id);
+    return `<div class="lv-r${on?"":" sub"}${fl?" dim":""}${menu?" open":""}" data-pid="${p.id}"${official?"":` oncontextmenu="event.preventDefault();act('pmenu',${p.id})"`}>
+      <span class="lv-pos"><button class="lv-pl" onclick="act('card',${p.id})">${photoHTML(p,"lv-ph")}<span class="lv-nm"><b>${esc(p.web_name)}</b>${capId===p.id?`<span class="pz-cv"${official?' title="Captain (official)"':""}>C</span>`:viceId===p.id?`<span class="pz-cv v"${official?' title="Vice-captain (official)"':""}>V</span>`:""}${inDT(p)?dtStar("pz-dts",9):""}${p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(p.news||"Doubt")}">${lic("triangle-alert",12)}<i>${Math.round(p.avail*100)}%</i></span>`:""}${on||key==="pos"?"":`<span class="lv-sub">SUB</span>`}<i>${esc(p.teamName)} · ${POSL[p.pos]}</i></span></button></span>
+      <span class="lv-sell"><b>£${sell.toFixed(1)}${arw(p.priceChange)}</b><i class="${sell>buy?"up":sell<buy?"dn":""}">paid £${buy.toFixed(1)}</i></span>
+      <span class="lv-total">${p.total}</span><span class="lv-form">${p.form.toFixed(1)}</span><span class="lv-xmins mu">${Math.round(p.xMins)}′</span>
+      <span class="lv-pred"><span class="lv-pt" style="background:${c.v==null?"var(--ink3)":c.col[0]};color:${c.v==null?"var(--mute)":c.col[1]}${c.elite?";box-shadow:0 0 0 2px #EAFFEF,0 0 10px rgba(125,251,158,.7)":""}" title="${c.actual?"Actual":"Predicted"} GW${g}${capId===p.id?", captain":""}">${c.v==null?"—":c.v.toFixed(1)}</span></span>
+      <span class="lv-p3 cy">${hPts(p,g,3).toFixed(1)}</span><span class="lv-own">${p.owned}%</span>
+      <span class="lv-riv">${R&&R.n?`${R.own[p.id]||0}/${R.n}`:"—"}</span>
+      <span class="lv-next">${g<S.model.next.id?fxRun(pastFxGW(p,g),"sm"):fxNext(p,g,3,"sm")}</span>
+      <span class="lv-act">${official?"":`<button class="pz-xf${fl?" on":""}" onclick="act('flag',${p.id})" title="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}" aria-label="${fl?"Keep":"Transfer out"} ${esc(p.web_name)}">${lic("arrow-right-left",12)}</button>
+        <button class="lv-more" onclick="event.stopPropagation();act('pmenu',${p.id})" aria-label="More for ${esc(p.web_name)}">···</button>`}${menu?pmenuHTML(p,on?null:{cycle:p.pos!==1}):""}</span></div>`;};
+  const sorted=list=>list.slice().sort((a,b)=>{const x=val(a),y=val(b);return dir==="asc"?x-y:y-x;});
+  let body;
+  if(key==="pos"){
+    const grp=(label,list)=>list.length?`<div class="lv-g"><span>${label}</span><i>${list.reduce((a,p)=>a+(pts.get(p.id).v||0),0).toFixed(1)} pts</i></div>${list.map(row).join("")}`:"";
+    const byV=list=>list.slice().sort((a,b)=>(pts.get(b.id).v||0)-(pts.get(a.id).v||0));
+    const groups=[[1,"Goalkeeper"],[2,"Defenders"],[3,"Midfielders"],[4,"Forwards"]];
+    const order=dir==="asc"?groups:groups.slice().reverse();
+    body=order.map(([k,n])=>grp(n,byV(xi.filter(p=>p.pos===k)))).join("")+grp("Bench",orderBench(sp.filter(p=>!xi.includes(p))));
+  }else body=sorted(sp).map(row).join("");
+  return `<div class="lv">${head}${body}</div>`;
 }
 /* icons for the Chips page (Lucide 1.52.0, ISC) */
 Object.assign(LUCIDE,{"chart-column":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\" /><path d=\"M18 17V9\" /><path d=\"M13 17V5\" /><path d=\"M8 17v-3\" />","wand-sparkles":"<path d=\"m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72\" /><path d=\"m14 7 3 3\" /><path d=\"M5 6v4\" /><path d=\"M19 14v4\" /><path d=\"M10 2v2\" /><path d=\"M7 8H3\" /><path d=\"M21 16h-4\" /><path d=\"M11 3H9\" />","zap":"<path d=\"M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z\" />","armchair":"<path d=\"M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3\" /><path d=\"M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z\" /><path d=\"M5 18v2\" /><path d=\"M19 18v2\" />","layers":"<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\" /><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\" /><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\" />","calendar-range":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /><path d=\"M16 2v3\" /><path d=\"M3 9h18\" /><path d=\"M8 2v3\" /><path d=\"M17 13h-6\" /><path d=\"M13 17H7\" /><path d=\"M7 13h.01\" /><path d=\"M17 17h.01\" />","circle-check":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m16 9-5.5 5.5L8 12\" />"});
