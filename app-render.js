@@ -118,7 +118,8 @@ function pkStories(p){
   const seen=new Set(),out=[];
   [...(S.news||[]),...(S.squadNews||[]),...((S.pNews||{})[p.id]||[])].forEach(n=>{
     if(!(n.ids||[]).includes(p.id))return;const k=newsKey(n.title);if(seen.has(k))return;seen.add(k);out.push(n);});
-  return out.sort((a,b)=>((NW_CAT[a.cat]||NW_CAT.news)[2]-(NW_CAT[b.cat]||NW_CAT.news)[2])||b.time-a.time);
+  /* newest first (Andy, 22 Nov 2026); the category chips filter */
+  return out.sort((a,b)=>b.time-a.time);
 }
 function pkNewsHTML(p,stories){
   const f=flagNow(p),c=Math.round((p.avail==null?1:p.avail)*100),sc=startChance(p);

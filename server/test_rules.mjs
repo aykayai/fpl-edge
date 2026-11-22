@@ -475,6 +475,16 @@ try {
     check((page.querySelector(".nw-lead h2") || {}).textContent === "Older transfer story" && !/Squad man injury worry/.test((page.querySelector(".nw-top") || {}).textContent || ""),
       "News: the Transfers filter shows only transfer stories");
     g.act("nwcat", "all");
+    /* the player card lists his stories newest first (Andy, 22 Nov 2026) */
+    S.news = [...S.news, { src: "Feed D", title: "Newest FPL note about him", url: "https://example.com/4", time: Date.now() - 1800000, cat: "fpl", ids: [p.id] }];
+    g.act("cardnews", p.id); g.render();
+    const firstStory = ((doc.querySelector(".pk-ns b") || {}).textContent) || "";
+    check(firstStory === "Newest FPL note about him", "News: the player card shows his newest story first, whatever its category", firstStory);
+    g.act("card", null);
+    /* Injury Room and Social Media scroll inside their boxes */
+    S.tab = "news"; g.render();
+    check(!!doc.querySelector("#r-nwso .nw-list.nw-scroll") && (!doc.querySelector("#r-nwir .nw-ir") || !!doc.querySelector("#r-nwir .nw-list.nw-scroll")),
+      "News: Injury Room and Social Media lists scroll inside their boxes");
 
     /* the Status page turns amber for a source down over an hour, not for a blip */
     const keepStatus = S.status;
