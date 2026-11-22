@@ -34,6 +34,9 @@ const OLD_REF = process.env.OLD_REF || "626c3f4";
 const PORT = Number(process.env.PORT || 8093);
 const BASE = `http://127.0.0.1:${PORT}`;
 const STATE_DIR = process.env.STATE_DIR;
+/* the season from the date, the app's rule: a season starts in August */
+const SEASON_Y = (d => d.getUTCMonth() >= 7 ? d.getUTCFullYear() : d.getUTCFullYear() - 1)(new Date());
+const SEASON = `${SEASON_Y}-${SEASON_Y + 1}`;
 if (!STATE_DIR) { console.error("Set STATE_DIR to a populated server state dir."); process.exit(2); }
 
 /* jsdom comes from wherever it is installed; the repo itself has no deps. */
@@ -90,7 +93,7 @@ function startServer() {
 async function waitForServer() {
   for (let i = 0; i < 60; i++) {
     try {
-      const r = await fetch(BASE + "/data/insights/2026-2027/players.csv", { method: "HEAD" });
+      const r = await fetch(BASE + `/data/insights/${SEASON}/players.csv`, { method: "HEAD" });
       if (r.ok) return;
     } catch { /* not up yet */ }
     await new Promise(r => setTimeout(r, 1000));
@@ -270,7 +273,7 @@ try {
 
   /* Pin the official gw to the dataset's first unfinished gameweek so both
      models are built for the same week; report the live disagreement too. */
-  const sums = await (await fetch(BASE + "/data/insights/2026-2027/gameweek_summaries.csv")).text();
+  const sums = await (await fetch(BASE + `/data/insights/${SEASON}/gameweek_summaries.csv`)).text();
   const rows = sums.trim().split("\n").slice(1).map(l => l.split(","));
   const head = sums.trim().split("\n")[0].split(",");
   const iId = head.indexOf("id"), iFin = head.indexOf("finished");
