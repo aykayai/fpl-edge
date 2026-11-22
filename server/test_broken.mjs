@@ -300,7 +300,7 @@ try {
   S.pop = null; S.fixMode = "grid";
 
   /* F10 behaviour: Enter presses a role=button element; Escape closes a card */
-  show("signals");
+  show("signals"); g.act("sgtab", "players"); /* batch 3: My Squad In Form, its first ranked list, moved to Performance */
   /* jsdom in this mode does not run inline onclick attributes, so the check
      is on what the key handler owns: Enter and Space press the element */
   const rowEl = doc.querySelector(".sgpage .hbr[role='button'], .sgpage .sbrow[role='button'], .sgrow[role='button']");
