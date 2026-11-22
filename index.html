@@ -518,9 +518,9 @@ body.scrolled .tbfig{display:flex}
 .pdt tr.mine td.nm{background:#111815}
 .pdt tbody tr:hover td.nm{background:#171717}
 .pdt .pcell{display:flex;align-items:center;gap:11px}
-.pdshirt{position:relative;width:26px;height:26px;flex:none;display:grid;place-items:center}
-.pdshirt .tick{position:absolute;inset:4px;width:18px;height:18px;margin:0;min-height:0;opacity:0;accent-color:var(--mint);cursor:pointer}
-.pdt tr:hover .pdshirt svg,.pdt.ticking .pdshirt svg,.pdshirt:focus-within svg{opacity:0}
+.pdshirt{position:relative;width:34px;height:34px;flex:none;display:grid;place-items:center}
+.pdshirt .tick{position:absolute;inset:8px;width:18px;height:18px;margin:0;min-height:0;opacity:0;accent-color:var(--mint);cursor:pointer}
+.pdt tr:hover .pdshirt svg,.pdt.ticking .pdshirt svg,.pdshirt:focus-within svg,.pdt tr:hover .pdshirt .kitsm,.pdt.ticking .pdshirt .kitsm,.pdshirt:focus-within .kitsm{opacity:0}
 .pdt tr:hover .pdshirt .tick,.pdt.ticking .pdshirt .tick,.pdshirt .tick:focus-visible{opacity:1}
 .pdt .pmeta{display:flex;flex-direction:column;gap:2px}
 .pdt .prow1{display:flex;align-items:center;gap:7px;font-weight:600;font-size:14px}.pdt .prow2{font-size:12px;color:var(--mute)}
@@ -1562,6 +1562,14 @@ svg.chart circle[data-tip]{cursor:pointer}
 .lv-act{position:relative;display:flex;gap:4px;justify-content:flex-end}
 .lv-act .pz-xf{width:26px;height:26px;border-radius:8px}.lv-more{min-height:0;width:26px;height:26px;padding:0;border-radius:8px;font-size:11px;line-height:1}
 .lv-act .pz-menu{left:auto;right:0;top:32px}
+/* FPL kits in lists (22 Nov 2026): Player Pool, Player Data, transfer cards */
+.kitsm{display:inline-grid;place-items:center;width:var(--kh);height:var(--kh);flex:none}
+.kitsm img{height:var(--kh);width:auto;max-width:calc(var(--kh) * 1.15);object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.prow .kitsm{margin-right:2px}
+.prow .fxrun .fxc{width:27px;height:19px;font-size:9px;letter-spacing:0}.prow>span:nth-child(2){overflow:hidden}
+/* Compare: actions in the squads row, right aligned */
+.cv-acts{margin-left:auto;display:flex;gap:8px;align-items:center}.cv-acts button{display:inline-flex;align-items:center;gap:6px;min-height:0;padding:8px 14px}
+.cv-src{align-items:center}
 </style>
 </head>
 <body>
@@ -1575,13 +1583,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.11.1"></script>
-<script src="./app-squad.js?v=13.11.1"></script>
-<script src="./app-render.js?v=13.11.1"></script>
-<script src="./app-odds.js?v=13.11.1"></script>
-<script src="./app-tracker.js?v=13.11.1"></script>
-<script src="./app-main.js?v=13.11.1"></script>
-<script src="./app-scout.js?v=13.11.1"></script>
+<script src="./app-core.js?v=13.11.2"></script>
+<script src="./app-squad.js?v=13.11.2"></script>
+<script src="./app-render.js?v=13.11.2"></script>
+<script src="./app-odds.js?v=13.11.2"></script>
+<script src="./app-tracker.js?v=13.11.2"></script>
+<script src="./app-main.js?v=13.11.2"></script>
+<script src="./app-scout.js?v=13.11.2"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

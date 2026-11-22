@@ -228,7 +228,7 @@ try {
     if (bb && bx) { g.act("cmpsub", "B", bb.id, bx.id); const B4 = g.cmpSide("B");
       check(B4.xi.some(p => p.id === bb.id) && !B4.xi.some(p => p.id === bx.id), "Compare: dragging a bench player on substitutes on that side"); }
     g.act("cmpsrc", "B", "fh");
-    check(S.cmp.b === "fh" && !S.cmp.ed.B && /Play Free Hit with B/.test(doc.querySelector(".cv-foot")?.textContent || ""), "Compare: picking Best Free Hit offers to play it with B", (() => { try { const T = g.cmpSide("B"); return "ids " + (T && T.ids ? T.ids.length : T && T.sub); } catch (e) { return "throws " + e.message; } })() + " | foot: " + (doc.querySelector(".cv-foot")?.textContent || "none").replace(/\s+/g, " ").slice(0, 120) + " | app: " + (doc.getElementById("app").textContent.match(/hit a problem.{0,200}/) || ["no error"])[0]);
+    check(S.cmp.b === "fh" && !S.cmp.ed.B && /Play Free Hit with B/.test(doc.querySelector(".cv-acts")?.textContent || ""), "Compare: picking Best Free Hit offers to play it with B", (() => { try { const T = g.cmpSide("B"); return "ids " + (T && T.ids ? T.ids.length : T && T.sub); } catch (e) { return "throws " + e.message; } })() + " | foot: " + (doc.querySelector(".cv-acts")?.textContent || "none").replace(/\s+/g, " ").slice(0, 120) + " | app: " + (doc.getElementById("app").textContent.match(/hit a problem.{0,200}/) || ["no error"])[0]);
     g.act("cmpclose");
     check(!doc.querySelector(".mbox.cv"), "Compare closes");
   }
