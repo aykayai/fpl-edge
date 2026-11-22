@@ -265,18 +265,20 @@ function routeFor(tab){return "#/"+(TABPATH[tab]||"planner");}
 /* A pop-up belongs to the page it was opened on: leaving the page closes it
    (audit 22 Nov 2026: one opened from #/transfers stayed over the next page) */
 function closePops(){S.pop=null;S.popTab=null;S.cmp=null;S.cardId=null;S.pMenu=null;}
+const sgTabKey=k=>({transfers:"players",squad:"season",teams:"clubs"})[k]||(["players","clubs","season"].includes(k)?k:"players");
 function applyHash(){
   const h=(location.hash||"").replace(/^#\/?/,"").replace(/\/$/,"");
   /* Signals tabs have their own links: #/signals/transfers and so on */
-  const sg=/^signals\/(transfers|squad|teams|players)$/.exec(h);
-  /* old links to Signals › Transfers land on My Squad */
-  if(sg&&sg[1]==="transfers")sg[1]="squad";
+  const sg=/^signals\/(transfers|squad|teams|players|clubs|season)$/.exec(h);
+  /* Bundle C (22 Nov 2026): the tabs are Players, Clubs and My Season; old
+     links (Transfers, My Squad, Teams) land on their new homes */
+  if(sg)sg[1]=sgTabKey(sg[1]);
   if(sg){const ch=S.tab!=="signals"||S.sgTab!==sg[1];if(ch)closePops();S.tab="signals";S.sgTab=sg[1];return ch;}
   const t=FROM_ROUTE[h];
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.22.0";
+const APP_VERSION="13.23.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>

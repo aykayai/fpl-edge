@@ -253,7 +253,7 @@ function rivalOwn(){
    column and the Signal Board. S.horizon was stuck at 1 GW everywhere else. */
 function sigH(){
   if(S.tab==="table"&&typeof lGwRange==="function"){const r=lGwRange();return Math.max(1,r.count||1);}
-  if(S.tab==="signals")return S.sigH||3;
+  if(S.tab==="signals")return S.sigH==="ros"?Math.max(1,39-S.model.next.id):(S.sigH||3);
   return S.horizon||1;
 }
 function signals(p,g,noSell,hh){
