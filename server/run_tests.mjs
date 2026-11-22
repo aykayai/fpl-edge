@@ -30,8 +30,17 @@ const SUITES = [
   { name: "broken items", file: "test_broken.mjs", env: { PORT: "8098" } },
   { name: "extra", file: "test_extra.mjs", env: { PORT: "8091" } },
   { name: "the scout", file: "test_scout.mjs", env: {} },
-  ...(process.env.EXTRA ? process.env.EXTRA.split(",").map((f, i) => ({ name: f, file: f, env: { PORT: String(8110 + i) } })) : []),
+  { name: "model", file: "test_model.mjs", env: { PORT: "8112" } },
+  { name: "pages", file: "test_pages.mjs", env: { PORT: "8113" } },
+  ...(process.env.EXTRA ? process.env.EXTRA.split(",").map((f, i) => ({ name: f, file: f, env: { PORT: String(8120 + i) } })) : []),
 ];
+
+/* The least number of checks each suite passes today (Bundle F, 22 Nov
+   2026). A suite whose passed count falls below its floor fails even with
+   no FAIL line, so a block that silently stops running is caught. Raise a
+   floor when checks are added; EXTRA suites are matched by file name. */
+const FLOORS = { "gate": 35, "regression": 17, "planner history": 16, "signals": 42, "broken items": 84, "extra": 14,
+  "the scout": 26, "model": 43, "pages": 18, "test_rules.mjs": 161 };
 
 const t0 = Date.now();
 const run = s => new Promise(res => {
@@ -44,7 +53,12 @@ const run = s => new Promise(res => {
     clearTimeout(timer);
     const text = out.join("");
     const fails = text.split("\n").filter(l => l.startsWith("FAIL"));
-    const tally = (text.match(/(\d+) passed, (\d+) failed/) || [])[0] || "no tally";
+    const m = text.match(/(\d+) passed, (\d+) failed/), tally = m ? m[0] : "no tally";
+    const floor = FLOORS[s.name];
+    if (floor != null && !(m && +m[1] >= floor)) {
+      fails.unshift(`FAIL  only ${m ? m[1] : 0} checks passed; this suite's floor is ${floor} (a block stopped running?)`);
+      code = code || 1;
+    }
     res({ ...s, code, fails, tally, secs: Math.round((Date.now() - t0) / 1000) });
   });
 });

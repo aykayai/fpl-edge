@@ -1,7 +1,7 @@
 /* FPL Signals server - gate. Run: node server/test_gate.mjs
    No network needed: a fixture state dir is built from scratch, a stub
    upstream (local http server) stands in for GitHub, the FPL API, the
-   news feeds, reddit and odds-api.io, and the real server is started as
+   news feeds and odds-api.io, and the real server is started as
    a child process pointed at both. Prints PASS/FAIL per check and ends
    with "All checks passed." only when everything passed. */
 
@@ -15,7 +15,10 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER = join(HERE, "server.mjs");
-const SEASON = "2026-2027", LAST = "2025-2026";
+/* the season from the date, the app's rule: a season starts in August;
+   the feeds name a season by the year it ends */
+const SEASON_Y = (d => d.getUTCMonth() >= 7 ? d.getUTCFullYear() : d.getUTCFullYear() - 1)(new Date());
+const SEASON = `${SEASON_Y}-${SEASON_Y + 1}`, LAST = `${SEASON_Y - 1}-${SEASON_Y}`, FEED_SEASON = String(SEASON_Y + 1);
 const GOOD_SHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const TRUNC_SHA = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const ODDS_KEY = "TESTKEY-9f3a77-SECRETVALUE";
@@ -138,9 +141,6 @@ function stubHandler(req, res) {
   }
   if (/^\/fplapi\/event\/\d+\/live\/$/.test(p)) return json({ elements: [] });
   if (p === "/feed1") return text(HOSTILE_RSS, "application/rss+xml");
-  if (p === "/reddit.json") {
-    return json({ data: { children: [{ data: { title: "<b>Captain</b> &lt;script&gt;alert(1)&lt;/script&gt; poll", permalink: "/r/FantasyPL/comments/abc/x/", created_utc: 1760000000, score: "12", num_comments: "7", link_flair_text: "Discussion" } }] } });
-  }
   if (p.startsWith("/gnews")) return text(HOSTILE_RSS, "application/rss+xml");
   if (p === "/v3odds/leagues") return json([{ name: "Premier League", slug: "england-premier-league", country: "England" }]);
   if (p === "/v3odds/bookmakers/selected") return json(["Bet365"]);
@@ -189,10 +189,10 @@ async function buildFixture(root) {
   const feeds = join(root, "feeds");
   await mkdir(feeds, { recursive: true });
   await writeFile(join(feeds, "actuals.json"), JSON.stringify({
-    season: "2027", team: { totalPlayers: 11000000, gw: [{ event: 5, points: 52, orRank: 300000 }], chips: {} }, players: { 1: { 5: 6 } }
+    season: FEED_SEASON, team: { totalPlayers: 11000000, gw: [{ event: 5, points: 52, orRank: 300000 }], chips: {} }, players: { 1: { 5: 6 } }
   }));
   await writeFile(join(feeds, "rivals.json"), JSON.stringify({
-    season: "2027", leagueId: "391690", lastEvent: 5, updated: "2026-10-10T07:22:00Z", standings: [], entries: {}
+    season: FEED_SEASON, leagueId: "391690", lastEvent: 5, updated: "2026-10-10T07:22:00Z", standings: [], entries: {}
   }));
 }
 
@@ -220,7 +220,6 @@ async function main() {
       FPL_API_BASE: `${S}/fplapi`,
       ODDS_API_BASE: `${S}/v3odds`,
       NEWS_FEEDS: JSON.stringify([["Hostile Feed", `${S}/feed1`]]),
-      REDDIT_JSON_URL: `${S}/reddit.json`,
       GOOGLE_NEWS_BASE: `${S}/gnews`,
       SIGNALS_TICK_MS: "150",
       SIGNALS_JITTER_MS: "0",
@@ -262,7 +261,7 @@ async function main() {
     check("insights: players.csv served, 610 rows", r.status === 200 && lines === 611, "lines=" + lines);
     check("insights: X-Source-Time and X-Fetched-At set", !!r.headers["x-source-time"] && !!r.headers["x-fetched-at"]);
     r = await get("/data/feeds/actuals.json");
-    check("feeds: actuals.json parses", r.status === 200 && JSON.parse(r.body).season === "2027");
+    check("feeds: actuals.json parses", r.status === 200 && JSON.parse(r.body).season === FEED_SEASON);
     r = await get("/data/feeds/rivals.json");
     check("feeds: rivals.json parses", r.status === 200 && JSON.parse(r.body).lastEvent === 5);
 

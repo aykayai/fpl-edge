@@ -1114,7 +1114,7 @@ function statusPageHTML(){
       ${rep("stmvf","gauge","Model vs FPL","Prediction error each finished week; backtest for GW1-6.",mvf)}
       ${rep("stpva","crown","Predicted vs Actual","Your squad's predicted and actual points.",pva)}
       ${rep("stsrc","clock-alert","Data Sources","Each source and when it last answered.",srcList)}
-      ${rep("sthit","sparkles","Signal Hit Rates","How far flagged players beat their prediction; three signals are graded.",stBody(`<div class="panel"><div class="phead"></div>${signalHitsHTML()}</div>`))}
+      ${rep("sthit","sparkles","Signal Hit Rates","How far flagged players beat their prediction; three signals are graded.",(signalHitsHTML()?stBody(`<div class="panel"><div class="phead"></div>${signalHitsHTML()}</div>`):sgEmpty("Graded once pre-deadline predictions have been saved.")))}
       ${rep("stnews","newspaper","News Sources","Each news source, its items now, and whether it answers.",stNewsHTML(),{wide:true})}
       ${rep("stfix","target","Fixture Ratings","How well the ratings predicted goals.",fxBody)}
       ${rep("stodds","activity","Odds","The bookmakers' markets the model reads.",oddsStatusHTML()+`<p style="margin:10px 0 0"><a class="btnlink" href="${routeFor("odds")}" onclick="return go(event,'odds')">Bookmaker markets →</a></p>`)}

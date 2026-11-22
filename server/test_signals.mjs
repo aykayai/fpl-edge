@@ -27,6 +27,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = Number(process.env.PORT || 8097);
 const BASE = `http://127.0.0.1:${PORT}`;
 const STATE_DIR = process.env.STATE_DIR;
+/* the season from the date, the app's rule: a season starts in August */
+const SEASON_Y = (d => d.getUTCMonth() >= 7 ? d.getUTCFullYear() : d.getUTCFullYear() - 1)(new Date());
+const SEASON = `${SEASON_Y}-${SEASON_Y + 1}`;
 if (!STATE_DIR) { console.error("Set STATE_DIR to a populated server state dir."); process.exit(2); }
 
 function loadJSDOM() {
@@ -71,7 +74,7 @@ function startServer() {
 }
 async function waitForServer() {
   for (let i = 0; i < 60; i++) {
-    try { if ((await fetch(BASE + "/data/insights/2026-2027/players.csv", { method: "HEAD" })).ok) return; } catch { /* not up */ }
+    try { if ((await fetch(BASE + `/data/insights/${SEASON}/players.csv`, { method: "HEAD" })).ok) return; } catch { /* not up */ }
     await new Promise(r => setTimeout(r, 1000));
   }
   throw new Error("server did not come up at " + BASE);
@@ -124,7 +127,7 @@ try {
   const cardBy2 = id => doc.getElementById("r-" + id);
 
   /* ---------- 1. independent: season scorers by position ---------- */
-  const season = "2026-2027";
+  const season = SEASON;
   const players = csv(await get(`/data/insights/${season}/players.csv`));
   const posOf = {}; players.forEach(p => { posOf[p.player_id] = p.position; });
   const stats = csv(await get(`/data/insights/${season}/playerstats.csv`));
