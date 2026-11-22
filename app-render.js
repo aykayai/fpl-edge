@@ -297,7 +297,8 @@ function filtered(scope){
   }
   let out=S.model.players.filter(p=>(!pos||p.pos===pos)&&(!team||p.team===team)
     &&p.price<=cap+.001&&p.price>=3.5-.001
-    &&(!q||(p.web_name+" "+p.first+" "+p.last).toLowerCase().includes(q.toLowerCase())));
+    &&(!q||(p.web_name+" "+p.first+" "+p.last+" "+p.teamName).toLowerCase().includes(q.toLowerCase())));
+  if(!list&&S.fFit)out=out.filter(p=>p.avail>=1);
   if(list){
     const g=S.model.next.id;
     if(S.starOnly)out=out.filter(p=>S.stars.includes(p.id));
@@ -469,27 +470,31 @@ function stepperInput(action,value,opts){
     <button onclick="act('${action}',${fmt(clampv(+value+big))})" title="+${fmt(big)}">»</button>
   </span>`;
 }
-function filtersHTML(compact,scope){
-  const L=scope==="list";
-  const pos=L?S.lPos:S.fPos, team=L?S.lTeam:S.fTeam, q=L?S.lSearch:S.fSearch;
-  const A=k=>L?"l"+k:k;
-  return `<div class="pbody" style="display:flex;${compact?"flex-direction:column":"flex-wrap:wrap;align-items:end"};gap:9px;border-bottom:1px solid var(--ink3)">
-    <input id="srch-${L?'l':'p'}" ${compact?"":'style="width:auto;min-width:150px;flex:1"'} placeholder="Search"
-      value="${esc(q)}" oninput="searchInput('${A('search')}',this)">
-    <span style="display:flex;gap:4px;flex-wrap:wrap">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]]
-      .map(([v,n])=>`<button class="${pos===v?"on":""}" onclick="act('${A('pos')}',${v})">${n}</button>`).join("")}</span>
-    ${L?(()=>{const r=lGwRange();return `<span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-      <span class="note" style="white-space:nowrap">Pr xFPL: GW</span>
-      ${stepperInput("lgwfrom",r.from,{min:1,max:38,step:1,big:5,w:40})}
-      <span class="note">to</span>
-      ${stepperInput("lgwto",r.to,{min:r.from,max:38,step:1,big:5,w:40})}
-      </span>`;})():""}
-    ${L?"":`<span class="pricebox" style="width:auto">
-      <span class="note" style="white-space:nowrap">Max £</span>
-      <input type="number" min="3.5" max="16" step="0.1" value="${S.fMax.toFixed(1)}"
-        onchange="act('fmax',this.value)" style="width:70px"></span>`}
-    <select ${compact?"":'style="width:auto"'} onchange="act('${A('team')}',this.value)"><option value="0">All clubs</option>
-      ${S.model.teams.map(t=>`<option value="${t.id}" ${team===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
+/* Player Pool filters (21 Nov 2026, Andy approved the mock): search with a
+   sort, one row of positions, then chips: price (a slider in £0.1m steps
+   with quick picks), club, fit only, and the count. */
+function poolFiltersHTML(){
+  const pos=S.fPos,team=S.fTeam,q=S.fSearch||"",max=S.fMax,n=filtered("planner").length;
+  const flags=S.flagged||[],raised=flags.reduce((t,id)=>{const o=S.model.players.find(p=>p.id===id);return t+(o?sellPrice(o):0);},0);
+  const budget=+(planBank()+raised).toFixed(1);
+  const sorts=[["pred","xPts"],["pred3","3GW"],["total","Pts"],["form","Form"],["price","Price"],["xmins","xMins"]];
+  const tm=(S.model.teams||[]).find(t=>t.id===team);
+  const priceOn=max<16-1e-9;
+  const quick=[[budget,`Bank £${budget.toFixed(1)}`],[5.5,"≤ £5.5"],[7,"≤ £7.0"],[8,"≤ £8.0"],[10,"≤ £10.0"],[16,"Any"]];
+  return `<div class="pf">
+    <div class="pf-r1"><label class="pf-s">${lic("search",15)}<input id="srch-p" placeholder="Search players or clubs" value="${esc(q)}" oninput="searchInput('search',this)" aria-label="Search players or clubs"></label>
+      <label class="pf-sort">${lic("arrow-right-left",13)}<select onchange="act('lsortset',this.value)" aria-label="Sort by">${sorts.map(([k,l])=>`<option value="${k}"${S.lSort===k?" selected":""}>${l}</option>`).join("")}</select></label></div>
+    <div class="pf-pos" role="group" aria-label="Position">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]].map(([v,l])=>`<button class="${pos===v?"on":""}" aria-pressed="${pos===v}" onclick="act('pos',${v})">${l}</button>`).join("")}</div>
+    <div class="pf-chips">
+      <button class="pf-c${priceOn?" on":""}" onclick="act('poolpop','price')" aria-expanded="${S.poolPop==="price"}">£ ${priceOn?`up to ${max.toFixed(1)}`:"Any price"}${priceOn?`<span role="button" tabindex="0" aria-label="Clear price" onclick="event.stopPropagation();act('fmax',16)">${lic("x",12)}</span>`:lic("chevron-down",12)}</button>
+      <label class="pf-c${team?" on":""}">${lic("shield",12)}<select onchange="act('team',this.value)" aria-label="Club"><option value="0">All clubs</option>${(S.model.teams||[]).map(t=>`<option value="${t.id}"${team===t.id?" selected":""}>${esc(t.name)}</option>`).join("")}</select>${team?`<span role="button" tabindex="0" aria-label="Clear club" onclick="event.preventDefault();event.stopPropagation();act('team',0)">${lic("x",12)}</span>`:""}</label>
+      <button class="pf-c${S.fFit?" on":""}" aria-pressed="${!!S.fFit}" onclick="act('fitonly')">${lic("check",12)} Fit only</button>
+      <span class="pf-n">${n} player${n===1?"":"s"}</span></div>
+    ${S.poolPop==="price"?`<div class="pf-pop" role="dialog" aria-label="Max price" onclick="event.stopPropagation()"><div class="pf-ph"><b>Max price</b><span id="pf-pv">£${max.toFixed(1)}</span></div>
+      <input class="pf-rng" type="range" min="3.5" max="16" step="0.1" value="${max.toFixed(1)}" aria-label="Max price"
+        oninput="document.getElementById('pf-pv').textContent='£'+(+this.value).toFixed(1)" onchange="act('fmax',this.value)">
+      <div class="pf-ticks"><span>£3.5</span><span>£6.0</span><span>£8.5</span><span>£11.0</span><span>£13.5</span><span>£16.0</span></div>
+      <div class="pf-qk">${quick.map(([v,l])=>`<button class="${Math.abs(max-v)<0.05?"on":""}" onclick="act('fmax',${(+v).toFixed(1)})">${l}</button>`).join("")}</div></div>`:""}
   </div>`;
 }
 
@@ -1682,83 +1687,128 @@ function popHTML(){
   }
   return "";
 }
-/* ---------- Compare pop-up (mock 3) ----------
-   Left: the current team (Your Edits: the official squad; Wildcard and Free
-   Hit: the plan for this week). Right: the proposal (your plan, or the
-   Chips page optimiser's best Wildcard / Free Hit squad). Players leaving
-   carry OUT, players arriving IN. On the left a tap locks a player into the
-   proposal; on the right a tap rules him out; Re-run solves again. */
-function cmpTeams(){
-  const C=S.cmp,g=VG(),h=C.mode==="fh"?1:C.h;
-  const cur=C.mode==="edits"?((latestOfficialPicks()||{}).picks||[]).map(pk=>pk.id):effectiveSquadIds(g).ids;
-  let prop=null,meta={};
-  if(C.mode==="edits"){prop=effectiveSquadIds(g).ids;meta={bank:planBank(),cap:effectiveCaptainVice(g).captain};}
-  else if(C.mode==="draft"){const d=(LS.get("drafts")||[])[C.draft];if(d){prop=d.ids;meta={bank:d.bank,cap:d.cap,label:d.label};}}
-  else{
-    const kind=C.mode==="wc"?"wildcard":"freehit",budget=squadBudget();
+/* ---------- Compare v3 (21 Nov 2026, Andy approved the mock) ----------
+   Two squads side by side, each on the Planner's own pitch (kits, transfer
+   button, armbands, Dream Team star, ownership, injury, points, fixture
+   strip, right-click menu, drag to substitute). A is the current team by
+   default; B is any squad: your plan, the best Free Hit or Wildcard team
+   (the optimiser, with locks and rule-outs and Re-run), or a saved squad.
+   Edits on a side stay on that side (S.cmp.ed) until saved or applied. */
+const CMP_SRC=[["cur","Current team"],["plan","Your plan"],["fh","Best Free Hit"],["wc","Best Wildcard"]];
+function cmpNew(a,b){return{a:a||"cur",b:b||"plan",h:1,locks:[],bans:[],pendLocks:[],pendBans:[],ed:{A:null,B:null},menu:null,sub:null,repl:null};}
+const cmpBuilder=src=>src==="fh"||src==="wc";
+/* one squad source: ids, armbands, bank, label */
+function cmpSquad(src){
+  const C=S.cmp,g=VG(),P=id=>S.model.players.find(p=>p.id===id);
+  if(src==="cur"){const o=latestOfficialPicks();if(!o)return null;
+    const c=o.picks.find(pk=>pk.isC)||{},v=o.picks.find(pk=>pk.isV)||{};
+    return{ids:o.picks.map(pk=>pk.id),xi:o.picks.slice(0,11).map(pk=>pk.id),cap:c.id,vice:v.id,bank:planBank(),label:"Current team",sub:`GW${o.event} official`};}
+  if(src==="plan"){const e=effectiveSquadIds(g),cv=effectiveCaptainVice(g);
+    return{ids:e.ids,xi:startingXI().map(p=>p.id),cap:cv.captain,vice:cv.vice,bank:planBank(),label:"Your plan",sub:`GW${g}`};}
+  if(cmpBuilder(src)){const kind=src==="wc"?"wildcard":"freehit",budget=squadBudget(),h=src==="fh"?1:C.h;
     const r=optimalSquad(kind,g,budget,null,{weeks:h,locks:C.locks,bans:C.bans});
-    if(r){prop=[...r.xi,...r.bench].map(p=>p.id);meta={bank:+(budget-r.value).toFixed(1),cap:r.cap&&r.cap.id,how:r.heuristic?"best found (quick builder)":r.proven?"proven optimal":r.checking?"best found, still checking":"best found",infeasible:false};}
-    else meta={infeasible:true};
-  }
-  return{g,h,cur:cur.length?cur:effectiveSquadIds(g).ids,prop,meta};
+    if(!r)return{ids:null,label:src==="fh"?"Best Free Hit":"Best Wildcard",sub:"no legal squad",infeasible:true};
+    return{ids:[...r.xi,...r.bench].map(p=>p.id),xi:r.xi.map(p=>p.id),cap:r.cap&&r.cap.id,vice:null,bank:+(budget-r.value).toFixed(1),
+      label:src==="fh"?"Best Free Hit":"Best Wildcard",sub:src==="fh"?`GW${g}`:wkSpan(g,h),how:r.heuristic?"quick builder":r.proven?"proven best":r.checking?"best found · checking":"best found"};}
+  const m=/^d(\d+)$/.exec(src||"");if(m){const d=(LS.get("drafts")||[])[+m[1]];if(!d)return null;
+    return{ids:d.ids.slice(),xi:d.xi||null,cap:d.cap,vice:d.vice||null,bank:d.bank??planBank(),label:d.label,sub:d.gw?`saved · GW${d.gw}`:"saved"};}
+  return null;
 }
-function teamPtsOver(ids,g,h){
-  const byId=new Map(S.model.players.map(p=>[p.id,p]));const out=[];
-  for(let k=0;k<h&&g+k<=38;k++)out.push(xiTotal(ids,g+k,byId));
-  return out;
+/* a side as shown: the source with that side's own edits on top */
+function cmpSide(side){
+  const C=S.cmp,g=VG(),h=C[side==="A"?"a":"b"]==="fh"?1:C.h,base=cmpSquad(C[side==="A"?"a":"b"]);
+  if(!base||!base.ids)return base?{...base,players:[],xi:[],bench:[],total:0}:null;
+  const ed=C.ed[side]||{},ids=ed.ids||base.ids,P=id=>S.model.players.find(p=>p.id===id);
+  const players=ids.map(P).filter(Boolean),val=p=>{let t=0;for(let e=g;e<g+h&&e<=38;e++)t+=p.gw[e]?.pts||0;return t;};
+  let xiIds=ed.xi||(!ed.ids&&base.xi)||null;
+  if(!xiIds||!legalXI(xiIds)||xiIds.some(i=>!ids.includes(i)))xiIds=legalBestXI(players,val).map(p=>p.id);
+  const xi=xiIds.map(P).filter(Boolean),bench=players.filter(p=>!xiIds.includes(p.id)).sort((a,b)=>(a.pos===1?-1:b.pos===1?1:val(b)-val(a)));
+  const byV=xi.slice().sort((a,b)=>val(b)-val(a));
+  const cap=xi.find(p=>p.id===(ed.cap??base.cap))||byV[0],vice=xi.find(p=>p.id===(ed.vice??base.vice)&&p!==cap)||byV.find(p=>p!==cap);
+  const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0);
+  const sellOrPay=p=>(S.squad||[]).includes(p.id)?sellPrice(p):p.price;
+  return{...base,ids,players,xi,bench,cap,vice,total,val,h,bank:ed.bank??base.bank,edited:!!ed.ids||ed.cap!=null||!!ed.xi,sellOrPay};
 }
-function cmpPitchHTML(ids,other,g,h,side){
-  const C=S.cmp,ps=ids.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-  const v=p=>p.gw[g]?.pts||0;
-  const xi=legalBestXI(ps,v),bench=ps.filter(p=>!xi.includes(p)).sort((a,b)=>(a.pos===1?-1:b.pos===1?1:v(b)-v(a)));
-  const cap=xi.slice().sort((a,b)=>v(b)-v(a))[0];
-  const otherSet=new Set(other||[]);
-  const chip=p=>{
-    const moved=!otherSet.has(p.id),tag=moved?(side==="cur"?"OUT":"IN"):"";
-    const locked=(C.locks||[]).includes(p.id),banned=(C.bans||[]).includes(p.id);
-    const pend=side==="cur"?(C.pendLocks||[]).includes(p.id):(C.pendBans||[]).includes(p.id);
-    const canTap=C.mode==="wc"||C.mode==="fh";
-    const act2=canTap?(side==="cur"?`act('cmplock',${p.id})`:`act('cmpban',${p.id})`):`act('card',${p.id})`;
-    return `<div class="cpl${tag?" moved":""}${pend?" pend":""}" onclick="${act2}" title="${canTap?(side==="cur"?"Tap to lock him into the proposal":"Tap to rule him out"):"Open player card"}">
-      ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,34)}
-      <span class="cpn">${esc(p.web_name)}${p===cap?' <span class="tagy">C</span>':""}</span>
-      <span class="cpv">${hPts(p,g,h).toFixed(1)}</span>
-      ${tag?`<span class="ctag ${tag==="OUT"?"out":"in"}">${tag}</span>`:""}${pend||locked||banned?`<span class="cmark">${lic(side==="cur"?"lock":"ban",12)}</span>`:""}</div>`;};
-  return `<div class="cpitch">${[1,2,3,4].map(pos=>{const r=xi.filter(p=>p.pos===pos);return r.length?`<div class="crow">${r.map(chip).join("")}</div>`:"";}).join("")}
-    <div class="cbench"><span class="lb">Bench</span><div class="crow">${bench.map(chip).join("")}</div></div></div>`;
+/* one card: the Planner's card, on a compare side */
+function cmpCardHTML(p,side,T,other,bench){
+  const g=VG(),v=T.val(p)*(p===T.cap?2:1),col=ptsCol(v/Math.max(1,T.h));
+  const uniq=!!(other&&other.ids&&other.ids.length)&&!other.ids.includes(p.id),C=S.cmp,menu=C.menu&&C.menu.side===side&&C.menu.id===p.id;
+  const sub=C.sub&&C.sub.side===side&&C.sub.id===p.id,lock=side==="B"&&(C.pendLocks.includes(p.id)||C.locks.includes(p.id)),ban=side==="B"&&(C.pendBans.includes(p.id)||C.bans.includes(p.id));
+  const inj=p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(p.news||"Doubt")}">${lic("triangle-alert",13)}<i>${Math.round(p.avail*100)}%</i></span>`:"";
+  return `<div class="pz-c${uniq?" cv-"+(side==="A"?"out":"in"):""}${sub?" subsel":""}${menu?" open":""}${ban?" dim":""}" data-pid="${p.id}"
+    onclick="act('cmpclick','${side}',${p.id})" oncontextmenu="event.preventDefault();act('cmpmenu','${side}',${p.id})" draggable="true"
+    ondragstart="pzDrag(event,${p.id})" ondragover="pzOver(event)" ondragleave="this.classList.remove('drop')" ondrop="pzDrop(event,${p.id},'${side}')" title="${esc(p.web_name)}">
+    <div class="pz-k">${kitHTML(p,"pz-kit")}
+      <span class="pz-l"><button class="pz-xf" onclick="event.stopPropagation();act('cmprepl','${side}',${p.id})" title="Transfer ${esc(p.web_name)} out" aria-label="Transfer ${esc(p.web_name)} out">${lic("arrow-right-left",11)}</button>${p===T.cap?`<span class="pz-cv">C</span>`:p===T.vice?`<span class="pz-cv v">V</span>`:""}${inDT(p)?dtStar("pz-dt"):""}</span>
+      <span class="pz-r"><span class="pz-ow">${p.owned}%</span>${inj}</span>
+      ${uniq?`<span class="cv-tag">${side==="A"?"OUT":"IN"}</span>`:lock?`<span class="cv-tag lk">${lic("lock",9)}</span>`:""}
+      <span class="pz-pt" style="background:${col[0]};color:${col[1]}">${v.toFixed(1)}</span></div>
+    <div class="pz-n"><b>${esc(p.web_name)}</b><i>£${p.price.toFixed(1)}</i></div>
+    <div class="pz-x">${fxNext(p,g,5,"sm")}</div>${menu?cmpMenuHTML(p,side,T,bench):""}${C.repl&&C.repl.side===side&&C.repl.id===p.id?cmpReplHTML(p,side,T):""}</div>`;
+}
+function cmpMenuHTML(p,side,T,bench){
+  const C=S.cmp,b=side==="B"&&cmpBuilder(C.b);
+  const it=(icon,label,on,call)=>`<button role="menuitem" onclick="event.stopPropagation();${call}">${icon}<span>${label}</span>${on?lic("check",14):""}</button>`;
+  return `<div class="pz-menu" role="menu" onclick="event.stopPropagation()" oncontextmenu="event.preventDefault();event.stopPropagation()">
+    <div class="pz-mh"><b>${esc(p.web_name)}</b><span>${esc(p.teamName)} · ${POSL[p.pos]} · £${p.price.toFixed(1)}</span></div>
+    ${it(lic("arrow-right-left",15),"Substitute",false,`act('cmpsubpick','${side}',${p.id})`)}
+    ${!bench?it(`<span class="pz-mb">C</span>`,"Captain",p===T.cap,`act('cmpcap','${side}',${p.id})`):""}
+    ${!bench?it(`<span class="pz-mb v">V</span>`,"Vice-captain",p===T.vice,`act('cmpvice','${side}',${p.id})`):""}
+    ${b?it(lic("lock",15),"Lock in",C.pendLocks.includes(p.id),`act('cmplock',${p.id})`):""}
+    ${b?it(lic("ban",15),"Rule out",C.pendBans.includes(p.id),`act('cmpban',${p.id})`):""}
+    ${it(lic("info",15),"Player card",false,`act('card',${p.id})`)}</div>`;
+}
+/* the transfer: the best affordable players for his place on that side */
+function cmpReplHTML(p,side,T){
+  const g=VG(),club={};T.players.filter(x=>x!==p).forEach(x=>club[x.team]=(club[x.team]||0)+1);
+  const funds=T.bank+T.sellOrPay(p);
+  const opts=S.model.players.filter(q=>q.pos===p.pos&&!T.ids.includes(q.id)&&q.avail>0&&q.price<=funds+1e-9&&(club[q.team]||0)<3)
+    .sort((a,b)=>T.val(b)-T.val(a)).slice(0,6);
+  return `<div class="pz-menu cv-repl" onclick="event.stopPropagation()"><div class="pz-mh"><b>Replace ${esc(p.web_name)}</b><span>£${funds.toFixed(1)} to spend</span></div>
+    ${opts.map(q=>`<button onclick="event.stopPropagation();act('cmpswap','${side}',${p.id},${q.id})">${photoHTML(q,"pz-ph")}<span>${esc(q.web_name)} <i class="mu">${esc(q.teamName)} · £${q.price.toFixed(1)}</i></span><b class="up">${T.val(q).toFixed(1)}</b></button>`).join("")||`<p class="note" style="padding:6px 8px">No affordable player fits.</p>`}</div>`;
+}
+function cmpPitchHTML(side,T,other){
+  if(!T||!T.ids||!T.players.length)return `<div class="pz-pitch cv-pz cv-empty"><p class="note">${T&&T.infeasible?"No legal squad fits those locks and rule-outs within your budget. Clear some and Re-run.":"Nothing to show for this squad."}</p></div>`;
+  return `<div class="pz-pitch cv-pz"><svg class="pz-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="24" y="0" width="52" height="13"/><rect x="38" y="0" width="24" height="5"/><path d="M42 13 Q50 18 58 13"/></svg>
+    ${[1,2,3,4].map(k=>`<div class="pz-row">${T.xi.filter(p=>p.pos===k).map(p=>cmpCardHTML(p,side,T,other,false)).join("")}</div>`).join("")}
+    <div class="pz-bench">${T.bench.map((p,i)=>`<div class="pz-bs"><div class="pz-bl">${p.pos===1?"GKP":`${i}. ${POSL[p.pos]}`}</div>${cmpCardHTML(p,side,T,other,true)}</div>`).join("")}</div></div>`;
 }
 function compareModalHTML(){
   const C=S.cmp;if(!C||!S.model)return "";
-  const T=cmpTeams(),{g,h}=T;
-  const modes=[["edits","Your Edits"],["wc","Wildcard"],["fh","Free Hit"]];
-  const drafts=LS.get("drafts")||[];
-  const ctl=`<span class="pseg mseg">${modes.map(([k,n])=>`<button class="${C.mode===k?"on":""}" onclick="act('cmpmode','${k}')">${n}</button>`).join("")}</span>
-    ${C.mode==="fh"?`<span class="hz"><button class="on" disabled>1 GW</button></span>`:hzHTML(C.h,"cmph")}`;
-  if(!T.prop)return modalHTML(`Compare · ${wkSpan(g,h)}`,`<p class="note">${T.meta.infeasible?"No legal squad fits those locks and exclusions within your budget. Clear some and Re-run.":"Nothing to compare yet."}</p>
-    <div class="mfoot"><button onclick="act('cmpclear')">Clear locks</button></div>`,{wide:true,ctl,close:"cmpclose"});
-  const mine=teamPtsOver(T.cur,g,h),theirs=teamPtsOver(T.prop,g,h);
-  const sum=a=>a.reduce((x,y)=>x+y,0),ms=sum(mine),ts=sum(theirs),gain=ts-ms;
-  const outs=T.cur.filter(i=>!T.prop.includes(i)).length;
-  const value=T.prop.reduce((a,i)=>{const p=S.model.players.find(q=>q.id===i);return a+(p?p.price:0);},0);
-  const hit=C.mode==="edits"?hitCost(g):0;
-  const cards=[
-    figCard("Proposed",`Best XI plus captain of the proposal, week by week over ${wkSpan(g,h)}.`,ts.toFixed(1),`<span class="${gain>=0?"up":"dn"}">${sgn1(gain)}</span> vs your team`,h>1?theirs:null,"#3DDC97","mint"),
-    figCard(C.mode==="edits"?"Official Team":"Your Team",`Best XI plus captain of ${C.mode==="edits"?"your official squad":"your plan for GW"+g}, scored the same way.`,ms.toFixed(1),wkSpan(g,h),h>1?mine:null,"#8A8A8A"),
-    figCard("Gain",`Proposed minus yours over ${wkSpan(g,h)}${hit?", before the hit":""}.`,`<span class="${gain>=0?"up":"dn"}">${sgn1(gain)}</span>`,hit?`<span class="dn">−${hit} hit</span> · net ${sgn1(gain-hit)}`:`over ${h} GW`,null,"#8A8A8A"),
-    figCard("Transfers","Players who change between the two teams.",String(outs),C.mode==="wc"?"Wildcard: no hits":C.mode==="fh"?"Free Hit: one week only":(hit?`<span class="dn">−${hit} hit</span>`:"within your free transfers"),null,"#8A8A8A"),
-    figCard("Bank After","Money left once the proposal is bought.",`£${(T.meta.bank??0).toFixed(1)}`,`Squad £${value.toFixed(1)}${T.meta.how?" · "+T.meta.how:""}`,null,"#8A8A8A")
-  ].join("");
-  const pend=(C.pendLocks||[]).length+(C.pendBans||[]).length, applied=(C.locks||[]).length+(C.bans||[]).length;
-  const body=`<div class="fcgrid c5">${cards}</div>
-    <div class="cgrid"><div><div class="chd">${C.mode==="edits"?"Official team":"Current team"}${C.mode==="wc"||C.mode==="fh"?' <span class="mu">tap to lock in</span>':""}</div>${cmpPitchHTML(T.cur,T.prop,g,h,"cur")}</div>
-      <div><div class="chd">${C.mode==="edits"?"Your edits":C.mode==="draft"?esc(T.meta.label||"Draft"):(C.mode==="wc"?"Wildcard":"Free Hit")+" proposal"}${C.mode==="wc"||C.mode==="fh"?' <span class="mu">tap to rule out</span>':""}</div>${cmpPitchHTML(T.prop,T.cur,g,h,"prop")}</div></div>
-    <div class="mfoot">
-      ${C.mode==="wc"||C.mode==="fh"?`<button class="${pend?"pri":""}" onclick="act('cmprerun')">${lic("refresh-cw",14)} Re-run${pend?` (${pend})`:""}</button>${applied||pend?`<button onclick="act('cmpclear')">Clear locks</button>`:""}`:""}
-      ${drafts.length?`<select onchange="act('cmpdraft',+this.value)" aria-label="Open a draft"><option value="-1">Drafts (${drafts.length})</option>${drafts.map((d,i)=>`<option value="${i}">${esc(d.label)}</option>`).join("")}</select>`:""}
-      <span style="flex:1"></span>
-      <button onclick="act('cmpsave')">${lic("save",14)} Save as draft</button>
-      ${C.mode==="edits"?`<button class="pri" onclick="act('save');act('cmpclose')">Save plan</button>`:`<button class="pri" onclick="act('cmpapply')">Apply</button>`}</div>`;
-  return modalHTML(`Compare · ${wkSpan(g,h)}`,body,{wide:true,ctl,close:"cmpclose"});
+  const g=VG(),A=cmpSide("A"),B=cmpSide("B"),drafts=LS.get("drafts")||[];
+  const srcs=[...CMP_SRC,...drafts.map((d,i)=>["d"+i,d.label])];
+  const sel=side=>{const k=side==="A"?"a":"b";return `<label class="cv-sel ${side.toLowerCase()}"><span class="cv-badge ${side.toLowerCase()}">${side}</span>
+    <select onchange="act('cmpsrc','${side}',this.value)" aria-label="Squad ${side}">${srcs.map(([v,n])=>`<option value="${v}"${C[k]===v?" selected":""}>${esc(n)}</option>`).join("")}</select></label>`;};
+  const chips=srcs.map(([v,n])=>{const sq=v.startsWith("d")?drafts[+v.slice(1)]:null;
+    return `<button class="cv-sq${C.a===v?" a":""}${C.b===v?" b":""}" onclick="act('cmpsrc','B','${v}')"><b>${esc(n)}</b><i>${v==="cur"?"official":v==="plan"?"GW"+g:v==="fh"?"built · GW"+g:v==="wc"?"built · 5 GW":sq&&sq.gw?"saved · GW"+sq.gw:"saved"}</i>${C.a===v?"<em>A</em>":C.b===v?"<em>B</em>":""}</button>`;}).join("");
+  const hzc=C.b==="fh"&&C.a!=="wc"?`<span class="hz"><button class="on" disabled>1 GW</button></span>`:hzHTML(C.h,"cmph");
+  const head=(side,T)=>`<div class="cv-sh"><span class="cv-badge ${side.toLowerCase()}">${side}</span><b>${esc(T?T.label:"—")}</b>${T&&T.edited?`<span class="cv-ed">edited</span>`:""}<span class="cv-tot">${T?T.total.toFixed(1):"—"}</span>
+    <span class="cv-meta">${side==="B"&&cmpBuilder(C.b)?`${lic("lock",12)} ${C.locks.length+C.pendLocks.length} locked · ${lic("ban",12)} ${C.bans.length+C.pendBans.length} ruled out`:T?`£${(+T.bank).toFixed(1)} bank`:""}</span></div>`;
+  let spine=`<p class="note">Pick two squads.</p>`;
+  if(A&&B&&A.ids&&B.ids&&A.players.length&&B.players.length){
+    const d=B.total-A.total,outs=A.players.filter(p=>!B.ids.includes(p.id)),ins=B.players.filter(p=>!A.ids.includes(p.id));
+    const posS=(T,k)=>T.xi.filter(p=>p.pos===k).reduce((a,p)=>a+T.val(p)*(p===T.cap?2:1),0);
+    const chip=cmpBuilder(C.b),hit=chip?0:Math.max(0,ins.length-freeTransfers())*4;
+    const bankAfter=A.bank+outs.reduce((a,p)=>a+A.sellOrPay(p),0)-ins.reduce((a,p)=>a+p.price,0);
+    spine=`<div class="cv-big"><span>B against A</span><b class="${d>=0?"up":"dn"}">${sgn1(d)}</b><i>${B.total.toFixed(1)} vs ${A.total.toFixed(1)} pts · ${wkSpan(g,B.h)}</i></div>
+      <div class="cv-blk"><em>By position</em>${[1,2,3,4].map(k=>{const x=posS(B,k)-posS(A,k);
+        return `<div class="cv-pd"><span>${POSL[k]}</span><span class="cv-bar"><i class="${x>=0?"up":"dn"}" style="width:${Math.min(50,Math.abs(x)/20*50)}%;${x>=0?"left:50%":"right:50%"}"></i></span><b class="${x>=0?"up":"dn"}">${sgn1(x)}</b></div>`;}).join("")}</div>
+      <div class="cv-blk"><em>To get from A to B</em>
+        <div class="cv-kv"><span>Transfers</span><b>${ins.length}</b></div>
+        <div class="cv-kv"><span>Hit</span><b class="${hit?"dn":""}">${chip?`None with ${C.b==="fh"?"Free Hit":"Wildcard"}`:hit?`−${hit}`:"None"}</b></div>
+        <div class="cv-kv"><span>Squad value</span><b>£${B.players.reduce((a,p)=>a+p.price,0).toFixed(1)}</b></div>
+        <div class="cv-kv"><span>Bank after</span><b class="${bankAfter<-0.001?"dn":""}">£${bankAfter.toFixed(1)}</b></div>
+        ${B.how?`<div class="cv-kv"><span>Solver</span><b>${esc(B.how)}</b></div>`:""}</div>
+      <div class="cv-blk"><em>Biggest swings</em>${ins.sort((a,b)=>B.val(b)-B.val(a)).slice(0,3).map(p=>`<div class="cv-sw">${photoHTML(p,"cv-ph")}<span>${esc(p.web_name)} in</span><b class="up">+${B.val(p).toFixed(1)}</b></div>`).join("")||`<span class="mu">Same players</span>`}</div>`;
+  }
+  const pend=C.pendLocks.length+C.pendBans.length,applied=C.locks.length+C.bans.length,bName=B?B.label:"B";
+  const apply=C.b==="fh"||C.b==="wc"?`Play ${C.b==="fh"?"Free Hit":"Wildcard"} with B in GW${g}`:`Use B for GW${g}`;
+  const body=`<div class="cv-src">${chips}<button class="cv-new" onclick="act('cmpsave')">${lic("save",14)} Save B as…</button></div>
+    <div class="cv-main"><div class="cv-side">${head("A",A)}${cmpPitchHTML("A",A,B)}</div><div class="cv-spine">${spine}</div><div class="cv-side">${head("B",B)}${cmpPitchHTML("B",B,A)}</div></div>
+    <div class="mfoot cv-foot">${cmpBuilder(C.b)?`<button class="${pend?"pri":""}" onclick="act('cmprerun')">${lic("refresh-cw",14)} Re-run B${pend?` (${pend})`:""}</button>${applied||pend?`<button onclick="act('cmpclear')">Clear locks</button>`:""}`:""}
+      ${C.ed.A||C.ed.B?`<button onclick="act('cmpundo')">Undo edits</button>`:""}<span style="flex:1"></span>
+      <button onclick="act('cmpsave')">${lic("save",14)} Save B</button><button class="pri" onclick="act('cmpapply')" ${B&&B.ids?"":"disabled"}>${apply}</button></div>`;
+  return modalHTML("Compare Squads",body,{wide:true,ctl:`<span class="cv-pick">${sel("A")}<span class="cv-vs">vs</span>${sel("B")}</span>${hzc}`,close:"cmpclose",cls:"cv"});
 }
 
 /* ============================================================

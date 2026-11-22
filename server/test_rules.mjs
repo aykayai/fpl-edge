@@ -77,7 +77,7 @@ try {
   for (const f of FILES) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
-    teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,
+    teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
@@ -209,6 +209,52 @@ try {
     const draggable = doc.querySelectorAll(".pz-c[draggable=true]").length;
     check(draggable === 15, `Planner: all 15 players can be dragged in an editable week (${draggable})`);
     S.forceXI = keepXI; g.render();
+  }
+  /* ---------- Compare v3, the List view, the Player Pool filters (21 Nov 2026) ---------- */
+  {
+    g.act("compare");
+    const md = doc.querySelector(".modal .mbox.cv");
+    check(!!md && S.cmp.a === "cur" && S.cmp.b === "plan" && md.querySelectorAll(".cv-pz").length === 2 && md.querySelectorAll(".cv-pz .pz-c").length === 30,
+      "Compare: current team on the left, your plan on the right, two Planner pitches of 15", md && md.querySelectorAll(".cv-pz .pz-c").length);
+    const A = g.cmpSide("A"), outB = g.cmpSide("B").xi.find(p => p.pos > 1);
+    g.act("cmprepl", "B", outB.id);
+    const opts = [...doc.querySelectorAll(".cv-repl button")];
+    check(opts.length > 0, `Compare: the transfer button lists replacements for ${outB.web_name} (${opts.length})`);
+    const inId = +((opts[0]?.getAttribute("onclick") || "").match(/cmpswap','B',\d+,(\d+)/) || [])[1];
+    if (inId) { g.act("cmpswap", "B", outB.id, inId);
+      const B2 = g.cmpSide("B");
+      check(B2.ids.includes(inId) && !B2.ids.includes(outB.id) && B2.edited && g.cmpSide("A").ids.join() === A.ids.join(), "Compare: a transfer edits that side only"); }
+    const B3 = g.cmpSide("B"), bb = B3.bench.find(p => p.pos > 1), bx = bb && B3.xi.find(p => p.pos === bb.pos);
+    if (bb && bx) { g.act("cmpsub", "B", bb.id, bx.id); const B4 = g.cmpSide("B");
+      check(B4.xi.some(p => p.id === bb.id) && !B4.xi.some(p => p.id === bx.id), "Compare: dragging a bench player on substitutes on that side"); }
+    g.act("cmpsrc", "B", "fh");
+    check(S.cmp.b === "fh" && !S.cmp.ed.B && /Play Free Hit with B/.test(doc.querySelector(".cv-foot")?.textContent || ""), "Compare: picking Best Free Hit offers to play it with B", (() => { try { const T = g.cmpSide("B"); return "ids " + (T && T.ids ? T.ids.length : T && T.sub); } catch (e) { return "throws " + e.message; } })() + " | foot: " + (doc.querySelector(".cv-foot")?.textContent || "none").replace(/\s+/g, " ").slice(0, 120) + " | app: " + (doc.getElementById("app").textContent.match(/hit a problem.{0,200}/) || ["no error"])[0]);
+    g.act("cmpclose");
+    check(!doc.querySelector(".mbox.cv"), "Compare closes");
+  }
+  {
+    g.act("sqview", "list");
+    const groups = [...doc.querySelectorAll(".lv .lv-g span")].map(s => s.textContent);
+    check(doc.querySelectorAll(".lv .lv-r").length === 15 && groups.join("|") === "Goalkeeper|Defenders|Midfielders|Forwards|Bench", "List: 15 rows grouped by position, bench last", groups.join("|"));
+    g.act("sqsort", "total");
+    const tots = [...doc.querySelectorAll(".lv .lv-r .lv-total")].map(e => +e.textContent);
+    check(!doc.querySelector(".lv .lv-g") && tots.length === 15 && tots.every((t, i) => !i || tots[i - 1] >= t), "List: a header click sorts the whole squad high to low");
+    g.act("sqsort", "total");
+    const tots2 = [...doc.querySelectorAll(".lv .lv-r .lv-total")].map(e => +e.textContent);
+    check(tots2.every((t, i) => !i || tots2[i - 1] <= t), "List: a second click reverses it");
+    S.sqSort = "pos"; S.sqDir = "asc"; g.act("sqview", "pitch");
+  }
+  {
+    const all = g.filtered("planner").length;
+    g.act("fmax", 5.5);
+    const cheap = g.filtered("planner");
+    check(cheap.length < all && cheap.every(p => p.price <= 5.5 + 1e-9) && /up to 5\.5/.test(doc.querySelector(".pf-chips")?.textContent || ""), "Pool: the price filter (£0.1m steps) narrows the list and shows on its chip");
+    g.act("poolpop", "price");
+    const rng = doc.querySelector(".pf-pop input[type=range]");
+    check(!!rng && rng.getAttribute("step") === "0.1", "Pool: the price slider moves in £0.1m steps");
+    g.act("fitonly");
+    check(g.filtered("planner").every(p => p.avail >= 1), "Pool: Fit only hides doubts and injuries");
+    g.act("fitonly"); g.act("fmax", 16); S.poolPop = null; g.render();
   }
   {
     const W2 = Math.max(NEXT, 20), keep = { ...S.chips };

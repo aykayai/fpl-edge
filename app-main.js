@@ -17,7 +17,7 @@ function searchInput(action,el,extra){
     if(again){again.focus();try{again.setSelectionRange(pos,pos);}catch(e){}}
   },220);
 }
-function act(k,a,b){
+function act(k,a,b,c){
   const P=id=>S.model?.players.find(p=>p.id===id);
   /* any action closes the player menu (21 Nov 2026) */
   if(k!=="pmenu"&&S.pMenu!=null)S.pMenu=null;
@@ -69,42 +69,57 @@ function act(k,a,b){
       S.pCmp=false;render();
       if(typeof askScout==="function")askScout("Compare: "+names.join(", "),"",`Compare ${list} for GW${r.from}–${r.to}. Who should I pick, and why?`);
       return;}
-    case"compare":S.cmp=S.cmp?null:{mode:"edits",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
+    /* Compare v3 (21 Nov 2026): A and B are squads; edits stay on their side */
+    case"compare":S.cmp=S.cmp?null:cmpNew("cur","plan");break;
     case"cmpclose":S.cmp=null;break;
-    case"cmpmode":{const C=S.cmp;if(!C)break;Object.assign(C,{mode:a,locks:[],bans:[],pendLocks:[],pendBans:[]});
-      if(a==="wc"&&C.h===1)C.h=5;break;}
+    case"cmpopen":S.cmp=cmpNew("cur",a==="wc"?"wc":"fh");if(a==="wc")S.cmp.h=5;break;
+    case"cmpsrc":{const C=S.cmp;if(!C)break;C[a==="A"?"a":"b"]=b;C.ed[a]=null;C.menu=C.repl=C.sub=null;if(b==="wc"&&C.h===1)C.h=5;break;}
     case"cmph":if(S.cmp)S.cmp.h=[1,3,5].includes(+a)?+a:1;break;
-    case"cmplock":{const C=S.cmp;if(!C)break;C.pendLocks=C.pendLocks.includes(a)?C.pendLocks.filter(x=>x!==a):[...C.pendLocks,a];break;}
-    case"cmpban":{const C=S.cmp;if(!C)break;C.pendBans=C.pendBans.includes(a)?C.pendBans.filter(x=>x!==a):[...C.pendBans,a];break;}
-    case"cmprerun":{const C=S.cmp;if(!C)break;C.locks=C.pendLocks.slice();C.bans=C.pendBans.filter(x=>!C.locks.includes(x));break;}
-    case"cmpclear":{const C=S.cmp;if(!C)break;Object.assign(C,{locks:[],bans:[],pendLocks:[],pendBans:[]});break;}
-    case"cmpdraft":{const C=S.cmp;if(!C||!(+a>=0))break;C.mode="draft";C.draft=+a;break;}
-    case"cmpsave":{const C=S.cmp;if(!C)break;const T=cmpTeams();if(!T.prop)break;
-      const name={edits:"Your edits",wc:"Wildcard",fh:"Free Hit",draft:"Draft"}[C.mode];
-      const ds=[{label:name+" GW"+T.g+" · "+ukFmt(Date.now(),{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}),
-        ids:T.prop.slice(),cap:T.meta.cap,bank:T.meta.bank,gw:T.g,mode:C.mode},...(LS.get("drafts")||[])].slice(0,10);
-      LS.set("drafts",ds);toast("Saved as a draft");break;}
-    case"cmpapply":{const C=S.cmp;if(!C)break;const T=cmpTeams();if(!T.prop)break;
+    case"cmplock":{const C=S.cmp;if(!C)break;C.pendLocks=C.pendLocks.includes(a)?C.pendLocks.filter(x=>x!==a):[...C.pendLocks,a];C.pendBans=C.pendBans.filter(x=>x!==a);C.menu=null;break;}
+    case"cmpban":{const C=S.cmp;if(!C)break;C.pendBans=C.pendBans.includes(a)?C.pendBans.filter(x=>x!==a):[...C.pendBans,a];C.pendLocks=C.pendLocks.filter(x=>x!==a);C.menu=null;break;}
+    case"cmprerun":{const C=S.cmp;if(!C)break;C.locks=C.pendLocks.slice();C.bans=C.pendBans.filter(x=>!C.locks.includes(x));C.ed.B=null;break;}
+    case"cmpclear":{const C=S.cmp;if(!C)break;Object.assign(C,{locks:[],bans:[],pendLocks:[],pendBans:[]});C.ed.B=null;break;}
+    case"cmpmenu":{const C=S.cmp;if(!C)break;C.repl=null;C.menu=(C.menu&&C.menu.side===a&&C.menu.id===b)?null:{side:a,id:b};break;}
+    case"cmprepl":{const C=S.cmp;if(!C)break;C.menu=null;C.repl=(C.repl&&C.repl.side===a&&C.repl.id===b)?null:{side:a,id:b};break;}
+    case"cmpsubpick":{const C=S.cmp;if(!C)break;C.menu=null;C.sub={side:a,id:b};toast("Now tap who to swap with");break;}
+    case"cmpclick":{const C=S.cmp;if(!C)break;
+      if(C.sub&&C.sub.side===a){const from=C.sub.id;C.sub=null;if(from!==b)cmpDoSub(a,from,b);break;}
+      C.menu=C.repl=null;S.cardId=b;break;}
+    case"cmpsub":if(S.cmp){S.cmp.sub=null;if(b!==c)cmpDoSub(a,b,c);}break;
+    case"cmpcap":cmpEdit(a,e=>{e.cap=b;if(e.vice===b)e.vice=null;});if(S.cmp)S.cmp.menu=null;break;
+    case"cmpvice":cmpEdit(a,e=>{e.vice=b;if(e.cap===b)e.cap=null;});if(S.cmp)S.cmp.menu=null;break;
+    case"cmpswap":{const C=S.cmp;if(!C)break;const T=cmpSide(a),o=S.model.players.find(p=>p.id===b),n=S.model.players.find(p=>p.id===c);if(!T||!o||!n)break;
+      cmpEdit(a,e=>{e.ids=e.ids.map(i=>i===b?c:i);e.xi=e.xi.map(i=>i===b?c:i);if(e.cap===b)e.cap=c;if(e.vice===b)e.vice=c;e.bank=+(e.bank+T.sellOrPay(o)-n.price).toFixed(1);});
+      C.repl=null;toast(o.web_name+" → "+n.web_name);break;}
+    case"cmpundo":if(S.cmp)S.cmp.ed={A:null,B:null};break;
+    case"cmpsave":{const C=S.cmp;if(!C)break;const T=cmpSide("B");if(!T||!T.ids)break;
+      const def=T.label+" GW"+VG();let nm=def;
+      try{if(typeof prompt==="function"){const r=prompt("Name this squad",def);if(r===null)break;nm=String(r).trim()||def;}}catch(_){}
+      const ds=[{label:nm.slice(0,40),ids:T.ids.slice(),xi:T.xi.map(p=>p.id),cap:T.cap&&T.cap.id,vice:T.vice&&T.vice.id,bank:T.bank,gw:VG(),mode:C.b},...(LS.get("drafts")||[])].slice(0,10);
+      LS.set("drafts",ds);toast("Saved: "+nm);break;}
+    case"cmpapply":{const C=S.cmp;if(!C)break;const T=cmpSide("B");if(!T||!T.ids)break;
       const gw=editableGw();if(gw==null)break;
-      if(C.mode==="wc"||C.mode==="fh"){const kind=C.mode==="wc"?"wildcard":"freehit";
+      if(C.b==="wc"||C.b==="fh"){const kind=C.b==="wc"?"wildcard":"freehit";
         if(chipForWeek(gw)!==kind){const half=gw>=20?"2":"1",next={...S.chips};
           ["bboost","3xc","freehit","wildcard"].forEach(k=>{if(next[k+half]===gw)delete next[k+half];});
           const keep=S.chips;S.chips=next;const why=chipRuleBreak(kind+half,gw);S.chips=keep;
           if(why){toast(why,{warn:true});break;}
           next[kind+half]=gw;S.chips=next;}}
       const cur=effectiveSquadIds(gw).ids,byId=id=>S.model.players.find(p=>p.id===id);
-      const bank=+(planBank()+cur.filter(i=>!T.prop.includes(i)).reduce((s,i)=>s+sellPrice(byId(i)),0)
-        -T.prop.filter(i=>!cur.includes(i)).reduce((s,i)=>s+byId(i).price,0)).toFixed(1);
+      const bank=+(planBank()+cur.filter(i=>!T.ids.includes(i)).reduce((s,i)=>s+sellPrice(byId(i)),0)
+        -T.ids.filter(i=>!cur.includes(i)).reduce((s,i)=>s+byId(i).price,0)).toFixed(1);
       if(bank<-0.001){toast("Over budget by £"+(-bank).toFixed(1),{warn:true});break;}
-      const v=p=>p.gw[gw]?.pts||0,xi=legalBestXI(T.prop.map(byId),v).sort((x,y)=>v(y)-v(x));
-      writePlan(gw,T.prop,{bank,captain:xi[0]?xi[0].id:T.meta.cap,vice:xi[1]?xi[1].id:null});
-      S.flagged=[];S.forceXI=null;S.benchOrder=null;saveState();S.cmp=null;
-      toast((C.mode==="wc"?"Wildcard":C.mode==="fh"?"Free Hit":"Draft")+" team applied to GW"+gw+". Save when you are happy.");break;}
+      writePlan(gw,T.ids,{bank,captain:T.cap?T.cap.id:null,vice:T.vice?T.vice.id:null});
+      S.flagged=[];S.forceXI=T.xi.map(p=>p.id);S.benchOrder=T.bench.map(p=>p.id);saveState();S.cmp=null;
+      toast((C.b==="wc"?"Wildcard":C.b==="fh"?"Free Hit":T.label)+" team applied to GW"+gw+". Save when you are happy.");break;}
     case"sqview":S.sqView=a;break;
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
-      else{S.sqSort=a;S.sqDir=a==="name"?"asc":"desc";}break;
+      else{S.sqSort=a;S.sqDir=a==="pos"||a==="next"?"asc":"desc";}break;
     case"card":S.cardId=a||null;break;
     case"pmenu":S.pMenu=a==null?null:+a;break;
+    case"lsortset":S.lSort=a;S.lDir="desc";break;
+    case"poolpop":S.poolPop=S.poolPop===a?null:a;break;
+    case"fitonly":S.fFit=!S.fFit;break;
     case"dragsub":S.subFrom=null;if(a!==b)trySub(a,b);break;
     case"pdmore":S.pdLimit=(S.pdLimit||PD_PAGE)+PD_PAGE;break;
     case"pdall":S.pdLimit=1000;break;
@@ -307,7 +322,6 @@ function act(k,a,b){
       S.chips={...S.chips,[k]:e};S.chipPick=null;saveState();toast(`${CHIP_UI[chipKind(k)].n} ${k.slice(-1)} planned for GW${e}`);break;}
     case"chippop":S.chipPop=a||null;break;
     case"chippopclose":S.chipPop=null;break;
-    case"cmpopen":S.cmp={mode:a==="wc"?"wc":"fh",h:1,locks:[],bans:[],pendLocks:[],pendBans:[]};break;
     case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
     case"fixmode":S.fixMode=a==="matches"?"matches":"grid";if(a==="matches")S.mGw=null;break;
     case"toggleout":S.outList=S.outList.includes(a)?S.outList.filter(x=>x!==a):[...S.outList,a];break;
@@ -462,11 +476,21 @@ document.addEventListener("pointerdown",e=>{
 ["pointerup","pointercancel","pointerleave"].forEach(t=>document.addEventListener(t,()=>clearTimeout(_lpT)));
 document.addEventListener("click",e=>{
   if(_lpFired){_lpFired=false;e.preventDefault();e.stopPropagation();return;}
-  if(S.pMenu!=null&&!(e.target.closest&&e.target.closest(".pz-menu,.pz-c"))){S.pMenu=null;render();}},true);
+  if(S.pMenu!=null&&!(e.target.closest&&e.target.closest(".pz-menu,.pz-c,.lv-act"))){S.pMenu=null;render();}
+  if(S.cmp&&(S.cmp.menu||S.cmp.repl)&&!(e.target.closest&&e.target.closest(".pz-menu,.pz-c"))){S.cmp.menu=null;S.cmp.repl=null;render();}
+  if(S.poolPop&&!(e.target.closest&&e.target.closest(".pf-pop,.pf-c"))){S.poolPop=null;render();}},true);
 /* drag a player onto another to substitute them (21 Nov 2026); the
    formation follows as long as it stays legal (trySub checks) */
 function pzDrag(e,id){try{e.dataTransfer.setData("text/plain",String(id));e.dataTransfer.effectAllowed="move";}catch(_){}S.pMenu=null;}
 function pzOver(e){e.preventDefault();try{e.dataTransfer.dropEffect="move";}catch(_){}e.currentTarget.classList.add("drop");}
-function pzDrop(e,id){e.preventDefault();e.currentTarget.classList.remove("drop");
+function pzDrop(e,id,side){e.preventDefault();e.currentTarget.classList.remove("drop");
   let from=NaN;try{from=+e.dataTransfer.getData("text/plain");}catch(_){}
-  if(from&&from!==id)act("dragsub",from,id);}
+  if(from&&from!==id){if(side)act("cmpsub",side,from,id);else act("dragsub",from,id);}}
+/* Compare: a substitution or an edit on one side (21 Nov 2026) */
+function cmpEdit(side,fn){const C=S.cmp;if(!C)return;const T=cmpSide(side);if(!T||!T.ids)return;
+  C.ed[side]=C.ed[side]||{ids:T.ids.slice(),xi:T.xi.map(p=>p.id),cap:T.cap?T.cap.id:null,vice:T.vice?T.vice.id:null,bank:T.bank};fn(C.ed[side]);}
+function cmpDoSub(side,a,b){const T=cmpSide(side);if(!T)return;const xi=T.xi.map(p=>p.id),aIn=xi.includes(a),bIn=xi.includes(b);
+  if(aIn===bIn){toast(aIn?"Pick one from the pitch and one from the bench":"Bench order follows the predictions here");return;}
+  const next=xi.map(i=>i===(aIn?a:b)?(aIn?b:a):i);
+  if(!legalXI(next)){toast("That would break the formation");return;}
+  cmpEdit(side,e=>{e.xi=next;});toast("Substitution made");}
