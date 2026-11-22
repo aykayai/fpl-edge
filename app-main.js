@@ -285,7 +285,11 @@ function act(k,a,b,c){
     case"opt":{S.forceXI=null;
       const g2=S.model.next.id;const xi=startingXI();
       const rank=xi.slice().sort((x,y)=>(y.gw[g2]?.pts||0)-(x.gw[g2]?.pts||0));
-      if(rank[0]){S.captain=rank[0].id;if(rank[1])S.vice=rank[1].id;}
+      if(rank[0]){S.captain=rank[0].id;if(rank[1])S.vice=rank[1].id;
+        /* C10 (audit, 22 Nov 2026): a captain picked by hand is saved in the
+           week's plan, which the pitch reads first, so the armband stayed put
+           while the toast said it moved. Write the plan as the cap action does. */
+        const gwE=editableGw();if(gwE!=null)writePlan(gwE,null,{captain:S.captain,vice:S.vice});}
       /* bench in descending order too, so the first substitute is the best one */
       S.benchOrder=squadPlayers().filter(p=>!xi.includes(p))
         .sort((x,y)=>(y.gw[g2]?.pts||0)-(x.gw[g2]?.pts||0)).map(p=>p.id);

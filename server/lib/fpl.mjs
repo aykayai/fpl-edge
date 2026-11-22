@@ -78,7 +78,7 @@ export async function anyFixtureLive() {
     if (k < 0) return false;
     const now = Date.now();
     return f.rows.some(r => {
-      const t = Date.parse(r[k]);
+      const raw = String(r[k] || ""), t = Date.parse(/T\d\d:\d\d(:\d\d)?$/.test(raw) ? raw + "Z" : raw); /* C8: dataset times are UTC without a zone */
       return Number.isFinite(t) && now >= t && now <= t + 130 * 60000;
     });
   } catch { return false; }

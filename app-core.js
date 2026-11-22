@@ -42,6 +42,10 @@ const SEASON="2026-2027", LAST="2025-2026";
 const FEED_SEASON="2027";
 /* a season as "25/26" (21 Nov 2026, Andy): takes "2025/26" or the year a
    season ends ("2026") */
+/* C8 (audit, 22 Nov 2026): the dataset's kickoff_time is UTC written without
+   a zone ("2026-08-21T19:00:00"), which a browser reads as local time, an
+   hour early in Irish or UK summer time. Mark it as UTC. */
+const utcKick=k=>{k=String(k||"");return k&&/T\d\d:\d\d(:\d\d)?$/.test(k)?k+"Z":k;};
 const seasonShort=s=>{s=String(s);const m=s.match(/^(\d{4})\/(\d{2,4})$/);if(m)return m[1].slice(2)+"/"+m[2].slice(-2);
   const n=+s;return n>2000&&n<2100?String(n-1).slice(2)+"/"+String(n).slice(2):s;};
 const ACTUALS_URL=BACKUP?"data/actuals.json":"/data/feeds/actuals.json";
@@ -188,7 +192,9 @@ async function loadActuals(){
         purchase:d.team.purchase||null};
       /* F8: the header's overall rank was never set; it is the latest week's */
       const ranked=d.team.gw.filter(r=>r.orRank!=null);
-      if(ranked.length){const lr=ranked.reduce((x,y)=>(y.event>x.event?y:x));S.entryRank=lr.orRank;S.entryRankGw=lr.event;}
+      if(ranked.length){const lr=ranked.reduce((x,y)=>(y.event>x.event?y:x));S.entryRank=lr.orRank;S.entryRankGw=lr.event;
+        /* C12 (audit): during a week in play the rank is live, not final */
+        S.entryRankLive=lr.finished===false;}
       const am={};d.team.gw.forEach(row=>{if(row.event!=null&&row.points!=null)am[row.event]=row.points;});
       S.actuals=am;
     }
@@ -267,7 +273,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.19.0";
+const APP_VERSION="13.20.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -603,7 +609,7 @@ async function loadAll(force,opts){
         if(f.home_team&&f.away_team)fixtures.push({
           event:Math.round(num(f.gameweek)),h:Math.round(num(f.home_team)),a:Math.round(num(f.away_team)),
           hElo:num(f.home_team_elo),aElo:num(f.away_team_elo),
-          kickoff:f.kickoff_time||"",finished:String(f.finished).toLowerCase()==="true",
+          kickoff:utcKick(f.kickoff_time),finished:String(f.finished).toLowerCase()==="true",
           hs:f.home_score===""?null:num(f.home_score),as:f.away_score===""?null:num(f.away_score)});
         const fin=String(f.finished).toLowerCase()==="true";
         const hsv=f.home_score,asv=f.away_score;
@@ -1637,6 +1643,9 @@ function buildModel(){
 
   const byEv={};S.fixtures.forEach(f=>{f.ht=anyTeam(f.h);f.at=anyTeam(f.a);
     (byEv[f.event]=byEv[f.event]||[]).push(f);});
+  /* C13: clubs whose match in a week still in play has finished */
+  const liveIds=new Set(evs.filter(e=>!e.finished&&e.id<nextEv.id).map(e=>e.id)),clubLive={};
+  S.fixtures.forEach(f=>{if(liveIds.has(f.event)&&f.finished){if(f.ht)clubLive[f.ht.id]=1;if(f.at)clubLive[f.at.id]=1;}});
   S.model={teams:S.teams,byEv,strSorted,next:nextEv,gwPlayed};
   const teamFix=(team,e)=>(byEv[e]||[]).filter(f=>f.ht===team||f.at===team).map(f=>{
     const home=f.ht===team,opp=home?f.at:f.ht;
@@ -1755,7 +1764,14 @@ function buildModel(){
        the same units, or the term saturates and every player gets the same lift */
     const clubMax=(S._tmaxRaw&&S._tmaxRaw[p.teamCode])||price||10;
     const rel=clamp(price/Math.max(4,clubMax),0.25,1.0);
-    if(rows.filter(r=>r.mins>0).length>=10){
+    /* M3 (Andy, 22 Nov 2026): the appearance method now starts at 3
+       appearances and is blended with the no-history estimate until 10, so
+       the method no longer switches abruptly at 10; and defenders and
+       midfielders no longer get a floor of 80 minutes when they start (37 of
+       111 players had been projected 5+ minutes high). */
+    const nApps=rows.filter(r=>r.mins>0).length;
+    let appMins=null;
+    if(nApps>=3){
       const recent=rows.filter(r=>r.mins>0).slice(-12);
       const startRate=recent.filter(r=>r.start===0).length/recent.length;
       const startedMins=recent.filter(r=>r.start===0&&r.mins>0).map(r=>r.mins);
@@ -1770,14 +1786,14 @@ function buildModel(){
          midfielders, because an occasional starter still starts more often than
          his raw rate suggests; above 1 for forwards, where rotation is harsher
          and last season's starts overstate this season's role. */
-      const MP={1:{pw:0.60,fl:55,sc:1.15},2:{pw:0.60,fl:80,sc:1.05},
-                3:{pw:0.60,fl:80,sc:1.05},4:{pw:1.25,fl:55,sc:1.05}}[p.pos]
-                ||{pw:1,fl:70,sc:1};
+      const MP={1:{pw:0.60,fl:55,sc:1.15},2:{pw:0.60,fl:55,sc:1.05},
+                3:{pw:0.60,fl:55,sc:1.05},4:{pw:1.25,fl:55,sc:1.05}}[p.pos]
+                ||{pw:1,fl:55,sc:1};
       const srP=Math.pow(clamp(startRate,0,1),MP.pw);
       const ws2=Math.max(MP.fl,whenStarts);
-      xMins=clamp((srP*ws2+(1-srP)*offBench)*MP.sc,0,90);
-      minsSrc="appearances";
+      appMins=clamp((srP*ws2+(1-srP)*offBench)*MP.sc,0,90);
     }
+    if(nApps>=10){xMins=appMins;minsSrc="appearances";}
     else{
       /* No Premier League history. For a player signed from abroad, pre-season
          is the only evidence of his role and is worth using once he has 180+
@@ -1796,12 +1812,19 @@ function buildModel(){
         xMins=clamp(rel*66+preSignal*0.22, 6, 86);
         minsSrc="no history";
       }
+      /* M3: 3 to 9 appearances count in proportion against the no-history
+         estimate, before this season's minutes take over below */
+      if(appMins!=null){const w=clamp((nApps-2)/8,0,1);xMins=xMins*(1-w)+appMins*w;minsSrc="appearances (blend)";}
       /* D15 (12 Oct 2026). This season's minutes per gameweek take over from
          the estimate gradually, fully from MINS_RAMP_GW weeks played, instead
          of replacing it for 300+ players in one step at GW3. */
-      if(gwPlayed>=1&&(mins>0||MINS_RAMP_ZERO)){
-        const w=clamp(gwPlayed/MINS_RAMP_GW,0,1);
-        xMins=xMins*(1-w)+clamp(mins/gwPlayed,0,90)*w;
+      /* C13 (audit, 22 Nov 2026): during a week in play FPL's season minutes
+         already include a club's finished match, so that week counts too
+         (18 Fulham players had been lifted by up to 7.7 minutes) */
+      const gwP=gwPlayed+(team&&clubLive[team.id]?1:0);
+      if(gwP>=1&&(mins>0||MINS_RAMP_ZERO)){
+        const w=clamp(gwP/MINS_RAMP_GW,0,1);
+        xMins=xMins*(1-w)+clamp(mins/gwP,0,90)*w;
         minsSrc=w>=1?"this season":"this season (blend)";
       }
     }

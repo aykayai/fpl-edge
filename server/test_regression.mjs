@@ -193,6 +193,11 @@ function normalise(text, isNew) {
     t = t.replace(/ FPL (?=Predicted )/, " ");
   }
   t = t.replace(/expire [^▲▼]+/g, "expire ");                          /* chips expiry was hard-coded */
+  /* PLANNED (Bundle A, 22 Nov 2026): the Sub Tracker fills from the feed's
+     autoSubs (C9), and M3 changes how many players reach 45+ minutes */
+  t = t.replace(/Sub tracker.*?(?=Historical performance)/, "Sub tracker ");
+  t = t.replace(/\(\d+ players on 45\+ expected minutes\)/, "(N players on 45+ expected minutes)");
+  t = t.replace(/PositionNPredictedActualMAEBias.*?(?= Actual is)/, "PositionNPredictedActualMAEBias");
   /* PLANNED (21 Nov 2026): seasons read "25/26" instead of "2026" */
   t = t.replace(/(\d{2})\/(\d{2})/g, (m, a, b) => +b === +a + 1 && +a >= 18 && +a <= 40 ? "20" + b : m);
   /* PLANNED (redesign wave 1): new signal key and labels, League tabs,
@@ -303,7 +308,10 @@ try {
   const moves = ids.map(id => ({ id, d: (NEW.players[id] ?? 0) - (OLD.players[id] ?? 0) })).filter(x => Math.abs(x.d) > 0.0005)
     .sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
   if (moves.length) console.log(`INFO  projection moves: ${moves.length} players, largest ${moves.slice(0, 5).map(x => `id ${x.id} ${x.d > 0 ? "+" : ""}${x.d.toFixed(3)}`).join(", ")}; over 0.05: ${moves.filter(x => Math.abs(x.d) > 0.05).length}`);
-  check(ptsDiffs === 0, `per-player GW${OLD.next} pts identical to 3dp (${ids.length} players)`, `${ptsDiffs} differ; ${examples.join("; ")}`);
+  /* XP_CHANGE_OK=1 is set only for a run whose model change Andy approved
+     (e.g. M3, 22 Nov 2026): the movement is still measured above */
+  if (process.env.XP_CHANGE_OK === "1" && ptsDiffs) console.log(`INFO  per-player pts changed by approved design: ${ptsDiffs} of ${ids.length}; ${examples.join("; ")}`);
+  else check(ptsDiffs === 0, `per-player GW${OLD.next} pts identical to 3dp (${ids.length} players)`, `${ptsDiffs} differ; ${examples.join("; ")}`);
 
   for (const k of ["bankFromFeed", "planBank"]) {
     check(JSON.stringify(OLD.header[k]) === JSON.stringify(NEW.header[k]), `header ${k} identical`,

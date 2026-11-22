@@ -248,8 +248,16 @@ function rivalOwn(){
 }
 /* signals(p,g) -> [[key, hover text]] in Andy's order. noSell skips Sell
    (Head Scout's own tie-break calls this while Sell is being worked out). */
+/* The window Buy and Sell are judged over (audit C1, 22 Nov 2026): the page's
+   own 1/3/5/ROS switch, so Player Data's icons and counts match its xPts
+   column and the Signal Board. S.horizon was stuck at 1 GW everywhere else. */
+function sigH(){
+  if(S.tab==="table"&&typeof lGwRange==="function"){const r=lGwRange();return Math.max(1,r.count||1);}
+  if(S.tab==="signals")return S.sigH||3;
+  return S.horizon||1;
+}
 function signals(p,g,noSell,hh){
-  const out=[],h=hh||S.horizon||1,mine=(S.squad||[]).includes(p.id);
+  const out=[],h=hh||sigH(),mine=(S.squad||[]).includes(p.id);
   if(!S.model)return out;
   if(buySet(g,h).has(p.id)&&!mine)out.push(["buy",SIG_RULE.buy(h)+`: ${hPts(p,g,h).toFixed(1)} pts`]);
   if(mine&&!noSell){const m=sellMap(h).get(p.id);
@@ -598,15 +606,21 @@ function dGain(inn,out,g,h){
 function weekPtsFor(g,h){
   h=h||1;
   const xi=startingXI();if(!xi.length)return 0;
-  let s=xi.reduce((a,p)=>a+hPts(p,g,h),0);
-  const cap=S.model.players.find(p=>p.id===S.captain);
-  if(cap&&xi.includes(cap))s+=hPts(cap,g,h);
-  const bench=squadPlayers().filter(p=>!xi.includes(p));
-  const chip=chipForWeek(g);
-  if(chip==="bboost")s+=bench.reduce((a,p)=>a+hPts(p,g,h),0);
-  if(chip==="3xc"&&cap)s+=hPts(cap,g,h);
-  if(chip!=="bboost"){const ob=orderBench(bench),vice=S.model.players.find(p=>p.id===S.vice);
-    for(let e=g;e<g+h&&e<=38;e++)s+=coverPts(xi,ob,cap&&xi.includes(cap)?cap:null,vice,e,chip==="3xc"?3:2);}
+  const cap=S.model.players.find(p=>p.id===S.captain),capIn=cap&&xi.includes(cap)?cap:null;
+  const bench=squadPlayers().filter(p=>!xi.includes(p)),ob=orderBench(bench),vice=S.model.players.find(p=>p.id===S.vice);
+  /* Week by week, each with its own planned chip (audit C6, 22 Nov 2026):
+     a Bench Boost in the viewed week used to be added to every week of the
+     horizon (+33.2 at 3 GW for a +9.2 chip), and later chips were ignored. */
+  let s=0;
+  for(let e=g;e<g+h&&e<=38;e++){
+    const chip=chipForWeek(e),w=p=>p.gw[e]?.pts||0;
+    s+=xi.reduce((a,p)=>a+w(p),0);
+    if(capIn)s+=w(capIn)*(chip==="3xc"?2:1);
+    /* M4 (Andy, 22 Nov 2026): a Bench Boost week keeps the vice-captain
+       cover; only the bench cover goes, as the bench already scores */
+    if(chip==="bboost")s+=bench.reduce((a,p)=>a+w(p),0)+coverPts(xi,[],capIn,vice,e,2);
+    else s+=coverPts(xi,ob,capIn,vice,e,chip==="3xc"?3:2);
+  }
   return s-hitsOver(g,h);
 }
 function weekPts(){return weekPtsFor(VG(),S.horizon);}
@@ -1251,7 +1265,9 @@ function teamScore(ids,e,chip,adj){
   let s=xi.reduce((a,p)=>a+v(p),0)+(cap?v(cap):0);
   if(chip==="bboost")s+=bench.reduce((a,p)=>a+v(p),0);
   if(chip==="3xc"&&cap)s+=v(cap);
-  if(chip!=="bboost")s+=coverPts(xi,orderBench(bench),cap,vice,e,chip==="3xc"?3:2);
+  /* M4 (Andy, 22 Nov 2026): a Bench Boost keeps the vice-captain cover;
+     only the bench cover goes, as the bench already scores */
+  s+=chip==="bboost"?coverPts(xi,[],cap,vice,e,2):coverPts(xi,orderBench(bench),cap,vice,e,chip==="3xc"?3:2);
   return s;
 }
 /* FPL's own doubles and blanks for a week */
@@ -1276,7 +1292,38 @@ function chipWeekMark(e){
 function chipTeam(kind,e,best){
   const b=squadBudget();
   const t=(best?optimalSquad(kind,e,b):null)||buildSquad(kind,e,null,b);
-  return t?{t,ids:t.xi.concat(t.bench).map(p=>p.id)}:null;
+  if(!t)return null;
+  const ids=t.xi.concat(t.bench).map(p=>p.id);
+  return kind==="freehit"?benchWeighted(t,ids,e,b):{t,ids};
+}
+/* M1 (Andy, 22 Nov 2026): the optimiser picks the Free Hit XI and treats the
+   bench as filler, but the gain is scored with bench cover, so one bench swap
+   often beat the "best" team by 1.5 to 4 points. Each bench slot is offered
+   the best twenty same-position players the budget and the three-per-club
+   rule allow, and a swap is kept when it raises the team score. */
+function benchWeighted(t,ids,e,budget){
+  const v=p=>p.gw[e]?.pts||0;
+  const pool={};S.model.players.forEach(p=>(pool[p.pos]=pool[p.pos]||[]).push(p));
+  Object.keys(pool).forEach(k=>pool[k].sort((a,b)=>v(b)-v(a)));
+  let cur=ids.slice(),score=teamScore(cur,e,null);
+  for(let pass=0;pass<2;pass++){
+    const sp=cur.map(chipPlayer).filter(Boolean),xi=new Set(legalBestXI(sp,v).map(p=>p.id));
+    let moved=false;
+    for(const out of sp.filter(p=>!xi.has(p.id))){
+      const now=cur.map(chipPlayer).filter(Boolean),cost=now.reduce((a,p)=>a+(p.price||0),0)-(out.price||0),club={};
+      now.forEach(p=>{if(p.id!==out.id)club[p.team]=(club[p.team]||0)+1;});
+      let bestIds=null,bestS=score+0.05;
+      for(const c of (pool[out.pos]||[]).filter(p=>!cur.includes(p.id)&&cost+(p.price||0)<=budget+1e-9&&(club[p.team]||0)<3).slice(0,20)){
+        const tryIds=cur.map(i=>i===out.id?c.id:i),s=teamScore(tryIds,e,null);
+        if(s>bestS){bestS=s;bestIds=tryIds;}
+      }
+      if(bestIds){cur=bestIds;score=bestS;moved=true;}
+    }
+    if(!moved)break;
+  }
+  if(cur.join(".")===ids.join("."))return{t,ids};
+  const sp=cur.map(chipPlayer).filter(Boolean),xi=legalBestXI(sp,v);
+  return{t:{...t,xi,bench:sp.filter(p=>!xi.includes(p))},ids:cur};
 }
 /* The squad your free transfers would reach anyway over a Wildcard's five
    weeks (21 Nov 2026, Andy): one transfer a week from the Wildcard week,
@@ -1345,12 +1392,16 @@ function chipWeighted(kind,e,v,ids){
     if(kind==="bboost"||kind==="3xc")return{v:teamScore(ids,e,kind,adj)-teamScore(ids,e,null,adj),f};
     return{v,f:null};
   }
-  if(kind==="freehit"&&f.t==="blank")return{v:v+f.p*0.2*teamScore(ids,e,null),f};
+  /* M2 (Andy, 22 Nov 2026): a forecast blank counts only the clubs it names.
+     Without named clubs there is no way to know which of yours blank, so the
+     Free Hit is not lifted (it used to add a fifth of your whole team score,
+     more than a confirmed blank of two of your clubs was worth). */
+  if(kind==="freehit"&&f.t==="blank")return{v,f};
   if((kind==="bboost"||kind==="3xc")&&f.t==="double")return{v:v*(1+f.p*0.3),f};
   return{v,f:null};
 }
 let _chipCurves=null;
-function chipSig(){return[_chipModelId(),(S.squad||[]).join("."),JSON.stringify(S.planByGw||{}),squadBudget().toFixed(1),S.bank].join("|");}
+function chipSig(){return[_chipModelId(),(S.squad||[]).join("."),JSON.stringify(S.planByGw||{}),squadBudget().toFixed(1),S.bank,typeof _optDone!=="undefined"?_optDone:0].join("|");}
 /* gain for every legal week of a chip key ("bboost1", "wildcard2"...):
    {e:{v (weighted), raw, f (forecast), proven}} */
 function chipCurve(key){
