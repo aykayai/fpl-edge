@@ -78,6 +78,7 @@ try {
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
+    flagNow,flagTitle,startChance,newsDown,statusState,
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
@@ -384,6 +385,108 @@ try {
     check(/<b>Free Hit 1<\/b>/.test(sec("r-chused")), "F47 a played chip is listed in Chips Used");
   }
   S.tab = "squad"; g.render();
+
+
+  /* ---------- News (22 Nov 2026, Andy's redesign) ---------- */
+  {
+    /* server: categories, stricter player matching, feed parsing */
+    const NT = await import("./lib/news-tag.mjs"), NM = await import("./lib/news.mjs");
+    const cat = t => NT.categorise(t);
+    check(cat("Raya set to have scan on injury") === "inj" && cat("Calafiori back in full training after a knee injury") === "ret"
+      && cat("Saudi clubs ready January offer for Isak") === "trf" && cat("Fixture amendments for matches in January") === "bgw"
+      && cat("Best weeks to play your Bench Boost") === "chip" && cat("Hull v Brighton team news: Kostoulas benched") === "team",
+      "News: categories (injury, return beats injury, transfer, blanks and doubles, chips, team news)");
+    check(cat("Haaland scores injury-time winner") !== "inj" && cat("Was Haaland's goal correctly ruled out?") !== "inj" && cat("Joe Gomez ruled out for six weeks") === "inj",
+      "News: injury time and a disallowed goal are not injuries; 'ruled out for' is");
+    const IX = NT.buildIndex([{ id: 1, first: "Diego", second: "Gómez Amarilla", web: "Gomez", team: "Brighton" }, { id: 2, first: "Joe", second: "Gomez", web: "Gomez", team: "Liverpool" },
+      { id: 3, first: "James", second: "Justin", web: "Justin", team: "Leeds" }, { id: 4, first: "Justin", second: "Kluivert", web: "Kluivert", team: "Bournemouth" },
+      { id: 5, first: "Keane", second: "Andrews", web: "Andrews", team: "Coventry City" }, { id: 6, first: "Kristoffer", second: "Ajer", web: "Ajer", team: "Brentford" },
+      { id: 7, first: "Pascal", second: "Groß", web: "Groß", team: "Brighton" }]);
+    const tag = t => NT.tagPlayers(t, IX).sort().join(",");
+    check(tag("Joe Gomez ruled out for six weeks") === "2" && tag("Gomez starts for Brighton") === "1" && tag("Gomez to miss out") === "",
+      "News: stricter matching: a shared surname needs the first name or the club", [tag("Joe Gomez ruled out for six weeks"), tag("Gomez starts for Brighton"), tag("Gomez to miss out")].join(" | "));
+    check(tag("Justin Kluivert scores again") === "4" && tag("Leeds full-back Justin back in training") === "3",
+      "News: another player's full name is not a match ('Justin Kluivert' is not James Justin)", tag("Justin Kluivert scores again"));
+    check(tag("Brentford: Andrews hails Kristoffer Ajer's start") === "6" && tag("Gross rested as Brighton rotate") === "7",
+      "News: a lone surname with another club named is not a match; ß reads as ss", tag("Brentford: Andrews hails Kristoffer Ajer's start"));
+    check(NT.tagPlayers("Justin Kluivert News: Back in training", IX, null, true).join() === "4" && NT.tagPlayers("Gomez starts for Brighton", IX, null, true).length === 0,
+      "News: strict sources (RotoWire) need the full name");
+    const xml = `<rss><channel>
+      <item><title>Raya &lt;b&gt;scan&lt;/b&gt; latest</title><link>https://example.com/a</link><pubDate>${new Date().toUTCString()}</pubDate>
+        <media:thumbnail width="240" url="https://img.example.com/s.jpg"/><media:content width="976" url="https://img.example.com/l.jpg"/>
+        <description><![CDATA[<p>He goes for a scan on Monday.</p><p>The post Raya scan latest appeared first on Some Site.</p>]]></description></item>
+      <item><title>Undated story</title><link>https://example.com/b</link></item>
+      <item><title>Evil link</title><link>javascript:alert(1)</link><pubDate>${new Date().toUTCString()}</pubDate></item>
+      <item><title>Plain picture</title><link>https://example.com/c</link><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="http://img.example.com/x.jpg" type="image/jpeg"/></item>
+    </channel></rss>`;
+    const it = NM.parseFeed(xml, "Test", false);
+    check(it.length === 2 && it[0].img === "https://img.example.com/l.jpg" && it[0].sum === "He goes for a scan on Monday." && !/</.test(it[0].title),
+      "News: feed parsing takes the widest picture, drops the 'appeared first on' line, drops undated and javascript: items", JSON.stringify(it.map(i => [i.title, i.img, i.sum])));
+    check(it[1] && it[1].img === "", "News: pictures must be https", it[1] && it[1].img);
+
+    /* the one flag mechanism: every page shows the same chance and the same 'since' */
+    const keepFlags = S.flags, keepNews = [S.news, S.social, S.squadNews, S.newsState, S.newsWindow, S.newsSources];
+    const sqp = g.squadPlayers(), p = sqp.find(x => x.pos >= 2 && x.avail >= 1) || sqp[0];
+    const keepP = { avail: p.avail, news: p.news };
+    const since = Date.now() - 2 * 86400000, iso = ms => new Date(ms).toISOString();
+    S.flags = { updated: iso(Date.now()), players: { [p.id]: [{ t: iso(since), seen: iso(since), st: "d", cn: 75, news: "Knee injury - 75% chance of playing" }] } };
+    p.avail = 0.75; p.news = "Knee injury - 75% chance of playing";
+    const fn = g.flagNow(p), day = new Date(since).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" });
+    check(fn && fn.c === 75 && fn.was === 100 && Math.abs(fn.since - since) < 1000, "Flags: flagNow gives the chance, since when and the chance before", JSON.stringify(fn));
+    const title = g.flagTitle(p);
+    check(title.includes(`75% since ${day}`) && title.includes("was 100%"), "Flags: the hover text names the chance, the day and the chance before", title);
+    S.tab = "squad"; S.sqView = "pitch"; S.cardId = null; g.render();
+    const escT = title.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    check(doc.getElementById("app").innerHTML.includes(`title="${escT}"`) || !g.startingXI().some(x => x.id === p.id),
+      "Flags: the Planner's injury badge uses the same hover text");
+    g.act("card", p.id); g.render();
+    check(S.cardTab === "overview" && new RegExp(`since ${day}`).test((doc.querySelector(".pkwarn") || {}).textContent || ""), "Flags: the player card's flag line says since when");
+    g.act("cardtab", "news"); g.render();
+    const cardTxt = (doc.querySelector(".pkcard") || {}).textContent || "";
+    check(S.cardTab === "news" && /Flag History/.test(cardTxt) && /Start Chance/.test(cardTxt) && /75%/.test(cardTxt) && cardTxt.includes(`since ${day}`),
+      "Flags: the card's News tab shows the same chance and day", cardTxt.slice(0, 160));
+    const sc = g.startChance(p);
+    check(sc >= 0 && sc <= 75, "Start Chance is within 0 and FPL's chance (75%)", String(sc));
+    g.act("card", null);
+
+    /* the page: the window filters, availability and your players lead, hostile text stays text */
+    S.news = [
+      { src: "Feed A", title: "FPL tips for the weekend", url: "https://example.com/1", time: Date.now() - 1 * 3600000, cat: "fpl", ids: [] },
+      { src: "Feed B", title: "Squad man injury worry", url: "https://example.com/2", time: Date.now() - 3 * 3600000, cat: "inj", ids: [p.id], img: "" },
+      { src: "Feed C", title: "Older transfer story", url: "https://example.com/3", time: Date.now() - 50 * 3600000, cat: "trf", ids: [p.id] },
+      { src: "Feed <img id=xs>", title: "Hostile <img id=xt src=x>", url: "javascript:alert(1)", time: Date.now() - 2 * 3600000, cat: "news", ids: [], img: "javascript:alert(2)" }];
+    S.social = [{ kind: "pin", src: "Ben Crellin", pub: "Fantasy Football Hub", title: "Crellin's calendar updated", url: "https://example.com/c", time: Date.now() - 86400000, ids: [] }];
+    S.squadNews = []; S.newsState = "ok"; S.newsWindow = 24; S.nwCat = "all";
+    S.newsSources = { "Feed A": { ok: true }, "Feed B": { ok: false } };
+    S.tab = "news"; g.render();
+    const page = doc.getElementById("app"), ptxt = page.textContent;
+    check(/Squad man injury worry/.test(ptxt) && !/Older transfer story/.test(ptxt), "News: the 24h window leaves out a two-day-old story");
+    const lead = (page.querySelector(".nw-lead h2") || {}).textContent || "";
+    check(lead === "Squad man injury worry", "News: an injury story naming your player leads over a newer FPL article", lead);
+    check(!page.querySelector("#xs,#xt") && ![...page.querySelectorAll("a")].some(a => /^javascript:/i.test(a.getAttribute("href") || "")) && ![...page.querySelectorAll("img")].some(i => /^javascript:/i.test(i.getAttribute("src") || "")),
+      "News: hostile text stays text, and only http(s) links and pictures");
+    check(/Ben Crellin/.test((page.querySelector(".nw-so.pin") || {}).textContent || ""), "News: Ben Crellin is pinned in Social Media");
+    check(/1 of 2/.test(ptxt), "News: the Sources figure counts live sources", (ptxt.match(/Sources.{0,30}/) || [""])[0]);
+    const tile = [...page.querySelectorAll(".nw-sw")].find(b => b.textContent.includes(p.web_name));
+    check(tile && /75%/.test(tile.textContent) && tile.classList.contains("flag"), "News: Squad Watch shows the flagged player's FPL chance", tile && tile.textContent);
+    g.act("nwin", 72); g.render();
+    check(/Older transfer story/.test(page.textContent), "News: the 3d window brings the older story back");
+    g.act("nwcat", "trf"); g.render();
+    check((page.querySelector(".nw-lead h2") || {}).textContent === "Older transfer story" && !/Squad man injury worry/.test((page.querySelector(".nw-top") || {}).textContent || ""),
+      "News: the Transfers filter shows only transfer stories");
+    g.act("nwcat", "all");
+
+    /* the Status page turns amber for a source down over an hour, not for a blip */
+    const keepStatus = S.status;
+    S.status = { ...(keepStatus || {}), news: { perSource: { Blip: { ok: false, failingSince: iso(Date.now() - 600000) }, Gone: { ok: false, failingSince: iso(Date.now() - 2 * 3600000) } } } };
+    const down = g.newsDown(), stt = g.statusState();
+    check(down.join() === "Gone" && /1 news source down/.test(stt.txt) && stt.cls === "wait", "Status: a news source down for over an hour turns the status amber; a blip does not", JSON.stringify([down, stt.cls, stt.plain]));
+    S.tab = "xfpl"; g.render();
+    check(/News Sources/.test(doc.getElementById("app").textContent) && /Down since/.test(doc.getElementById("app").textContent), "Status: the page lists each news source and its state");
+    S.status = keepStatus;
+    [S.news, S.social, S.squadNews, S.newsState, S.newsWindow, S.newsSources] = keepNews; S.flags = keepFlags;
+    p.avail = keepP.avail; p.news = keepP.news; S.tab = "squad"; g.render();
+  }
 
   /* ---------- F60 best combination ---------- */
   const outIds = sq.filter(p => p.pos >= 2).slice(0, 3).map(p => p.id);

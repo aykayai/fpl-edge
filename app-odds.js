@@ -745,80 +745,140 @@ function rivalsHTML(){
   return table+summary+detail;
 }
 
+/* ============================================================
+   NEWS (22 Nov 2026, Andy's v4 mock-up). A news page that leads with
+   availability: Squad Watch (the fifteen at a glance: FPL's flag or the
+   chance of starting, and how many stories name each), Top Stories
+   (injury, return, transfer and team news first, then blanks and doubles
+   and chip strategy, FPL articles last; the article's own picture, else
+   the player on his club colour), the Injury Room (every FPL flag change
+   in the league, from the one flag log) and Social Media (Ben Crellin
+   pinned, the Creators' YouTube videos and Bluesky posts). Classes nw-.
+   ============================================================ */
+const NW_CAT={inj:["Injury","#FFB020",0],ret:["Return","#2DDC87",1],trf:["Transfer","#A78BFA",2],team:["Team News","#22D3EE",3],
+  pc:["Press Conference","#7AA2FF",4],bgw:["Blanks & Doubles","#FF6B9A",5],chip:["Chip Strategy","#5EEAD4",6],fpl:["FPL","#9A9A9A",7],news:["News","#9A9A9A",8]};
+const NW_FILTERS=[["all","All"],["inj","Injuries"],["ret","Returns"],["trf","Transfers"],["team","Team News"],["bgw","BGW/DGW"],["chip","Chips"],["fpl","FPL"]];
+const nwTag=k=>{const c=NW_CAT[k]||NW_CAT.news;return `<span class="nw-tg" style="--tc:${c[1]}">${c[0]}</span>`;};
+const nwAgo=t=>{const h=(Date.now()-t)/3600000;return h<1?Math.max(1,Math.round(h*60))+"m":h<24?Math.round(h)+"h":Math.round(h/24)+"d";};
+const nwById=id=>(S.model.players||[]).find(p=>p.id===id);
+const nwKit=p=>((KITS[p.teamName]||KITS._d||{b:"#444"}).b);
+const nwFace=(p,cls)=>`<span class="nw-face ${cls||""}" style="--cc:${nwKit(p)}"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.visibility='hidden'"></span>`;
+const nwSquad=()=>new Set(S.squad||[]);
+/* the player a story is mostly about: one of yours first */
+function nwLead(n){const mine=nwSquad(),ids=n.ids||[];const id=ids.find(i=>mine.has(i))||ids[0];return id?nwById(id):null;}
+/* every story in the window, one copy each, yours first, availability first */
+function nwStories(){
+  const cut=Date.now()-S.newsWindow*3600000,mine=nwSquad();
+  const all=[...(S.news||[]),...(S.squadNews||[])].filter(n=>n.time>=cut);
+  const rank=n=>((n.ids||[]).some(i=>mine.has(i))?0:10)+((NW_CAT[n.cat]||NW_CAT.news)[2]);
+  return all.sort((a,b)=>rank(a)-rank(b)||b.time-a.time);
+}
+function nwThumb(n,big){
+  const p=nwLead(n);
+  if(n.img)return `<span class="nw-th img${big?" big":""}"><img alt="" src="${esc(safeUrl(n.img))}" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('none')"></span>`;
+  if(p)return `<span class="nw-th${big?" big":""}" style="--cc:${nwKit(p)}"><img class="pl" alt="" src="${imgSrc("player",p.code)}" onerror="this.style.visibility='hidden'"></span>`;
+  return `<span class="nw-th none${big?" big":""}">${lic("newspaper",big?40:22)}</span>`;
+}
+const nwSrc=n=>`${esc(n.pub&&n.pub!==n.src?n.pub:n.src)} · ${nwAgo(n.time)}`;
+function nwLeadHTML(n){
+  const p=nwLead(n),mine=p&&nwSquad().has(p.id);
+  const bg=n.img?`<img class="nw-lbg" alt="" src="${esc(safeUrl(n.img))}" referrerpolicy="no-referrer" onerror="this.remove()">`
+    :p?`<img class="nw-lph" alt="" src="${imgSrc("player",p.code)}" onerror="this.remove()">`:"";
+  return `<a class="nw-lead${n.img?" photo":""}" style="--cc:${p?nwKit(p):"#2A2A2A"}" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">${bg}
+    <div class="nw-lc">${nwTag(n.cat)}<h2>${esc(n.title)}</h2>${n.sum?`<p>${esc(n.sum)}</p>`:""}<span class="nw-src">${nwSrc(n)}${mine?` · <b>In your squad</b>`:""}</span></div></a>`;
+}
+function nwCardHTML(n){
+  const p=nwLead(n),mine=p&&nwSquad().has(p.id);
+  return `<a class="nw-card" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">${nwThumb(n)}
+    <div class="nw-cc">${nwTag(n.cat)}<h4>${esc(n.title)}</h4><span class="nw-src">${nwSrc(n)}${mine?`<i class="nw-own" title="In your squad"></i>`:""}</span></div></a>`;
+}
+/* Injury Room: every change in the flag log, newest first */
+function nwChanges(){
+  const F=(S.flags&&S.flags.players)||{},out=[];
+  Object.entries(F).forEach(([id,rows])=>{const p=nwById(+id);if(!p)return;let prev=100;
+    rows.forEach(r=>{const c=flagChance(r);if(c!==prev)out.push({p,a:prev,b:c,t:flagT(r),n:r.news||""});prev=c;});});
+  return out.sort((a,b)=>b.t-a.t);
+}
+const nwBack=s=>{const m=/^(\d{2})-([A-Za-z]{3})$/.exec(s||"");return m?`Back ${+m[1]} ${m[2]}`:"";};
+function nwIrRow(x){
+  const mine=nwSquad().has(x.p.id),note=String(x.n||"").split(/\s+-\s+/)[0]||(x.b>=100?"Fit again":"");
+  const back=nwBack(parseReturn(x.n));
+  return `<button class="nw-ir" onclick="act('cardnews',${x.p.id})">${nwFace(x.p,"sm")}<span class="nw-who"><b>${esc(x.p.web_name)}${mine?`<i class="nw-own" title="In your squad"></i>`:""}</b><i>${esc(x.p.teamName)} · ${esc(note)}</i></span>
+    <span class="nw-ch">${chPill(x.a)}<span class="fh-ar" style="color:${x.b>x.a?"var(--mint)":"var(--red)"}">${lic("arrow-right",12)}</span>${chPill(x.b)}</span>
+    <span class="nw-bk">${back?`<b>${back}</b>`:""}<i>${nwAgo(x.t)}</i></span></button>`;
+}
+/* Social Media: one row shape for every kind */
+function nwSoRow(n){
+  const ini=s=>esc(String(s).split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase());
+  const icon=n.kind==="pin"?`<span class="nw-av" style="--ac:#1D9BF0">BC</span>`
+    :n.kind==="yt"?`<span class="nw-av" style="--ac:#FF0000">${lic("play",15)}</span>`
+    :`<span class="nw-av" style="--ac:#0A7AFF">${ini(n.src)}</span>`;
+  const meta=n.kind==="pin"?`${lic("calendar-days",12)}${esc(n.pub||"Fantasy Football Hub")}`:n.kind==="yt"?`${lic("play",12)}YouTube`:`${lic("cloud",12)}Bluesky`;
+  return `<a class="nw-so${n.kind==="pin"?" pin":""}" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">${icon}<div class="nw-sb"><span class="nw-sh"><b>${esc(n.kind==="pin"?"Ben Crellin":n.src)}</b><i>${nwAgo(n.time)}</i>${n.kind==="pin"?`<span class="nw-pin">${lic("pin",11)}Pinned</span>`:""}</span><p>${esc(n.title)}</p><span class="nw-se">${meta}</span></div></a>`;
+}
+const nwSeg=(opts,cur,action)=>`<span class="hz nw-seg">${opts.map(([k,l])=>`<button class="${cur===k?"on":""}" onclick="act('${action}','${k}')">${l}</button>`).join("")}</span>`;
 function newsHTML(){
-  const cut=Date.now()-S.newsWindow*3600*1000;
-  const sf=S.srcFilter, pf=S.playerFilter;
-  const match=n=>(!sf||n.src===sf)&&(!pf||hits(n.title).includes(pf));
-  const all=[...S.news,...S.reddit,...(S.squadNews||[])];
-  const playerNames=new Set(squadPlayers().map(p=>p.web_name));
-  const srcCount={};
-  [...S.news,...S.reddit].forEach(n=>{if(!playerNames.has(n.src))srcCount[n.src]=(srcCount[n.src]||0)+1;});
-
-  /* My team: newest mentions of the fifteen, from every source */
-  const week=Date.now()-7*24*3600*1000;
-  const mine=all.filter(n=>hits(n.title).length&&n.time>=week)
-    .sort((a,b)=>b.time-a.time)
-    .filter(n=>!pf||hits(n.title).includes(pf)).slice(0,S.expand.mine?40:10);
-  /* Latest news: one item per source, newest first, no repeats */
-  /* newest first, one per source until we run out of sources, then fill to ten */
-  const seenSrc=new Set(),spread=[],overflow=[];
-  S.news.filter(match).sort((a,b)=>b.time-a.time).forEach(n=>{
-    if(seenSrc.has(n.src)){overflow.push(n);return;}
-    seenSrc.add(n.src);spread.push(n);});
-  while(spread.length<10&&overflow.length)spread.push(overflow.shift());
-  spread.sort((a,b)=>b.time-a.time);
-  if(!S.expand.news)spread.length=Math.min(spread.length,10);
-  const red=S.reddit.filter(match).slice(0,10);
-  const creators=CREATORS.slice(0,S.expand.creators?CREATORS.length:5);
-
-  const srcN=Object.keys(S.srcLog||{}).filter(k=>!k.startsWith("·")).length;
-  const ctrl=`<div class="panel"><div class="phead"><h2>News feed</h2>
-     ${S.newsState==="ok"&&S.newsFetchedAt?`<span class="note" style="margin-right:auto;margin-left:8px">Updated ${esc(agoText(S.newsFetchedAt))}${srcN?` · ${srcN} sources`:""} · checked every 15 min</span>`:""}
-     <span style="display:flex;gap:6px;align-items:center">
-      ${[24,72,168].map(w=>`<button class="${S.newsWindow===w?"on":""}" onclick="act('nwin',${w})">${w===24?"24h":w===72?"3d":"7d"}</button>`).join("")}
-      <button onclick="act('news')">${S.newsState==="loading"?"…":"↻"}</button></span></div>
-     ${S.newsState==="backup"?backupNote("The news feed"):""}
-     ${S.newsState==="idle"?`<div class="pbody"><button class="pri" onclick="act('news')">Load the feed</button></div>`:""}
-     ${S.newsState==="loading"?`<div class="pbody"><p class="note">Reading the feeds…</p></div>`:""}
-     ${S.newsState==="fail"?`<div class="pbody"><div class="warn">
-       ${Object.keys(S.srcLog||{}).length?`<div class="mono" style="font-size:10px;margin-bottom:8px">${Object.entries(S.srcLog).map(([k,v])=>esc(k)+": "+v).join("<br>")}</div>`:""}The server returned no news items. It refetches every 15 minutes; squad data is unaffected.</div></div>`:""}
-     ${S.newsState==="ok"?`<div class="pbody" style="border-top:1px solid var(--ink3);display:flex;flex-direction:column;gap:8px">
-       <span style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-         <span style="font-size:10px;color:var(--mute);font-weight:700;width:46px">Source</span>
-         <button class="chipbtn ${sf?"":"on"}" onclick="act('srcf','')">All</button>
-         ${Object.entries(srcCount).sort((a,b)=>b[1]-a[1]).slice(0,14)
-           .map(([k,v])=>`<button class="chipbtn ${sf===k?"on":""}" onclick="act('srcf','${esc(k).replace(/'/g,"")}')">${esc(k)} ${v}</button>`).join("")}</span>
-       <span style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-         <span style="font-size:10px;color:var(--mute);font-weight:700;width:46px">Player</span>
-         <button class="chipbtn ${pf?"":"on"}" onclick="act('plf','')">All</button>
-         ${squadPlayers().map(p=>`<button class="chipbtn ${pf===p.web_name?"on":""}" onclick="act('plf','${esc(p.web_name).replace(/'/g,"")}')">${esc(p.web_name)}</button>`).join("")}</span>
-       </div>`:""}</div>`;
-
-  const creatorPanel=`<div class="panel"><div class="phead"><h2>Creators</h2></div>
-     ${creators.map(([n,d,u])=>`<a class="item" href="${u}" target="_blank" rel="noopener">
-       <div class="ttl">${n} <span style="color:var(--cyan)">↗</span></div><div class="meta">${d}</div></a>`).join("")}
-     <button style="margin:10px 13px 13px" onclick="act('expand','creators')">${S.expand.creators?"Show fewer":"View more · "+(CREATORS.length-5)+" others"}</button></div>`;
-  if(S.newsState!=="ok")return ctrl+creatorPanel;
-
-  const myPanel=`<div class="panel" style="border-color:var(--mint);background:#10321F">
-    <div class="phead" style="border-color:#1B5133"><h2 style="color:var(--mint)">My team</h2>
-      <span class="note">${mine.length} mentioning your squad</span></div>
-    ${mine.length?mine.map(n=>itemHTML(n,false)).join("")
-      :`<div class="pbody"><p class="note">Nothing naming your fifteen yet.</p></div>`}
-    ${mine.length>=10?`<button style="margin:10px 13px 13px" onclick="act('expand','mine')">${S.expand.mine?"Show fewer":"View more"}</button>`:""}</div>`;
-
-  const newsPanel=`<div class="panel"><div class="phead"><h2>Latest FPL news</h2>
-      <span class="note">${spread.length} sources</span></div>
-    ${spread.length?spread.map(n=>itemHTML(n,false)).join(""):`<div class="pbody"><p class="note">Nothing in this window.</p></div>`}
-    <button style="margin:10px 13px 13px" onclick="act('expand','news')">${S.expand.news?"One per source":"View more"}</button></div>`;
-
-  const redPanel=`<div class="panel"><div class="phead"><h2>Hot on r/FantasyPL</h2>
-      <span class="note">top ${red.length}</span></div>
-    ${red.length?red.map(n=>itemHTML(n,true)).join(""):`<div class="pbody"><p class="note">Nothing loaded.</p></div>`}
-    <a class="item" href="https://www.reddit.com/r/FantasyPL/hot/" target="_blank" rel="noopener"
-       style="text-align:center;color:var(--cyan)">View more on Reddit ↗</a></div>`;
-
-  return ctrl+myPanel+newsPanel+redPanel+creatorPanel;
+  const G=S.model.next.id,mine=nwSquad(),cut=Date.now()-S.newsWindow*3600000,day=Date.now()-86400000;
+  const sq=squadPlayers();
+  const stories=nwStories();
+  const countFor=id=>stories.filter(n=>(n.ids||[]).includes(id)).length;
+  /* ---- header ---- */
+  const flagged=sq.filter(p=>p.avail<1),newToday=flagged.filter(p=>{const f=flagNow(p);return f&&f.since&&f.since>=day;}).length;
+  const daysAgo=d=>Date.now()-d*86400000;
+  const sqSeries=[6,5,4,3,2,1,0].map(d=>sq.filter(p=>{const c=flagAt(p,daysAgo(d));return c!=null&&c<100;}).length);
+  const ch=nwChanges(),wk=daysAgo(7);
+  const backList=ch.filter(x=>x.b>x.a&&x.t>=wk);
+  const backSeries=[6,5,4,3,2,1,0].map(d=>backList.filter(x=>x.t>=daysAgo(d+1)&&x.t<daysAgo(d)).length);
+  const trf=stories.filter(n=>n.cat==="trf"&&(n.ids||[]).some(i=>mine.has(i)));
+  const trfBy={};trf.forEach(n=>n.ids.filter(i=>mine.has(i)).forEach(i=>{const p=nwById(i);if(p)trfBy[p.web_name]=(trfBy[p.web_name]||0)+1;}));
+  const trfSeries=[6,5,4,3,2,1,0].map(d=>[...(S.news||[]),...(S.squadNews||[])].filter(n=>n.cat==="trf"&&(n.ids||[]).some(i=>mine.has(i))&&n.time>=daysAgo(d+1)&&n.time<daysAgo(d)).length);
+  const src=Object.values(S.newsSources||{}),srcOk=src.filter(s=>s.ok).length;
+  const head=`<div class="nw-hdr"><div><div class="cx-kick">GW${G}${S.newsFetchedAt?` · Updated ${esc(agoText(S.newsFetchedAt))}`:""}</div><h1>News</h1>
+      <div class="nw-hbtn"><span class="hz">${[[24,"24h"],[72,"3d"],[168,"7d"]].map(([w,l])=>`<button class="${S.newsWindow===w?"on":""}" onclick="act('nwin',${w})">${l}</button>`).join("")}</span>
+        <button class="cx-rpt" onclick="act('news')">${lic("refresh-cw",14)}${S.newsState==="loading"?"Loading…":"Refresh"}</button></div></div>
+    <div class="nw-figs">
+      ${figCard("Squad Flags","Your players with an FPL flag.",String(flagged.length),newToday?`<span class="dn">+${newToday}</span> today`:"None new today",sqSeries,"#FFB020")}
+      ${figCard("Back This Week","Players whose FPL chance rose in the last 7 days.",String(backList.length),backSeries[6]?`<span class="up">+${backSeries[6]}</span> today`:"None today",backSeries,"#2DDC87")}
+      ${figCard("Transfer Talk","Transfer stories naming your players.",String(trf.length),Object.entries(trfBy).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([k,v])=>`${esc(k)} ${v}`).join(" · ")||"None",trfSeries,"#A78BFA")}
+      ${figCard("Sources","Sources answering now; Status lists each one.",src.length?`${srcOk} of ${src.length}`:"–",src.length?(srcOk===src.length?"All live":`<span class="dn">${src.length-srcOk} down</span>`):"Not loaded",null)}
+    </div></div>`;
+  if(S.newsState==="backup")return head+backupNote("The news feed");
+  /* ---- Squad Watch ---- */
+  const sw=sq.map(p=>{const sc=startChance(p),k=countFor(p.id);
+    const st=p.avail<1?"flag":(p.pos===1&&sc<15)?"bench":sc<60?"rot":"ok";
+    return {p,sc,k,st};}).sort((a,b)=>({flag:0,rot:1,ok:2,bench:3}[a.st]-{flag:0,rot:1,ok:2,bench:3}[b.st])||b.k-a.k);
+  const swTile=({p,sc,k,st})=>{const c=Math.round(p.avail*100);
+    const lab=st==="flag"?`${lic("triangle-alert",11)}${c}%`:st==="bench"?"Back-up":`Start ${sc}%`;
+    return `<button class="nw-sw ${st}" onclick="act('cardnews',${p.id})" title="${esc(st==="flag"?flagTitle(p):`${p.web_name}: ${sc}% chance of starting`)}">${nwFace(p,"sw")}<span class="nw-swn">${esc(p.web_name)}</span><span class="nw-swl ${st}">${lab}</span>${k?`<i class="nw-swk" title="${k} stories">${k}</i>`:""}</button>`;};
+  const watch=`<section class="nw-watch"><div class="nw-wh"><span class="rhi">${lic("shirt",16)}</span><h3>Squad Watch</h3><button class="fci" data-tip="FPL's chance if flagged, else his chance of starting.">i</button>
+    <span class="nw-wk"><i class="k1"></i>Flagged<i class="k2"></i>Rotation risk<i class="k3"></i>Stories</span></div>
+    <div class="nw-sws">${sw.map(swTile).join("")}</div></section>`;
+  /* ---- Top Stories ---- */
+  const cat=S.nwCat||"all",inCat=n=>cat==="all"||n.cat===cat||(cat==="team"&&n.cat==="pc");
+  const list=stories.filter(inCat);
+  const leadI=Math.max(0,list.findIndex(n=>n.img||nwLead(n)));
+  const lead=list[leadI],rest=list.filter((n,i)=>i!==leadI).slice(0,4);
+  const top=rep("nwtop","newspaper","Top Stories","Availability news first; your players' stories lead.",
+    S.newsState==="loading"&&!list.length?sgEmpty("Reading the feeds…"):S.newsState==="fail"?sgEmpty("The server returned no news. It checks every 15 minutes; the rest of the app is unaffected."):
+    !lead?sgEmpty("No stories in this window."):`<div class="nw-top">${nwLeadHTML(lead)}<div class="nw-cards">${rest.map(nwCardHTML).join("")}</div></div>`,
+    {extra:`<span class="nw-cat">${NW_FILTERS.map(([k,l])=>`<button class="${cat===k?"on":""}" onclick="act('nwcat','${k}')">${l}</button>`).join("")}</span>`});
+  /* ---- Injury Room ---- */
+  const irTab=S.nwIr||"chg";
+  let irRows;
+  if(irTab==="chg"){const inWin=ch.filter(x=>x.t>=cut);irRows=(inWin.length>=10?inWin:ch).slice(0,14);}
+  else irRows=S.model.players.filter(p=>p.avail<1&&p.back&&p.back!=="unknown").map(p=>{const f=flagNow(p)||{};return {p,a:f.was!=null?f.was:100,b:Math.round(p.avail*100),t:f.since||Date.now(),n:p.news||""};})
+    .sort((a,b)=>{const d=x=>{const m=/^(\d{2})-([A-Za-z]{3})$/.exec(x.p.back);return m?Date.parse(`${+m[1]} ${m[2]} ${new Date().getFullYear()}`):0;};return d(a)-d(b);}).slice(0,14);
+  const injury=rep("nwir","heart-pulse","Injury Room","Every FPL flag change, newest first. Green dot: your player.",
+    S.flags?(irRows.length?`<div class="nw-list">${irRows.map(nwIrRow).join("")}</div>`:sgEmpty(irTab==="chg"?"No flag changes yet.":"No return dates from FPL right now.")):sgEmpty("Reading the flag log…"),
+    {extra:nwSeg([["chg","Changes"],["back","Back Soon"]],irTab,"nwir")});
+  /* ---- Social Media ---- */
+  const so=S.nwSo||"all",soc=(S.social||[]);
+  const pin=soc.filter(n=>n.kind==="pin").sort((a,b)=>b.time-a.time)[0];
+  const others=soc.filter(n=>n.kind!=="pin"&&n.time>=Date.now()-Math.max(S.newsWindow,72)*3600000&&(so==="all"||(so==="yt"?n.kind==="yt":n.kind==="bs")));
+  const social=rep("nwso","users","Social Media","Ben Crellin pinned, then Creators' YouTube and Bluesky posts.",
+    (pin||others.length)?`<div class="nw-list">${pin&&so==="all"?nwSoRow(pin):""}${(c=>others.filter(n=>(c[n.src]=(c[n.src]||0)+1)<=2))({}).slice(0,8).map(nwSoRow).join("")}</div>`:sgEmpty(S.newsState==="loading"?"Reading the feeds…":"Nothing posted yet."),
+    {extra:nwSeg([["all","All"],["yt","Videos"],["bs","Posts"]],so,"nwso")});
+  return `<div class="nw">${head}${watch}<div class="nw-body">${top}${injury}${social}</div></div>`;
 }
 /* the page links (the full bar is topbarHTML, drawn with the page) */
 function navLinksHTML(){
@@ -862,9 +922,26 @@ function statusState(){
     else if(liveAge!=null&&liveAge<=10){cls="live";txt=`Live · <b>updated ${agoText(fpl.liveFetchedAt)}</b>`;}
     else txt=`Up to date · <b>checked ${S.statusAt?agoText(S.statusAt):"just now"}</b>`;
   }
+  /* a news source failing for over an hour turns the dot amber (Andy, 22 Nov 2026) */
+  const nDown=newsDown();
+  if(nDown.length&&!BACKUP&&st&&!S.statusErr){if(cls!=="wait")cls="wait";txt+=` · ${nDown.length} news source${nDown.length>1?"s":""} down`;}
   /* a part of the load that failed turns the dot amber too */
   if(!cls&&((S.loadWarnings||[]).length||(S.fixFail||[]).length))cls="wait",txt+=" · some data did not load";
   return{cls,txt,plain:txt.replace(/<[^>]+>/g,"")};
+}
+/* news sources failing for more than an hour, from the server's status */
+function newsDown(){
+  const ps=((S.status||{}).news||{}).perSource||{};
+  return Object.entries(ps).filter(([,v])=>v&&!v.ok&&v.failingSince&&Date.now()-Date.parse(v.failingSince)>3600000).map(([k])=>k);
+}
+function newsSourcesHTML(){
+  const ps=((S.status||{}).news||{}).perSource||{},rows=Object.entries(ps);
+  if(!rows.length)return `<div class="pbody"><p class="note" style="margin:0">${BACKUP?"News runs on the FPL Signals server only.":"No news check reported yet."}</p></div>`;
+  const down=new Set(newsDown());
+  rows.sort((a,b)=>(down.has(b[0])-down.has(a[0]))||(!a[1].ok-!b[1].ok)*-1||((a[1].kind==="social")-(b[1].kind==="social"))||a[0].localeCompare(b[0]));
+  return `<table class="mkt nw-srcs"><thead><tr><th>Source</th><th>Kind</th><th>Items</th><th>Last good copy</th><th>State</th></tr></thead><tbody>${rows.map(([k,v])=>{
+    const st=v.ok?`<span class="up">Live</span>`:down.has(k)?`<span class="dn">Down since ${esc(ukWhen(v.failingSince))}</span>`:`<span style="color:var(--amber)">Retrying</span>`;
+    return `<tr><td>${esc(k)}</td><td>${v.kind==="social"?"Social media":"News"}</td><td>${+v.count||0}</td><td>${v.fetchedAt?esc(agoText(v.fetchedAt)):"never"}</td><td title="${esc(v.error||"")}">${st}</td></tr>`;}).join("")}</tbody></table>`;
 }
 function statusChipHTML(){
   const{cls,txt}=statusState();
@@ -1087,6 +1164,7 @@ function leagueTabsHTML(){
 function statusPageHTML(){
   return `<div class="pagetabs"><h1>Status</h1>${statusChipHTML()}</div>
     <div class="panel"><div class="phead"><h2>Data Freshness</h2></div>${provHTML()}</div>
+    <div class="panel"><div class="phead"><h2>News Sources</h2>${(n=>n?`<span class="note" style="color:var(--amber)">${n} down for over an hour</span>`:"")(newsDown().length)}</div>${newsSourcesHTML()}</div>
     <div class="panel"><div class="phead"><h2>Model vs FPL</h2><span class="note">each finished gameweek, prediction against points scored</span></div>${modelVsFplHTML()}</div>
     <div class="panel"><div class="phead"><h2>Signal Hit Rates</h2><span class="note">did the flagged players beat their prediction?</span></div>${signalHitsHTML()}</div>
     <div class="panel"><div class="phead"><h2>Fixture Ratings</h2><span class="note">projected goals against this season's results</span></div>${fixtureAccuracyHTML()}</div>

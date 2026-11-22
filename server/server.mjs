@@ -11,7 +11,8 @@
      /data/feeds/*.json     locally built actuals.json / rivals.json
      /api/status            everything the header chip and footer need
      /api/news              merged sanitised items + per-source status
-     /api/player-news       ?names=a,b  Google News per player
+     /api/player-news       ?ids=1,2  Google News per player, tagged
+     /api/flags             FPL flag changes per player (the one flag log)
      /api/odds              odds-api.io cache, { state:"nokey" } without a key
      /api/tv                TV channels per match, pushed weekly from Andy's PC
                             (scripts/fetch-tv.mjs), { state:"none" } until then
@@ -35,7 +36,7 @@ import { snapshotTick, snapshotStatus } from "./lib/snapshot.mjs";
 import { finalRowsFile } from "./lib/trim.mjs";
 import { handleMcp, mcpAllowed, scoutModel } from "./lib/scout-mcp.mjs";
 import { ask as scoutAsk, history as scoutHistory, newThread as scoutNew, ready as scoutReady } from "./lib/scout-ask.mjs";
-import { recordInjuries } from "./lib/scout-news.mjs";
+import { recordInjuries, flagsPayload } from "./lib/scout-news.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -200,9 +201,10 @@ async function handle(req, res) {
     }
     if (path === "/api/news") { sendJson(res, method, 200, newsPayload()); return; }
     if (path === "/api/player-news") {
-      sendJson(res, method, 200, await playerNews(u.searchParams.get("names")));
+      sendJson(res, method, 200, await playerNews(u.searchParams.get("names"), u.searchParams.get("ids")));
       return;
     }
+    if (path === "/api/flags") { sendJson(res, method, 200, await flagsPayload()); return; }
     if (path === "/api/odds") { sendJson(res, method, 200, oddsPayload()); return; }
     if (path === "/api/fpl-players") { sendJson(res, method, 200, await fplPlayersPayload()); return; }
     { const wk = /^\/api\/fpl-week\/(\d{1,2})$/.exec(path); if (wk) { sendJson(res, method, 200, await fplWeekPayload(wk[1])); return; } }

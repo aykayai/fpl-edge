@@ -115,7 +115,7 @@ function act(k,a,b,c){
     case"sqview":S.sqView=a;break;
     case"sqsort":if((S.sqSort||"pos")===a)S.sqDir=(S.sqDir||"asc")==="asc"?"desc":"asc";
       else{S.sqSort=a;S.sqDir=a==="pos"||a==="next"?"asc":"desc";}break;
-    case"card":S.cardId=a||null;break;
+    case"card":S.cardId=a||null;S.cardTab="overview";break;
     case"pmenu":S.pMenu=a==null?null:+a;break;
     case"lsortset":S.lSort=a;S.lDir="desc";break;
     case"poolpop":S.poolPop=S.poolPop===a?null:a;break;
@@ -338,8 +338,14 @@ function act(k,a,b,c){
       toast("Transfers made · +"+c.gain.toFixed(1)+" pts");break;}
     case"news":loadNews();return;
     case"nwin":S.newsWindow=a;break;
-    case"srcf":S.srcFilter=a||null;break;
-    case"plf":S.playerFilter=a||null;break;
+    /* News (22 Nov 2026): story category, Injury Room tab, Social Media filter */
+    case"nwcat":S.nwCat=a||"all";break;
+    case"nwir":S.nwIr=a||"chg";break;
+    case"nwso":S.nwSo=a||"all";break;
+    case"pkcat":S.pkCat=a||"all";break;
+    /* a player's card on its News tab, and switching the card's tabs */
+    case"cardnews":S.cardId=a||null;S.cardTab="news";S.pkCat="all";if(a)loadPlayerNews(a);break;
+    case"cardtab":S.cardTab=a==="news"?"news":"overview";if(S.cardTab==="news"&&S.cardId)loadPlayerNews(S.cardId);break;
     case"odds":loadOdds();return;
     case"oddsdemo":S.oddsDemo=!S.oddsDemo;break;
     case"oddspv":S.oddsPv=a;break;

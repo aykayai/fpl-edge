@@ -57,6 +57,13 @@ export async function recordInjuries(players) {
   if (changed) { log.updated = now; await saveLog(); }
   return changed;
 }
+/* The one flag log, for every page (22 Nov 2026): /api/flags. Each player
+   ever flagged since the log began, his changes oldest first:
+   { t: FPL's news_added, seen: when this server saw it, st, cn, news } */
+export async function flagsPayload() {
+  await loadLog();
+  return { updated: log.updated, players: log.players };
+}
 export async function injuryHistory(id) {
   await loadLog();
   const rows = log.players[String(id)] || [];

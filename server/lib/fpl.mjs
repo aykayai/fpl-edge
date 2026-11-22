@@ -179,6 +179,20 @@ export async function fplPlayersPayload() {
   return body;
 }
 
+/* Every player's names and club, for tagging news stories (22 Nov 2026).
+   From the last bootstrap on disk, cached until the next fetch. */
+let _names = null;
+export async function fplNamesPayload() {
+  if (_names && _names.at === state.fetchedAt) return _names.list;
+  let b;
+  try { b = JSON.parse(await readFile(join(DIR(), "bootstrap.json"), "utf8")); }
+  catch { return []; }
+  const tm = {}; (b.teams || []).forEach(t => { tm[t.id] = t.name; });
+  const list = (b.elements || []).map(e => ({ id: e.id, first: e.first_name, second: e.second_name, web: e.web_name, team: tm[e.team] || "" }));
+  _names = { at: state.fetchedAt, list };
+  return list;
+}
+
 /* One gameweek for the Planner's finished-week view (22 Nov 2026): each
    player's points, minutes, match events and that week's Dream Team, and
    the week's fixtures with their scores. A finished week never changes, so
