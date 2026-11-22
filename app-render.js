@@ -568,7 +568,10 @@ const SORTVAL=(p,k,g)=>{
   conv:(W.xg90>0?(W.g||0)/Math.max(.1,W.xg90*(W.mins||0)/90):0)}[k]);
 };
 function sortList(arr,key,dir,g){
-  return arr.sort((x,y)=>{const a=SORTVAL(x,key,g),b=SORTVAL(y,key,g);
+  /* H2 (Bundle E): each player's sort value is worked out once, not twice per
+     comparison (SORTVAL builds a 50-field object every call) */
+  const v=new Map(arr.map(p=>[p,SORTVAL(p,key,g)]));
+  return arr.sort((x,y)=>{const a=v.get(x),b=v.get(y);
     if(typeof a==="string")return dir==="asc"?a.localeCompare(b):b.localeCompare(a);
     return dir==="asc"?a-b:b-a;});
 }
@@ -3499,60 +3502,6 @@ function dcGiven(){
    then model performance against FPL's own prediction, fixture-rating
    accuracy, odds status, options, the signal key and the xFPL model page.
    ============================================================ */
-function modelVsFplHTML(){
-  const A=S.playerActuals;
-  const rows=[];let tm=0,tf=0,tn=0,tb=0,top=[];
-  for(let g=1;g<=38;g++){
-    if(!weekFinal(g))continue;
-    const live=S.predLive&&S.predLive.gw&&S.predLive.gw[g],back=S.predBack&&S.predBack.gw&&S.predBack.gw[g];
-    const snap=live||back;if(!snap||!snap.players||!A)continue;
-    const ep=snap.fplEp||null;
-    let n=0,em=0,ef=0,b=0;const both=[];
-    Object.entries(snap.players).forEach(([id,pred])=>{
-      const a=A[id]||A[+id];const pts=a?(a[g]??a[String(g)]):null;if(pts==null)return;
-      const f=ep?ep[id]:null;if(ep&&f==null)return;
-      n++;em+=Math.abs(pred-pts);b+=pred-pts;if(ep){ef+=Math.abs(f-pts);both.push({pred,f,pts});}});
-    if(!n)continue;
-    const t10=k=>both.slice().sort((x,y)=>y[k]-x[k]).slice(0,10).reduce((s,x)=>s+x.pts,0)/Math.min(10,both.length||1);
-    rows.push({g,src:live?"live":"backtest",n,mae:em/n,bias:b/n,fpl:ep?ef/n:null,tM:both.length?t10("pred"):null,tF:both.length?t10("f"):null});
-    if(ep){tm+=em;tf+=ef;tn+=n;tb+=b;}
-  }
-  if(!rows.length)return `<p class="note" style="padding:14px;margin:0">No finished gameweek with a saved prediction yet.</p>`;
-  const cmp=rows.filter(r=>r.fpl!=null);
-  const avg=(k)=>cmp.length?cmp.reduce((s,r)=>s+r[k],0)/cmp.length:null;
-  const cards=cmp.length?`<div class="fcgrid c5" style="padding:14px 14px 0">
-    ${figCard("Model Error",`Average miss per player, model against points scored, over ${tn.toLocaleString()} player-weeks where FPL's own figure was saved too.`,(tm/tn).toFixed(2),"points per player",cmp.map(r=>-r.mae),"#3DDC97","mint")}
-    ${figCard("FPL Error","The same players and weeks, FPL's own expected points (ep_next) taken before the deadline.",(tf/tn).toFixed(2),"points per player",cmp.map(r=>-r.fpl),"#8A8A8A")}
-    ${figCard("Model vs FPL","How much closer the model is on average (positive = the model is better).",`<span class="${tf>tm?"up":"dn"}">${sgn1((tf-tm)/tn)}</span>`,`${cmp.filter(r=>r.mae<r.fpl).length} of ${cmp.length} weeks better`,null,"#8A8A8A")}
-    ${figCard("Model Bias","Average of prediction minus points: positive means the model over-predicts.",sgn1(tb/tn),"points per player",null,"#8A8A8A")}
-    ${figCard("Top 10 Picks","What the model's ten highest predictions went on to score, on average, against FPL's ten.",avg("tM").toFixed(1),`FPL's top 10: ${avg("tF").toFixed(1)}`,null,"#8A8A8A")}
-  </div>`:"";
-  return cards+`<div class="scroll" style="padding:0 14px 14px"><table class="mkt"><thead><tr><th>Gameweek</th><th>Source</th><th>Players</th><th>Model error</th><th>FPL error</th><th>Bias</th><th>Model top 10</th><th>FPL top 10</th></tr></thead><tbody>
-    ${rows.map(r=>`<tr><td>GW${r.g}</td><td>${r.src==="live"?"before the deadline":"backtest"}</td><td>${r.n}</td>
-      <td><b class="${r.fpl!=null?(r.mae<=r.fpl?"up":"dn"):""}">${r.mae.toFixed(2)}</b></td><td>${r.fpl!=null?r.fpl.toFixed(2):"not saved"}</td>
-      <td>${sgn1(r.bias)}</td><td>${r.tM!=null?r.tM.toFixed(1):"—"}</td><td>${r.tF!=null?r.tF.toFixed(1):"—"}</td></tr>`).join("")}</tbody></table>
-    <p class="note" style="margin:8px 0 0">Backtest weeks (GW1-6) run today's model on the data as it stood before each deadline; FPL's figure for those weeks comes from the same pre-deadline data. Live weeks are snapshots taken an hour and 15 minutes before the deadline (FPL's figure saved with them from GW8).</p></div>`;
-}
-function fixtureAccuracyHTML(){
-  if(!S.model||!S.ratingsReady)return `<p class="note" style="padding:14px;margin:0">Ratings not ready.</p>`;
-  /* fixtures carry their model teams (ht, at) */
-  const done=(S.fixtures||[]).filter(f=>f.finished&&f.hs!=null&&f.as!=null&&f.ht&&f.at);
-  if(!done.length)return `<p class="note" style="padding:14px;margin:0">No finished matches yet.</p>`;
-  let n=0,e=0,eBase=0,hit=0,games=0,tot=0;
-  done.forEach(f=>{const h=f.ht,a=f.at;if(!h||!a)return;tot+=f.hs+f.as;});
-  const base=tot/(2*done.length);
-  done.forEach(f=>{const h=f.ht,a=f.at;if(!h||!a)return;
-    const ph=fdrCalc(h,a,true,"xgf"),pa=fdrCalc(a,h,false,"xgf");
-    e+=Math.abs(ph-f.hs)+Math.abs(pa-f.as);eBase+=Math.abs(base-f.hs)+Math.abs(base-f.as);n+=2;
-    const pr=ph-pa>0.25?1:pa-ph>0.25?-1:0,ac=f.hs>f.as?1:f.as>f.hs?-1:0;if(pr!==0){games++;if(pr===ac)hit++;}});
-  return `<div class="fcgrid c5" style="padding:14px">
-    ${figCard("Goals Error","Average miss on each side's goals, today's fixture ratings against this season's results.",(e/n).toFixed(2),"goals per side",null,"#3DDC97","mint")}
-    ${figCard("Baseline Error","The same misses if every side were given the season's average goals.",(eBase/n).toFixed(2),`average ${base.toFixed(2)} goals`,null,"#8A8A8A")}
-    ${figCard("Skill",`How much better than the baseline (positive = the ratings help).`,`<span class="${eBase>e?"up":"dn"}">${Math.round((1-e/eBase)*100)}%</span>`,"vs the average",null,"#8A8A8A")}
-    ${figCard("Favourite Won","When the ratings make one side clearly the better (a quarter of a goal or more), how often that side won.",games?Math.round(hit/games*100)+"%":"—",`${hit} of ${games} matches`,null,"#8A8A8A")}
-    ${figCard("Matches","Finished league matches this season used here.",String(done.length),"in-sample: the ratings have seen them",null,"#8A8A8A")}
-  </div>`;
-}
 function oddsStatusHTML(){
   const st=S.oddsState||"idle",fx=(S.odds||[]).length,teams=S.oddsTeams?Object.keys(S.oddsTeams).length/2:0;
   const props=S.propMarket?Object.keys(S.propMarket).length:0;
@@ -3565,14 +3514,6 @@ function oddsStatusHTML(){
     <span>Players with goal or assist prices: <b>${props}</b></span>
     <span>Player odds in the model: <b>${typeof PROP_W!=="undefined"&&PROP_W>0?"on, weight "+PROP_W:"off (re-test at GW12)"}</b></span>
     ${(S.oddsRejected||[]).length?`<span style="flex-basis:100%;color:var(--amber)">Ignored as stale or in-play: ${esc(S.oddsRejected.join(", "))}</span>`:""}
-  </div>`;
-}
-function optionsHTML(){
-  const drafts=LS.get("drafts")||[],ign=(S.ignored||[]).map(id=>S.model&&S.model.players.find(p=>p.id===id)).filter(Boolean);
-  return `<div class="pbody" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
-    <div><div class="note" style="margin-bottom:6px">Compare drafts</div>${drafts.length?`${drafts.map(d=>`<div class="mu" style="font-size:12.5px">${esc(d.label)}</div>`).join("")}<button style="margin-top:8px" onclick="act('cleardrafts')">Delete all ${drafts.length} drafts</button>`:'<span class="mu">None saved.</span>'}</div>
-    <div><div class="note" style="margin-bottom:6px">Not suggesting</div>${ign.length?`<span style="display:flex;gap:6px;flex-wrap:wrap">${ign.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}<button onclick="act('unignore')">Suggest all again</button></span>`:'<span class="mu">Every player can be suggested.</span>'}</div>
-    <div><div class="note" style="margin-bottom:6px">Shortlist</div>${S.stars.length?`<span class="mu">${S.stars.length} players</span> <button onclick="act('clearstars')">Clear</button>`:'<span class="mu">Empty. Tap ★ on Players to add.</span>'}</div>
   </div>`;
 }
 
@@ -3779,9 +3720,6 @@ function colChart(cats,bars,lines,o){
     ${legend.length>1||o.legend?`<div class="clegend">${legend.map(([n,c,k])=>`<span><i class="${k}" style="background:${c}"></i>${esc(n)}</span>`).join("")}</div>`:""}</div>`;
 }
 /* chance of playing as a ring */
-function ringSVG(p,size,color){const r=size/2-3,c=2*Math.PI*r;
-  return `<svg class="ring" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true"><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="#262626" stroke-width="4"/>
-  <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${(c*p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size/2} ${size/2})"/></svg>`;}
 const sgPos=p=>`<span class="sgpos p${p.pos}">${POS[p.pos]}</span>`;
 
 /* ============================================================
@@ -4120,7 +4058,7 @@ function pdRows(){
   if(show==="out")a=a.filter(p=>!mine.has(p.id));
   if(S.pStarters)a=a.filter(p=>p.avail>0&&(p.xMins||0)>=60);
   if(S.starOnly)a=a.filter(p=>S.stars.includes(p.id));
-  if(S.iconF.length)a=a.filter(p=>{const ic=signals(p,g).map(x=>x[0]);return S.iconF.every(k=>ic.includes(k));});
+  if(S.iconF.length)a=a.filter(p=>{const ic=signalsC(p,g).map(x=>x[0]);return S.iconF.every(k=>ic.includes(k));});
   return{g,mine,a};
 }
 /* the projection window as one of the three buttons, or 0 for a custom one */
@@ -4141,7 +4079,9 @@ function playerDataHTML(){
   /* sort: any column; name sorts A-Z */
   const key=S.sortKey==="name"||D.C[S.sortKey]?S.sortKey:"proj",dir=S.sortDir||"desc";
   const sv=p=>key==="name"?p.web_name:(D.C[key].val(p)??-1e9);
-  const rows=a.slice().sort((x,y)=>{const A=sv(x),B=sv(y);if(typeof A==="string")return dir==="asc"?A.localeCompare(B):B.localeCompare(A);return dir==="asc"?A-B:B-A;});
+  /* H2: values once per player, then sort */
+  const svm=new Map(a.map(p=>[p,sv(p)]));
+  const rows=a.slice().sort((x,y)=>{const A=svm.get(x),B=svm.get(y);if(typeof A==="string")return dir==="asc"?A.localeCompare(B):B.localeCompare(A);return dir==="asc"?A-B:B-A;});
   /* the strongest quarter and tenth of each column, over every player listed */
   const heat={};cols.forEach(k=>{const c=D.C[k];if(!c.heat)return;
     const vs=rows.map(c.val).filter(v=>v!=null&&isFinite(v)).sort((x,y)=>x-y);if(vs.length<8)return;
@@ -4164,7 +4104,7 @@ function playerDataHTML(){
     ${th("form",D.C.form.label,D.C.form.tip,"gs")}${th("xfpl","xFPL",D.C.xfpl.tip,"","GW"+g)}${th("proj","xPts",D.C.proj.tip,"",pdWinLabel(r))}
     ${th("value",D.C.value.label,D.C.value.tip,"gs")}${th("vsb",D.C.vsb.label,D.C.vsb.tip)}${th("own",D.C.own.label,D.C.own.tip)}${th("rivals",D.C.rivals.label,D.C.rivals.tip)}${th("xmins",D.C.xmins.label,D.C.xmins.tip)}
     ${D.extra.map((k,j)=>{const[l,s]=HSUB[k]||[D.C[k].label,""];return th(k,l,D.C[k].tip,j?"":"gs",s);}).join("")}<th></th></tr>`;
-  const body=rows.slice(0,lim).map(p=>{const on=ticks.includes(p.id),own=mine.has(p.id),sg=signals(p,g),proj=D.C.proj.val(p)||0;
+  const body=rows.slice(0,lim).map(p=>{const on=ticks.includes(p.id),own=mine.has(p.id),sg=signalsC(p,g),proj=D.C.proj.val(p)||0;
     return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
       <td class="nm"><span class="pcell"><span class="pdshirt">${kitSm(p,34)}<input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></span>
         <span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${role(p)}</span><span class="prow2">${dsBadge(sgTeamOf(p),13)} ${esc(p.teamName)} · ${POS[p.pos]}</span></span></span></td>
@@ -4197,7 +4137,7 @@ function pdHeadHTML(rows,r){
   const ticks=S.pTicks||[],g=S.model.next.id,win=pdWin(r);
   const nMine=rows.filter(p=>(S.squad||[]).includes(p.id)).length;
   /* signal counts over every player, whatever the filters */
-  const cnt={};S.model.players.forEach(p=>signals(p,VG()).forEach(([k])=>{cnt[k]=(cnt[k]||0)+1;}));
+  const cnt={};S.model.players.forEach(p=>signalsC(p,VG()).forEach(([k])=>{cnt[k]=(cnt[k]||0)+1;}));
   const top=pdPriceTop(),lo=clamp(S.lMin||3.5,3.5,top),hi=clamp(S.lMax||16,lo,top);
   const nMore=[(S.pShow||"all")!=="all",!win,(S.lWin||38)!==38,["rank","eo"].includes(S.pOwn),!!S.pStarters,!!S.starOnly].filter(Boolean).length;
   const any=nMore||S.lSearch||S.lTeam||lo>3.5||hi<top||S.iconF.length||S.lPos;

@@ -256,6 +256,14 @@ function sigH(){
   if(S.tab==="signals")return S.sigH==="ros"?Math.max(1,39-S.model.next.id):(S.sigH||3);
   return S.horizon||1;
 }
+/* H2 (Bundle E): Player Data asked for every player's signals on each
+   click; a memo keyed on everything they read makes repeats free */
+let _sigMemo={k:null,m:new Map()};
+function signalsC(p,g){
+  const k=[g,sigH(),(S.squad||[]).join("."),S.stamp,S.fplLive&&S.fplLive.fetchedAt,S.rivalsFeed&&S.rivalsFeed.updated,typeof planBank==="function"?planBank().toFixed(1):"",(S.ignored||[]).join(".")].join("|");
+  if(_sigMemo.k!==k||_sigMemo.model!==S.model)_sigMemo={k,model:S.model,m:new Map()};
+  let v=_sigMemo.m.get(p.id);if(!v){v=signals(p,g);_sigMemo.m.set(p.id,v);}return v;
+}
 function signals(p,g,noSell,hh){
   const out=[],h=hh||sigH(),mine=(S.squad||[]).includes(p.id);
   if(!S.model)return out;
