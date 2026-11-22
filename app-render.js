@@ -866,102 +866,6 @@ function swapCardHTML(m,g){
       <button style="flex:1" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button>
       <button onclick="act('ignore',${m.inn.id})" title="Stop suggesting this player">Ignore</button></span></div>`;
 }
-/* wave 8: the Transfers page retired; its tools live in the Planner's Top
-   Move pop-up (several players at once, best moves by position, the
-   players not being suggested). The five-week plan sits beside them, price
-   moves are in Price Watch and the radar became Players > Compare. */
-function transfersHTML(part){
-  const g=VG();
-  const outIds=S.outList.length?S.outList:null;
-  const all=bestSwaps(400);
-  const pool=outIds?all.filter(m=>outIds.includes(m.out.id)):all;
-  /* F41: the same bank as the header (planBank: the official figure for the
-     live week unless planned edits moved it), not the locally tracked S.bank,
-     which read £0.0 beside the header's £0.4 */
-  const budget=outIds
-    ? planBank()+outIds.reduce((a,i)=>{const q=S.model.players.find(p=>p.id===i);return a+(q?sellPrice(q):0);},0)
-    : planBank();
-  const posName={1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
-  const chosen=S.outList.map(i=>S.model.players.find(p=>p.id===i)).filter(Boolean);
-
-  const picker=`<div class="panel"><div class="phead"><h2>Plan your transfers</h2>
-      <span class="note">£${budget.toFixed(1)} available</span></div>
-    <div class="pbody">
-      <p class="note" style="margin:0 0 8px">Tap players to sell. Recommendations use the combined budget.</p>
-      ${[1,2,3,4].map(pos=>{const list=squadPlayers().filter(p=>p.pos===pos);if(!list.length)return"";
-        return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-          <span style="font-size:10px;color:var(--mute);font-weight:700;width:34px">${POS[pos]}</span>
-          ${list.slice().sort((a,b)=>b.price-a.price).map(p=>`<button class="chipbtn ${S.outList.includes(p.id)?"on":""}"
-            onclick="act('toggleout',${p.id})">${esc(p.web_name)} £${p.price.toFixed(1)}</button>`).join("")}</div>`;}).join("")}
-      ${chosen.length?`<p class="note" style="margin-top:8px">Selling ${chosen.map(p=>esc(p.web_name)).join(", ")} frees £${budget.toFixed(1)}.
-        <button style="margin-left:6px" onclick="act('clearout')">Clear</button></p>`:""}
-    </div></div>`;
-
-  const combo=S.outList.length>1?bestCombo(S.outList):null;
-  const comboPanel=combo&&combo.picks.length>1?`<div class="panel" style="border-color:var(--cyan)">
-      <div class="phead"><h2 style="color:var(--cyan)">Best combination · ${combo.picks.map(m=>POS[m.out.pos]).join(" + ")}</h2>
-        <span class="note">£${combo.freed.toFixed(1)} to spend · £${combo.left.toFixed(1)} left</span></div>
-      <div class="pbody">
-        ${combo.picks.map(m=>`<div class="tline" style="margin-bottom:8px">
-          ${kitSm(m.out,30)}
-          <span class="tp"><span class="n">${esc(m.out.web_name)}</span><span class="s">£${m.out.price.toFixed(1)} · ${(m.out.gw[g]?.pts||0).toFixed(1)}</span></span>
-          <span class="arrow">→</span>
-          ${kitSm(m.inn,30)}
-          <span class="tp"><span class="n">${esc(m.inn.web_name)}</span><span class="s">£${m.inn.price.toFixed(1)} · ${(m.inn.gw[g]?.pts||0).toFixed(1)}</span></span>
-          <span class="gain">+${m.gain.toFixed(1)}</span></div>`).join("")}
-        <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ink3);padding-top:9px">
-          <span style="font-weight:700">Combined gain</span>
-          <span class="gain" style="font-size:16px">+${combo.gain.toFixed(1)} pts</span></div>
-        <button style="margin-top:9px;width:100%" onclick="act('docombo')">Make these transfers</button>
-      </div></div>`:"";
-  /* F95 (bundle 8): players taken off the suggestions can be put back */
-  const ignoredP=(S.ignored||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
-  const ignoredPanel=ignoredP.length?`<div class="panel"><div class="phead"><h2>Not Suggesting</h2>
-      <button onclick="act('unignore')">Suggest all again</button></div>
-    <div class="pbody" style="display:flex;gap:8px;flex-wrap:wrap">${ignoredP.map(p=>`<button onclick="act('unignore',${p.id})" title="Suggest ${esc(p.web_name)} again">${esc(p.web_name)} ↺</button>`).join("")}</div></div>`:"";
-  const suggestTitle=ignoredPanel+`<div class="panel"><div class="phead"><h2>Best Moves by Position</h2>
-      <span class="note">up to four per position, each worth a transfer</span></div></div>`;
-  const byPos=[1,2,3,4].filter(pos=>part!=="bypos"||!S.sigPos||pos===S.sigPos).map(pos=>{
-    /* One recommendation per player being sold, not a list of near-identical
-       alternatives, and only where the gain is worth a transfer. */
-    const seen=new Set();
-    const list=pool.filter(m=>{
-      if(m.inn.pos!==pos||(S.squad||[]).includes(m.inn.id))return false;
-      if(m.gain<moveBar(g))return false;
-      if(seen.has(m.out.id))return false;
-      seen.add(m.out.id);return true;}).slice(0,4);
-    return `<div class="panel"><div class="phead"><h2>${posName[pos]}</h2>
-        <span class="note">${list.length?"top "+list.length:""}</span></div>
-      <div class="pbody">${list.length?`<div class="tgrid">${list.map(m=>swapCardHTML(m,g)).join("")}</div>`
-        :`<p class="note" style="margin:0">Head Scout recommends no transfers in this position.</p>`}</div></div>`;
-  }).join("");
-
-  /* Signals > Transfers (25 Oct 2026) shows the parts in their own reports */
-  if(part==="picker")return picker+comboPanel;
-  if(part==="bypos")return byPos;
-  if(part==="ignored")return ignoredPanel;
-  return picker+comboPanel+suggestTitle+byPos;
-}
-/* S3 (Stage 1, 19 Oct 2026): the five-week plan, one card per week */
-function planPanelHTML(){
-  if(!S.model||VG()!==S.model.next.id)return "";        // the plan starts from the live week
-  const P=planWeeks(5);if(!P)return "";
-  const card=x=>x.roll
-    ?`<div class="wkc roll"><div class="wkh"><span>GW${x.w}</span><span>${x.ft} FT</span></div>
-        <div class="wkm"><b>Roll the transfer</b><br><span class="mu">${x.best?`Best move ${esc(x.best.out.web_name)} → ${esc(x.best.inn.web_name)} ${sgn1(x.best.gain)}, under the ${x.bar.toFixed(2)} bar`:"No move improves the XI"}</span></div></div>`
-    :`<div class="wkc"><div class="wkh"><span>GW${x.w}</span><span>${x.ft} FT${x.hit?` · <span class="dn">−${x.hit}</span>`:""}</span></div>
-        <div class="wkm"><span class="dn">${esc(x.out.web_name)}</span> <span class="mu">${esc(x.out.teamName)} £${sellPrice(x.out).toFixed(1)}</span><br>
-        → <span class="up">${esc(x.inn.web_name)}</span> <span class="mu">${esc(x.inn.teamName)} £${x.inn.price.toFixed(1)}</span><br>
-        <b class="up">${sgn1(x.gain)}</b> <span class="mu">to the XI · bank £${x.bank.toFixed(1)}</span></div>
-        ${x.w===S.model.next.id?`<button style="margin-top:8px;width:100%" onclick="act('doswap',${x.out.id},${x.inn.id})">Make this move</button>`:""}</div>`;
-  const first=P.weeks[0].w,last=P.weeks[P.weeks.length-1].w;
-  return `<div class="panel"><div class="phead"><h2>Five-Week Plan</h2>
-      <span class="note">GW${first}–${last} · ${sgn1(P.total)} net</span></div>
-    <div class="pbody"><div class="wkgrid">${P.weeks.map(card).join("")}</div>
-      <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>How the plan is made</summary><div class="infobox">
-        <p style="margin:0">Week by week, the best single move is scored by what it adds to your best XI and captain in each week left in the plan, later weeks counting 0.85 of the week before. A move is made only if it beats ${FT_VALUE} (what saving the transfer is worth), plus the ${HIT}-point hit when no free transfer is left; otherwise the transfer is rolled. A swap on a bench player who would not play adds nothing. Only this week's move can be made from here; later weeks show what the plan expects.</p></div></details>
-    </div></div>`;
-}
 /* S6 (Stage 1, 19 Oct 2026): price pressure from FPL's own transfer counts */
 function priceMovesHTML(){
   if(!S.model||!S.players)return "";
@@ -1729,7 +1633,7 @@ function wkSpan(g,h){return h>1?`GW${g}–${Math.min(38,g+h-1)}`:`GW${g}`;}
 function modalHTML(title,body,opts){
   opts=opts||{};
   return `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="if(event.target===this)act('${opts.close||"popclose"}')">
-    <div class="mbox mfull${opts.wide?" wide":""}${opts.cls?" "+opts.cls:""}"><div class="mhead"><h2>${title}</h2>${opts.ctl||""}
+    <div class="mbox mfull${opts.wide?" wide":""}${opts.cls?" "+opts.cls:""}"><div class="mhead"><h2>${opts.icon?`<span class="mh-ic">${opts.icon}</span>`:""}${title}</h2>${opts.ctl||""}
       <button class="mx" onclick="act('${opts.close||"popclose"}')" aria-label="Close">${lic("x",18)}</button></div>
     <div class="mbody">${body}</div></div></div>`;
 }
@@ -1779,10 +1683,10 @@ function thisWeekHTML(){
   const block=(label,cls,rows,none)=>`<em class="pz-fh ${cls}">${label}</em>${rows.length?rows.join(""):`<span class="pz-none">${none||"None"}</span>`}`;
   /* Top Move */
   const m=D.moves[0];
-  const move=m?card("move","circle-arrow-up","#3DDC97","Top Move",
+  const move=m?card("move","arrow-right-left","#3DDC97","Transfers",
       `<span class="pz-mv">${photoHTML(m.out,"pz-ph lg")}${lic("arrow-right",16)}${photoHTML(m.inn,"pz-ph lg")}<span><b>${esc(m.out.web_name)} → ${esc(m.inn.web_name)}</b><i class="up">${sgn1(m.gain)} pts · £${m.inn.price.toFixed(1)} · ${esc(m.inn.teamName)}</i></span></span>`,
       D.moves.slice(1,4).map(x=>`<span class="pz-alt">${photoHTML(x.out,"pz-ph")}${lic("arrow-right",12)}${photoHTML(x.inn,"pz-ph")}<span><b>${esc(x.out.web_name)} → ${esc(x.inn.web_name)}</b><i>£${x.inn.price.toFixed(1)} · ${esc(x.inn.teamName)}</i></span><b class="up">${sgn1(x.gain)}</b></span>`).join(""))
-    :card("move","circle-arrow-up","#3DDC97","Top Move","Hold",`<span class="mu">No single move improves your XI over ${wkSpan(g,h)}</span>`);
+    :card("move","arrow-right-left","#3DDC97","Transfers","Hold",`<span class="mu">No single move improves your XI over ${wkSpan(g,h)}</span>`);
   /* Captain: the top three options, doubled, as the Captain pop-up */
   const caps=D.caps.slice(0,3).map(p=>[p,hPts(p,g,h)*2]),cmx=Math.max(0.1,...caps.map(c=>c[1]));
   const cap=caps.length?card("cap","crown","#FFB020","Captain",`${esc(caps[0][0].web_name)} <span class="amber">${caps[0][1].toFixed(1)}</span>`,
@@ -1819,14 +1723,15 @@ function thisWeekHTML(){
   const fr=p=>row(p,barI(p.form/9*100,p.form>=5?"#FF8A3D":"#5A3A26"),p.form.toFixed(1));
   const form=card("form","flame","#FF8A3D","Form",byForm.length?`${esc(byForm[0].web_name)} <span class="up">${byForm[0].form.toFixed(1)}</span>`:"—",
     block("Best","up",byForm.slice(0,3).map(fr))+block("Worst","dn",byForm.slice(-3).reverse().map(fr)));
-  /* Rival: what rivals own that you don't, and your players they don't */
-  const R=D.R,diffs=R?squadPlayers().map(p=>({p,k:R.own[p.id]||0})).sort((a,b)=>a.k-b.k||b.p.gw[g]?.pts-a.p.gw[g]?.pts):[];
-  const rv=(x,col)=>row(x.p,barI(x.k/R.n*100,col),`${x.k}/${R.n}`);
-  const rival=R?card("rival","swords","#B388FF","Rivals",diffs[0]?esc(diffs[0].p.web_name):"No differentials",
-      block("Differentials","up",diffs.slice(0,3).map(x=>rv(x,"#5B4A80")))+block("Threats","dn",D.threats.slice(0,3).map(t=>rv(t,"#B388FF"))))
-    :card("rival","swords","#B388FF","Rivals","—",`<span class="mu">League feed not loaded</span>`);
+  /* Transfer Record (22 Nov 2026, in the Rivals card's place): the season's
+     transfers judged on points while held, the best and the worst */
+  const TL=transferLog().filter(x=>!x.chip&&x.held!=null),tnet=transferLog().reduce((a,x)=>a+(x.held||0),0);
+  const tbs=TL.slice().sort((a,b)=>b.held-a.held),trr=x=>row(x.inn,`<span class="pz-xs">for ${esc(x.out.web_name)} · GW${x.e}</span>`,(x.held>=0?"+":"−")+Math.abs(Math.round(x.held)),x.held>=0?"up":"dn");
+  const trec=TL.length?card("trec","arrow-right-left","#7AA2FF","Transfer Record",`<span class="${tnet>=0?"up":"dn"}">${tnet>=0?"+":"−"}${Math.abs(Math.round(tnet))}</span> <small>pts from transfers</small>`,
+      block("Best","up",tbs.slice(0,2).map(trr))+block("Worst","dn",tbs.slice(-2).reverse().filter(x=>x.held<0).map(trr),"None lost points"))
+    :card("trec","arrow-right-left","#7AA2FF","Transfer Record","—",`<span class="mu">No transfers yet</span>`);
   return `<section class="pz-sec"><div class="pz-sh"><h2>This Week</h2><button class="fci" aria-label="About" data-tip="This gameweek at a glance. Open a card for the detail.">i</button></div>
-    <div class="pz-ins">${move}${cap}${warn}${strength}${price}${outlook}${form}${rival}</div></section>`;
+    <div class="pz-ins">${move}${cap}${warn}${strength}${price}${outlook}${form}${trec}</div></section>`;
 }
 /* what each strip card opens */
 function popHTML(){
@@ -1837,14 +1742,9 @@ function popHTML(){
   const ctl=hzHTML(h,"weekh");
   /* full-screen pop-ups (20 Nov 2026): long ones split into tabs so each fits */
   const tabs=(list,cur)=>`<span class="hz poptabs" role="group" aria-label="Section">${list.map(([k2,n])=>`<button class="${cur===k2?"on":""}" aria-pressed="${cur===k2}" onclick="act('poptab','${k2}')">${n}</button>`).join("")}</span>`;
-  if(k==="move"){
-    const T=["best","plan","fund","all"].includes(S.popTab)?S.popTab:"best";
-    const body=T==="plan"?planPanelHTML():T==="fund"?fundingHTML():T==="all"?`<div class="xfgrid"><div>${transfersHTML("picker")}${transfersHTML("ignored")}</div><div class="xfpos">${transfersHTML("bypos")}</div></div>`
-      :(D.moves.length?`<div class="mvgrid">${D.moves.map(m=>swapCardHTML(m,g)).join("")}</div>`:`<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p>`)
-        +`<p class="note" style="margin-top:10px">Each move is scored on your best XI plus captain, week by week${h>1?" (later weeks count for a little less)":""}, against your current team.</p>`;
-    return modalHTML(`Top Moves · ${wkSpan(g,h)}`,body,{wide:true,ctl:tabs([["best","Best Moves"],["plan","Five-Week Plan"],["fund","Funding"],["all","All Transfers"]],T)});
-  }
-  if(k==="cap")return modalHTML("Captain",captaincyHTML()||`<p class="note">Captaincy is set for the next deadline.</p>`,{});
+  if(k==="move")return transfersPopHTML();
+  if(k==="cap")return captainPopHTML();
+  if(k==="trec")return transferRecordHTML();
   if(k==="price"){
     const row=p=>{const l=L(p),pr=(l.pcProj||[]).map(([o,v,lk])=>`<td>${Math.round(v)}%</td>`).join("");
       return `<tr${D.mine.has(p.id)?' class="me"':""}><td>${esc(p.web_name)} <span class="mu">${esc(p.teamName)}</span></td><td>£${p.price.toFixed(1)}</td>
@@ -1876,18 +1776,287 @@ function popHTML(){
         <td>${m?`${esc(m.inn.web_name)} <b class="up">${sgn1(m.gain)}</b> <button class="mini" onclick="act('doswap',${p.id},${m.inn.id})">Make</button>`:"—"}</td></tr>`;}).join("")}</tbody></table>`
       :`<p class="note">Every player in your squad is fit and expected to start.</p>`)+dashHTML(["risk"]),{wide:true});
   }
-  if(k==="rival"){
-    if(!D.R)return modalHTML("Rival Threat",`<p class="note">The league feed has not loaded.</p>`,{});
-    const top=D.threats.slice(0,12);
-    const myOwn=squadPlayers().map(p=>({p,k:D.R.own[p.id]||0})).sort((a,b)=>a.k-b.k);
-    const t=(rows,head)=>`<table class="mkt"><thead><tr><th>Player</th><th>${head}</th><th>Predicted ${wkSpan(g,h)}</th><th>Price</th><th>Overall</th></tr></thead><tbody>
-      ${rows.map(x=>`<tr><td>${esc(x.p.web_name)} <span class="mu">${esc(x.p.teamName)}</span></td><td>${x.k}/${D.R.n}</td><td>${hPts(x.p,g,h).toFixed(1)}</td><td>£${x.p.price.toFixed(1)}</td><td>${x.p.owned}%</td></tr>`).join("")}</tbody></table>`;
-    return modalHTML("Rival Threat",`<div class="pmgrid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
-      <div><div class="note">Owned by your rivals, not you</div>${t(top,"Rivals")}</div>
-      <div><div class="note">Your players, fewest rivals first (your differentials)</div>${t(myOwn,"Rivals")}</div></div>
-      <p class="note" style="margin-top:10px">From each rival's latest published squad in your mini-league (${D.R.n} rivals).</p>`,{wide:true});
-  }
   return "";
+}
+/* ============================================================
+   THIS WEEK BATCH 2 (22 Nov 2026, Andy approved the mocks): Transfers
+   (Optimal Moves, Plan, Sell & Fund, Rivals), Captain (This Week, Season
+   Record) and Transfer Record (in the Rivals card's place). Built from the
+   ds- parts. Every action is the Planner's own (doswap, cap, vice,
+   ignore, toggleout, docombo, dofund), so a move made here is in the plan.
+   ============================================================ */
+const twSg=v=>(v>=0?"+":"−")+Math.abs(v).toFixed(1);
+function twField(){const F=S.field;return F&&F.gws?F.gws[F.latest]||null:null;}
+const twMap=()=>new Map(S.model.players.map(p=>[p.id,p]));
+/* a given swap's gain over the h weeks from the gameweek in view */
+function twPairGain(m,h){const g=VG();return xiGain(S.squad||[],m.out.id,m.inn.id,g,Math.min(h,39-g),twMap());}
+const twTabs=(list,cur)=>`<span class="hz poptabs" role="group" aria-label="Section">${list.map(([k,n])=>`<button class="${cur===k?"on":""}" aria-pressed="${cur===k}" onclick="act('poptab','${k}')">${n}</button>`).join("")}</span>`;
+const twBar=(pct,col)=>`<span class="tw-bt"><i style="width:${clamp(Math.round(pct),0,100)}%;${col?`background:${col}`:""}"></i></span>`;
+
+/* ---------- Transfers ---------- */
+function transfersPopHTML(){
+  const g=VG(),T=["best","plan","fund","rivals"].includes(S.popTab)?S.popTab:"best";
+  const ft=freeWeek(g)?"free week":`${freeLeft(g)} FT`;
+  const hz=T==="plan"?hz4HTML(S.planH||5,"planh",[1,"ROS"]):T==="fund"?"":hz4HTML(S.twH||1,"twh");
+  const body=T==="plan"?twPlanHTML(g):T==="fund"?twFundHTML(g):T==="rivals"?twRivalsHTML(g):twBestHTML(g);
+  return modalHTML("Transfers",body,{wide:true,cls:"tw",icon:lic("arrow-right-left",18),
+    ctl:twTabs([["best","Optimal Moves"],["plan","Plan"],["fund","Sell &amp; Fund"],["rivals","Rivals"]],T)+`<span class="tw-sp"></span><span class="tw-ft">${lic("wallet",14)} £${planBank().toFixed(1)} · ${ft}</span>${hz}`});
+}
+function twSide(p,role,g){const L=fplLive(p)||{},pc=L.pcp,q=p.gw[g]||{};
+  return `<div class="tw-side ${role}"><div class="tw-top">${dsFace(p,"xl")}<div class="tw-who"><span class="tw-tag ${role}">${role==="out"?"OUT":"IN"}</span><b>${esc(p.web_name)}</b>
+    <i>${esc(p.teamName)} · ${POSL[p.pos]} · ${role==="out"?`sells £${sellPrice(p).toFixed(1)}`:`£${p.price.toFixed(1)}`}</i>
+    <span class="tw-xp"><em>GW${g}</em><b>${(q.pts||0).toFixed(1)}</b>${pc!=null?`<span class="tw-pc ${pc>=0?"up":"dn"}" title="FPL's progress to tonight's price change">${pc>=0?"▲":"▼"} ${Math.abs(Math.round(pc))}%</span>`:""}</span></div></div>${fxNext(p,g,5,"sm")}</div>`;}
+function twBestHTML(g){
+  const H=S.twH||1,h=hzWeeks(H,g),pf=S.twPos||0,all=bestSwaps(40,h),list=all.filter(m=>!pf||m.out.pos===pf).slice(0,10);
+  const R=rivalOwn(),F=twField();
+  const pos=`<span class="hz tw-pos">${[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]].map(([v,n])=>`<button class="${pf===v?"on":""}" onclick="act('twpos',${v})">${n}</button>`).join("")}</span>`;
+  const ign=(S.ignored||[]).map(id=>S.model.players.find(p=>p.id===id)).filter(Boolean);
+  const others=F&&F.top10k&&F.top10k.pairs.length?`<div class="tw-oth">${lic("users",13)}<span>Top 10k this week</span>${F.top10k.pairs.slice(0,3).map(([o,i,c])=>{const po=S.model.players.find(p=>p.id===o),pi=S.model.players.find(p=>p.id===i);
+      return po&&pi?`<span class="tw-op">${dsFace(po,"xs")}${lic("arrow-right",11)}${dsFace(pi,"xs")}<b class="ds-fig">${c}%</b></span>`:"";}).join("")}</div>`:"";
+  const foot=`${others}${ign.length?`<div class="tw-ign">${lic("ban",13)}<span>Not suggesting</span>${ign.map(p=>`<button onclick="act('unignore',${p.id})">${esc(p.web_name)} ${lic("refresh-cw",12)}</button>`).join("")}<button class="lnk" onclick="act('unignore')">Suggest all again</button></div>`:""}`;
+  if(!list.length)return `<div class="tw-grid"><section class="panel tw-hero tw-none">${dsHead("circle-arrow-up","Hold")}<p class="note">No single move improves your XI over ${wkSpan(g,h)}. Roll the transfer.</p></section>
+    <section class="panel tw-list"><div class="tw-lh">${pos}</div>${foot}</section></div>`;
+  const sel=list.find(m=>m.out.id+"-"+m.inn.id===S.twSel)||list[0],mx=Math.max(.1,...list.map(m=>m.gain));
+  const hzs=HZ4.map(x=>{const v=twPairGain(sel,hzWeeks(x,g));return `<span class="${String(x)===String(H)?"on":""}"><em>${x==="ROS"?"ROS":x+" GW"}</em><b class="${v>=0?"up":"dn"}">${twSg(v)}</b></span>`;}).join("");
+  const bankAfter=planBank()+sel.sell-sel.inn.price,cost=freeLeft(g)>0?(freeWeek(g)?"free week":"1 FT · no hit"):`−${HIT} hit`;
+  const own=p=>R&&R.n?(R.own[p.id]||0):0;
+  const bf=[["Form",sel.out.form,sel.inn.form,v=>v.toFixed(1)],["xMins",sel.out.xMins||0,sel.inn.xMins||0,v=>Math.round(v)+"′"],["xGI / 90",(sel.out.xg90||0)+(sel.out.xa90||0),(sel.inn.xg90||0)+(sel.inn.xa90||0),v=>v.toFixed(2)],
+    ["Points",sel.out.total||0,sel.inn.total||0,v=>Math.round(v)],["Owned",sel.out.owned||0,sel.inn.owned||0,v=>v+"%"]];
+  if(R&&R.n)bf.push(["Rivals own",own(sel.out),own(sel.inn),v=>v+"/"+R.n]);
+  const fly=bf.map(([l,a,b,f])=>{const m=Math.max(a,b,1e-9);return `<div class="tw-bf"><b class="${a>b?"hi":""}">${f(a)}</b><span class="tw-bfl"><i style="width:${a/m*100}%"></i></span><em>${l}</em><span class="tw-bfr"><i style="width:${b/m*100}%"></i></span><b class="${b>a?"hi":""}">${f(b)}</b></div>`;}).join("");
+  const hero=`<section class="panel tw-hero"><div class="tw-duel">${twSide(sel.out,"out",g)}<div class="tw-mid"><span class="tw-arrow">${lic("arrow-right",22)}</span><b class="${sel.gain>=0?"up":"dn"}">${twSg(sel.gain)}</b><i>${wkSpan(g,h)}</i></div>${twSide(sel.inn,"in",g)}</div>
+    <div class="tw-hzs">${hzs}<span class="tw-kv"><em>Bank after</em><b>£${bankAfter.toFixed(1)}</b></span><span class="tw-kv"><em>Cost</em><b>${cost}</b></span></div>
+    ${lastNextHTML([sel.out,sel.inn],{h:250})}<div class="tw-bfly">${fly}</div>
+    <div class="tw-acts"><button class="pri" onclick="act('doswap',${sel.out.id},${sel.inn.id})">${lic("check",15)} Make this transfer</button><button onclick="act('cmpmove',${sel.out.id},${sel.inn.id})">${lic("arrow-right-left",15)} Compare</button><button onclick="act('ignore',${sel.inn.id})">${lic("ban",15)} Ignore ${esc(sel.inn.web_name)}</button></div></section>`;
+  const rows=list.map((m,k)=>`<div class="tw-row${m===sel?" sel":""}" onclick="act('twsel','${m.out.id}-${m.inn.id}')"><span class="tw-rk">${k+1}</span>
+    <span class="tw-pair">${dsFace(m.out)}<span class="tw-nm out"><b>${esc(m.out.web_name)}</b><i>${esc(m.out.teamName)} · ${POSL[m.out.pos]}</i></span>${lic("arrow-right",14)}${dsFace(m.inn)}<span class="tw-nm"><b>${esc(m.inn.web_name)}</b><i>${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)}</i></span></span>
+    ${fxNext(m.inn,g,3,"sm")}<span class="tw-sig">${sigHTML(m.inn,g)}</span><span class="tw-gb">${twBar(m.gain/mx*100)}<b class="${m.gain>=0?"up":"dn"}">${twSg(m.gain)}</b></span>
+    <button class="tw-go" title="Make this transfer" onclick="event.stopPropagation();act('doswap',${m.out.id},${m.inn.id})">${lic("check",15)}</button></div>`).join("");
+  return `<div class="tw-grid">${hero}<section class="panel tw-list"><div class="tw-lh">${pos}<span class="ds-sub">${list.length} moves</span></div><div class="tw-rows">${rows}</div>${foot}</section></div>`;
+}
+function twPlanHTML(g){
+  if(!S.model||g!==S.model.next.id)return `<p class="note">The plan starts from the next deadline (GW${S.model.next.id}).</p>`;
+  const H=+(S.planH||5)===3?3:5,P=planWeeks(H);if(!P)return `<p class="note">No plan for this squad.</p>`;
+  const moves=P.weeks.filter(w=>!w.roll),hits=moves.reduce((a,w)=>a+(w.hit||0),0),lastBank=moves.length?moves[moves.length-1].bank:planBank(),lastW=P.weeks[P.weeks.length-1];
+  const ftAfter=Math.min(FT_MAX,lastW.roll?lastW.ft+1:Math.max(0,lastW.ft-1)+1);
+  const tiles=`<div class="ds-tiles tw-pt">${dsTile("Net gain",twSg(P.total),`pts over ${P.weeks.length} GW`,P.total>=0?"up":"dn")}${dsTile("Transfers",moves.length,hits?`−${hits} in hits`:"no hits")}${dsTile("Bank at the end","£"+lastBank.toFixed(1),`from £${planBank().toFixed(1)}`)}${dsTile("Free transfers after",ftAfter,`GW${lastW.w+1}`)}</div>`;
+  const card=x=>x.roll?`<div class="tw-wk roll"><div class="tw-wh"><b>GW${x.w}</b><span class="tw-fts">${x.ft} FT</span></div><div class="tw-roll">${lic("save",26)}<b>Roll</b><i>${Math.min(FT_MAX,x.ft+1)} FT next week</i></div>
+      <div class="tw-under">${x.best?`${esc(x.best.out.web_name)} → ${esc(x.best.inn.web_name)} ${twSg(x.best.gain)}<br><span>under the ${x.bar.toFixed(2)} bar</span>`:"No move improves the XI"}</div></div>`
+    :`<div class="tw-wk${x.w===g?" now":""}"><div class="tw-wh"><b>GW${x.w}</b><span class="tw-fts">${x.ft} FT${x.hit?` · −${x.hit}`:""}</span></div>
+      <div class="tw-wv">${dsFace(x.out,"md")}<span class="tw-arr">${lic("arrow-right",16)}</span>${dsFace(x.inn,"md")}</div>
+      <div class="tw-wn"><b class="dn">${esc(x.out.web_name)} <i>sells £${(x.sell??sellPrice(x.out)).toFixed(1)}</i></b><b class="up">${esc(x.inn.web_name)} <i>£${x.inn.price.toFixed(1)}</i></b></div>
+      <div class="tw-wg"><b class="up">${twSg(x.gain)}</b><i>bank £${x.bank.toFixed(1)}</i></div>
+      ${x.w===g?`<button class="pri" onclick="act('doswap',${x.out.id},${x.inn.id})">${lic("check",14)} Make this move</button>`:`<span class="tw-later">Planned</span>`}</div>`;
+  const byId=twMap(),base=P.weeks.map(x=>xiTotal(S.squad,x.w,byId)),plan=P.weeks.map(x=>xiTotal(x.squad||S.squad,x.w,byId));
+  const lo=Math.floor(Math.min(...base,...plan)/10)*10-5,hi=Math.ceil(Math.max(...base,...plan)/10)*10+5,Wd=1400,Hh=330,pl=40,pb=24,pt=18,slot=(Wd-pl-10)/P.weeks.length,y=v=>pt+(Hh-pt-pb)*(1-(v-lo)/((hi-lo)||1));
+  let svg="";for(let v=lo;v<=hi;v+=Math.max(5,Math.round((hi-lo)/4/5)*5))svg+=`<line class="cgrid" x1="${pl}" x2="${Wd-10}" y1="${y(v)}" y2="${y(v)}"/><text class="cax" x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  P.weeks.forEach((x,k)=>{const x0=pl+slot*k,bw=Math.min(60,slot/3);svg+=`<rect x="${x0+slot/2-bw-3}" y="${y(base[k])}" width="${bw}" height="${y(lo)-y(base[k])}" rx="5" fill="#3A3A3A"/><rect x="${x0+slot/2+3}" y="${y(plan[k])}" width="${bw}" height="${y(lo)-y(plan[k])}" rx="5" fill="#3DDC97"/>
+    <text x="${x0+slot/2+3+bw/2}" y="${y(plan[k])-6}" text-anchor="middle" class="ds-cd ${plan[k]>=base[k]?"up":"dn"}">${twSg(plan[k]-base[k])}</text><text class="cax" x="${x0+slot/2}" y="${Hh-6}" text-anchor="middle">GW${x.w}</text>`;});
+  return `<div class="tw-plan">${tiles}<div class="tw-weeks" style="grid-template-columns:repeat(${P.weeks.length},1fr)">${P.weeks.map(card).join("")}</div>
+    <section class="panel tw-pc"><div class="ds-lg"><span><i style="background:#3A3A3A"></i>No transfers</span><span><i style="background:#3DDC97"></i>With the plan</span><span class="ds-lgr">XI predicted points</span></div><svg class="chart" viewBox="0 0 ${Wd} ${Hh}" role="img" aria-label="XI points with and without the plan">${svg}</svg></section></div>`;
+}
+/* funding pairs: a sale that pays for an upgrade the bank alone could not
+   cover, scored over h weeks (was fundingHTML's, 22 Nov moved here) */
+let _fundCache=null;
+function fundMoves(h){
+  const key=[h,planBank(),S.squad.join("."),(S.ignored||[]).join(".")].join("|");
+  if(_fundCache&&_fundCache.key===key&&_fundCache.model===S.model)return _fundCache;
+  const single=(bestSwaps(1,h)[0]||{gain:0}).gain,sq=S.squad,res=[];
+  for(let i=0;i<sq.length;i++)for(let j=i+1;j<sq.length;j++){
+    const c=bestCombo([sq[i],sq[j]],h,6);
+    if(!c||c.picks.length!==2||c.gain<single+0.5)continue;
+    const cost=m=>m.inn.price-m.sell,bank=planBank();
+    if(c.picks.some(m=>cost(m)<-0.05)&&c.picks.some(m=>cost(m)>bank+0.05))res.push(c);}
+  res.sort((a,b)=>b.gain-a.gain);
+  return _fundCache={key,model:S.model,res:res.slice(0,3),single};
+}
+function twLeg(m){const d=m.inn.price-m.sell;
+  return `<div class="tw-leg">${dsFace(m.out)}<span class="tw-nm out"><b>${esc(m.out.web_name)}</b><i>${esc(m.out.teamName)}</i></span>${lic("arrow-right",14)}${dsFace(m.inn)}<span class="tw-nm"><b>${esc(m.inn.web_name)}</b><i>${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)}</i></span>
+    <span class="tw-mn ${d<0?"up":"dn"}">${d<0?"saves":"costs"} £${Math.abs(d).toFixed(1)}</span><b class="${m.gain>=0?"up":"dn"}">${twSg(m.gain)}</b></div>`;}
+function twFundHTML(g){
+  if(!S.model||g!==S.model.next.id)return `<p class="note">Sell &amp; Fund works on the next deadline (GW${S.model.next.id}).</p>`;
+  const h=3,sel=S.outList||[],sp=squadPlayers(),spend=planBank()+sel.reduce((a,i)=>{const q=sp.find(p=>p.id===i);return a+(q?sellPrice(q):0);},0);
+  const pick=`<section class="panel tw-pick"><div class="tw-ph2"><b>Pick players to sell</b><span class="tw-fund"><em>To spend</em><b>£${spend.toFixed(1)}</b><i>bank £${planBank().toFixed(1)}${sel.length?` + sales £${(spend-planBank()).toFixed(1)}`:""}</i></span></div>
+    ${[1,2,3,4].map(pos=>`<div class="tw-prow"><span class="tw-pl">${POSL[pos]}</span>${sp.filter(p=>p.pos===pos).sort((a,b)=>b.price-a.price).map(p=>{const on=sel.includes(p.id);
+      return `<button class="tw-pk${on?" on":""}" onclick="act('toggleout',${p.id})" aria-pressed="${on}">${on?`<span class="tw-sell">SELL</span>`:""}${dsFace(p,"md")}<b>${esc(p.web_name)}</b><i>£${sellPrice(p).toFixed(1)}</i></button>`;}).join("")}</div>`).join("")}
+    <div class="tw-pf">${sel.length?`<button onclick="act('clearout')">Clear</button><span>${sel.length} selected</span>`:`<span>Tap two or more to see the best combination</span>`}</div></section>`;
+  const c=sel.length>1?bestCombo(sel,h):null,hit=c?Math.max(0,c.picks.length-freeLeft(g))*HIT:0;
+  const combo=`<section class="panel tw-combo">${dsHead("arrow-right-left","Best combination",sel.length>1?`<span class="ds-sub">selling ${sel.map(i=>esc((sp.find(p=>p.id===i)||{}).web_name||"")).join(" + ")}</span>`:"")}
+    ${c&&c.picks.length?`<div class="tw-cb">${c.picks.map(twLeg).join("")}</div><div class="tw-sum"><span><em>Gain</em><b class="up">${twSg(c.gain)}</b></span><span><em>Hit</em><b class="${hit?"dn":""}">${hit?"−"+hit:"none"}</b></span><span><em>Net</em><b class="${c.gain-hit>=0?"up":"dn"}">${twSg(c.gain-hit)}</b></span><span><em>Left</em><b>£${c.left.toFixed(1)}</b></span><button class="pri" onclick="act('docombo')">${lic("check",14)} Make ${c.picks.length===2?"both":"all"}</button></div>`
+      :`<p class="note">${sel.length>1?"No combination improves the XI for that money.":"Pick players on the left."}</p>`}</section>`;
+  let fund;
+  if(!S.fundOn)fund=`<section class="panel tw-fp">${dsHead("wallet","Funding moves")}<button class="pri tw-fon" onclick="act('fundon')">Work out funding moves</button></section>`;
+  else{const F=fundMoves(h);
+    fund=`<section class="panel tw-fp">${dsHead("wallet","Funding moves",`<span class="ds-sub">a sale that pays for an upgrade · best single move ${twSg(F.single)}</span>`)}
+      <div class="tw-fgrid">${F.res.length?F.res.map(c2=>{const hh=freeLeft(g)<2?HIT:0;return `<div class="tw-fc">${c2.picks.map(twLeg).join("")}<div class="tw-sum sm"><span><em>Gain</em><b class="up">${twSg(c2.gain)}</b></span><span><em>Net of hit</em><b class="${c2.gain-hh>=0?"up":"dn"}">${twSg(c2.gain-hh)}</b></span><span><em>Left</em><b>£${c2.left.toFixed(1)}</b></span><button onclick="act('dofund',${c2.picks[0].out.id},${c2.picks[1].out.id})">${lic("check",13)} Make both</button></div></div>`;}).join("")
+        :`<p class="note">No downgrade that pays for an upgrade beats the best single move by half a point over ${h} GW.</p>`}</div></section>`;}
+  return `<div class="tw-sf">${pick}<div class="tw-sfr">${combo}${fund}</div></div>`;
+}
+/* Rivals (22 Nov 2026, the Rivals card moved here): players your rivals own
+   and you don't, with the best affordable way to cover each, and your
+   differentials worth keeping */
+function twRivalsHTML(g){
+  const R=rivalOwn();if(!R||!R.n)return `<p class="note">The league feed has not loaded.</p>`;
+  const h=hzWeeks(S.twH||1,g),byId=twMap(),sq=S.squad||[],mine=new Set(sq),sp=squadPlayers();
+  const club={};sp.forEach(p=>club[p.team]=(club[p.team]||0)+1);
+  const cover=t=>{let best=null;sp.filter(o=>o.pos===t.pos).forEach(o=>{if(planBank()+sellPrice(o)+1e-9<t.price)return;if(o.team!==t.team&&(club[t.team]||0)>=RULES.clubMax)return;
+    const gn=xiGain(sq,o.id,t.id,g,Math.min(h,39-g),byId);if(!best||gn>best.g)best={o,g:gn};});return best;};
+  const thr=Object.keys(R.own).map(id=>({p:byId.get(+id),k:R.own[id]})).filter(x=>x.p&&!mine.has(x.p.id)).sort((a,b)=>b.k-a.k||hPts(b.p,g,h)-hPts(a.p,g,h)).slice(0,8);
+  const dif=sp.map(p=>({p,k:R.own[p.id]||0})).sort((a,b)=>a.k-b.k||hPts(b.p,g,h)-hPts(a.p,g,h)).slice(0,8);
+  const row=(x,kind)=>{const c=kind==="t"?cover(x.p):null;
+    return `<div class="tw-rv">${dsFace(x.p)}<span class="tw-nm"><b>${esc(x.p.web_name)}</b><i>${esc(x.p.teamName)} · ${POSL[x.p.pos]} · £${x.p.price.toFixed(1)}</i></span>
+      <span class="tw-rb">${twBar(x.k/R.n*100,kind==="t"?"#B388FF":"#5B4A80")}<b class="ds-fig">${x.k}/${R.n}</b></span>${dsFig(hPts(x.p,g,h).toFixed(1))}
+      ${kind==="t"?(c?`<span class="tw-cov">${dsFace(c.o,"xs")}<span class="ds-sub">for ${esc(c.o.web_name)}</span><b class="ds-fig ${c.g>=0?"up":"dn"}">${twSg(c.g)}</b><button class="tw-go sm" title="Make this transfer" onclick="act('doswap',${c.o.id},${x.p.id})">${lic("check",13)}</button></span>`:`<span class="ds-sub">can't afford</span>`)
+        :`<span class="tw-keep ${x.k===0?"on":""}">${x.k===0?"no rival has him":x.k===1?"1 rival":x.k+" rivals"}</span>`}</div>`;};
+  const hd=t=>`<div class="tw-rv tw-rvh ds-th"><span></span><span>Player</span><span>Rivals own</span><span>${wkSpan(g,h)}</span><span>${t}</span></div>`;
+  return `<div class="tw-rg"><section class="panel tw-col">${dsHead("triangle-alert","Threats to cover",`<span class="ds-sub">owned by your rivals, not you</span>`)}${hd("Best cover")}${thr.map(x=>row(x,"t")).join("")}</section>
+    <section class="panel tw-col">${dsHead("gem","Your differentials",`<span class="ds-sub">fewest rivals own · ${R.n} rivals</span>`)}${hd("")}${dif.map(x=>row(x,"d")).join("")}</section></div>`;
+}
+
+/* ---------- Captain ---------- */
+function captainPopHTML(){
+  const T=S.popTab==="record"?"record":"week",g=VG();
+  const tabs=twTabs([["week","This Week"],["record","Season Record"]],T);
+  if(T==="record")return modalHTML("Captain",capRecordHTML(),{wide:true,cls:"tw ca",icon:lic("crown",18),ctl:tabs+`<span class="tw-sp"></span><span class="tw-ft">finished weeks</span>`});
+  const cv=effectiveCaptainVice(g),cP=S.model.players.find(p=>p.id===cv.captain),vP=S.model.players.find(p=>p.id===cv.vice);
+  const right=`<span class="tw-ft">${cP?`<span class="pz-cv">C</span> ${esc(cP.web_name)}`:""}${vP?` · <span class="pz-cv v">V</span> ${esc(vP.web_name)}`:""}</span>`;
+  return modalHTML("Captain",capWeekHTML(g),{wide:true,cls:"tw ca",icon:lic("crown",18),ctl:tabs+`<span class="tw-sp"></span>${right}${hz4HTML(S.capH||5,"caph")}`});
+}
+function capWeekHTML(g){
+  const xi=startingXI();if(!xi.length||g<S.model.next.id)return `<p class="note">Captaincy is set for the next deadline.</p>`;
+  const mult=chipForWeek(g)==="3xc"?3:2,v=p=>hPts(p,g,1)*mult,opts=xi.slice().sort((a,b)=>v(b)-v(a)).slice(0,8),best=v(opts[0]);
+  const cv=effectiveCaptainVice(g),sel=opts.find(p=>p.id===S.capSel)||opts[0],R=rivalOwn(),F=twField();
+  const mk={};try{Object.values(oddsPlayers(g)||{}).forEach(r=>{if(r&&r.p)mk[r.p.id]=r;});}catch(e){}
+  const rf=S.rivalsFeed||{},rcap={};let nRiv=0;
+  Object.entries(rf.entries||{}).forEach(([id,e])=>{if(String(id)===String(TEAM_ID))return;const l=(e.gw||[])[(e.gw||[]).length-1],c=l&&(l.picks||[]).find(x=>x.isC);nRiv++;if(c)rcap[c.id]=(rcap[c.id]||0)+1;});
+  const plays=p=>(p.gw[g]||{}).pPlay??1,scores=p=>{const m=mk[p.id];return m&&m.goal!=null?m.goal:modelChance(p,p.xg90||0);};
+  const third=p=>p.pos<=2?["Clean sheet",csProbNext(p,g)??0,"#22D3EE"]:["Assists",(mk[p.id]&&mk[p.id].assist!=null)?mk[p.id].assist:modelChance(p,p.xa90||0),"#22D3EE"];
+  const ring=(pc,col,label,sub)=>{const r=27,c=2*Math.PI*r;return `<div class="ca-ring"><svg viewBox="0 0 64 64" width="64" height="64"><circle cx="32" cy="32" r="${r}" fill="none" stroke="#262626" stroke-width="6"/><circle cx="32" cy="32" r="${r}" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(c*pc/100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle" class="ca-rv">${Math.round(pc)}%</text></svg><b>${label}</b><i>${sub}</i></div>`;};
+  const top=F&&F.top10k?F.top10k.cap[sel.id]||0:null,near=F&&F.near?F.near.cap[sel.id]||0:null;
+  const safe=(top!=null&&top>=30)||(sel.owned||0)>=30;
+  const curC=xi.find(p=>p.id===cv.captain),delta=curC&&curC!==sel?v(sel)-v(curC):null,th=third(sel);
+  const tags=`<span class="ca-tags">${sel===opts[0]?`<span class="ca-best">${lic("crown",12)} Best option</span>`:""}${sel.id===cv.captain?`<span class="pz-cv">C</span><span class="ds-sub">your captain</span>`:sel.id===cv.vice?`<span class="pz-cv v">V</span><span class="ds-sub">your vice</span>`:""}</span>`;
+  const hero=`<section class="panel ca-hero"><div class="ca-top">${dsFace(sel,"xxl")}<div class="ca-who">${tags}<b>${esc(sel.web_name)}</b><i>${esc(sel.teamName)} · ${POSL[sel.pos]} · £${sel.price.toFixed(1)}</i>${fxNext(sel,g,3,"sm")}
+      ${delta!=null?`<span class="ca-vs">${lic("arrow-right-left",13)} <b class="${delta>=0?"up":"dn"}">${twSg(delta)}</b> against your captain ${esc(curC.web_name)} (${v(curC).toFixed(1)})</span>`:""}</div>
+    <div class="ca-big"><b>${v(sel).toFixed(1)}</b><i>×${mult} · GW${g}</i></div></div>
+    <div class="ca-rings">${ring(plays(sel)*100,"#3DDC97","Plays","chance to appear")}${ring(scores(sel)*100,"#7AA2FF","Scores",mk[sel.id]&&mk[sel.id].goal!=null?"bookmakers":"model")}${ring(th[1]*100,th[2],th[0],sel.pos<=2?"model":(mk[sel.id]&&mk[sel.id].assist!=null?"bookmakers":"model"))}${ring(haulChance(sel)*100,"#FFB020","Haul","10+ points")}
+      <div class="ca-own"><span><em>Owned</em><b>${sel.owned}%</b></span><span><em>Rivals own</em><b>${R&&R.n?(R.own[sel.id]||0)+"/"+R.n:"—"}</b></span>
+        <span><em>Rivals' captain last GW</em><b>${nRiv?(rcap[sel.id]||0)+"/"+nRiv:"—"}</b></span><span><em>Top 10k captain</em><b>${top!=null?top+"%":"—"}</b></span>
+        <span class="ca-lab ${safe?"safe":"diff"}">${lic(safe?"shield":"gem",12)} ${safe?"Safe pick":"Differential"}</span>${near!=null?`<span><em>Near you</em><b>${near}%</b></span>`:""}</div></div>
+    ${lastNextHTML([sel],{h:300})}
+    <div class="tw-acts"><button class="pri" onclick="act('cap',${sel.id})"><span class="pz-cv">C</span> Make captain</button><button onclick="act('vice',${sel.id})"><span class="pz-cv v">V</span> Make vice-captain</button><button onclick="act('card',${sel.id})">${lic("info",15)} Player card</button></div></section>`;
+  const rows=opts.map((p,k)=>{const val=v(p),gap=val-best,isC=p.id===cv.captain,isV=p.id===cv.vice;
+    return `<div class="ca-row${p===sel?" sel":""}" onclick="act('capsel',${p.id})"><span class="tw-rk">${k+1}</span><span class="ca-pl">${dsFace(p)}<span class="tw-nm"><b>${esc(p.web_name)}${isC?` <span class="pz-cv">C</span>`:isV?` <span class="pz-cv v">V</span>`:""}</b><i>${esc(p.teamName)} · ${POSL[p.pos]}</i></span></span>
+      ${fxNext(p,g,1,"sm")}<span class="ca-bar">${twBar(val/Math.max(.1,best)*100,k?"#7A5F22":"var(--amber)")}<b>${val.toFixed(1)}</b></span><b class="ca-gap ${gap<-0.05?"dn":"up"}">${gap<-0.05?twSg(gap):"best"}</b>
+      <span class="ca-n">${Math.round(plays(p)*100)}%</span><span class="ca-n">${Math.round(scores(p)*100)}%</span><span class="ca-n">${Math.round(haulChance(p)*100)}%</span><span class="ca-n">${R&&R.n?(R.own[p.id]||0)+"/"+R.n:"—"}</span>
+      <span class="ca-act"><button class="ca-cb${isC?" on":""}" title="Captain" onclick="event.stopPropagation();act('cap',${p.id})">C</button><button class="ca-cb v${isV?" on":""}" title="Vice-captain" onclick="event.stopPropagation();act('vice',${p.id})">V</button></span></div>`;}).join("");
+  const n=hzWeeks(S.capH||5,g),wk=[];for(let e=g;e<g+Math.min(n,8)&&e<=38;e++){const sp=squadPlayers(),b=sp.slice().sort((a,b2)=>hPts(b2,e,1)-hPts(a,e,1))[0];if(b)wk.push([e,b,hPts(b,e,1)*2]);}
+  const strip=n>1?`<div class="ca-wk"><div class="ca-wkh">${lic("calendar",14)} Captain by week</div><div class="ca-wks" style="grid-template-columns:repeat(${wk.length},1fr)">${wk.map(([e,p,val],k)=>`<div class="ca-w${k===0?" now":""}"><em>GW${e}</em>${dsFace(p,"md")}<b>${esc(p.web_name)}</b><span>${fxNext(p,e,1,"sm")}<i>${val.toFixed(1)}</i></span></div>`).join("")}</div></div>`:"";
+  return `<div class="ca-grid">${hero}<section class="panel ca-list"><div class="ca-hd ds-th"><span></span><span>Player</span><span>Next</span><span>×${mult} predicted</span><span>Gap</span><span>Plays</span><span>Scores</span><span>Haul</span><span>Rivals</span><span></span></div>
+    <div class="ca-rows">${rows}</div>${strip}</section></div>`;
+}
+/* Season Record: each finished week, your captain against the best captain
+   your squad had (all 15), FPL's most captained, its top scorer and the
+   app's own pick before the deadline (from when that was first saved) */
+function capRecord(){
+  const T=S.tracker;if(!T||!T.gw)return [];
+  const A=S.playerActuals||{},act=(id,e)=>{const a=A[id]||A[String(id)]||{};const v=a[e]??a[String(e)];return v==null?null:+v;};
+  const next=S.model.next.id,evs=S.events||[],pl=S.predLive&&S.predLive.gw||{};
+  return T.gw.filter(r=>r.event<next&&r.picks&&r.picks.length).sort((a,b)=>a.event-b.event).map(r=>{const e=r.event,pk=r.picks,c=pk.find(x=>x.isC);if(!c)return null;
+    const m=Math.max(2,c.multiplier||2),scored=pk.map(x=>({id:x.id,v:act(x.id,e)})).filter(x=>x.v!=null),bst=scored.reduce((a,b)=>b.v>a.v?b:a,{id:c.id,v:act(c.id,e)||0});
+    const xi=pk.slice(0,11).map(x=>({id:x.id,v:act(x.id,e)||0})).sort((a,b)=>b.v-a.v),rank=xi.findIndex(x=>x.id===c.id)+1;
+    const ev=evs.find(x=>x.id===e)||{},adv=pl[e]&&pl[e].advice;
+    return{e,m,cap:c.id,cp:act(c.id,e)||0,best:bst.id,bp:bst.v||0,rank:rank||null,tm:ev.mostCapt||null,tp:ev.mostCapt?act(ev.mostCapt,e):null,top:ev.topEl||null,topPts:ev.topPts||null,app:adv&&adv.captain||null,ap:adv&&adv.captain?act(adv.captain,e):null};}).filter(Boolean);
+}
+function capRecordHTML(){
+  const W=capRecord();if(!W.length)return `<p class="note">No finished weeks yet.</p>`;
+  const P=id=>S.model.players.find(p=>p.id===id),tot=W.reduce((a,w)=>a+w.cp*w.m,0),bestTot=W.reduce((a,w)=>a+w.bp*w.m,0),hits=W.filter(w=>w.cap===w.best).length;
+  const tmW=W.filter(w=>w.tp!=null),tmTot=tmW.reduce((a,w)=>a+w.tp*2,0),myTm=tmW.reduce((a,w)=>a+w.cp*w.m,0),won=tmW.filter(w=>w.cp>w.tp).length,lost=tmW.filter(w=>w.cp<w.tp).length;
+  const apW=W.filter(w=>w.ap!=null),apTot=apW.reduce((a,w)=>a+w.ap*w.m,0),myAp=apW.reduce((a,w)=>a+w.cp*w.m,0);
+  const season=(S.tracker.gw.filter(r=>r.event<S.model.next.id).slice(-1)[0]||{}).totalPoints||0;
+  const tiles=`<div class="ds-tiles ca-t">${dsTile("Hit rate",Math.round(hits/W.length*100)+"%",`${hits} of ${W.length} weeks · top managers 23%`)}${dsTile("Captain points",tot,season?`${Math.round(tot/season*100)}% of your ${season}`:"")}
+    ${dsTile("Points lost","−"+(bestTot-tot),"against the best in your squad","dn")}${dsTile("Against the template",(myTm-tmTot>=0?"+":"−")+Math.abs(myTm-tmTot),`${won} won · ${lost} lost · ${tmW.length-won-lost} same`,myTm>=tmTot?"up":"dn")}
+    ${dsTile("Following the app's pick",apW.length?(apTot-myAp>=0?"+":"−")+Math.abs(apTot-myAp):"–",apW.length?`over ${apW.length} week${apW.length===1?"":"s"} saved`:"saved from this week on",apW.length?(apTot>myAp?"dn":"up"):null)}
+    ${dsTile("Average finish",(W.filter(w=>w.rank).reduce((a,w)=>a+w.rank,0)/Math.max(1,W.filter(w=>w.rank).length)).toFixed(1),"your captain's place in your XI")}</div>`;
+  const top=Math.max(20,...W.map(w=>w.bp*w.m)),Wd=720,H=380,pl=30,pb=24,pt=16,slot=(Wd-pl-6)/W.length,y=v=>pt+(H-pt-pb)*(1-v/top);
+  let svg="";for(let v=0;v<=top;v+=Math.max(5,Math.round(top/4/5)*5))svg+=`<line class="cgrid" x1="${pl}" x2="${Wd-6}" y1="${y(v)}" y2="${y(v)}"/><text class="cax" x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  W.forEach((w,k)=>{const x0=pl+slot*k,bw=Math.min(17,slot/3),a=w.cp*w.m,b=w.bp*w.m,hit=w.cap===w.best;
+    svg+=`<rect x="${x0+slot/2-bw-1}" y="${y(a)}" width="${bw}" height="${y(0)-y(a)}" rx="3" fill="${hit?"#3DDC97":"#FFB020"}"/><rect x="${x0+slot/2+1}" y="${y(b)}" width="${bw}" height="${y(0)-y(b)}" rx="3" fill="rgba(255,255,255,.08)" stroke="#8A8A8A" stroke-width="1.2" stroke-dasharray="3 2"/>
+      <text x="${x0+slot/2}" y="${y(Math.max(a,b))-6}" text-anchor="middle" class="${hit?"ca-hit":"ds-cd dn"}">${hit?"✓":"−"+(b-a)}</text><text class="cax" x="${x0+slot/2}" y="${H-7}" text-anchor="middle">${w.m===3?"TC":"GW"+w.e}</text>`;});
+  const chart=`<div class="ds-chart"><div class="ds-lg"><span><i style="background:#3DDC97"></i>Best pick made</span><span><i style="background:#FFB020"></i>Your captain</span><span><i class="p"></i>Best in your squad</span></div><svg class="chart" viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Captain points by week">${svg}</svg></div>`;
+  const miss=W.filter(w=>w.cap!==w.best).map(w=>({w,d:(w.bp-w.cp)*w.m})).sort((a,b)=>b.d-a.d).slice(0,3);
+  const misses=`<div class="ca-miss"><div class="ca-wkh">${lic("triangle-alert",13)} Costliest calls</div>${miss.map(({w,d})=>`<div class="ca-m"><em>GW${w.e}${w.m===3?" · TC":""}</em>${dsFace(P(w.cap))}<span class="tw-nm"><b>${esc((P(w.cap)||{}).web_name||"")}</b><i>${w.cp*w.m} pts</i></span>${lic("arrow-right",13)}${dsFace(P(w.best))}<span class="tw-nm"><b>${esc((P(w.best)||{}).web_name||"")}</b><i>${w.bp*w.m} pts</i></span><b class="dn">−${d}</b></div>`).join("")}</div>`;
+  const nm=id=>{const p=P(id);return p?`${dsFace(p)}<span class="tw-nm"><b>${esc(p.web_name)}</b>`:`<span class="tw-nm"><b>—</b>`;};
+  const rows=W.slice().reverse().map(w=>{const hit=w.cap===w.best,d=(w.bp-w.cp)*w.m,ord=n=>n+(n===1?"st":n===2?"nd":n===3?"rd":"th");
+    return `<div class="cr-row${hit?" hit":""}"><span class="cr-gw">GW${w.e}${w.m===3?`<i>TC</i>`:""}</span><span class="cr-p">${nm(w.cap)}<i>${w.cp} × ${w.m}</i></span><b class="cr-v">${w.cp*w.m}</b></span>
+      <span class="cr-p">${hit?`<span class="cr-same">${lic("check",14)} Best pick</span>`:`${nm(w.best)}<i>${w.bp} × ${w.m}</i></span><b class="cr-v">${w.bp*w.m}</b>`}</span>
+      <b class="cr-l ${d?"dn":"up"}">${d?"−"+d:"0"}</b><span class="cr-rk">${w.rank?ord(w.rank):"–"}</span>
+      <span class="cr-t">${w.tm?`${nm(w.tm)}<i>${w.tp!=null?w.tp*2+" pts":"–"}</i></span><span class="cr-vs ${w.tp==null?"":w.cp>w.tp?"up":w.cp<w.tp?"dn":""}">${w.tp==null?"":w.cp>w.tp?"won":w.cp<w.tp?"lost":"same"}</span>`:"–"}</span>
+      <span class="cr-f">${w.top?`<b>${esc((P(w.top)||{}).web_name||"")}</b><i>${w.topPts||"–"} pts</i>`:"–"}</span></div>`;}).join("");
+  return `<div class="ca-rg">${`<section class="panel ca-left">${tiles}${chart}${misses}</section>`}<section class="panel ca-right"><div class="cr-row cr-hd ds-th"><span>Week</span><span>Your captain</span><span>Best in your squad</span><span>Lost</span><span>Finish</span><span>Most captained in FPL</span><span>Top scorer in FPL</span></div><div class="cr-rows">${rows}</div></section></div>`;
+}
+
+/* ---------- Transfer Record ---------- */
+/* Every transfer from your FPL history (the weekly squads differ): who left
+   and who came, judged on actual points that gameweek, over the next 3 and
+   5 and while you held him, less hits. A Wildcard is one block (the new
+   squad against the old); a Free Hit is judged that week only. */
+function transferLog(){
+  const T=S.tracker;if(!T||!T.gw)return [];
+  const rows=T.gw.filter(r=>r.picks&&r.picks.length).sort((a,b)=>a.event-b.event),next=S.model.next.id,last=Math.min(next-1,rows.length?rows[rows.length-1].event:0);
+  const wc=new Set(rows.filter(x=>x.chip==="wildcard").map(x=>x.event)),fh=new Set(rows.filter(x=>x.chip==="freehit").map(x=>x.event));
+  const A=S.playerActuals||{},act=(id,e)=>{const a=A[id]||A[String(id)]||{};const v=a[e]??a[String(e)];return v==null?0:+v;};
+  const P=id=>S.model.players.find(p=>p.id===id),sum=(id,a,b)=>{let s=0;for(let e=a;e<=Math.min(b,last);e++)s+=act(id,e);return s;};
+  const pur=(T.purchase&&T.purchase.players)||{},out=[];
+  rows.forEach((r,i)=>{if(!i)return;const e=r.event;let prev=rows[i-1];if(fh.has(prev.event)&&rows[i-2])prev=rows[i-2];
+    const was=new Set(prev.picks.map(x=>x.id)),now=new Set(r.picks.map(x=>x.id));
+    const ins=[...now].filter(x=>!was.has(x)).map(P).filter(Boolean),outs=[...was].filter(x=>!now.has(x)).map(P).filter(Boolean);
+    if(!ins.length&&!outs.length)return;
+    if(wc.has(e)||fh.has(e)){const w=fh.has(e)?0:4,d=(a,b)=>ins.reduce((s,p)=>s+sum(p.id,a,b),0)-outs.reduce((s,p)=>s+sum(p.id,a,b),0);
+      out.push({e,chip:fh.has(e)?"FH":"WC",n:ins.length,d1:d(e,e),d3:fh.has(e)?null:d(e,e+2),d5:fh.has(e)?null:d(e,e+4),held:fh.has(e)?d(e,e):d(e,e+w),hg:fh.has(e)?1:Math.min(w+1,last-e+1),hit:0});return;}
+    const per=(r.transferCost||0)/Math.max(1,ins.length);
+    [1,2,3,4].forEach(pos=>{const o=outs.filter(p=>p.pos===pos).sort((a,b)=>b.price-a.price),n=ins.filter(p=>p.pos===pos).sort((a,b)=>b.price-a.price);
+      n.forEach((p,k)=>{const q=o[k];if(!q)return;
+        let end=last;for(let j=i+1;j<rows.length;j++){if(fh.has(rows[j].event))continue;if(!rows[j].picks.some(x=>x.id===p.id)){end=rows[j].event-1;break;}}
+        const held=sum(p.id,e,end)-sum(q.id,e,end),sold=end<last?end+1:null,pp=pur[p.id];
+        out.push({e,out:q,inn:p,d1:act(p.id,e)-act(q.id,e),d3:e+2<=last?sum(p.id,e,e+2)-sum(q.id,e,e+2):null,d5:e+4<=last?sum(p.id,e,e+4)-sum(q.id,e,e+4):null,held:held-per,hg:end-e+1,hit:per,sold,
+          price:!sold&&pp&&pp.paid!=null?+(p.price-pp.paid).toFixed(1):null});});});});
+  return out;
+}
+function transferRecordHTML(){
+  const L=transferLog(),win=["d1","d3","d5","held"].includes(S.trWin)?S.trWin:"held";
+  const sw=`<span class="hz ds-hz">${[["d1","That GW"],["d3","3 GW"],["d5","5 GW"],["held","While held"]].map(([k,n])=>`<button class="${win===k?"on":""}" onclick="act('trwin','${k}')">${n}</button>`).join("")}</span>`;
+  if(!L.length)return modalHTML("Transfer Record",`<p class="note">No transfers yet this season.</p>`,{wide:true,cls:"tw xr",icon:lic("arrow-right-left",18),ctl:`<span class="tw-sp"></span>${sw}`});
+  const val=r=>r[win]==null?null:r[win]-(win==="held"?0:r.hit||0),pairs=L.filter(r=>!r.chip),scored=L.filter(r=>val(r)!=null);
+  const net=scored.reduce((a,r)=>a+val(r),0),hits=L.reduce((a,r)=>a+(r.hit||0),0),win2=pairs.filter(r=>val(r)!=null&&val(r)>0).length,judged=pairs.filter(r=>val(r)!=null).length;
+  const bst=pairs.filter(r=>val(r)!=null).sort((a,b)=>val(b)-val(a)),best=bst[0],worst=bst[bst.length-1],profit=pairs.reduce((a,r)=>a+(r.price||0),0);
+  const filt=S.trFilt||"all",shown=L.filter(r=>filt==="all"||(val(r)!=null&&(filt==="gain"?val(r)>0:val(r)<0))).slice().reverse();
+  const nm=r=>r.out?`${esc(r.out.web_name)} → ${esc(r.inn.web_name)}`:"";
+  const tiles=`<div class="ds-tiles xr-t">${dsTile("Transfers",pairs.length+L.filter(r=>r.chip).reduce((a,r)=>a+r.n,0),`${pairs.length} moves${L.some(r=>r.chip)?" · "+L.filter(r=>r.chip).map(r=>r.chip).join(" + "):""}${hits?` · ${Math.round(hits/HIT)} hit${hits>HIT?"s":""}`:""}`)}
+    ${dsTile("Net points",(net>=0?"+":"−")+Math.abs(Math.round(net)),win==="held"?`while held, after ${hits?"−"+hits:"no"} hits`:"over the window",net>=0?"up":"dn")}${dsTile("Hit rate",judged?Math.round(win2/judged*100)+"%":"–",`${win2} of ${judged} in outscored out`)}
+    ${dsTile("Best",best?twSg(val(best)).replace(".0",""):"–",best?nm(best):"","up")}${dsTile("Worst",worst?twSg(val(worst)).replace(".0",""):"–",worst?nm(worst):"",worst&&val(worst)<0?"dn":null)}${dsTile("Price profit",(profit>=0?"+":"−")+"£"+Math.abs(profit).toFixed(1),"on players you still own",profit>=0?"up":"dn")}</div>`;
+  const cell=v=>v==null?`<span class="xr-v na">–</span>`:`<span class="xr-v ${v>0?"up":v<0?"dn":"z"}">${v>0?"+":v<0?"−":"±"}${Math.abs(Math.round(v))}</span>`;
+  const row=r=>r.chip?`<div class="xr-r chip"><span class="xr-gw">GW${r.e}</span><span class="xr-wc">${dsChips(r.chip==="WC"?["wildcard"]:["freehit"],null).replace(/ds-chip"/g,'ds-chip off"')}<span class="ds-name">${r.chip==="WC"?"Wildcard":"Free Hit"} · ${r.n} changes</span><span class="ds-sub">${r.chip==="WC"?"new squad against the old":"that week only"}</span></span>${cell(r.d1)}${cell(r.d3)}${cell(r.d5)}${cell(r.held)}<span class="ds-sub xr-h">${r.hg} GW</span><span class="xr-p">–</span></div>`
+    :`<div class="xr-r"><span class="xr-gw">GW${r.e}</span><span class="xr-mv">${dsFace(r.out)}<span class="ds-name out">${esc(r.out.web_name)}</span>${lic("arrow-right",13)}${dsFace(r.inn)}<span class="ds-name">${esc(r.inn.web_name)}</span>${r.hit?`<span class="xr-hit">−${r.hit} hit</span>`:""}${r.sold?`<span class="xr-sold">sold GW${r.sold}</span>`:""}</span>
+      ${cell(r.d1-(r.hit||0))}${cell(r.d3==null?null:r.d3-(r.hit||0))}${cell(r.d5==null?null:r.d5-(r.hit||0))}${cell(r.held)}<span class="ds-sub xr-h">${r.hg} GW</span><span class="xr-p">${r.price==null?"–":`<b class="${r.price>=0?"up":"dn"}">${r.price>=0?"+":"−"}£${Math.abs(r.price).toFixed(1)}</b>`}</span></div>`;
+  const list=`<section class="panel xr-col">${dsHead("arrow-right-left","Your transfers",`<span class="hz">${[["all","All"],["gain","Gains"],["loss","Losses"]].map(([k,n])=>`<button class="${filt===k?"on":""}" onclick="act('trfilt','${k}')">${n}</button>`).join("")}</span>`)}
+    <div class="xr-r xr-hd ds-th"><span>GW</span><span>Out → In</span><span>That GW</span><span>Next 3</span><span>Next 5</span><span>While held</span><span>Held</span><span>Price</span></div><div class="xr-rows">${shown.map(row).join("")}</div>
+    <div class="xr-sum"><span>Net from transfers</span>${dsFig((net>=0?"+":"−")+Math.abs(Math.round(net)),net>=0?"up":"dn")}<span class="ds-sub">${hits?`· hits −${hits} included`:""}</span></div></section>`;
+  /* cumulative by gameweek */
+  const by={};scored.forEach(r=>{by[r.e]=(by[r.e]||0)+val(r);});const ks=Object.keys(by).map(Number).sort((a,b)=>a-b);let c=0;const cum=ks.map(k=>[k,c+=by[k]]);
+  let chart="";if(cum.length){const vs=cum.map(x=>x[1]),lo=Math.min(0,...vs)-5,hi=Math.max(5,...vs)+5,Wd=470,H=180,pl=30,pb=22,pt=14,pr=8,X=i=>pl+(cum.length<2?0.5:i/(cum.length-1))*(Wd-pl-pr),Y=v=>pt+(H-pt-pb)*(1-(v-lo)/(hi-lo));
+    let g=[0,hi].map(v=>`<line class="${v===0?"czero":"cgrid"}" x1="${pl}" x2="${Wd-pr}" y1="${Y(v)}" y2="${Y(v)}"/><text class="cax" x="${pl-6}" y="${Y(v)+4}" text-anchor="end">${Math.round(v)}</text>`).join("");
+    const pts=cum.map(([,v],i)=>`${X(i)},${Y(v)}`).join(" ");
+    g+=`<polygon points="${X(0)},${Y(0)} ${pts} ${X(cum.length-1)},${Y(0)}" fill="rgba(61,220,151,.14)"/><polyline points="${pts}" fill="none" stroke="#3DDC97" stroke-width="2.5" stroke-linejoin="round"/>`+cum.map(([e,v],i)=>`<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="#3DDC97"/><text class="cax" x="${X(i)}" y="${H-5}" text-anchor="middle">GW${e}</text>`).join("");
+    chart=`<svg class="chart" viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Cumulative points from transfers">${g}</svg>`;}
+  const lesson=(icon,cls,t,r,txt,v)=>`<div class="xr-ls ${cls}"><span class="xr-li">${lic(icon,14)}</span><span class="xr-lt"><b>${t}</b>${r&&r.out?`<span class="xr-lp">${dsFace(r.out,"xs")}<span class="ds-name">${esc(r.out.web_name)}</span>${lic("arrow-right",12)}${dsFace(r.inn,"xs")}<span class="ds-name">${esc(r.inn.web_name)}</span></span>`:""}<span class="ds-sub">${txt}</span></span>${dsFig(v,cls==="z"?"":cls)}</div>`;
+  const side=pairs.filter(r=>r.hg>=4&&Math.abs(r.held)<=2)[0];
+  const ls=[best?lesson("trophy","up","Best move",best,`GW${best.e} · held ${best.hg} GW`,twSg(val(best)).replace(".0","")):"",
+    worst&&val(worst)<0?lesson("triangle-alert","dn","Costliest move",worst,`GW${worst.e} · ${worst.sold?"sold GW"+worst.sold:"still held"}`,twSg(val(worst)).replace(".0","")):"",
+    side?lesson("arrow-right-left","z","Sideways",side,`${twSg(side.held).replace(".0","")} over ${side.hg} GW: a transfer that changed little`,twSg(side.held).replace(".0","")):"",
+    lesson("sparkles","z","Against the app",null,(S.predLive&&Object.values(S.predLive.gw||{}).some(x=>x.advice))?"the app's saved picks are graded once those weeks finish":"the app's pick is saved before each deadline from now on","–")].join("");
+  return modalHTML("Transfer Record",`<div class="ds-tiles-wrap">${tiles}</div><div class="xr-g">${list}<div class="xr-rc"><section class="panel xr-col">${dsHead("activity","Points from transfers, season",`<span class="ds-sub">${win==="held"?"while held, net of hits":"over the window"}</span>`)}${chart}</section><section class="panel xr-col">${dsHead("info","Lessons")}${ls}</section></div></div>`,
+    {wide:true,cls:"tw xr",icon:lic("arrow-right-left",18),ctl:`<span class="tw-sp"></span><span class="tw-ft">GW1–${S.model.next.id-1} · finished weeks</span>${sw}`});
 }
 /* ---------- Compare v3 (21 Nov 2026, Andy approved the mock) ----------
    Two squads side by side, each on the Planner's own pitch (kits, transfer
@@ -2357,46 +2526,6 @@ function optionsHTML(){
 }
 
 /* ============================================================
-   RESEARCH LIST (20 Oct 2026): funding. Every pair of your players sold
-   together, each slot filled through the one engine with the money pooled
-   (bestCombo), over 3 or 5 GW. A pair is listed when it beats the best
-   single move by half a point or more: a downgrade that pays for an
-   upgrade. Each leg shows the money and the points, and points per £1m.
-   ============================================================ */
-let _fundCache=null;
-function fundingHTML(){
-  if(!S.model||!S.squad||VG()!==S.model.next.id)return "";
-  const h=Math.max(3,S.weekH||1);
-  if(!S.fundOn)return `<div class="panel"><div class="phead"><h2>Funding</h2><span class="note">two moves together, over ${h} GW</span>
-    <button onclick="act('fundon')">Work out funding moves</button></div></div>`;
-  const key=[h,planBank(),S.squad.join("."),(S.ignored||[]).join(".")].join("|");
-  if(!_fundCache||_fundCache.key!==key||_fundCache.model!==S.model){
-    const single=(bestSwaps(1,h)[0]||{gain:0}).gain,sq=S.squad,res=[];
-    for(let i=0;i<sq.length;i++)for(let j=i+1;j<sq.length;j++){
-      const c=bestCombo([sq[i],sq[j]],h,6);
-      if(!c||c.picks.length!==2||c.gain<single+0.5)continue;
-      /* a funding move: one sale frees money for an upgrade the bank alone
-         could not pay for */
-      const cost=m=>m.inn.price-m.sell,bank=planBank();
-      if(c.picks.some(m=>cost(m)<-0.05)&&c.picks.some(m=>cost(m)>bank+0.05))res.push(c);}
-    res.sort((a,b)=>b.gain-a.gain);
-    _fundCache={key,model:S.model,res:res.slice(0,6),single};
-  }
-  const F=_fundCache;
-  const leg=m=>{const d=m.inn.price-m.sell;
-    return `<div class="fleg"><span class="dn">${esc(m.out.web_name)}</span> → <span class="up">${esc(m.inn.web_name)}</span>
-      <span class="mu">${d<0?"saves £"+(-d).toFixed(1):"costs £"+d.toFixed(1)}</span> <b class="${m.gain>=0?"up":"dn"}">${sgn1(m.gain)}</b>
-      ${Math.abs(d)>=0.5?`<span class="mu">(${sgn1(m.gain/Math.abs(d))} per £1m)</span>`:""}</div>`;};
-  return `<div class="panel"><div class="phead"><h2>Funding</h2><span class="note">two moves together, over ${h} GW · best single move ${sgn1(F.single)}</span></div>
-    <div class="pbody">${F.res.length?`<div class="tgrid">${F.res.map(c=>`<div class="tcard">${c.picks.map(leg).join("")}
-      <div class="fsum"><b class="up">${sgn1(c.gain)}</b> to your XI · £${c.left.toFixed(1)} left
-      ${freeLeft(VG())<2?`<span class="dn"> · 2 transfers with ${freeLeft(VG())} free: a ${HIT}-point hit</span>`:""}</div>
-      <button class="mini" style="margin-top:6px" onclick="act('dofund',${c.picks[0].out.id},${c.picks[1].out.id})">Make both</button></div>`).join("")}</div>`
-      :`<p class="note" style="margin:0">No downgrade that pays for an upgrade beats the best single move by half a point over ${h} GW.</p>`}
-    <p class="note" style="margin:8px 0 0">Each pair is a downgrade that pays for an upgrade your bank (£${planBank().toFixed(1)}) could not cover alone: two of your players sold, the best replacements the pooled money allows, scored on your best XI plus captain over the next ${h}. Points per £1m shows what a downgrade gives up for the money it frees, and what an upgrade buys with it.</p></div></div>`;
-}
-
-/* ============================================================
    RESEARCH LIST (20 Oct 2026): squad shape. Points per £1m by position and
    price band over the horizon, regular starters only (60+ expected
    minutes), with the best value and the top scorer in each band and your
@@ -2540,7 +2669,9 @@ function signalHitsHTML(){
    bars for leaderboards, split bars for plus and minus, columns for weeks.
    ============================================================ */
 LUCIDE["chevron-up"]='<path d="m18 15-6-6-6 6"/>';
-const SG_TABS=[["transfers","Transfers"],["squad","My Squad"],["teams","Teams"],["players","Players"]];
+/* 22 Nov 2026 (Andy): Signals › Transfers removed; the Planner's Transfers
+   pop-up holds best moves, the plan, funding and the rest */
+const SG_TABS=[["squad","My Squad"],["teams","Teams"],["players","Players"]];
 const SG_TONE={mint:"#3DDC97",red:"#FF5A6E",amber:"#FFB020",grey:"#8A8A8A",ice:"#BAE6FD",purple:"#B388FF",cyan:"#22D3EE"};
 function rep(key,icon,title,info,body,o){
   o=o||{};const shut=(S.sigFold||[]).includes(key);
@@ -2610,10 +2741,10 @@ function sgSpark(p,G){const pa=S.playerActuals||{},a=pa[p.id]||pa[String(p.id)]|
 /* the page: header, tabs, position and horizon, then the tab's reports */
 function signalsHTML(){
   if(!S.model)return "";
-  const G=VG(),H=S.sigH||3,posF=S.sigPos||0,tab=SG_TABS.some(([k])=>k===S.sgTab)?S.sgTab:"transfers";
+  const G=VG(),H=S.sigH||3,posF=S.sigPos||0,tab=SG_TABS.some(([k])=>k===S.sgTab)?S.sgTab:"squad";
   const seg=(items,cur,k)=>`<span class="hz">${items.map(([v,l])=>`<button class="${cur===v?"on":""}" aria-pressed="${cur===v}" onclick="act('${k}',${typeof v==="string"?`'${v}'`:v})">${l}</button>`).join("")}</span>`;
-  const usesPos=tab==="transfers"||tab==="players";
-  const body={transfers:sgTransfers,squad:sgSquad,teams:sgTeams,players:sgPlayers}[tab](G,H,posF);
+  const usesPos=tab==="players";
+  const body={squad:sgSquad,teams:sgTeams,players:sgPlayers}[tab](G,H,posF);
   return `<div class="sgpage" data-tab="${tab}">
     <div class="pagetabs"><h1>Signals</h1><span class="pseg sgtabs">${SG_TABS.map(([k,n])=>`<button class="${tab===k?"on":""}" onclick="act('sgtab','${k}')">${n}</button>`).join("")}</span></div>
     <div class="hubctl">${usesPos?seg([[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],posF,"sigpos"):""}
@@ -2623,65 +2754,6 @@ function signalsHTML(){
 }
 const sgOk=(p,posF)=>!posF||p.pos===posF;
 const hzL=H=>H>1?`next ${H}`:"next GW";
-
-/* ---------------- Transfers ---------------- */
-function sgTransfers(G,H,posF){
-  const mine=new Set(S.squad||[]),M=S.model;
-  const moves=bestSwaps(40,H).filter(m=>sgOk(m.out,posF));
-  const first=new Map();engineMoves({squad:S.squad||[],bank:planBank(),g:G,h:H}).forEach(m=>{if(!first.has(m.out.id))first.set(m.out.id,m);});
-  const sells=[...first.values()].filter(m=>m.gain>=2&&sgOk(m.out,posF)).sort((a,b)=>b.gain-a.gain);
-  const L=p=>fplLive(p)||{};
-  const rising=M.players.filter(p=>mine.has(p.id)&&L(p).pcp>=70);
-  const top=moves[0];
-  const figs=rkv([
-    {label:"Best Move",value:top?`<span class="up">${sgn1(top.gain)}</span>`:"Hold",sub:top?`${esc(top.out.web_name)} → ${esc(top.inn.web_name)}`:"no move adds to your XI"},
-    {label:"Sell Flags",value:String(sells.length),sub:`yours, ${hzL(H)}`,tone:sells.length?"bad":""},
-    {label:"Your Players Rising",value:String(rising.length),sub:"FPL predictor 70%+",tone:rising.length?"good":""},
-    {label:"Bank",value:`£${planBank().toFixed(1)}`,sub:`squad £${squadBudget().toFixed(1)} to spend`},
-    {label:"Free Transfers",value:freeWeek(G)?"Unlimited":String(freeTransfers()),sub:hitCost(G)?`<span class="dn">−${hitCost(G)} hit planned</span>`:"no hit planned"}]);
-  const mkBtn=m=>`<button class="mini" onclick="event.stopPropagation();act('doswap',${m.out.id},${m.inn.id})">Make</button>`;
-  const moveRow=m=>({label:`${esc(m.out.web_name)} → ${esc(m.inn.web_name)}`,sub:`${esc(m.inn.teamName)} · ${POS[m.inn.pos]} · £${m.inn.price.toFixed(1)}`,value:m.gain,show:sgn1(m.gain),pid:m.inn.id,extra:mkBtn(m)});
-  const why=p=>{const w=[];if(p.form<3)w.push(`form ${p.form.toFixed(1)}`);if(p.avail<1)w.push(`${Math.round(p.avail*100)}% fit`);if((p.xMins||0)<45)w.push(`${Math.round(p.xMins||0)}′ expected`);return w;};
-  const sellBody=sells.length?`<div class="mvgrid">${sells.map(m=>`<div class="mv">
-      <div class="mvh"><span class="dn">${esc(m.out.web_name)}</span><span class="arr">→</span><span class="up">${esc(m.inn.web_name)}</span><b class="up">${sgn1(m.gain)}</b></div>
-      <div class="mvs">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · to your XI, ${hzL(H)}</div>
-      ${why(m.out).length?`<div class="sgwhy">${why(m.out).map(r=>`<span class="sgchip">${esc(r)}</span>`).join("")}</div>`:""}
-      <button class="mini" onclick="act('doswap',${m.out.id},${m.inn.id})">Make this transfer</button></div>`).join("")}</div>`
-    :sgEmpty(`No player of yours has a replacement worth 2+ points to your XI over the ${hzL(H)}.`);
-  const pc=M.players.filter(p=>L(p).pcp!=null&&sgOk(p,posF));
-  const pcRow=p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · £${p.price.toFixed(1)}${mine.has(p.id)?" · yours":""}`,value:Math.max(-150,Math.min(150,L(p).pcp)),show:`${Math.round(L(p).pcp)}%`,pid:p.id,mine:mine.has(p.id)});
-  const up=pc.filter(p=>L(p).pcp>0).sort((a,b)=>L(b).pcp-L(a).pcp).slice(0,8),dn=pc.filter(p=>L(p).pcp<0).sort((a,b)=>L(a).pcp-L(b).pcp).slice(0,8);
-  const stats=new Map((S.players||[]).map(p=>[p.id,p.stats||{}]));
-  const net=p=>{const s=stats.get(p.id)||{};return num(s.transfers_in_event)-num(s.transfers_out_event);};
-  const k=n=>(n>=0?"+":"−")+Math.abs(Math.round(n/1000))+"k";
-  const tr=M.players.filter(p=>sgOk(p,posF));
-  const bought=tr.slice().sort((a,b)=>net(b)-net(a)).slice(0,8),sold=tr.slice().sort((a,b)=>net(a)-net(b)).slice(0,8);
-  const netRow=p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · ${p.owned}% owned`,value:net(p),show:k(net(p)),pid:p.id,mine:mine.has(p.id)});
-  const diffs=M.players.filter(p=>p.owned<5&&(p.xMins||0)>=60&&p.avail>0&&sgOk(p,posF)).sort((a,b)=>hPts(b,G,H)-hPts(a,G,H)).slice(0,8);
-  const cold=M.players.filter(p=>p.owned>=10&&p.form<=3&&sgOk(p,posF)).sort((a,b)=>b.owned-a.owned).slice(0,8);
-  return figs+`<div class="sggrid1">${rep("board","sparkles","Signal Board",`Every player carrying each signal now, yours first, points over the ${hzL(H)}. Hover a tile for its rule.`,signalBoardHTML(G,H,posF,true),{wide:true})}</div>
-  <div class="repgrid">
-    ${rep("topmoves","circle-arrow-up","Top Moves",`The best single transfers, each scored by what it adds to your best XI plus captain over the ${hzL(H)} (later weeks count a little less). Make does the transfer in the Planner.`,hbars(moves.slice(0,10).map(moveRow),{empty:"No single move adds to your XI."}))}
-    ${rep("sqrep","circle-arrow-down","Sell",`Your players whose best affordable replacement adds 2 or more points to your XI over the ${hzL(H)} (the Sell icon's rule). Chips show why he may be struggling.`,sellBody)}
-  </div>
-  <div class="repgrid">
-    ${rep("funding","wallet","Funding","A downgrade that pays for an upgrade your bank could not cover alone, both scored on your XI.",(S.fundOn?fundingHTML():`<p class="rnote" style="margin:0 0 10px">Checks every pair of your players sold together (takes a second).</p><button onclick="act('fundon')">Work out funding moves</button>`)||sgEmpty("Funding works from the live gameweek."),{bare:true})}
-    ${rep("plan5","calendar","Five-Week Plan","Week by week, the best move if it beats rolling the transfer, otherwise roll.",planPanelHTML()||sgEmpty("The plan starts from the live gameweek."),{bare:true})}
-  </div>
-  ${rep("bypos","target","Best Moves by Position","Up to four moves per position, each worth a transfer on its own.",transfersHTML("bypos"),{wide:true})}
-  ${rep("several","arrow-right-left","Plan Several Transfers","Pick the players to sell; the best combination for the money they free.",transfersHTML("picker"),{wide:true,bare:true})}
-  <div class="repgrid">
-    ${rep("pricewatch","trending-up","Price Watch","FPL's own predictor: progress towards tonight's change (100% = it changes). Risers right, fallers left; yours highlighted.",
-      up.length||dn.length?`<div class="split2"><div><h4 class="rsub">Closest to a rise</h4>${hbars(up.map(pcRow),{diverge:true})}</div><div><h4 class="rsub">Closest to a fall</h4>${hbars(dn.map(pcRow),{diverge:true})}</div></div>`:sgEmpty("FPL's price predictor did not load."))}
-    ${rep("netmoves","users","Most Bought and Sold","Net transfers this gameweek (in minus out), FPL's own counts.",
-      `<div class="split2"><div><h4 class="rsub">Most bought</h4>${hbars(bought.map(netRow),{diverge:true})}</div><div><h4 class="rsub">Most sold</h4>${hbars(sold.map(netRow),{diverge:true})}</div></div>`)}
-  </div>
-  <div class="repgrid">
-    ${rep("diff","gem","Differentials",`Under 5% owned, 60+ expected minutes, ranked by points over the ${hzL(H)}.`,hbars(diffs.map(p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · ${POS[p.pos]} · ${p.owned}% owned`,value:hPts(p,G,H),show:hPts(p,G,H).toFixed(1),pid:p.id,tone:SG_TONE.ice})),{rank:true}))}
-    ${rep("sell","trending-down","Sell Signals","Owned by 10% or more with form at 3 or under: template players gone cold.",hbars(cold.map(p=>({label:esc(p.web_name),sub:`${esc(p.teamName)} · form ${p.form.toFixed(1)}`,value:p.owned,show:p.owned.toFixed(1)+"%",pid:p.id,tone:SG_TONE.red,mine:mine.has(p.id)})),{rank:true}))}
-  </div>
-  ${(S.ignored||[]).length?rep("ignored","ban","Not Suggesting","Players taken off the suggestions; tap one to bring him back.",transfersHTML("ignored"),{bare:true,wide:true}):""}`;
-}
 
 /* ---------------- My Squad ---------------- */
 function sgSquad(G,H){
