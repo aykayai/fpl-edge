@@ -1623,76 +1623,94 @@ function weekData(){
    Each card opens its pop-up, where the dashboard's detail now lives. */
 function thisWeekHTML(){
   if(!S.model||VG()<S.model.next.id)return "";
-  const D=weekData(),{g,h}=D,d=dashData()||{};
-  const L=p=>fplLive(p)||{};
-  const card=(k,icon,tone,title,fig,body,foot)=>`<button class="pz-in" onclick="act('pop','${k}')" aria-haspopup="dialog">
-    <span class="pz-ih"><span class="tile" style="--tc:${tone}">${lic(icon)}</span><span class="pz-it">${title}</span>${lic("chevron-right",16)}</span>
-    <span class="pz-if">${fig}</span><span class="pz-ib">${body}</span>${foot?`<span class="pz-ifo">${foot}</span>`:""}</button>`;
-  const barI=(pct,col)=>`<span class="pz-bt"><i style="width:${clamp(Math.round(pct),0,100)}%;background:${col}"></i></span>`;
-  const who=p=>`<span class="pz-bn">${esc(p.web_name)}${inDT(p)?dtStar("pz-dts",9):""}</span>`;
-  /* one row and one Best/Worst block, the same in all four bottom cards */
-  const row=(p,mid,val,cls)=>`<span class="pz-bw">${photoHTML(p,"pz-ph")}${who(p)}${mid}<b class="${cls||""}">${val}</b></span>`;
-  const block=(label,cls,rows,none)=>`<em class="pz-fh ${cls}">${label}</em>${rows.length?rows.join(""):`<span class="pz-none">${none||"None"}</span>`}`;
-  /* Top Move */
-  const m=D.moves[0];
-  const move=m?card("move","arrow-right-left","#3DDC97","Transfers",
-      `<span class="pz-mv">${photoHTML(m.out,"pz-ph lg")}${lic("arrow-right",16)}${photoHTML(m.inn,"pz-ph lg")}<span><b>${esc(m.out.web_name)} → ${esc(m.inn.web_name)}</b><i class="up">${sgn1(m.gain)} pts · £${m.inn.price.toFixed(1)} · ${esc(m.inn.teamName)}</i></span></span>`,
-      D.moves.slice(1,4).map(x=>`<span class="pz-alt">${photoHTML(x.out,"pz-ph")}${lic("arrow-right",12)}${photoHTML(x.inn,"pz-ph")}<span><b>${esc(x.out.web_name)} → ${esc(x.inn.web_name)}</b><i>£${x.inn.price.toFixed(1)} · ${esc(x.inn.teamName)}</i></span><b class="up">${sgn1(x.gain)}</b></span>`).join(""))
-    :card("move","arrow-right-left","#3DDC97","Transfers","Hold",`<span class="mu">No single move improves your XI over ${wkSpan(g,h)}</span>`);
-  /* Captain: the top three options, doubled, as the Captain pop-up */
-  const caps=D.caps.slice(0,3).map(p=>[p,hPts(p,g,h)*2]),cmx=Math.max(0.1,...caps.map(c=>c[1]));
-  const cap=caps.length?card("cap","crown","#FFB020","Captain",`${esc(caps[0][0].web_name)} <span class="amber">${caps[0][1].toFixed(1)}</span>`,
-      caps.map(([p,v],i)=>row(p,barI(v/cmx*100,i?"#6A5526":"var(--amber)"),v.toFixed(1))).join(""))
-    :card("cap","crown","#FFB020","Captain","—","");
+  const D=weekData(),{g,h}=D;
+  /* ---------- Gameweek Brief (v14, 22 Nov 2026, Andy approved mock_brief) ----------
+     This Week renamed. One card anatomy: head, one headline figure with its
+     label, three rows, one footer figure. Two rows: before the deadline (Your
+     Week, Team News, Transfers, Captain), then market and season (Price
+     Watch, Fixture Outlook, Performance, Transfer Record). Every card reads
+     the Planner's one team total. Classes gb-. */
+  const team=weekPtsFor(g,1);
+  const gbCard=(k,icon,tone,title,head,rows,foot)=>`<button class="pz-in gb-c" onclick="act('pop','${k}')" aria-haspopup="dialog">
+    <span class="pz-ih"><span class="tile" style="--tc:${tone}">${typeof icon==="string"&&icon.startsWith("<")?icon:lic(icon)}</span><span class="pz-it">${title}</span>${lic("chevron-right",16)}</span>
+    <span class="gb-hl">${head}</span><span class="gb-rows">${rows.length?rows.join(""):`<span class="gb-none">None</span>`}</span><span class="gb-ft">${foot||""}</span></button>`;
+  const gbHead=(fig,label,cls,extra)=>`<b class="gb-fig${cls?" "+cls:""}">${fig}</b><span class="gb-lab">${label}</span>${extra||""}`;
+  const gbRow=(left,name,sub,mid,val,cls)=>`<span class="gb-r${mid?"":" nm"}">${left||""}<span class="gb-n"><b>${name}</b>${sub?`<i>${sub}</i>`:""}</span>${mid||""}<b class="gb-v${cls?" "+cls:""}">${val}</b></span>`;
+  const gbFace=p=>photoHTML(p,"gb-f");
+  const gbBar=(pct,col)=>`<span class="gb-bt"><i style="width:${clamp(Math.round(pct),3,100)}%;background:${col}"></i></span>`;
+  /* Your Week */
+  let ywCard;{const Sm=ywSim(g),F=ywEO(ywKind()),fm=ywFieldMean(F,g),avg=ywAvgBench();
+    const b=[],lo=Sm.sorted[0],hi=Sm.sorted[Sm.N-1],nb=14,bw=Math.max(1e-9,(hi-lo)/nb);for(let i=0;i<nb;i++)b.push(0);
+    Sm.sorted.forEach(v=>{b[Math.min(nb-1,Math.floor((v-lo)/bw))]++;});
+    const mx=Math.max(1,...b),W=92,H=34,cw=W/nb,mid=(Sm.mean-lo)/bw*cw;
+    const hist=`<svg class="gb-hist" viewBox="0 0 ${W} ${H}" aria-hidden="true">${b.map((v,i)=>{const x0=lo+i*bw,inR=x0+bw>Sm.lo&&x0<Sm.hi;return `<rect x="${(i*cw+.5).toFixed(1)}" y="${(H-v/mx*H).toFixed(1)}" width="${(cw-1).toFixed(1)}" height="${(v/mx*H).toFixed(1)}" rx="1" fill="${inR?"#3DDC97":"#245A40"}"/>`;}).join("")}<line x1="${mid.toFixed(1)}" x2="${mid.toFixed(1)}" y1="0" y2="${H}" stroke="#fff" stroke-width="1.2"/></svg>`;
+    const pc=v=>v==null?null:v;
+    ywCard=gbCard("week","gauge","#3DDC97","Your Week",gbHead(Sm.mean.toFixed(1),`predicted · likely ${Math.round(Sm.lo)}–${Math.round(Sm.hi)}`,"",hist),
+      [["Beat the field",pc(fm!=null?Sm.above(fm):null)],["Beat the average",pc(avg!=null?Sm.above(avg):null)],["Top your league",pc(Sm.pTop)]].filter(x=>x[1]!=null)
+        .map(([l,v])=>gbRow("",l,"",gbBar(v*100,v>=.5?"var(--mint)":v>=.25?"var(--amber)":"var(--red)"),Math.round(v*100)+"%")),
+      fm!=null?`<b class="${Sm.mean-fm>=0?"up":"dn"}">${sgn1(Sm.mean-fm)}</b> against the field · ${esc(F.label)}`:"No field sample yet");}
   /* Team News: your 15 on its pop-up's one risk rule, this week only */
   if(S.pop!=="warn")S.tnOpen=false;
   const tnSt=wpStats(),tnR=tnRiskPts(g,1);
-  const tnLab=(p,s)=>s.sev>0?s:(()=>{const q=p.gw[g];return !q||q.blank||!q.fixtures.length?{l:"No fixture",s:"BGW"+g}:(p.roleMins||0)>=60&&(p.xMins||0)<60?{l:Math.round(p.xMins||0)+"′ expected",s:"minutes dropped"}:s;})();
+  const tnLab=(p,s)=>s.sev>0?s:(()=>{const q=p.gw[g];return !q||q.blank||!q.fixtures.length?{k:"bk",l:"No fixture",s:"BGW"+g}:(p.roleMins||0)>=60&&(p.xMins||0)<60?{k:"rot",l:Math.round(p.xMins||0)+"′ expected",s:"minutes dropped"}:s;})();
   const tnRows=squadPlayers().map(p=>({p,s:tnStatus(p,g,tnSt),r:tnRisk(p,g,1,tnSt)})).filter(x=>x.s.sev>0||x.r).sort((a,b)=>b.s.sev-a.s.sev);
-  const warn=card("warn","activity","#FF8A3D","Team News",tnRows.length?`${tnRows.length} to watch`:"All clear",
-    tnRows.slice(0,2).map(({p,s})=>{const t=tnLab(p,s);return `<span class="pz-rk">${photoHTML(p,"pz-ph lg")}<span><b>${esc(p.web_name)}</b> ${esc(t.l)}<br><span class="mu">${esc(t.s)}</span></span></span>`;}).join("")
-      ||`<span class="mu">Every player fit and expected to start</span>`,
-    `Points at risk <b>${tnR.risk.toFixed(1)}</b> of ${tnR.xi.toFixed(1)}`);
-  /* Your Week (22 Nov 2026, batch 6): the predicted score and its likely
-     range, and the chances against the field, the average and the league;
-     Team Rating lives in the header */
-  let ywCard;{const Sm=ywSim(g),F=ywEO(ywKind()),fm=ywFieldMean(F,g),avg=ywAvgBench(),lg=ywLastG(),lr=lg?offRowOf(lg):null;
-    const Fl=lg?ywEO(ywKind(),lg):null,lf=lr&&Fl?Object.keys(Fl.eo).reduce((s,id)=>s+Fl.eo[id]/100*(actOf(+id,lg)||0),0)-(Fl.hits||0):null;
-    ywCard=card("week","gauge","#3DDC97","Your Week",`${Sm.mean.toFixed(1)} <small>likely ${Math.round(Sm.lo)}–${Math.round(Sm.hi)}</small>`,
-      [["Beat the field",fm!=null?Sm.above(fm):null],["Beat the average",avg!=null?Sm.above(avg):null],["Top your league",Sm.pTop]].map(([l,v])=>v==null?"":`<span class="pz-br"><span class="pz-bn">${l}</span>${barI(v*100,v>=.5?"var(--mint)":v>=.25?"var(--amber)":"var(--red)")}<b>${Math.round(v*100)}%</b></span>`).join(""),
-      lr?`GW${lg}: ${lr.points}${lf!=null?` · <span class="${lr.points-lf>=0?"up":"dn"}">${sgn1(lr.points-lf)}</span> against the field`:""}`:"");}
-  /* Price Watch: your players closest to a change, as its pop-up */
+  const xiIds=new Set(startingXI().map(p=>p.id)),tnXI=tnRows.filter(x=>xiIds.has(x.p.id)).length;
+  const tnVal=(p,s)=>s.k==="dbt"?[Math.round((p.avail??1)*100)+"%","am"]:["inj","sus","un"].includes(s.k)?["Out","dn"]:s.k==="yc"?[tnYc(p,tnSt)+"/5","am"]:s.k==="rot"&&s.sev>0?[startChance(p)+"%","am"]:["—",""];
+  const warn=gbCard("warn","activity","#FF8A3D","Team News",tnRows.length?gbHead(String(tnRows.length),`to watch · ${tnXI} in your XI`):gbHead("0","to watch · all clear","up"),
+    tnRows.slice(0,3).map(({p,s})=>{const t=tnLab(p,s),[v,c]=tnVal(p,t);return gbRow(`<span class="gb-st">${TN_ICON[t.k]||TN_ICON.dbt}</span>${gbFace(p)}`,esc(p.web_name),esc(t.k==="dbt"?t.s:`${t.l} · ${t.s}`),"",v,c);}),
+    `Points at risk <b class="${tnR.risk>0?"dn":"up"}">${tnR.risk.toFixed(1)}</b> of ${team.toFixed(1)}`);
+  /* Transfers: three different players to bring in */
+  const seenIn=new Set(),mv=D.moves.filter(x=>!seenIn.has(x.inn.id)&&seenIn.add(x.inn.id)).slice(0,3);
+  const ft=freeWeek(g)?"Unlimited":String(freeTransfers());
+  const move=gbCard("move","arrow-right-left","#3DDC97","Transfers",
+    mv.length?gbHead(sgn1(mv[0].gain),`pts ${h>1?"over "+wkSpan(g,h):"in GW"+g} · best move`,"up"):gbHead("Hold","no move improves your XI","mu"),
+    mv.map((x,k)=>`<span class="gb-r gb-mv${k?"":" top"}"><span class="gb-pair">${gbFace(x.out)}${lic("arrow-right",12)}${gbFace(x.inn)}</span><span class="gb-n"><b>${esc(x.out.web_name)} → ${esc(x.inn.web_name)}</b><i>£${x.inn.price.toFixed(1)} · ${esc(x.inn.teamName)}</i></span><b class="gb-v up">${sgn1(x.gain)}</b></span>`),
+    `${ft} free transfer${ft==="1"?"":"s"} · <b>£${planBank().toFixed(1)}</b> in the bank`);
+  /* Captain: the top three, doubled, each against the best; the field's armband */
+  const cm=chipForWeek(g)==="3xc"?3:2,caps=D.caps.slice(0,3).map(p=>[p,hPts(p,g,h)*cm]);
+  const cTop=caps.length?caps[0][1]:0,cLow=caps.length?caps[caps.length-1][1]:0,cFloor=cLow-Math.max(1,(cTop-cLow)*0.6);
+  const Ft=twField(),tk=Ft&&Ft.top10k&&Ft.top10k.cap?Ft.top10k.cap:null,tkTop=tk?Object.entries(tk).sort((a,b)=>b[1]-a[1])[0]:null,tkP=tkTop?S.model.players.find(p=>p.id===+tkTop[0]):null;
+  const cap=gbCard("cap","crown","#FFB020","Captain",caps.length?gbHead(caps[0][1].toFixed(1),`${esc(caps[0][0].web_name)} · ×${cm} predicted`,"am"):gbHead("—","no starting XI"),
+    caps.map(([p,v],i)=>gbRow(gbFace(p),esc(p.web_name),i?`${sgn1(v-cTop)} against ${esc(caps[0][0].web_name)}`:"best option",gbBar((v-cFloor)/Math.max(0.1,cTop-cFloor)*100,i?"#7A5F22":"var(--amber)"),v.toFixed(1),i?"":"am")),
+    tkP?`Top 10k captain: <b>${esc(tkP.web_name)} ${Math.round(tkTop[1])}%</b>${caps.length&&caps[0][0].id!==tkP.id?` · ${esc(caps[0][0].web_name)} ${Math.round(tk[caps[0][0].id]||0)}%`:""}`:"Top 10k captaincy not sampled yet");
+  /* Price Watch: the three closest to a change, either way */
   const pwL=p=>fplLive(p)||{},pwSq=squadPlayers().filter(p=>pwL(p).pcp!=null),pwTn=p=>pwDue(pwL(p))[0]==="Tonight";
-  const pwUp=pwSq.filter(p=>pwL(p).pcp>0).sort((a,b)=>pwL(b).pcp-pwL(a).pcp),pwDn=pwSq.filter(p=>pwL(p).pcp<0).sort((a,b)=>pwL(a).pcp-pwL(b).pcp);
-  const nUp=pwUp.filter(pwTn).length,nDn=pwDn.filter(pwTn).length;
-  const pw=(p,up)=>row(p,barI(Math.abs(pwL(p).pcp||0),up?"var(--mint)":"var(--red)"),`${Math.round(pwL(p).pcp)}%`,up?"up":"dn");
-  const price=card("price",nDn&&!nUp?"trending-down":"trending-up",nDn&&!nUp?"#FF5A6E":"#4ADE80","Price Watch",
-    pwSq.length?`${nUp} rising · <span class="${nDn?"dn":"mu"}">${nDn} falling</span> <small>tonight</small>`:"No predictor data",
-    block("Closest to a rise","up",pwUp.slice(0,3).map(p=>pw(p,true)))+block("Closest to a fall","dn",pwDn.slice(0,3).map(p=>pw(p,false))));
-  /* Fixture Outlook: the next three gameweeks on its pop-up's one method,
-     Overall (a blank counts 5, a double one easier) */
+  const nUp=pwSq.filter(p=>pwL(p).pcp>0&&pwTn(p)).length,nDn=pwSq.filter(p=>pwL(p).pcp<0&&pwTn(p)).length;
+  const pwTop=pwSq.slice().sort((a,b)=>Math.abs(pwL(b).pcp)-Math.abs(pwL(a).pcp)).slice(0,3);
+  const price=gbCard("price",nDn&&!nUp?"trending-down":"trending-up",nDn&&!nUp?"#FF5A6E":"#4ADE80","Price Watch",
+    pwSq.length?gbHead(String(nUp),`rising tonight · ${nDn} falling`,nUp?"up":""):gbHead("—","no predictor data"),
+    pwTop.map(p=>{const v=pwL(p).pcp,up=v>0;return gbRow(gbFace(p),esc(p.web_name),up?"towards a rise":"towards a fall",gbBar(Math.abs(v),up?"var(--mint)":"var(--red)"),(up?"+":"−")+Math.abs(Math.round(v))+"%",up?"up":"dn");}),
+    `Prices change at <b>01:30</b>`);
+  /* Fixture Outlook: the easiest two runs and the hardest, next three weeks */
   const foStrip=p=>{let h2="";for(let e=g;e<g+3&&e<=38;e++){const q=p.gw[e];
       h2+=!q||q.blank||!q.fixtures.length?fxBlank(`GW${e}: no fixture`):(c=>c.length>1?`<span class="fxdbl">${c.join("")}</span>`:c[0])(q.fixtures.map(f=>fxChip(f.opp,f.home,foDiff(f,"all"))));}
-    return fxRun(h2,"sm");};
-  const runs=squadPlayers().map(p=>({p,v:foRun(p,g,3,"all")})).sort((a,b)=>a.v-b.v);
-  const rr=x=>row(x.p,`<span class="pz-fxm">${foStrip(x.p)}</span>`,x.v.toFixed(1));
-  const outlook=card("out","calendar","#22D3EE","Fixture Outlook",runs.length?`${esc(runs[0].p.web_name)} <span class="up">${runs[0].v.toFixed(1)}</span>`:"—",
-    block("Best Run","up",runs.slice(0,3).map(rr))+block("Worst Run","dn",runs.slice(-3).reverse().map(rr)));
-  /* Performance: points against prediction over the last six, as its pop-up */
+    return `<span class="gb-fx">${fxRun(h2,"sm")}</span>`;};
+  const runs=squadPlayers().map(p=>({p,v:foRun(p,g,3,"all")})).sort((a,b)=>a.v-b.v),sqAvg=runs.length?runs.reduce((a,x)=>a+x.v,0)/runs.length:null;
+  const foPick=runs.length>=3?[runs[0],runs[1],runs[runs.length-1]]:runs;
+  const outlook=gbCard("out","calendar","#22D3EE","Fixture Outlook",runs.length?gbHead(runs[0].v.toFixed(1),`${esc(runs[0].p.web_name)} · easiest run · avg difficulty, next 3`,"up"):gbHead("—","no fixtures"),
+    foPick.map((x,i)=>gbRow(gbFace(x.p),esc(x.p.web_name),"",foStrip(x.p),x.v.toFixed(1),i===2?"dn":"up")),
+    sqAvg!=null?`Squad average <b>${sqAvg.toFixed(1)}</b> · lower is easier`:"");
+  /* Performance: points against prediction over the last six weeks */
   const pmR=squadPlayers().map(p=>pmRow(p,pmWeeks(6),true)).filter(r=>r.vp!=null).sort((a,b)=>b.vp-a.vp);
-  const fr=r=>row(r.p,barI(Math.min(100,Math.abs(r.vp)/12*100),r.vp>=0?"#FF8A3D":"#5A3A26"),sgn1(r.vp),r.vp>=0?"up":"dn");
-  const form=card("form","flame","#FF8A3D","Performance",pmR.length?`${esc(pmR[0].p.web_name)} <span class="${pmR[0].vp>=0?"up":"dn"}">${sgn1(pmR[0].vp)}</span>`:"—",
-    pmR.length?block("Above prediction","up",pmR.filter(r=>r.vp>0).slice(0,3).map(fr))+block("Below prediction","dn",pmR.filter(r=>r.vp<0).slice(-3).reverse().map(fr))
-      :`<span class="mu">No predictions stored for the last six</span>`);
-  /* Transfer Record (22 Nov 2026, in the Rivals card's place): the season's
-     transfers judged on points while held, the best and the worst */
-  const TL=transferLog().filter(x=>!x.chip&&x.held!=null),tnet=transferLog().reduce((a,x)=>a+(x.held||0),0);
-  const tbs=TL.slice().sort((a,b)=>b.held-a.held),trr=x=>row(x.inn,`<span class="pz-xs">for ${esc(x.out.web_name)} · GW${x.e}</span>`,(x.held>=0?"+":"−")+Math.abs(Math.round(x.held)),x.held>=0?"up":"dn");
-  const trec=TL.length?card("trec","arrow-right-left","#7AA2FF","Transfer Record",`<span class="${tnet>=0?"up":"dn"}">${tnet>=0?"+":"−"}${Math.abs(Math.round(tnet))}</span> <small>pts from transfers</small>`,
-      block("Best","up",tbs.slice(0,2).map(trr))+block("Worst","dn",tbs.slice(-2).reverse().filter(x=>x.held<0).map(trr),"None lost points"))
-    :card("trec","arrow-right-left","#7AA2FF","Transfer Record","—",`<span class="mu">No transfers yet</span>`);
-  return `<section class="pz-sec"><div class="pz-sh"><h2>This Week</h2><button class="fci" aria-label="About" data-tip="This gameweek at a glance. Open a card for the detail.">i</button></div>
-    <div class="pz-ins">${move}${cap}${warn}${ywCard}${price}${outlook}${form}${trec}</div></section>`;
+  const pmPick=pmR.length>=3?[pmR[0],pmR[1],pmR[pmR.length-1]]:pmR,pmMax=Math.max(1,...pmPick.map(r=>Math.abs(r.vp))),pmSum=pmR.reduce((a,r)=>a+r.vp,0);
+  const form=gbCard("form","flame","#FF8A3D","Performance",pmR.length?gbHead(sgn1(pmR[0].vp),`${esc(pmR[0].p.web_name)} · vs predicted, last 6 GW`,pmR[0].vp>=0?"up":"dn"):gbHead("—","no predictions stored"),
+    pmPick.map(r=>gbRow(gbFace(r.p),esc(r.p.web_name),"",gbBar(Math.abs(r.vp)/pmMax*100,r.vp>=0?"#FF8A3D":"#7A4A2A"),sgn1(r.vp),r.vp>=0?"up":"dn")),
+    pmR.length?`Squad <b class="${pmSum>=0?"up":"dn"}">${sgn1(pmSum)}</b> against prediction, last 6 GW`:"");
+  /* Transfer Record: the season's transfers judged on points while held */
+  const TLa=transferLog(),TL=TLa.filter(x=>!x.chip&&x.held!=null),tnet=TLa.reduce((a,x)=>a+(x.held||0),0);
+  const tbs=TL.slice().sort((a,b)=>b.held-a.held),trPick=tbs.length>=3?[tbs[0],tbs[1],tbs[tbs.length-1]]:tbs;
+  const hits=((S.tracker&&S.tracker.gw)||[]).reduce((a,r)=>a+(r.transferCost||0),0);
+  const trec=gbCard("trec",`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>`,"#7AA2FF","Transfer Record",
+    TL.length?gbHead(`${tnet>=0?"+":"−"}${Math.abs(Math.round(tnet))}`,"pts from transfers · season",tnet>=0?"up":"dn"):gbHead("—","no transfers yet"),
+    trPick.map(x=>gbRow(gbFace(x.inn),esc(x.inn.web_name),`for ${esc(x.out.web_name)} · GW${x.e}`,"",(x.held>=0?"+":"−")+Math.abs(Math.round(x.held)),x.held>=0?"up":"dn")),
+    TL.length?`${TL.length} transfer${TL.length===1?"":"s"} · ${hits?`${hits/4} hit${hits===4?"":"s"} <b class="dn">−${hits}</b>`:"no hits"}${tbs.length&&tbs[tbs.length-1].held>=0?" · no transfer lost points":""}`:"");
+  /* the deadline, counted down */
+  const ev=(S.events||[]).find(e=>e.id===g),dl=ev&&ev.deadline?new Date(ev.deadline):null,left=dl?dl-Date.now():null;
+  const cd=left!=null&&left>0?(left>=864e5?`${Math.floor(left/864e5)}d ${Math.floor(left%864e5/36e5)}h`:`${Math.floor(left/36e5)}h ${Math.floor(left%36e5/6e4)}m`):null;
+  const dlTxt=dl&&!isNaN(dl)?`GW${g} · deadline ${dl.toLocaleString("en-GB",{timeZone:"Europe/London",weekday:"short",hour:"2-digit",minute:"2-digit"}).replace(",","")}${cd?` · <b>${cd}</b>`:""}`:`GW${g}`;
+  return `<section class="pz-sec gb"><div class="pz-sh"><h2>Gameweek Brief</h2><button class="fci" aria-label="About" data-tip="The gameweek at a glance. Open a card for the detail.">i</button><span class="gb-dl">${lic("calendar",14)} ${dlTxt}</span></div>
+    <div class="gb-grp">Before the deadline</div><div class="pz-ins">${ywCard}${warn}${move}${cap}</div>
+    <div class="gb-grp">Market and season</div><div class="pz-ins">${price}${outlook}${form}${trec}</div></section>`;
 }
 /* ============================================================
    THIS WEEK BATCH 3 (22 Nov 2026, Andy approved the mocks): Team News
@@ -2949,14 +2967,14 @@ function ywSim(g){
   ids.forEach(id=>{const p=PM.get(id);if(!p)return;const mu=hPts(p,g,1),h=A[id]||A[String(id)]||{};
     const hist=Object.keys(h).filter(e=>+e<next).map(e=>+h[e]||0),hm=hist.length?hist.reduce((a,b)=>a+b,0)/hist.length:0;
     draws[id]=hist.length>=5&&hm>0.3?()=>hist[Math.floor(rnd()*hist.length)]*mu/hm:()=>Math.max(0,mu+Math.max(1.5,0.9*mu)*gauss());});
+  const xiMean=me.reduce((a,x)=>a+hPts(x.p,g,1)*x.m,0),mean=weekPtsFor(g,1),shift=mean-xiMean;
   const N=2000,mine=new Float64Array(N);let top=0;
   const pr=rivals.map(()=>new Float64Array(N));
   for(let s=0;s<N;s++){const d={};ids.forEach(id=>{if(draws[id])d[id]=draws[id]();});
-    let t=0;me.forEach(x=>{if(x.m)t+=(d[x.p.id]||0)*x.m;});mine[s]=t;
+    let t=shift;me.forEach(x=>{if(x.m)t+=(d[x.p.id]||0)*x.m;});mine[s]=t;
     let best=-1;rivals.forEach((r,j)=>{let u=0;r.list.forEach(x=>{u+=(d[x.id]||0)*x.m;});pr[j][s]=u;if(u>best)best=u;});
     if(t>=best)top++;}
   const sorted=Array.from(mine).sort((a,b)=>a-b),q=f=>sorted[Math.min(N-1,Math.floor(f*N))];
-  const mean=me.reduce((a,x)=>a+hPts(x.p,g,1)*x.m,0);
   const v={g,N,mine,sorted,mean,lo:q(0.1),hi:q(0.9),pTop:rivals.length?top/N:null,nRiv:rivals.length,me,mult,
     above:t=>{let n=0;for(let s=0;s<N;s++)if(mine[s]>t)n++;return n/N;}};
   _ywSim={k:key,v};return v;

@@ -2159,6 +2159,29 @@ svg.chart circle[data-tip]{cursor:pointer}
 .yw-cv{display:flex;align-items:baseline;gap:4px;justify-content:flex-end}.yw-cr>.ds-fig:last-child{text-align:right}
 .yw-open{margin-top:auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;border-radius:10px}
 .cx-tier{display:grid;grid-template-columns:24px minmax(0,1fr) repeat(3,90px);gap:12px;align-items:center;min-height:38px;border-top:1px solid rgba(255,255,255,.05);text-align:center}.cx-tier b{text-align:left;font:600 13px 'Geist',sans-serif}.cx-tierh{border:0;min-height:22px;font:500 11px 'Geist',sans-serif;color:var(--mute)}.cx-tierh span:first-child{grid-column:1/3}
+/* v14 (22 Nov 2026): Gameweek Brief, gb- */
+.gb-dl{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font:500 12.5px 'Geist',sans-serif;color:var(--mute)}.gb-dl b{font-family:'Geist Mono',monospace;color:#EDEDED}
+.gb-grp{font:600 11px 'Geist',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6E6E6E;margin:4px 2px 8px}.gb .pz-ins+.gb-grp{margin-top:18px}
+.gb-c{gap:10px;padding:14px 16px 12px}
+.gb-hl{display:flex;align-items:baseline;gap:8px;min-height:34px;min-width:0}
+.gb-fig{font:700 26px 'Geist Mono',monospace;letter-spacing:-.02em;color:#EDEDED;line-height:1;flex:none}.gb-fig.up{color:var(--mint)}.gb-fig.am{color:var(--amber)}.gb-fig.dn{color:#FF8095}.gb-fig.mu{color:var(--mute)}
+.gb-lab{font:500 12.5px 'Geist',sans-serif;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.gb-hist{margin-left:auto;width:92px;height:34px;flex:none;align-self:center}
+.gb-rows{display:flex;flex-direction:column}.gb-none{font:500 12px 'Geist',sans-serif;color:var(--mute);padding:10px 0}
+.gb-r{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) 52px;gap:9px;align-items:center;min-height:42px;border-top:1px solid rgba(255,255,255,.05)}
+.gb-r:first-child{border-top:0}
+.gb-r.nm{grid-template-columns:auto minmax(0,1fr) 52px}.gb-r.nm:has(.gb-st){grid-template-columns:auto auto minmax(0,1fr) 52px}
+.gb-r:not(:has(img)):not(:has(.gb-st)):not(.nm){grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) 52px}
+.gb-mv{grid-template-columns:auto minmax(0,1fr) 52px!important}.gb-mv.top{background:linear-gradient(90deg,rgba(61,220,151,.08),transparent 70%);border-radius:8px;margin:0 -6px;padding:0 6px}
+.gb-f{width:26px;height:32px;object-fit:cover;object-position:top;border-radius:6px;background:#1E1E1E;display:block}
+.gb-pair{display:inline-flex;align-items:center;gap:4px;color:var(--mute)}
+.gb-st{display:grid;place-items:center}
+.gb-n{display:flex;flex-direction:column;min-width:0;line-height:1.2}.gb-n b{font:600 12.5px 'Geist',sans-serif;color:#EDEDED;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gb-n i{font-style:normal;font:500 11px 'Geist',sans-serif;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gb-bt{height:6px;border-radius:3px;background:#242424;overflow:hidden}.gb-bt i{display:block;height:100%;border-radius:3px}
+.gb-v{font:700 13px 'Geist Mono',monospace;text-align:right;color:#EDEDED}.gb-v.up{color:var(--mint)}.gb-v.dn{color:#FF8095}.gb-v.am{color:var(--amber)}
+.gb-fx{display:inline-flex;justify-content:flex-end;min-width:0}.gb-fx .fxc{min-width:32px;height:19px;line-height:19px;font-size:9.5px}
+.gb-ft{margin-top:auto;padding-top:9px;border-top:1px solid rgba(255,255,255,.06);font:500 12px 'Geist',sans-serif;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:27px}
+.gb-ft b{font-family:'Geist Mono',monospace;color:#EDEDED}.gb-ft b.up{color:var(--mint)}.gb-ft b.dn{color:#FF8095}
 </style>
 </head>
 <body>

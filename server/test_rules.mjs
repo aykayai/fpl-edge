@@ -78,7 +78,7 @@ try {
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
-    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,lkCalc,lkRankAt,lkTotalAt,ywSim,fieldEO10k,
+    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,lkCalc,lkRankAt,lkTotalAt,ywSim,fieldEO10k,weekPtsFor,
     
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
@@ -706,6 +706,24 @@ try {
     g.act("tab", "chips"); S.chipPop = "report"; g.render();
     check(doc.querySelectorAll(".modal .cx-tier").length === 5 && /7\.5%/.test(doc.querySelector(".modal").textContent), "Chips: Chip Report shows chips by rank tier");
     S.chipPop = null; S.field = keepF; g.act("tab", "squad"); S.startGW = NEXT; g.render();
+  }
+
+  /* ---------- v14: Gameweek Brief (22 Nov 2026) ---------- */
+  {
+    S.startGW = NEXT; S.pop = null; g.render();
+    const sec = doc.querySelector(".pz-sec.gb");
+    check(!!sec && sec.querySelector("h2").textContent === "Gameweek Brief" && ![...doc.querySelectorAll("h2")].some(h => h.textContent === "This Week"), "Gameweek Brief: This Week is renamed");
+    const keys = sec ? [...sec.querySelectorAll(".gb-c")].map(b => (/act\('pop','(\w+)'\)/.exec(b.getAttribute("onclick")) || [])[1]) : [];
+    check(keys.join(",") === "week,warn,move,cap,price,out,form,trec", "Gameweek Brief: before the deadline, then market and season", keys.join(","));
+    /* one team total: the Planner's, on Your Week and Team News alike */
+    const team = g.weekPtsFor(NEXT, 1).toFixed(1);
+    const yw = sec && sec.querySelector(".gb-c[onclick*=\"'week'\"] .gb-fig"), tn = sec && sec.querySelector(".gb-c[onclick*=\"'warn'\"] .gb-ft");
+    check(!!yw && yw.textContent === team && !!tn && tn.textContent.trim().endsWith("of " + team), "Gameweek Brief: Your Week and Team News show the Planner's total", (yw && yw.textContent) + " / " + (tn && tn.textContent) + " / " + team);
+    const ins = sec ? [...sec.querySelectorAll(".gb-c[onclick*=\"'move'\"] .gb-mv .gb-n b")].map(b => b.textContent.split(" → ")[1]) : [];
+    check(ins.length > 0 && new Set(ins).size === ins.length, "Transfers: each row brings in a different player", ins.join(", "));
+    check(sec && !sec.querySelector(".pz-dts"), "Gameweek Brief: no Dream Team stars on the cards");
+    const shape = sec ? [...sec.querySelectorAll(".gb-c")].every(c => c.querySelector(".gb-fig") && c.querySelector(".gb-ft") && c.querySelectorAll(".gb-rows > .gb-r").length <= 3) : false;
+    check(shape, "Gameweek Brief: every card has a headline figure, at most three rows and a footer");
   }
 
   /* ---------- F60 best combination ---------- */
