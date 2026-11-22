@@ -78,7 +78,7 @@ try {
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
-    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,lkCalc,lkRankAt,lkTotalAt,
+    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,lkCalc,lkRankAt,lkTotalAt,ywSim,fieldEO10k,
     
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
@@ -677,6 +677,35 @@ try {
       if (rival) { g.act("h2h", rival.id); check(!!doc.querySelector(".modal .hh-g .hh-side.me") && doc.querySelectorAll(".modal .hh-side").length === 2, "Head to head: opens from a league row with both sides"); g.act("pop", null); }
       S.rankBands = keepB; vm.runInContext("liveGW=window.__lgOrig", ctx); S.wkLive[LG] = keepW; S.startGW = NEXT; g.render();
     }
+  }
+
+  /* ---------- This Week batch 6: Your Week and the field's ownership (22 Nov 2026) ---------- */
+  {
+    S.startGW = NEXT; g.render();
+    const a = g.ywSim(NEXT), b = g.ywSim(NEXT);
+    check(a === b && a.lo <= a.mean + 1e-9 && a.mean <= a.hi + 1e-9 && a.lo < a.hi, "Your Week: the likely range brackets the prediction and holds between repaints", a.lo.toFixed(1) + " " + a.mean.toFixed(1) + " " + a.hi.toFixed(1));
+    /* each draw is scaled to the player's prediction, so the runs average out near it */
+    const avg = Array.from(a.mine).reduce((x, y) => x + y, 0) / a.N;
+    check(Math.abs(avg - a.mean) / Math.max(1, a.mean) < 0.06, "Your Week: the simulated average matches the predicted score", avg.toFixed(1) + " vs " + a.mean.toFixed(1));
+    check(a.above(a.lo) >= a.above(a.hi) && Math.abs(a.above(-1) - 1) < 1e-9, "Your Week: chances fall as the target rises");
+    check(!!doc.querySelector(".pz-in[onclick*=\"'week'\"]"), "Your Week: the card sits in This Week");
+    g.act("pop", "week");
+    check(doc.querySelectorAll(".modal .yw-g > section").length === 3 && !!doc.querySelector(".modal .yw-big"), "Your Week: This Week shows the score, against the field and the matches");
+    g.act("poptab", "last");
+    check(doc.querySelectorAll(".modal .yw-g > section").length === 3, "Your Week: Last Week shows what happened and why");
+    g.act("pop", null);
+    /* the field's ownership: an invented sample, so the figures are known */
+    const keepF = S.field, pid = S.model.players[0].id;
+    S.field = { latest: NEXT - 1, gws: { [NEXT - 1]: { gw: NEXT - 1, top10k: { eo: { [pid]: 137 }, own: {}, cap: {}, chips: { bboost: 7.5 }, avg: {} }, near: { eo: {}, own: {}, cap: {}, chips: { bboost: 3.1 }, avg: {} } } } };
+    check((g.fieldEO10k() || {})[pid] === 137, "Field EO: read from the top 10k sample");
+    g.act("tab", "table"); g.act("pown", "eo");
+    const heads = [...doc.querySelectorAll("th")].map(t => t.textContent);
+    check(heads.some(t => /EO 10k/.test(t)), "Player Data: the ownership column can show EO 10k");
+    g.act("pown", "all"); g.act("tab", "fixtures");
+    check([...doc.querySelectorAll("th")].some(t => /^EO/.test(t.textContent.trim())), "Teams: an EO column for the top 10k");
+    g.act("tab", "chips"); S.chipPop = "report"; g.render();
+    check(doc.querySelectorAll(".modal .cx-tier").length === 5 && /7\.5%/.test(doc.querySelector(".modal").textContent), "Chips: Chip Report shows chips by rank tier");
+    S.chipPop = null; S.field = keepF; g.act("tab", "squad"); S.startGW = NEXT; g.render();
   }
 
   /* ---------- F60 best combination ---------- */

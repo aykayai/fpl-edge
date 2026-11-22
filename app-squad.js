@@ -599,7 +599,6 @@ function dGain(inn,out,g,h){
   for(let k=0;k<(h||1)&&g+k<=38;k++)s+=Math.pow(DECAY,k)*((inn.gw[g+k]?.pts||0)-(out.gw[g+k]?.pts||0));
   return s;
 }
-function moveBar(g){return freeWeek(g)?TRANSFER_MIN:freeLeft(g)>0?FT_VALUE:FT_VALUE+HIT;}
 /* The squad's predicted total from week g over h weeks: XI, captain, chip,
    vice and bench cover, less hits. The header uses the planner's week and
    horizon; the xFPL comparison asks for any single week (F103: these were
@@ -1150,108 +1149,6 @@ function dashData(){
     .sort((a,b)=>b.score-a.score);
   return{strength,outlook,risks,conc:top,bench,benchPts,caps,risky,riskPts,xiPts,diffs,diffPts,runList,xi};
 }
-/* Kind and hard fixture runs for the next five weeks (Attack and Defence
-   outlook): This Week's Fixture Outlook card and its pop-up */
-function dashRuns(){
-  const g=VG(), sp=squadPlayers();
-  const kind=p=>{let good=0,n=0;
-    for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];if(!q||q.blank)continue;
-      q.fixtures.forEach(f=>{if(posDiff(p,f)<=2)good++;n++;});}
-    return{good,n};};
-  const rated=list=>list.map(p=>{const k=kind(p);
-    return{p,...k,bad:k.n-k.good};}).filter(x=>x.n>=4);
-  const bestOf=list=>rated(list).filter(x=>x.good>=4)
-    .sort((a,b)=>b.good-a.good||(b.p.gw[g]?.pts||0)-(a.p.gw[g]?.pts||0)).slice(0,3);
-  const worstOf=list=>rated(list).filter(x=>x.bad>=3)
-    .sort((a,b)=>b.bad-a.bad||(a.p.gw[g]?.pts||0)-(b.p.gw[g]?.pts||0)).slice(0,3);
-  const attP=sp.filter(p=>p.pos>=3), defP=sp.filter(p=>p.pos<=2);
-  return{att:bestOf(attP),attBad:worstOf(attP),def:bestOf(defP),defBad:worstOf(defP)};
-}
-/* The Squad Dashboard's detail, now shown in This Week's pop-ups (21 Nov
-   2026): pick lists the parts to show (str, caps, risk, form, aout, dout). */
-function dashHTML(pick){
-  pick=pick||["str","caps","risk","form","aout","dout"];
-  const g=VG(), d=dashData();
-  const sp=squadPlayers(), xi=startingXI();
-  const kind=p=>{let good=0,n=0;
-    for(let e=g;e<g+5&&e<=38;e++){const q=p.gw[e];if(!q||q.blank)continue;
-      q.fixtures.forEach(f=>{if(posDiff(p,f)<=2)good++;n++;});}
-    return{good,n};};
-  const rated=list=>list.map(p=>{const k=kind(p);
-    return{p,...k,bad:k.n-k.good};}).filter(x=>x.n>=4);
-  const bestOf=list=>rated(list).filter(x=>x.good>=4)
-    .sort((a,b)=>b.good-a.good||(b.p.gw[g]?.pts||0)-(a.p.gw[g]?.pts||0)).slice(0,3);
-  const worstOf=list=>rated(list).filter(x=>x.bad>=3)
-    .sort((a,b)=>b.bad-a.bad||(a.p.gw[g]?.pts||0)-(b.p.gw[g]?.pts||0)).slice(0,3);
-  const attP=sp.filter(p=>p.pos>=3), defP=sp.filter(p=>p.pos<=2);
-  const att=bestOf(attP), attBad=worstOf(attP);
-  const def=bestOf(defP), defBad=worstOf(defP);
-  const byForm=[...sp].sort((a,b)=>b.form-a.form);
-  const line=(l,r,c)=>`<div class="dline"><span>${l}</span><span class="mono" style="${c||""}">${r}</span></div>`;
-  const plLine=(p,right,c)=>`<div class="dline">
-      <span style="display:flex;align-items:center;gap:7px">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,18)}
-        <span><b>${esc(p.web_name)}</b><span class="note" style="display:block">${esc(p.teamName)} · ${POS[p.pos]}</span></span></span>
-      <span class="mono" style="${c||""};font-weight:700">${right}</span></div>`;
-  const cell=(k,title,head,body,colour)=>!pick.includes(k)?"":`
-    <div class="dashpart"><div class="dashph"><span class="dkey">${title}</span>
-        <span class="dval" style="${colour||""}">${head}</span></div>
-      <div class="dashbody">${body}</div></div>`;
-
-  /* strength is keyed by position: {got, best, pct, n} for each */
-  const st=d.strength||{};
-  const totGot=[1,2,3,4].reduce((a,k)=>a+(st[k]?st[k].got:0),0);
-  const totBest=[1,2,3,4].reduce((a,k)=>a+(st[k]?st[k].best:0),0);
-  const barPct=Math.round(100*totGot/Math.max(1,totBest));
-  return `<div class="dashparts">
-    ${cell("str","Squad strength",`${totGot.toFixed(1)} of ${totBest.toFixed(1)}`,
-      `<div class="dbar"><span style="width:${clamp(barPct,3,100)}%"></span></div>
-       <p class="note" style="margin:8px 0 10px">Your squad against the strongest one the same budget could buy.</p>
-       ${[1,2,3,4].filter(k=>st[k]).map(k=>line(POS[k],
-         `${st[k].got.toFixed(1)} / ${st[k].best.toFixed(1)}`,
-         st[k].pct<0.75?"color:var(--red)":st[k].pct>=0.9?"color:var(--mint)":"")).join("")}`,
-      barPct>=88?"color:var(--mint)":barPct>=75?"color:var(--amber)":"color:var(--red)")}
-    ${(()=>{
-      /* F63: this cell is a ranking of options, and it used to be titled
-         "Captain" while the captain actually picked was someone else. The
-         picked captain now leads, then the options by projected points. */
-      const capId=_histCaptain!=null?_histCaptain:effectiveCaptainVice(g).captain;
-      const mine=sp.find(p=>p.id===capId)||null, mp=mine?(mine.gw[g]?.pts||0)*2:0;
-      const head=mine?`${esc(mine.web_name)} ${mp.toFixed(1)}`
-        :(d.caps.length?`${esc(d.caps[0].p.web_name)} ${(d.caps[0].pts*2).toFixed(1)}`:"—");
-      return cell("caps","Captain options",head,
-        (mine?`<p class="dsub">Your captain</p>${plLine(mine,mp.toFixed(1),"color:var(--cream)")}<p class="dsub">Best options</p>`:"")
-        +d.caps.map(c=>plLine(c.p,(c.pts*2).toFixed(1),"color:var(--mint)")).join("")
-        +`<p class="note" style="margin:8px 0 0">Doubled score for GW${g}. The options are ranked by projected points.</p>`,
-        mine?"color:var(--cream)":"color:var(--mint)");
-    })()}
-    ${cell("risk","Points at risk",
-      `${d.riskPts.toFixed(1)} of ${d.xiPts.toFixed(1)}`,
-      d.risky.length?d.risky.map(p=>plLine(p,(p.gw[g]?.pts||0).toFixed(1),
-        p.staleRole?"color:var(--amber)":"color:var(--mute)")).join("")
-        +`<p class="note" style="margin:8px 0 0">Amber marks a squad place that may have changed hands.</p>`
-        :`<p class="note" style="margin:0">Nothing flagged.</p>`,
-      d.riskPts/Math.max(1,d.xiPts)>0.25?"color:var(--red)":d.riskPts>0?"color:var(--amber)":"")}
-    ${cell("form","Form",byForm.length?`${esc(byForm[0].web_name)} ${byForm[0].form.toFixed(1)}`:"—",
-      `<p class="dsub">Best</p>${byForm.slice(0,3).map(p=>plLine(p,p.form.toFixed(1)+formTag(p),"color:var(--mint)")).join("")}
-       <p class="dsub">Worst</p>${byForm.slice(-3).reverse().map(p=>plLine(p,p.form.toFixed(1)+formTag(p),"color:var(--red)")).join("")}`,
-      "color:var(--mint)")}
-    ${cell("aout","Attack outlook",
-      att.length?`${esc(att[0].p.web_name)} ${att[0].good}/${att[0].n}`:"none kind",
-      `<p class="dsub">Kind runs</p>${att.length?att.map(x=>plLine(x.p,`${x.good}/${x.n}`,"color:var(--amber)")).join("")
-        :`<p class="note" style="margin:0">No forward or midfielder has four kind fixtures in the next five.</p>`}
-       <p class="dsub">Hard runs</p>${attBad.length?attBad.map(x=>plLine(x.p,`${x.bad}/${x.n} hard`,"color:var(--red)")).join("")
-        :`<p class="note" style="margin:0">None with three or more hard fixtures.</p>`}`,
-      att.length?"color:var(--amber)":"color:var(--mute)")}
-    ${cell("dout","Defence outlook",
-      def.length?`${esc(def[0].p.web_name)} ${def[0].good}/${def[0].n}`:"none kind",
-      `<p class="dsub">Kind runs</p>${def.length?def.map(x=>plLine(x.p,`${x.good}/${x.n}`,"color:var(--sky)")).join("")
-        :`<p class="note" style="margin:0">No keeper or defender has four kind fixtures in the next five.</p>`}
-       <p class="dsub">Hard runs</p>${defBad.length?defBad.map(x=>plLine(x.p,`${x.bad}/${x.n} hard`,"color:var(--red)")).join("")
-        :`<p class="note" style="margin:0">None with three or more hard fixtures.</p>`}`,
-      def.length?"color:var(--sky)":"color:var(--mute)")}
-  </div>`;
-}
-
 /* The Planner's List view (21 Nov 2026, Andy's columns): Player, Sells (paid
    under it), Pts, Form, xMins, xPts (the pitch's own pill), 3GW, Owned,
    Rivals, Next 3, then the transfer button and the menu. Every header

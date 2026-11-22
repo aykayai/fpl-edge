@@ -46,6 +46,7 @@ function act(k,a,b,c){
     case"rkmode":S.rkMode=a==="pts"?"pts":"rank";break;
     case"trh":S.trH=[1,3,5].includes(+a)?+a:1;break;
     /* batch 5: the live gameweek */
+    case"ywf":S.ywF=["near","top10k","overall","rivals"].includes(a)?a:"near";break;
     case"lkf":S.lkF=["near","top10k","overall"].includes(a)?a:"top10k";break;
     case"lkl":S.lkL=a==="live"?"live":"season";break;
     case"mcm":S.mcM=a==="table"?"table":"matches";break;
@@ -80,7 +81,7 @@ function act(k,a,b,c){
       if(ok)toast("Both transfers made");break;}
     /* Player Data (12 Nov 2026) */
     case"pshow":S.pShow=["all","out","mine"].includes(a)?a:"all";S.pdLimit=PD_PAGE;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
-    case"pown":S.pOwn=a==="rank"?"rank":"all";LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
+    case"pown":S.pOwn=["rank","eo"].includes(a)?a:"all";LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
     case"pstart":S.pStarters=!S.pStarters;break;
     case"pdmorefilters":S.pdMore=!S.pdMore;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
     case"pwin":{const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=a==="ros"?38:Math.min(38,g0+([3,5].includes(+a)?+a:5)-1);break;}
