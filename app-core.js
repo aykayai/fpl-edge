@@ -450,7 +450,6 @@ const PBAND=[["#4A0010","#FFD9DF"],["#96122A","#FFE3E8"],["#D4545E","#3A0009"],
    lightness changes at every step so it reads without colour too. */
 const FDR5={1:["#2BD47D","#04210F"],2:["#1E7A4D","#E2F8EC"],3:["#3A3A3A","#E4E4E4"],4:["#B54A2C","#FFF1EC"],5:["#7E1733","#FFDDE5"]};
 const fdrBand=d=>Math.min(5,Math.max(1,Math.round(+d)||3));
-const fdrCol=d=>FDR5[fdrBand(d)];
 /* THE fixture chip (Andy's pick B, 20 Nov 2026): a strip of equal cells,
    three capitals, "@" before an away opponent (drawn by CSS), and a
    difficulty bar along the bottom of each cell. Every fixture on the site
