@@ -423,6 +423,10 @@ try {
     check(it.length === 2 && it[0].img === "https://img.example.com/l.jpg" && it[0].sum === "He goes for a scan on Monday." && !/</.test(it[0].title),
       "News: feed parsing takes the widest picture, drops the 'appeared first on' line, drops undated and javascript: items", JSON.stringify(it.map(i => [i.title, i.img, i.sum])));
     check(it[1] && it[1].img === "", "News: pictures must be https", it[1] && it[1].img);
+    check(NM.matchEventPost("⚽ | GOAL - McBurnie 🐯 Hull City 2-0 Brighton #FPL") && NM.matchEventPost("🅰 | ASSIST - Gourna-Douath") && NM.matchEventPost("⚽ | GOAL - McBurnie | ASSIST - Belloumi")
+      && NM.matchEventPost("🟥 | RED CARD - Costinha 🐯 Hull City 1-0 Brighton") && NM.matchEventPost("✅ | DEF CON POINTS 🕊 Groß (+2) 🕊")
+      && !NM.matchEventPost("LINE-UPS | #LIVMUN LIV: Alisson, van Dijk") && !NM.matchEventPost("Rogers now has 6 goal involvements in his last 5"),
+      "News: FFScout's goal, assist, red card and DefCon posts are left out of Social Media; line-ups and other posts stay");
 
     /* the one flag mechanism: every page shows the same chance and the same 'since' */
     const keepFlags = S.flags, keepNews = [S.news, S.social, S.squadNews, S.newsState, S.newsWindow, S.newsSources];

@@ -143,6 +143,10 @@ async function fetchYouTube([name, id]) {
     keep(key, "social", items);
   } catch (e) { fail(key, "social", e); log("news.youtube", "fail " + name + " " + e.message, Date.now() - t0); }
 }
+/* FFScout's live-match posts (goals, assists, red cards, DefCon points:
+   "⚽ | GOAL - McBurnie ...", "✅ | DEF CON POINTS ...") are left out (Andy,
+   22 Nov 2026): they crowded out everything else */
+export const matchEventPost = t => /\|\s*(GOAL|ASSIST|RED CARD)\s*-|\|\s*DEF ?CON POINTS/i.test(String(t || ""));
 async function fetchBluesky([name, handle]) {
   const key = "Bluesky · " + name, t0 = Date.now();
   try {
@@ -156,7 +160,7 @@ async function fetchBluesky([name, handle]) {
         || (e.media && e.media.images && e.media.images[0] && e.media.images[0].thumb) || "";
       return { src: name, pub: "Bluesky", kind: "bs", title: plainText(p.record.text || "").slice(0, 300), sum: "",
         url: safeUrl(`https://bsky.app/profile/${handle}/post/${rkey}`), time: Date.parse(p.record.createdAt || p.indexedAt || ""), img: httpsOnly(img) };
-    }).filter(i => i.title && Number.isFinite(i.time) && fresh(i)).slice(0, 10).map(enrich);
+    }).filter(i => i.title && !matchEventPost(i.title) && Number.isFinite(i.time) && fresh(i)).slice(0, 10).map(enrich);
     keep(key, "social", items);
   } catch (e) { fail(key, "social", e); log("news.bluesky", "fail " + name + " " + e.message, Date.now() - t0); }
 }
