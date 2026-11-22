@@ -78,7 +78,7 @@ try {
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
-    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,
+    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,planWeeks,transferLog,capRecord,hPts,rankMilestones,teamRating,lkCalc,lkRankAt,lkTotalAt,
     
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
@@ -639,6 +639,44 @@ try {
     g.act("pop", "str");
     check(!!doc.querySelector(".modal .rt-hero"), "Squad Strength's pop-up now opens Team Rating");
     g.act("pop", null);
+  }
+
+  /* ---------- This Week batch 5: the live gameweek (22 Nov 2026) ---------- */
+  {
+    const LG = NEXT - 1, row = (S.tracker && S.tracker.gw || []).find(r => r.event === LG && Array.isArray(r.picks) && r.picks.length);
+    if (!row) check(false, "Live: the last week has official picks to test with");
+    else {
+      /* an invented live week on his real picks: one match in play, four BPS
+         figures with a tie at the top (FPL: 3, 3, then 1; the fourth none) */
+      const ids = row.picks.map(k => k.id), pl = id => S.model.players.find(p => p.id === id);
+      const players = {}; ids.forEach((id, i) => { players[id] = { p: 2 + (i % 5), m: 90, g: 0, a: 0, cs: 0, b: 0, sv: 0, yc: 0, rc: 0, og: 0, ps: 0, pm: 0, dc: 0, dt: 0, bps: 0, dcn: 0 }; });
+      const t0 = pl(ids[0]).team, other = S.model.teams.find(t => t.id !== t0).id;
+      const fx = { id: 9901, h: t0, a: other, hs: 1, as: 0, done: false, fp: false, started: true, min: 63, ko: new Date().toISOString(),
+        st: { bps: { h: [[ids[0], 30], [ids[1], 30]], a: [[ids[2], 20], [ids[3], 10]] } } };
+      S.wkLive = S.wkLive || {}; const keepW = S.wkLive[LG]; S.wkLive[LG] = { gw: LG, players, fixtures: [fx] };
+      w.__lgOrig = vm.runInContext("liveGW", ctx); vm.runInContext("liveGW=function(){return " + LG + "}", ctx);
+      const L = g.lkCalc(LG);
+      const want = { [ids[0]]: 3, [ids[1]]: 3, [ids[2]]: 1 };
+      check(!!L && ids.slice(0, 4).every(id => (L.prov[id] || 0) === (want[id] || 0)), "Live: provisional bonus goes 3, 3, 1 on a tie at the top, none to the fourth",
+        L && JSON.stringify(ids.slice(0, 4).map(id => L.prov[id] || 0)));
+      const exp = row.picks.reduce((a, k, i) => a + (players[k.id].p + (want[k.id] || 0)) * (k.multiplier != null ? k.multiplier : (i < 11 ? 1 : 0)), 0) - (row.transferCost || 0);
+      check(!!L && Math.abs(L.pre - exp) < 1e-9, "Live: points are each pick's live points with bonus, times his multiplier, less the hit", L && L.pre + " vs " + exp);
+      /* invented bands (the frozen state has none): a band total gives its own rank */
+      const keepB = S.rankBands; S.rankBands = { gw: LG, bands: [{ rank: 10000, at: 10000, total: 760 }, { rank: 100000, at: 100000, total: 730 }, { rank: 1000000, at: 1000000, total: 680 }] };
+      check(g.lkRankAt(730, LG) === 100000 && g.lkRankAt(760, LG) === 10000, "Live rank: a band total gives that band rank", g.lkRankAt(730, LG) + " " + g.lkRankAt(760, LG));
+      const r1 = g.lkRankAt(700, LG), r2 = g.lkRankAt(720, LG);
+      {
+        check(r2 < r1, "Live rank: more points, a better rank", r1 + " vs " + r2);
+        check(Math.abs(g.lkTotalAt(r1, LG) - 700) < 0.5, "Live rank: rank to total and back agree", String(g.lkTotalAt(r1, LG)));
+      }
+      S.startGW = LG; g.render();
+      check(!!doc.querySelector(".lp-sum") && !!doc.querySelector(".lv4 .lg4-r.me") && !!doc.querySelector(".lk-rank .rk4-hero") && !!doc.querySelector(".mc5 .m4.lv"),
+        "Live: summary bar, Live panel with his row, Rank and Match Centre all draw");
+      check(!doc.querySelector(".pz-in"), "Live: This Week's cards give way to Rank and Match Centre");
+      const rival = L.league.find(x => !x.mine);
+      if (rival) { g.act("h2h", rival.id); check(!!doc.querySelector(".modal .hh-g .hh-side.me") && doc.querySelectorAll(".modal .hh-side").length === 2, "Head to head: opens from a league row with both sides"); g.act("pop", null); }
+      S.rankBands = keepB; vm.runInContext("liveGW=window.__lgOrig", ctx); S.wkLive[LG] = keepW; S.startGW = NEXT; g.render();
+    }
   }
 
   /* ---------- F60 best combination ---------- */
