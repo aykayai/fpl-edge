@@ -865,18 +865,18 @@ function newsHTML(){
   /* ---- Injury Room ---- */
   const irTab=S.nwIr||"chg";
   let irRows;
-  if(irTab==="chg"){const inWin=ch.filter(x=>x.t>=cut);irRows=(inWin.length>=10?inWin:ch).slice(0,14);}
+  if(irTab==="chg"){const inWin=ch.filter(x=>x.t>=cut);irRows=(inWin.length>=20?inWin:ch).slice(0,40);}
   else irRows=S.model.players.filter(p=>p.avail<1&&p.back&&p.back!=="unknown").map(p=>{const f=flagNow(p)||{};return {p,a:f.was!=null?f.was:100,b:Math.round(p.avail*100),t:f.since||Date.now(),n:p.news||""};})
-    .sort((a,b)=>{const d=x=>{const m=/^(\d{2})-([A-Za-z]{3})$/.exec(x.p.back);return m?Date.parse(`${+m[1]} ${m[2]} ${new Date().getFullYear()}`):0;};return d(a)-d(b);}).slice(0,14);
+    .sort((a,b)=>{const d=x=>{const m=/^(\d{2})-([A-Za-z]{3})$/.exec(x.p.back);return m?Date.parse(`${+m[1]} ${m[2]} ${new Date().getFullYear()}`):0;};return d(a)-d(b);}).slice(0,40);
   const injury=rep("nwir","heart-pulse","Injury Room","Every FPL flag change, newest first. Green dot: your player.",
-    S.flags?(irRows.length?`<div class="nw-list">${irRows.map(nwIrRow).join("")}</div>`:sgEmpty(irTab==="chg"?"No flag changes yet.":"No return dates from FPL right now.")):sgEmpty("Reading the flag log…"),
+    S.flags?(irRows.length?`<div class="nw-list nw-scroll">${irRows.map(nwIrRow).join("")}</div>`:sgEmpty(irTab==="chg"?"No flag changes yet.":"No return dates from FPL right now.")):sgEmpty("Reading the flag log…"),
     {extra:nwSeg([["chg","Changes"],["back","Back Soon"]],irTab,"nwir")});
   /* ---- Social Media ---- */
   const so=S.nwSo||"all",soc=(S.social||[]);
   const pin=soc.filter(n=>n.kind==="pin").sort((a,b)=>b.time-a.time)[0];
   const others=soc.filter(n=>n.kind!=="pin"&&n.time>=Date.now()-Math.max(S.newsWindow,72)*3600000&&(so==="all"||(so==="yt"?n.kind==="yt":n.kind==="bs")));
   const social=rep("nwso","users","Social Media","Ben Crellin pinned, then Creators' YouTube and Bluesky posts.",
-    (pin||others.length)?`<div class="nw-list">${pin&&so==="all"?nwSoRow(pin):""}${(c=>others.filter(n=>(c[n.src]=(c[n.src]||0)+1)<=2))({}).slice(0,8).map(nwSoRow).join("")}</div>`:sgEmpty(S.newsState==="loading"?"Reading the feeds…":"Nothing posted yet."),
+    (pin||others.length)?`<div class="nw-list nw-scroll">${pin&&so==="all"?nwSoRow(pin):""}${(c=>others.filter(n=>(c[n.src]=(c[n.src]||0)+1)<=4))({}).slice(0,30).map(nwSoRow).join("")}</div>`:sgEmpty(S.newsState==="loading"?"Reading the feeds…":"Nothing posted yet."),
     {extra:nwSeg([["all","All"],["yt","Videos"],["bs","Posts"]],so,"nwso")});
   return `<div class="nw">${head}${watch}<div class="nw-body">${top}${injury}${social}</div></div>`;
 }
