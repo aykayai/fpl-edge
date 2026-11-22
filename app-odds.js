@@ -837,10 +837,10 @@ function newsHTML(){
       <div class="nw-hbtn"><span class="hz">${[[24,"24h"],[72,"3d"],[168,"7d"]].map(([w,l])=>`<button class="${S.newsWindow===w?"on":""}" onclick="act('nwin',${w})">${l}</button>`).join("")}</span>
         <button class="cx-rpt" onclick="act('news')">${lic("refresh-cw",14)}${S.newsState==="loading"?"Loading…":"Refresh"}</button></div></div>
     <div class="nw-figs">
-      ${figCard("Squad Flags","Players in your 15 with an FPL flag (chance under 100%). The line is the last seven days, from the flag log.",String(flagged.length),newToday?`<span class="dn">+${newToday}</span> today`:"None new today",sqSeries,"#FFB020")}
-      ${figCard("Back This Week","Players anywhere in the league whose FPL chance went up in the last seven days. The line is per day.",String(backList.length),backSeries[6]?`<span class="up">+${backSeries[6]}</span> today`:"None today",backSeries,"#2DDC87")}
-      ${figCard("Transfer Talk","Transfer stories naming one of your 15 in the window. The line is per day over the last week.",String(trf.length),Object.entries(trfBy).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([k,v])=>`${esc(k)} ${v}`).join(" · ")||"None",trfSeries,"#A78BFA")}
-      ${figCard("Sources","News feeds and social media accounts that answered on the server's last check (every 15 minutes). The Status page lists each one.",src.length?`${srcOk} of ${src.length}`:"–",src.length?(srcOk===src.length?"All live":`<span class="dn">${src.length-srcOk} down</span>`):"Not loaded",null)}
+      ${figCard("Squad Flags","Your players with an FPL flag.",String(flagged.length),newToday?`<span class="dn">+${newToday}</span> today`:"None new today",sqSeries,"#FFB020")}
+      ${figCard("Back This Week","Players whose FPL chance rose in the last 7 days.",String(backList.length),backSeries[6]?`<span class="up">+${backSeries[6]}</span> today`:"None today",backSeries,"#2DDC87")}
+      ${figCard("Transfer Talk","Transfer stories naming your players.",String(trf.length),Object.entries(trfBy).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([k,v])=>`${esc(k)} ${v}`).join(" · ")||"None",trfSeries,"#A78BFA")}
+      ${figCard("Sources","Sources answering now; Status lists each one.",src.length?`${srcOk} of ${src.length}`:"–",src.length?(srcOk===src.length?"All live":`<span class="dn">${src.length-srcOk} down</span>`):"Not loaded",null)}
     </div></div>`;
   if(S.newsState==="backup")return head+backupNote("The news feed");
   /* ---- Squad Watch ---- */
@@ -850,7 +850,7 @@ function newsHTML(){
   const swTile=({p,sc,k,st})=>{const c=Math.round(p.avail*100);
     const lab=st==="flag"?`${lic("triangle-alert",11)}${c}%`:st==="bench"?"Back-up":`Start ${sc}%`;
     return `<button class="nw-sw ${st}" onclick="act('cardnews',${p.id})" title="${esc(st==="flag"?flagTitle(p):`${p.web_name}: ${sc}% chance of starting`)}">${nwFace(p,"sw")}<span class="nw-swn">${esc(p.web_name)}</span><span class="nw-swl ${st}">${lab}</span>${k?`<i class="nw-swk" title="${k} stories">${k}</i>`:""}</button>`;};
-  const watch=`<section class="nw-watch"><div class="nw-wh"><span class="rhi">${lic("shirt",16)}</span><h3>Squad Watch</h3><button class="fci" data-tip="Your 15. A flagged player shows FPL's chance of playing; the others show their chance of starting: the share of his club's last six league matches he started, times FPL's chance. The badge counts the stories naming him in the window. Click a player for his News.">i</button>
+  const watch=`<section class="nw-watch"><div class="nw-wh"><span class="rhi">${lic("shirt",16)}</span><h3>Squad Watch</h3><button class="fci" data-tip="FPL's chance if flagged, else his chance of starting.">i</button>
     <span class="nw-wk"><i class="k1"></i>Flagged<i class="k2"></i>Rotation risk<i class="k3"></i>Stories</span></div>
     <div class="nw-sws">${sw.map(swTile).join("")}</div></section>`;
   /* ---- Top Stories ---- */
@@ -858,7 +858,7 @@ function newsHTML(){
   const list=stories.filter(inCat);
   const leadI=Math.max(0,list.findIndex(n=>n.img||nwLead(n)));
   const lead=list[leadI],rest=list.filter((n,i)=>i!==leadI).slice(0,4);
-  const top=rep("nwtop","newspaper","Top Stories","Injury, return, transfer and team news first, then blanks and doubles and chip strategy; FPL articles after. Stories naming your players lead. The picture is the article's own where the source gives one, otherwise the player.",
+  const top=rep("nwtop","newspaper","Top Stories","Availability news first; your players' stories lead.",
     S.newsState==="loading"&&!list.length?sgEmpty("Reading the feeds…"):S.newsState==="fail"?sgEmpty("The server returned no news. It checks every 15 minutes; the rest of the app is unaffected."):
     !lead?sgEmpty("No stories in this window."):`<div class="nw-top">${nwLeadHTML(lead)}<div class="nw-cards">${rest.map(nwCardHTML).join("")}</div></div>`,
     {extra:`<span class="nw-cat">${NW_FILTERS.map(([k,l])=>`<button class="${cat===k?"on":""}" onclick="act('nwcat','${k}')">${l}</button>`).join("")}</span>`});
@@ -868,14 +868,14 @@ function newsHTML(){
   if(irTab==="chg"){const inWin=ch.filter(x=>x.t>=cut);irRows=(inWin.length>=10?inWin:ch).slice(0,14);}
   else irRows=S.model.players.filter(p=>p.avail<1&&p.back&&p.back!=="unknown").map(p=>{const f=flagNow(p)||{};return {p,a:f.was!=null?f.was:100,b:Math.round(p.avail*100),t:f.since||Date.now(),n:p.news||""};})
     .sort((a,b)=>{const d=x=>{const m=/^(\d{2})-([A-Za-z]{3})$/.exec(x.p.back);return m?Date.parse(`${+m[1]} ${m[2]} ${new Date().getFullYear()}`):0;};return d(a)-d(b);}).slice(0,14);
-  const injury=rep("nwir","heart-pulse","Injury Room","Every change FPL makes to a player's flag, from the server's flag log, with the return date where FPL gives one. Back Soon: flagged players with a return date, soonest first. Green dot: in your squad.",
+  const injury=rep("nwir","heart-pulse","Injury Room","Every FPL flag change, newest first. Green dot: your player.",
     S.flags?(irRows.length?`<div class="nw-list">${irRows.map(nwIrRow).join("")}</div>`:sgEmpty(irTab==="chg"?"No flag changes yet.":"No return dates from FPL right now.")):sgEmpty("Reading the flag log…"),
     {extra:nwSeg([["chg","Changes"],["back","Back Soon"]],irTab,"nwir")});
   /* ---- Social Media ---- */
   const so=S.nwSo||"all",soc=(S.social||[]);
   const pin=soc.filter(n=>n.kind==="pin").sort((a,b)=>b.time-a.time)[0];
   const others=soc.filter(n=>n.kind!=="pin"&&n.time>=Date.now()-Math.max(S.newsWindow,72)*3600000&&(so==="all"||(so==="yt"?n.kind==="yt":n.kind==="bs")));
-  const social=rep("nwso","users","Social Media","Ben Crellin pinned: the newest story naming him (his Blank and Double Gameweek Calendar and team reveals on Fantasy Football Hub). Then the Creators' YouTube videos and Bluesky posts from Fantasy Football Scout, FPL Focal and Holly Shand. All free sources; X and Reddit are not read.",
+  const social=rep("nwso","users","Social Media","Ben Crellin pinned, then Creators' YouTube and Bluesky posts.",
     (pin||others.length)?`<div class="nw-list">${pin&&so==="all"?nwSoRow(pin):""}${(c=>others.filter(n=>(c[n.src]=(c[n.src]||0)+1)<=2))({}).slice(0,8).map(nwSoRow).join("")}</div>`:sgEmpty(S.newsState==="loading"?"Reading the feeds…":"Nothing posted yet."),
     {extra:nwSeg([["all","All"],["yt","Videos"],["bs","Posts"]],so,"nwso")});
   return `<div class="nw">${head}${watch}<div class="nw-body">${top}${injury}${social}</div></div>`;
