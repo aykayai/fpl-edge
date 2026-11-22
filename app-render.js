@@ -1366,26 +1366,38 @@ function chipsHTML(){
         if(kind==="wildcard")foot="The gain counts five weeks against the squad one free transfer a week would reach anyway, later weeks a little less.";}}
     if(o.f)foot+=(foot?" ":"")+`Weighted for Ben Crellin's forecast ${o.f.t} (${o.f.why}).`;
     return `<span class="cx-htip" role="tooltip"><span class="cx-thh">${chipTile(kind,18,false,"dash")}<b>${chipKeyName(k)} · GW${e}</b><span class="up">${sgnPts(v)}</span></span>${body}<span class="cx-tf">${foot||"Points are the Planner's projections."}</span></span>`;};
-  const rpBox=kind=>{const ks=[kind+"1",kind+"2"],avail=ks.filter(k=>left.includes(k));
-    const sel=avail.includes((S.chipRP||{})[kind])?S.chipRP[kind]:avail[0];
+  const rpBox=kind=>{const ks=[kind+"1",kind+"2"],avail=ks.filter(k=>left.includes(k)),usable=ks.filter(k=>left.includes(k)||chipPlayed(k)!=null);
+    /* 1 and 2 toggle (22 Nov 2026, Andy): a chip still to play shows its
+       best weeks to plan; a played chip shows the week you played it, then
+       the two best weeks you could have played it in (GW1-19 for 1, GW20
+       on for 2), scored as in How Well You Picked */
+    const want=(S.chipRP||{})[kind],sel=usable.includes(want)?want:(avail[0]||usable[usable.length-1]||null);
     const pills=ks.map(k=>{const pe=chipPlayed(k),n=k.slice(-1);
-      if(pe!=null)return `<span class="cx-pp off" title="${esc(chipKeyName(k))}: played GW${pe}">${n} ✓</span>`;
-      if(!avail.includes(k))return `<span class="cx-pp off" title="${esc(chipKeyName(k))}: expired">${n} –</span>`;
-      return avail.length>1?`<button class="cx-pp${k===sel?" pick":""}" onclick="act('chiprp','${kind}','${k}')">${n}</button>`:`<span class="cx-pp pick">${n}</span>`;}).join("");
-    const top=`<div class="cx-rbh">${chipTile(kind,26,!sel,sel&&S.chips[sel]?"ring":sel?"dash":"")}<b>${CHIP_UI[kind].n}</b><span class="cx-pps">${pills}</span></div>`;
-    if(!sel)return `<div class="cx-rbox done" style="--tc:${CHIP_UI[kind].c}">${top}<div class="cx-rdone">${ks.every(k=>chipPlayed(k)!=null)?"Both played":"None left"}</div></div>`;
+      if(!usable.includes(k))return `<span class="cx-pp off" title="${esc(chipKeyName(k))}: expired">${n} –</span>`;
+      const lab=pe!=null?`${n} ✓`:n,tt=pe!=null?`${chipKeyName(k)}: played GW${pe}`:`${chipKeyName(k)}: still to play`;
+      return usable.length>1?`<button class="cx-pp${k===sel?" pick":""}" onclick="act('chiprp','${kind}','${k}')" title="${esc(tt)}">${lab}</button>`:`<span class="cx-pp pick" title="${esc(tt)}">${lab}</span>`;}).join("");
+    const pe=sel?chipPlayed(sel):null;
+    const top=`<div class="cx-rbh">${chipTile(kind,26,pe!=null||!sel,pe==null&&sel?(S.chips[sel]?"ring":"dash"):"")}<b>${CHIP_UI[kind].n}</b><span class="cx-pps">${pills}</span></div>`;
+    const fade=avail.length?"":" done";
+    if(!sel)return `<div class="cx-rbox done" style="--tc:${CHIP_UI[kind].c}">${top}<div class="cx-rdone">None left</div></div>`;
+    if(pe!=null){const f=F[sel]||{},alt=(f.arr||[]).filter(x=>x.e!==pe).sort((a,b)=>b.v-a.v).slice(0,2),tiles=[{e:pe,v:f.v,me:true},...alt];
+      const note=!f.fin?`Played GW${pe} · not final yet`:f.pct==null?`Played GW${pe}`:f.best&&f.best.e===pe?"Played in the best week":`Played · ${f.pct}% of the best week`;
+      return `<div class="cx-rbox${fade}" style="--tc:${CHIP_UI[kind].c}">${top}
+        <div class="cx-ro">${tiles.map(x=>{const mk=chipWeekMark(x.e);
+          return `<div class="cx-roo ro${x.me?" pick":""}" title="${esc(x.me?`GW${x.e}: you played it, ${x.v==null?"points not in yet":sgnInt(x.v)} (FPL's figure)`:`GW${x.e}: ${sgnInt(x.v)} if played that week (hindsight)`)}">${mk?`<i class="cx-fx cx-ft ${mk.t==="blank"?"bl":mk.p>=0.6?"dl":"dp"}">${mk.t==="blank"?"BGW":"DGW"}</i>`:""}<b>GW${x.e}</b><i class="cx-rov${x.v!=null&&x.v<0?" dn":""}">${x.v==null?"—":sgnInt(x.v)}</i>${x.me?`<span class="cx-rmk">Played</span>`:""}</div>`;}).join("")}</div>
+        <div class="cx-rbf"><span>${note}</span></div></div>`;}
     const cv=chipCurve(sel),bests=chipBestWeeks(sel),road=weekOf(sel),planned=S.chips[sel];
     let opts=bests.slice(0,3).map(x=>x[0]);if(road&&!opts.includes(road))opts=[...opts.slice(0,2),road];
     opts.sort((a,b)=>((cv[b]||{}).v||0)-((cv[a]||{}).v||0));
     const tw=(bests[0]||[])[0],clash=!planned&&tw&&tw!==road?(Object.entries(S.chips).find(([k2,e2])=>k2!==sel&&e2===tw)||Object.entries(selPick).map(([k2,[e2]])=>[k2,e2]).find(([k2,e2])=>k2!==sel&&e2===tw)):null;
     const m=road?chipWeekMark(road):null;
     const note=planned?`Planned${m?` · ${m.t==="blank"?"blank":m.p>=0.6?"likely double":"possible double"} week`:""}`:clash?`GW${tw} goes to ${chipKeyName(clash[0])}`:`Suggested${m?` · ${m.t==="blank"?"blank":m.p>=0.6?"likely double":"possible double"} week`:""}`;
-    return `<div class="cx-rbox" style="--tc:${CHIP_UI[kind].c}">${top}
+    return `<div class="cx-rbox${fade}" style="--tc:${CHIP_UI[kind].c}">${top}
       <div class="cx-ro">${opts.map(e=>{const v=(cv[e]||{}).v||0,mk=chipWeekMark(e);
         return `<button class="cx-roo${e===road?" pick":""}" onclick="act('chipset','${sel}',${e})" aria-label="${esc(`${chipKeyName(sel)} GW${e} ${sgnPts(v)}. ${e===planned?"Clear the plan.":"Plan it."}`)}">${mk?`<i class="cx-fx cx-ft ${mk.t==="blank"?"bl":mk.p>=0.6?"dl":"dp"}">${mk.t==="blank"?"BGW":"DGW"}</i>`:""}<b>GW${e}</b><i class="cx-rov">${sgnPts(v)}</i>${e===road?`<span class="cx-rmk">${planned?"Planned":"Suggested"}</span>`:""}${tipFor(sel,e)}</button>`;}).join("")}</div>
       <div class="cx-rbf"><span>${note}</span></div></div>`;};
   const remainingSec=rep("chrem","layers","My Plan",
-    "One box per chip: its best three weeks by points added, with the selected week highlighted (the week you planned, or the suggested one). Click a week to plan it, or the planned week again to clear it. Hover a week to see where the points come from. When both of a chip are left, switch between them. Plans here and on the Team Planner are the same plan.",
+    "One box per chip: its best three weeks by points added, with the selected week highlighted (the week you planned, or the suggested one). Click a week to plan it, or the planned week again to clear it. Hover a week to see where the points come from. Switch between 1 and 2: a played chip shows the week you played it, then the two best weeks you could have played it in. Plans here and on the Team Planner are the same plan.",
     `<div class="cx-rgrid">${KORD.map(rpBox).join("")}</div>`,{wide:true});
 
   /* ---- best plan: the top three whole plans for the chips left ---- */
