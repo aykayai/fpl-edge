@@ -712,6 +712,37 @@ details[open]>summary::after{content:" ▴"}
 .rfold:hover{background:#262626;color:var(--cream)}
 .rep.bare .rb>.panel{background:none;box-shadow:none;margin:0;border:0;overflow:visible}
 .repgrid>.rep.wide{grid-column:1/-1}
+/* League › mini-league table and Head to Head (22 Nov 2026) */
+.lg-t th,.lg-t td{text-align:center;padding-left:5px;padding-right:5px}.lg-t .m{text-align:left}
+.lg-t tbody td{height:44px}.lg-t tbody tr:not(.me){cursor:pointer}.lg-t tbody tr:not(.me):hover td{background:#1A1A1A}
+.lg-t tr.lg-sel td,.lg-t tr.lg-sel:hover td{background:rgba(255,176,32,.07)}.lg-t tr.lg-sel .lg-nm b{color:var(--amber)}.lg-t tr.me .lg-nm b{color:var(--mint)}
+.lg-rk{white-space:nowrap;text-align:left!important}.lg-rk b{font:600 12.5px 'Geist Mono',monospace;display:inline-block;min-width:14px}.lg-mv{font-size:10.5px;margin-left:4px;display:inline-block;min-width:22px;text-align:left}
+.lg-tm{display:flex;align-items:center;gap:8px;min-width:0}.lg-nm{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.lg-nm b{font:600 12.5px 'Geist',sans-serif;color:#EDEDED;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lg-nm em{font:400 11px 'Geist',sans-serif;font-style:normal;color:var(--mute);white-space:nowrap}
+.lg-cap{display:inline-flex}.lg-t td .ds-face.sm{vertical-align:middle}.lg-chips{display:inline-flex;gap:3px}
+#r-lgtable .rb,#r-lgh2h .rb{display:flex;flex-direction:column}
+.lg-snap{display:flex;align-items:center;gap:10px;padding:2px 0 12px;border-bottom:1px solid rgba(255,255,255,.06)}
+.lg-snap>.sx-av{width:32px;height:32px;font-size:11px;flex:none}.lg-snap .lg-nm b{color:var(--amber);font-size:14px}
+.lg-mini{margin-left:auto;display:flex;gap:18px}.lg-mini>span{display:flex;flex-direction:column;align-items:center;gap:3px}
+.lg-mini em{font:500 10.5px 'Geist',sans-serif;font-style:normal;color:var(--mute);white-space:nowrap}
+.lg-mini b{font:700 15px 'Geist Mono',monospace;color:#EDEDED;display:inline-flex;align-items:center;gap:5px;min-height:22px}.lg-mini b.am{color:var(--amber)}
+.lg-mini .ds-face.sm{width:20px;height:20px}.lg-cl{gap:3px!important}
+.lg-edge{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:16px;padding:12px 0}
+.lg-es{display:flex;flex-direction:column;gap:2px}.lg-es em{font:500 11px 'Geist',sans-serif;font-style:normal;color:var(--mute)}.lg-es b{font:700 17px 'Geist Mono',monospace}
+.lg-es b.am{color:var(--amber)}.lg-es.r{text-align:right}.lg-es.e{padding-left:16px;border-left:1px solid rgba(255,255,255,.08)}
+.lg-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:3px;background:#1E1E1E}.lg-bar i.y{background:var(--mint)}.lg-bar i.t{background:var(--amber)}
+.lg-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.lg-lh{display:flex;justify-content:space-between;font:500 11px 'Geist',sans-serif;color:var(--mute);padding:0 2px 6px;border-bottom:1px solid rgba(255,255,255,.06)}
+.lg-pr{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer}.lg-pr:hover{background:#1A1A1A}
+.lg-pn{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}.lg-pn b{font:600 13px 'Geist',sans-serif;color:#EDEDED;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lg-pn em{font:400 11px 'Geist Mono',monospace;font-style:normal;color:var(--mute)}
+.lg-pf{font:700 14px 'Geist Mono',monospace;min-width:40px;text-align:right}.lg-pf.up{color:var(--mint)}.lg-pf.am{color:var(--amber)}
+#r-lgh2h .rh .lg-h2t{margin-left:auto}
+@media(max-width:700px){.lg-mini{gap:10px}.lg-cols{grid-template-columns:1fr}}
+/* Planner panels take the card header (22 Nov 2026) */
+.pnl-h{padding:13px 14px 0;margin-bottom:10px}.pnl-h h3{white-space:nowrap}
+.pnl-lnk{font:500 12.5px 'Geist',sans-serif;color:var(--mint);text-decoration:none;white-space:nowrap}.pnl-lnk:hover{text-decoration:underline}
+.pnl-h .pv-chip{flex:none}.pnl-h .lv4-ph{display:inline-flex}
 .vt4{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 12px}
 .vt{flex:1 1 200px;background:#1b1b1b;border:1px solid #2a2a2a;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
 .vt>span{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
@@ -2014,13 +2045,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.3.0"></script>
-<script src="./app-squad.js?v=14.3.0"></script>
-<script src="./app-render.js?v=14.3.0"></script>
-<script src="./app-odds.js?v=14.3.0"></script>
-<script src="./app-tracker.js?v=14.3.0"></script>
-<script src="./app-main.js?v=14.3.0"></script>
-<script src="./app-scout.js?v=14.3.0"></script>
+<script src="./app-core.js?v=14.4.0"></script>
+<script src="./app-squad.js?v=14.4.0"></script>
+<script src="./app-render.js?v=14.4.0"></script>
+<script src="./app-odds.js?v=14.4.0"></script>
+<script src="./app-tracker.js?v=14.4.0"></script>
+<script src="./app-main.js?v=14.4.0"></script>
+<script src="./app-scout.js?v=14.4.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

@@ -60,7 +60,7 @@ const TABS = ["squad", "chips", "rivals", "tracker", "table", "fixtures", "news"
 /* the Chips page was rebuilt on 20 Nov 2026 (test_rules checks its chip states) */
 /* Bundle D (22 Nov 2026): League › Tracker and Status were redesigned on
    purpose, so their text is no longer compared word for word */
-const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table" && t !== "fixtures" && t !== "chips" && t !== "squad" && t !== "tracker" && t !== "xfpl");
+const STRICT = TABS.filter(t => t !== "news" && t !== "odds" && t !== "table" && t !== "fixtures" && t !== "chips" && t !== "squad" && t !== "tracker" && t !== "xfpl" && t !== "rivals");   /* 22 Nov 2026: Rivals folded into League */
 
 /* ---------- old code out of git ---------- */
 function materialiseOld() {
@@ -348,7 +348,7 @@ try {
     check(!d, `page text unchanged outside planned places: ${tab}`,
       d ? `at ${d.at}\n   old: ...${d.old}...\n   new: ...${d.new_}...` : "");
   }
-  for (const tab of ["news", "table", "fixtures"]) {
+  for (const tab of ["news", "table", "fixtures", "rivals"]) {
     const a = OLD.pages[tab].text, b = NEW.pages[tab].text;
     console.log(`INFO  ${tab} page (changed by design): old ${a.length} chars, new ${b.length} chars`);
     const d = firstDiff(a, b);

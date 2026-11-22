@@ -109,7 +109,6 @@ function trkHeadHTML(){
   const lg=(S.rivalsFeed&&S.rivalsFeed.leagueName)||"Your league";
   const live=last&&!weekFinal(last.event);
   const kick=`${last?`GW${last.event}${live?" in play":""}`:""}${me?` · ${esc(lg)} ${me.rank===1?"1st":me.rank===2?"2nd":me.rank===3?"3rd":me.rank+"th"} of ${st.length}`:""}`;
-  const tabs=`<span class="pseg sgtabs">${[["tracker","Tracker"],["rivals","Rivals"]].map(([k,n])=>`<button class="${S.tab===k?"on":""}" onclick="return go(event,'${k}')">${n}</button>`).join("")}</span>`;
   const evs=(S.events||[]).filter(e=>e.finished);
   const avgSum=rows.filter(r=>weekFinal(r.event)).reduce((s,r)=>{const e=evs.find(x=>x.id===r.event);return s+(e&&e.avg!=null?r.points-e.avg:0);},0);
   const figs=last?[
@@ -120,7 +119,7 @@ function trkHeadHTML(){
       `<span class="${avgSum>=0?"up":"dn"}">${avgSum>=0?"+":""}${Math.round(avgSum)}</span> vs average`,rows.map((r,i)=>rows.slice(0,i+1).reduce((s,x)=>s+(x.points||0),0)),"#3DDC97"),
     figCard("Team Value","FPL's team value, bank included.","£"+trkNum(last.value,1),`£${trkNum(last.bank||0,1)} in the bank`,rows.filter(r=>r.value!=null).slice(-10).map(r=>+r.value),"#22D3EE")]
     :[figCard("Overall Rank","Your overall rank.","—","",null)];
-  return `<div class="sx-hdr"><div><div class="cx-kick">${kick}</div><h1>League</h1><div class="sx-ctl">${tabs}</div></div><div class="nw-figs sx-figs">${figs.join("")}</div></div>`;
+  return `<div class="sx-hdr"><div><div class="cx-kick">${kick}</div><h1>League</h1></div><div class="nw-figs sx-figs">${figs.join("")}</div></div>`;
 }
 /* Weekly Breakdown: the table, or six small charts of the same rows */
 function trkWeeklyHTML(){
@@ -222,5 +221,5 @@ function trkTransfersHTML(){
 }
 function trackerHTML(){
   if(!S.model)return `<div class="panel"><div class="pbody"><p class="note">Load data first.</p></div></div>`;
-  return `<div class="sgpage trkpage">${trkHeadHTML()}<div class="repgrid">${trkWeeklyHTML()}${trkCompareHTML()}${trkHistory2HTML()}${trkCareerHTML()}${trkChips2HTML()}${trkSubs2HTML()}${trkTransfersHTML()}</div></div>`;
+  return `<div class="sgpage trkpage">${trkHeadHTML()}<div class="repgrid">${lgRivalsHTML()}${trkWeeklyHTML()}${trkCompareHTML()}${trkHistory2HTML()}${trkCareerHTML()}${trkChips2HTML()}${trkSubs2HTML()}${trkTransfersHTML()}</div></div>`;
 }

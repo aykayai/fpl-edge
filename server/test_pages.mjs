@@ -107,7 +107,8 @@ try {
     const SIX = { trkcmp: "Gameweek Comparison", trkhist: "Season Against History", trkcareer: "Career Finishes", trkchips: "Chip Performance", trksubs: "Sub Tracker", trktrans: "Transfers" };
     const reps = [...doc.querySelectorAll(".trkpage .repgrid .rep")];
     const named = Object.entries(SIX).filter(([id, h]) => { const r = doc.getElementById("r-" + id); return r && txt(r.querySelector("h3")) === h && txt(r.querySelector(".rb")).length > 3; });
-    check(reps.length === 7 && !!doc.getElementById("r-trkweek") && named.length === 6, "Tracker: Weekly Breakdown and the six report cards, each with content",
+    /* 22 Nov 2026: the mini-league table and Head to Head (Rivals, folded in) lead the page */
+    check(reps.length === 9 && reps[0].id === "r-lgtable" && reps[1].id === "r-lgh2h" && !!doc.getElementById("r-trkweek") && named.length === 6, "League: the mini-league table and Head to Head, then Weekly Breakdown and the six report cards, each with content",
       `${reps.length} reports: ${reps.map(r => txt(r.querySelector("h3"))).join(", ")}`);
     check(!/NaN|undefined/.test(txt(app())), "Tracker: no NaN or undefined");
 

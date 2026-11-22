@@ -425,173 +425,99 @@ function marketCS(g){
     m[f.ht.id]=f.goals.csHome;m[f.at.id]=f.goals.csAway;});
   return m;
 }
-function rivalsHTML(){
+/* ============================================================
+   LEAGUE › your mini-league (22 Nov 2026, Andy's mock m14): the Rivals tab
+   folds into League as two cards side by side. The table (this gameweek,
+   or season totals) holds what Transfer Activity showed; clicking a rival
+   picks them for Head to Head: their snapshot, then the players only one
+   of you owns, projected for next week or as scored last week. Threats and
+   Your Differentials live in the Planner's Transfers pop-up (Rivals tab).
+   ============================================================ */
+function lgRivalsHTML(){
+  if(BACKUP)return "";
   const feed=S.rivalsFeed;
-  const gNext=S.model.next.id, gLast=gNext-1;
-  const mine=squadPlayers(), myIds=new Set(S.squad||[]);
+  if(!feed||!feed.standings||!feed.standings.length)
+    return rep("lgtable","list-ordered","Mini-League","Your league table and Head to Head.",sgEmpty("The league table appears once the rivals feed is published."),{wide:true});
+  const gNext=S.model.next.id,gLast=gNext-1,me=String(TEAM_ID);
+  const mine=squadPlayers(),myIds=new Set(S.squad||[]);
   const pOf=id=>S.model.players.find(p=>p.id===id);
-  const actOf=(id,gw)=>{const f=S.playerActuals&&(S.playerActuals[id]||S.playerActuals[String(id)]);
-    const v=f?(f[gw]??f[String(gw)]):null;return v==null?null:+v;};
-
-  if(BACKUP)return backupNote("Leagues and rivals");
-  if(!feed||!feed.standings||!feed.standings.length){
-    return `<div class="panel"><div class="phead"><h2>Leagues &amp; rivals</h2>
-        <span class="note">league ${esc(S.leagueId||"391690")}</span></div>
-      <div class="pbody"><p class="note" style="margin:0;color:var(--amber)">
-        The league table and rival squads appear here once the rivals feed is published
-        (same scheduled job as the actuals feed — it reads the official FPL API, which
-        the browser can't reach directly).</p></div></div>`;
+  const ents=feed.entries||{};
+  const rowsOf=id=>((ents[id]&&ents[id].gw)||[]);
+  const lastOf=id=>{const a=rowsOf(id);return a.length?a[a.length-1]:null;};
+  const st=[...feed.standings].sort((a,b)=>(a.rank||99)-(b.rank||99));
+  const lead=st.length?st[0].totalPoints||0:0;
+  const selId=S.rivalPick!=null&&st.some(r=>String(r.entryId)===String(S.rivalPick))?String(S.rivalPick)
+    :String((st.find(r=>String(r.entryId)!==me)||{}).entryId||"");
+  const ini=n=>esc(String(n||"?").trim().split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase());
+  const mu=`<span class="mu">–</span>`;
+  const mv=r=>{if(r.lastRank==null||r.rank==null||r.lastRank===0)return "";const d=r.lastRank-r.rank;
+    return d?`<span class="${d>0?"up":"dn"}">${d>0?"▲":"▼"}${Math.abs(d)}</span>`:"";};
+  const gap=r=>r.totalPoints==null||r.totalPoints>=lead?mu:`<span class="dn">−${lead-r.totalPoints}</span>`;
+  const sgn=v=>v==null?mu:`<span class="${v>0?"up":v<0?"dn":""}">${v>0?"+":v<0?"−":""}${Math.abs(v)}</span>`;
+  const KIND=["wildcard","freehit","bboost","3xc"];
+  const chipsOf=id=>(ents[id]&&ents[id].chips)||[];
+  const team=r=>{const isMe=String(r.entryId)===me;
+    return `<td class="m"><span class="lg-tm"><span class="sx-av">${ini(r.manager||r.entryName)}</span><span class="lg-nm"><b>${esc(r.entryName||"—")}</b><em>${isMe?"You":esc(r.manager||"")}</em></span></span></td>`;};
+  const trOpen=r=>{const isMe=String(r.entryId)===me,isSel=String(r.entryId)===selId;
+    return `<tr class="${isMe?"me":isSel?"lg-sel":""}"${isMe?"":` onclick="act('rivalpick','${r.entryId}')" title="Head to Head with ${esc(r.entryName||"")}"`}>`;};
+  const rk=r=>`<td class="lg-rk"><b>${r.rank??"—"}</b><span class="lg-mv">${mv(r)}</span></td>`;
+  const season=S.lgView==="season";
+  let table;
+  if(!season){
+    table=`<table class="ax-t lg-t"><thead><tr><th>#</th><th class="m">Team</th><th>GW</th><th>Total</th><th>Gap</th><th>Capt</th><th>Chip</th><th>Moves</th><th>Gain</th><th>Shared</th></tr></thead><tbody>
+      ${st.map(r=>{const isMe=String(r.entryId)===me,L=lastOf(r.entryId)||{},pk=L.picks||[],c=pk.find(x=>x.isC),cp=c&&pOf(c.id);
+        const ch=chipsOf(r.entryId).find(x=>x.event===L.event),shared=pk.filter(x=>x.multiplier>0&&myIds.has(x.id)).length;
+        return trOpen(r)+rk(r)+team(r)+`<td>${r.gwPoints??"—"}</td><td><b>${r.totalPoints??"—"}</b></td><td>${gap(r)}</td>
+          <td>${cp?`<span class="lg-cap" title="${esc(cp.web_name)}">${dsFace(cp,"sm")}</span>`:mu}</td>
+          <td>${ch&&CHIP_UI[ch.name]?`<span title="${esc(ch.label||CHIP_UI[ch.name].n)}">${chipTile(ch.name,20,true)}</span>`:mu}</td>
+          <td>${L.transfers??"—"}${L.transferCost?` <span class="dn">−${L.transferCost}</span>`:""}</td>
+          <td>${L.transfers?sgn(L.transferDiff??null):mu}</td><td>${isMe?mu:(pk.length?shared+"/11":"—")}</td></tr>`;}).join("")}</tbody></table>`;
+  }else{
+    table=`<table class="ax-t lg-t"><thead><tr><th>#</th><th class="m">Team</th><th>Total</th><th>Gap</th><th>Best GW</th><th>Chips</th><th>Moves</th><th>Hits</th><th>Gain</th><th>Bench</th></tr></thead><tbody>
+      ${st.map(r=>{const rows=rowsOf(r.entryId),sum=k=>rows.reduce((a,x)=>a+(+x[k]||0),0);
+        const best=rows.length?Math.max(...rows.map(x=>+x.points||0)):null,used=chipsOf(r.entryId).filter(x=>CHIP_UI[x.name]).sort((a,b)=>(a.event||0)-(b.event||0));
+        return trOpen(r)+rk(r)+team(r)+`<td><b>${r.totalPoints??"—"}</b></td><td>${gap(r)}</td><td>${best??"—"}</td>
+          <td><span class="lg-chips">${used.length?used.map(x=>`<span title="${esc(x.label||CHIP_UI[x.name].n)} · GW${x.event}">${chipTile(x.name,16,true)}</span>`).join(""):mu}</span></td>
+          <td>${rows.length?sum("transfers"):"—"}</td><td>${sum("transferCost")?`<span class="dn">−${sum("transferCost")}</span>`:mu}</td>
+          <td>${rows.length?sgn(sum("transferDiff")):mu}</td><td>${rows.length?sum("bench"):"—"}</td></tr>`;}).join("")}</tbody></table>`;
   }
+  const lgTog=`<span class="sx-tog">${[["gw","GW"+(feed.lastEvent||gLast)],["season","Season"]].map(([k,l])=>`<button class="${(season?"season":"gw")===k?"on":""}" onclick="act('lgview','${k}')">${l}</button>`).join("")}</span>`;
+  const tableCard=rep("lgtable","list-ordered",esc(feed.leagueName||"Mini-League"),"Your league this gameweek; click a rival for Head to Head.",table,{extra:lgTog});
 
-  /* ---------- league table ---------- */
-  const rows=[...feed.standings].sort((a,b)=>(a.rank||99)-(b.rank||99));
-  const selId=S.rivalPick!=null?String(S.rivalPick)
-    :String((rows.find(r=>String(r.entryId)!==String(TEAM_ID))||{}).entryId||"");
-  const mv=r=>{if(r.lastRank==null||r.rank==null||r.lastRank===0)return "";
-    const d=r.lastRank-r.rank;
-    if(!d)return `<span style="color:var(--mute)">–</span>`;
-    return `<span style="color:${d>0?"var(--mint)":"var(--red)"}">${d>0?"▲":"▼"}${Math.abs(d)}</span>`;};
-  /* S9 (Stage 1, 19 Oct 2026): LiveFPL-style rows. Captain, chip, transfers
-     and hits, bench points and how many of their XI you also own, all from
-     the latest week in the rivals feed. */
-  const lastOf=id=>{const e=(feed.entries||{})[id];const a=(e&&e.gw)||[];return a.length?a[a.length-1]:null;};
-  const chipOf=(id,ev)=>{const e=(feed.entries||{})[id];const c=((e&&e.chips)||[]).find(x=>x.event===ev);return c?(c.label||c.name):null;};
-  const table=`<div class="panel"><div class="phead"><h2>${esc(feed.leagueName||"League")}</h2>
-      <span class="note">${esc(feed.leagueId||S.leagueId||"391690")} · GW${feed.lastEvent||gLast}</span></div>
-    <div class="scroll"><table class="trktable"><thead><tr>
-      <th>#</th><th></th><th>Team</th><th>GW</th><th>Total</th><th>Captain</th><th class="hide-ph">Chip</th><th class="hide-ph">Transfers</th><th class="hide-ph">Bench</th><th>Shared</th></tr></thead><tbody>
-      ${rows.map(r=>{const isMe=String(r.entryId)===String(TEAM_ID);
-        const isSel=String(r.entryId)===selId;
-        return `<tr class="rvrow${isSel?" on":""}" ${isMe?"":`onclick="act('rivalpick','${r.entryId}')"`}
-          style="${isMe?"":"cursor:pointer"}">
-          <td style="text-align:left">${r.rank??"—"}</td>
-          <td style="text-align:left">${mv(r)}</td>
-          <td style="text-align:left">
-            <span style="font-weight:700;color:${isMe?"var(--mint)":isSel?"var(--amber)":"var(--cream)"}">${esc(r.entryName||"—")}</span>
-            <span style="display:block;font-size:10px;color:var(--mute)">${esc(r.manager||"")}${isMe?" · you":""}</span></td>
-          <td>${r.gwPoints??"—"}</td><td><b>${r.totalPoints??"—"}</b></td>
-          ${(()=>{const L=lastOf(r.entryId)||{},pk=L.picks||[],c=pk.find(x=>x.isC),cp=c&&pOf(c.id);
-            const chip=chipOf(r.entryId,L.event);
-            const shared=pk.filter(x=>x.multiplier>0&&myIds.has(x.id)).length;
-            return `<td>${cp?esc(cp.web_name):"—"}</td>
-              <td class="hide-ph">${chip?`<span class="tagy">${esc(chip)}</span>`:'<span class="mu">—</span>'}</td>
-              <td class="hide-ph">${L.transfers??"—"}${L.transferCost?` <span class="dn">−${L.transferCost}</span>`:""}</td>
-              <td class="hide-ph">${L.bench??"—"}</td>
-              <td>${isMe?"—":(pk.length?shared+"/11":"—")}</td>`;})()}</tr>`;}).join("")}
-    </tbody></table></div>
-    <div class="pbody"><p class="note" style="margin:0">Tap a rival for their squad, chips, transfers and differentials. Shared is how many of their starting XI you also own.</p></div></div>`;
-
-  /* ---------- league-wide summary ---------- */
-  const entries=feed.entries||{};
-  const latestGw=e=>{const a=(e&&e.gw)||[];return a.length?a[a.length-1]:null;};
-  const picksOf=e=>{const r=latestGw(e);return (r&&r.picks)||[];};
-  const others=Object.keys(entries).filter(k=>String(k)!==String(TEAM_ID));
-  /* how many rivals own each player, to find threats and true differentials */
-  const own={};
-  others.forEach(k=>{picksOf(entries[k]).forEach(pk=>{const id=pk.id??pk;own[id]=(own[id]||0)+1;});});
-  const threats=Object.keys(own).map(id=>({p:pOf(+id),n:own[id]}))
-    .filter(x=>x.p&&!myIds.has(x.p.id))
-    .sort((a,b)=>b.n-a.n||hPts(b.p,gNext,S.horizon)-hPts(a.p,gNext,S.horizon)).slice(0,8);
-  const myUnique=mine.filter(p=>!own[p.id])
-    .sort((a,b)=>hPts(b,gNext,S.horizon)-hPts(a,gNext,S.horizon));
-  const moves=[];
-  others.forEach(k=>{const r=latestGw(entries[k]);
-    if(r&&r.transfers)moves.push({name:entries[k].name||k,n:r.transfers,cost:r.transferCost||0,diff:r.transferDiff});});
-  moves.sort((a,b)=>b.n-a.n);
-
-  const miniRow=(p,right,sub)=>`<div class="prow" style="cursor:pointer" onclick="act('card',${p.id})">
-    ${dsFace(p)}${dsBadge(sgTeamOf(p),16)}
-    <span style="flex:1;min-width:0">
-      <span style="font-size:12.5px;font-weight:600">${esc(p.web_name)}</span>
-      <span style="display:block;font-size:10px;color:var(--mute)">${esc(p.teamName)} · £${p.price.toFixed(1)}${sub?" · "+sub:""}</span></span>
-    <span class="mono" style="font-weight:700;color:var(--mint)">${right}</span></div>`;
-
-  const summary=`<div class="rvsum">
-    <div class="panel"><div class="phead"><h2 style="color:var(--amber)">Threats</h2>
-        <span class="note">owned by rivals, not you</span></div>
-      ${threats.length?threats.map(x=>miniRow(x.p,hPts(x.p,gNext,S.horizon).toFixed(1),
-        `${x.n} of ${others.length} rivals`)).join(""):
-        `<div class="pbody"><p class="note" style="margin:0">Nothing they own that you don't.</p></div>`}</div>
-    <div class="panel"><div class="phead"><h2 style="color:var(--mint)">Your differentials</h2>
-        <span class="note">no rival owns these</span></div>
-      ${myUnique.length?myUnique.slice(0,8).map(p=>miniRow(p,hPts(p,gNext,S.horizon).toFixed(1),"unique to you")).join(""):
-        `<div class="pbody"><p class="note" style="margin:0">Every player you own is owned by someone else too.</p></div>`}</div>
-    <div class="panel"><div class="phead"><h2>Transfer activity</h2>
-        <span class="note">GW${feed.lastEvent||gLast}</span></div>
-      ${moves.length?`<div class="scroll"><table class="trktable"><thead><tr>
-        <th>Team</th><th>Moves</th><th>Hit</th><th>Gain</th></tr></thead><tbody>
-        ${moves.map(m=>`<tr><td>${esc(m.name)}</td><td>${m.n}</td>
-          <td style="color:${m.cost?"var(--red)":"var(--mute)"}">${m.cost?"-"+m.cost:"0"}</td>
-          <td style="color:${m.diff>0?"var(--mint)":m.diff<0?"var(--red)":"var(--mute)"}">${m.diff==null?"—":(m.diff>0?"+":"")+m.diff}</td></tr>`).join("")}
-        </tbody></table></div>`:`<div class="pbody"><p class="note" style="margin:0">No transfers made in the league this week.</p></div>`}</div>
-  </div>`;
-
-  /* ---------- selected rival ---------- */
-  const ent=entries[selId];
-  if(!ent)return table+summary;
-  const rowsGw=(ent.gw||[]);
-  const lastRow=rowsGw.length?rowsGw[rowsGw.length-1]:null;
-  const theirIds=picksOf(ent).map(pk=>pk.id??pk);
-  const theirSet=new Set(theirIds);
-  const theirs=theirIds.map(pOf).filter(Boolean);
-
-  const upcoming=S.rivalGwView!=="last";
-  const gShow=upcoming?gNext:(lastRow?lastRow.event:gLast);
+  /* ---------- Head to Head with the picked rival ---------- */
+  const ent=ents[selId],sr=st.find(r=>String(r.entryId)===selId);
+  if(!ent||!sr)return tableCard+rep("lgh2h","swords","Head to Head","Players only one of you owns, and what they score.",sgEmpty("Pick a rival in the table."));
+  const last=lastOf(selId);
+  const theirIds=((last&&last.picks)||[]).map(pk=>pk.id??pk),theirSet=new Set(theirIds),theirs=theirIds.map(pOf).filter(Boolean);
+  const upcoming=S.rivalGwView!=="last",gShow=upcoming?gNext:(last?last.event:gLast);
+  const actOf=(id,gw)=>{const f=S.playerActuals&&(S.playerActuals[id]||S.playerActuals[String(id)]);const v=f?(f[gw]??f[String(gw)]):null;return v==null?null:+v;};
   const val=p=>upcoming?hPts(p,gNext,S.horizon):(actOf(p.id,gShow)??0);
   const myDiff=mine.filter(p=>!theirSet.has(p.id)).sort((a,b)=>val(b)-val(a));
   const theirDiff=theirs.filter(p=>!myIds.has(p.id)).sort((a,b)=>val(b)-val(a));
-  const sum=a=>a.reduce((s,p)=>s+val(p),0);
-  const edge=sum(myDiff)-sum(theirDiff);
-
-  const chips=(ent.chips||[]).slice().sort((a,b)=>(a.event||0)-(b.event||0));
-  const stat=(k,v,c)=>`<div class="stat"><div class="k">${k}</div>
-    <div class="v"${c?` style="color:${c}"`:""}>${v}</div></div>`;
-  const capName=lastRow&&lastRow.captainId?(pOf(lastRow.captainId)||{}).web_name:null;
-
-  const detail=`<div class="panel"><div class="phead"><h2>${esc(ent.name||selId)}</h2>
-      <span class="note">${esc(ent.manager||"")} · GW${lastRow?lastRow.event:gLast}</span></div>
-    <div class="stats" style="padding-top:12px">
-      ${stat("GW points",lastRow?lastRow.points:"—","var(--mint)")}
-      ${stat("Captain",capName?esc(capName):"—")}
-      ${stat("Captain pts",lastRow&&lastRow.captainPts!=null?lastRow.captainPts:"—")}
-      ${stat("Transfers",lastRow?`${lastRow.transfers??0}${lastRow.transferCost?` (-${lastRow.transferCost})`:""}`:"—")}
-      ${stat("Transfer pts",lastRow&&lastRow.transferDiff!=null?(lastRow.transferDiff>0?"+":"")+lastRow.transferDiff:"—",
-        lastRow&&lastRow.transferDiff>0?"var(--mint)":lastRow&&lastRow.transferDiff<0?"var(--red)":null)}
-      ${stat("Free transfers",lastRow&&lastRow.ftAvailable!=null?lastRow.ftAvailable:"—","var(--amber)")}
-    </div>
-    <div class="pbody" style="border-top:1px solid var(--ink3)">
-      <span class="note" style="display:block;margin-bottom:6px">Chips used</span>
-      ${chips.length?`<div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${chips.map(c=>`<span class="rvchip">${esc(c.label||c.name)} · GW${c.event}${
-          c.uplift!=null?` · <b style="color:${c.uplift>=0?"var(--mint)":"var(--red)"}">${c.uplift>=0?"+":""}${(+c.uplift).toFixed(1)}</b>`:""}</span>`).join("")}
-        </div>`:`<p class="note" style="margin:0">No chips played yet.</p>`}
-    </div></div>
-
-    <div class="panel"><div class="phead"><h2>Head to head</h2>
-        <span class="pseg">
-          <button class="${upcoming?"on":""}" onclick="act('rivalgw','next')">GW${gNext} projected</button>
-          <button class="${!upcoming?"on":""}" onclick="act('rivalgw','last')">GW${gShow} actual</button></span></div>
-      <div class="stats" style="padding-top:12px">
-        ${stat("Your differentials",sum(myDiff).toFixed(1),"var(--mint)")}
-        ${stat("Their differentials",sum(theirDiff).toFixed(1),"var(--amber)")}
-        ${stat("Edge",(edge>=0?"+":"")+edge.toFixed(1),edge>=0?"var(--mint)":"var(--red)")}
-      </div>
-      ${!upcoming&&!theirDiff.concat(myDiff).some(p=>actOf(p.id,gShow)!=null)?
-        `<div class="pbody"><p class="note" style="margin:0">No actual points stored for GW${gShow} yet.</p></div>`:""}
-    </div>
-
-    <div class="rvsum">
-      <div class="panel"><div class="phead"><h2 style="color:var(--mint)">Yours they don't own</h2>
-          <span class="note">${myDiff.length}</span></div>
-        ${myDiff.length?myDiff.slice(0,10).map(p=>miniRow(p,val(p).toFixed(1))).join(""):
-          `<div class="pbody"><p class="note" style="margin:0">Identical squads.</p></div>`}</div>
-      <div class="panel"><div class="phead"><h2 style="color:var(--amber)">Theirs you don't own</h2>
-          <span class="note">${theirDiff.length}</span></div>
-        ${theirDiff.length?theirDiff.slice(0,10).map(p=>miniRow(p,val(p).toFixed(1))).join(""):
-          `<div class="pbody"><p class="note" style="margin:0">Nothing they own that you don't.</p></div>`}</div>
-    </div>`;
-
-  return table+summary+detail;
+  const sum=a=>a.reduce((s,p)=>s+val(p),0),ys=sum(myDiff),ts=sum(theirDiff),edge=ys-ts;
+  const meRow=st.find(r=>String(r.entryId)===me),d=meRow&&meRow.totalPoints!=null&&sr.totalPoints!=null?meRow.totalPoints-sr.totalPoints:null;
+  const ord=n=>n+(n%100>=11&&n%100<=13?"th":["th","st","nd","rd"][n%10]||"th");
+  const cap=last&&last.captainId?pOf(last.captainId):null;
+  const half=gNext>=20?2:1,played=chipsOf(selId).filter(x=>half===1?x.event<=19:x.event>=20).map(x=>x.name);
+  const left=KIND.filter(k=>!played.includes(k));
+  const snap=`<div class="lg-snap"><span class="sx-av">${ini(sr.manager||sr.entryName)}</span><span class="lg-nm"><b>${esc(sr.entryName||"")}</b><em>${esc(sr.manager||"")}${sr.rank?` · ${ord(sr.rank)}`:""}${d==null?"":d===0?" · level with you":` · ${Math.abs(d)} ${d>0?"behind":"ahead of"} you`}</em></span>
+    <div class="lg-mini"><span><em>GW${last?last.event:gLast}</em><b>${last&&last.points!=null?last.points:"—"}</b></span>
+      <span><em>Captain</em><b>${cap?dsFace(cap,"sm"):""}${last&&last.captainPts!=null?last.captainPts:"—"}</b></span>
+      <span><em>Free Transfers</em><b class="am">${last&&last.ftAvailable!=null?last.ftAvailable:"—"}</b></span>
+      <span><em>Chips Left</em><b class="lg-cl">${left.length?left.map(k=>`<span title="${CHIP_UI[k].n}">${chipTile(k,18,false,"dash")}</span>`).join(""):mu}</b></span></div></div>`;
+  const f1=v=>v.toFixed(1);
+  const bar=`<div class="lg-edge"><div class="lg-es"><em>Yours</em><b class="up">${f1(ys)}</b></div>
+    <div class="lg-bar">${ys+ts>0?`<i class="y" style="flex:${ys.toFixed(2)}"></i><i class="t" style="flex:${ts.toFixed(2)}"></i>`:""}</div>
+    <div class="lg-es r"><em>Theirs</em><b class="am">${f1(ts)}</b></div>
+    <div class="lg-es e"><em>Edge</em><b class="${edge>=0?"up":"dn"}">${edge>=0?"+":"−"}${f1(Math.abs(edge))}</b></div></div>`;
+  const prow=(p,tone)=>`<div class="lg-pr" onclick="act('card',${p.id})">${dsFace(p)}${dsBadge(sgTeamOf(p),16)}<span class="lg-pn"><b>${esc(p.web_name)}</b><em>${esc(p.teamName)} · £${p.price.toFixed(1)}</em></span><b class="lg-pf ${tone}">${f1(val(p))}</b></div>`;
+  const col=(t,a,tone,none)=>`<div><div class="lg-lh"><span>${t}</span><span>${upcoming?"xPts":"Pts"}</span></div>${a.length?a.slice(0,5).map(p=>prow(p,tone)).join(""):sgEmpty(none)}</div>`;
+  const noAct=!upcoming&&!theirDiff.concat(myDiff).some(p=>actOf(p.id,gShow)!=null);
+  const h2hTog=`<span class="sx-tog lg-h2t"><button class="${upcoming?"on":""}" onclick="act('rivalgw','next')">GW${gNext} Projected</button><button class="${!upcoming?"on":""}" onclick="act('rivalgw','last')">GW${gShow} Actual</button></span>`;
+  const h2h=rep("lgh2h","swords","Head to Head","Players only one of you owns, and what they score.",
+    snap+(noAct?sgEmpty(`No points stored for GW${gShow} yet.`):bar+`<div class="lg-cols">${col("Yours They Don't Own",myDiff,"up","Identical squads.")}${col("Theirs You Don't Own",theirDiff,"am","Nothing they own that you don't.")}</div>`),
+    {extra:h2hTog});
+  return tableCard+h2h;
 }
 
 /* ============================================================
@@ -916,9 +842,9 @@ function renderPage(){
           return `<button class="${on?"on":""}" onclick="act('achip','${k}')">${n}</button>`;}).join("")}</div>`;
     const flag="";
     const conf=S.pendingOpt?`<div class="panel" id="advice" style="border-color:var(--mint)">
-      <div class="phead"><h2 style="color:var(--mint)">Transfer Advice</h2></div>
-      <div class="pbody"><p class="note">Top ${S.pendingOpt.length} by predicted gain. Nothing changes until you confirm.</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:8px">
+      ${pnlHead("sparkles","Transfer Advice","The best moves by predicted gain; nothing changes until you confirm.",`<span class="rbadge">${S.pendingOpt.length}</span>`)}
+      <div class="pbody" style="padding-top:0">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">
           ${S.pendingOpt.map(m=>`<div><div style="font-size:10px;
             color:var(--cyan);font-weight:700;margin-bottom:4px">${POS[m.out.pos]}</div>${swapCardHTML(m,g)}</div>`).join("")}</div>
         <button style="margin-top:10px" onclick="act('cancelopt')">Cancel</button></div></div>`:"";
@@ -927,8 +853,7 @@ function renderPage(){
     main=`<div class="grid2 pz-grid${isLiveWk(g)?" lk":""}"><div>
       <div class="panel plpanel">${plannerHeadHTML()}${S.sqView==="list"?squadListHTML():plannerPitchHTML()}${plannerChipsHTML()}</div>${conf}${flag}</div>
       ${offRowOf(g)&&g<S.model.next.id?`<div class="poolcol pv-col"><div class="pv-wrap">${isLiveWk(g)?lkPanelHTML(g):pastReviewHTML(g)}`:`      <div class="poolcol">
-        <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
-        <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">Player Data →</a></div>
+        <div class="panel poolpanel">${pnlHead("users","Player Pool","Every player you can bring in.",`<a class="pnl-lnk" href="${routeFor("table")}" onclick="return go(event,'table')">Player Data →</a>`)}
         ${replHTML()}${poolFiltersHTML()}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
@@ -940,7 +865,7 @@ function renderPage(){
   else if(S.tab==="xfpl")main=statusPageHTML();
   else if(S.tab==="chips")main=chipsHTML();
   else if(S.tab==="fixtures")main=fixturesHTML();
-  else if(S.tab==="rivals")main=trkHeadHTML()+rivalsHTML();   /* audit follow-up: the League header on both tabs */
+  else if(S.tab==="rivals")main=trackerHTML();   /* 22 Nov 2026: Rivals folded into League */
   else if(S.tab==="news")main=newsHTML();
   else if(S.tab==="signals")main=signalsHTML();
   }catch(e){
