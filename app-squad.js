@@ -1594,7 +1594,8 @@ function chipHindsight(){
    same team the Chips page and Compare show */
 function teamRating(){
   if(!S.model)return null;
-  const g=VG(),T=chipTeam("freehit",g,true);if(!T)return null;
+  /* batch 5: a finished or live week in view rates the team for the next deadline */
+  const g=Math.max(VG(),S.model.next.id),T=chipTeam("freehit",g,true);if(!T)return null;
   const mine=teamScore(effectiveSquadIds(g).ids,g,null),best=teamScore(T.ids,g,null);
   if(!(best>0))return null;
   return{pct:Math.round(clamp(mine/best,0,1)*100),mine,best,totw:T.t,budget:squadBudget()};
