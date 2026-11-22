@@ -127,6 +127,8 @@ function kitHTML(p,cls){
   const c=teamCodeOf(p),fb=shirtSVG(p.teamName.toUpperCase(),p.pos===1,46);
   return c==null?fb:`<img class="${cls}" alt="" src="${imgSrc(p.pos===1?"shirtgk":"shirt",c)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'"><span class="pz-kfb" style="display:none">${fb}</span>`;
 }
+function kitSm(p,h){const c=teamCodeOf(p),fb=shirtSVG(p.teamName.toUpperCase(),p.pos===1,h);
+  return c==null?fb:`<span class="kitsm" style="--kh:${h}px"><img alt="" src="${imgSrc(p.pos===1?"shirtgk":"shirt",c)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'"><span style="display:none">${fb}</span></span>`;}
 const photoHTML=(p,cls)=>`<img class="${cls}" alt="" src="${imgSrc("player",p.code)}" onerror="this.style.visibility='hidden'">`;
 const dtStar=(cls,sz)=>`<span class="${cls}" title="In FPL's season Dream Team">${lic("star",sz||10)}</span>`;
 
@@ -394,7 +396,7 @@ function replHTML(){
         Replace ${esc(o.web_name)} · ${POS[o.pos]}</span>
       <span class="note">£${(planBank()+sellPrice(o)).toFixed(1)} to spend · sells for £${sellPrice(o).toFixed(1)}</span></div>
       ${opts.length?opts.map(m=>`<button class="prow" onclick="act('doswap',${o.id},${m.inn.id})">
-        ${shirtSVG(m.inn.teamName.toUpperCase(),m.inn.pos===1,24)}
+        ${kitSm(m.inn,30)}
         <span style="flex:1;min-width:0">
           <span style="display:flex;align-items:center;gap:5px"><span style="font-size:12.5px;font-weight:600">${esc(m.inn.web_name)}</span>${sigHTML(m.inn,g)}</span>
           <span style="display:block;font-size:10px;color:var(--mute)">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${m.inn.xMins}′ xMins</span></span>
@@ -433,7 +435,7 @@ function listHTML(){
     return `<button class="prow ${own?"own":""}" onclick="act('listpick',${p.id})"
       title="${afford?"":"Over budget by £"+(p.price-budget).toFixed(1)}"
       style="${p.avail===0?"opacity:.35;":""}${!afford?"opacity:.42;":""}">
-      ${shirtSVG(p.teamName.toUpperCase(),p.pos===1,24)}
+      ${kitSm(p,34)}
       <span style="flex:1;min-width:0">
         <span style="display:flex;align-items:center;gap:5px">
           <span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.web_name)}</span>
@@ -641,11 +643,11 @@ function xfplHTML(){
 }
 function swapCardHTML(m,g){
   return `<div class="tcard"><div class="tline">
-    ${shirtSVG(m.out.teamName.toUpperCase(),m.out.pos===1,26)}
+    ${kitSm(m.out,32)}
     <span class="tp"><span class="n">${esc(m.out.web_name)}</span>
       <span class="s">${esc(m.out.teamName)} · £${m.out.price.toFixed(1)} · form ${m.out.form.toFixed(1)} · ${(m.out.gw[g]?.pts||0).toFixed(1)} xPts</span></span>
     <span class="arrow">→</span>
-    ${shirtSVG(m.inn.teamName.toUpperCase(),m.inn.pos===1,26)}
+    ${kitSm(m.inn,32)}
     <span class="tp"><span class="n">${esc(m.inn.web_name)}</span>
       <span class="s">${esc(m.inn.teamName)} · £${m.inn.price.toFixed(1)} · ${(m.inn.gw[g]?.pts||0).toFixed(1)} xPts</span>
       <span style="display:flex;gap:5px;align-items:center;margin-top:3px">${sigHTML(m.inn,g)}</span></span>
@@ -691,10 +693,10 @@ function transfersHTML(part){
         <span class="note">£${combo.freed.toFixed(1)} to spend · £${combo.left.toFixed(1)} left</span></div>
       <div class="pbody">
         ${combo.picks.map(m=>`<div class="tline" style="margin-bottom:8px">
-          ${shirtSVG(m.out.teamName.toUpperCase(),m.out.pos===1,24)}
+          ${kitSm(m.out,30)}
           <span class="tp"><span class="n">${esc(m.out.web_name)}</span><span class="s">£${m.out.price.toFixed(1)} · ${(m.out.gw[g]?.pts||0).toFixed(1)}</span></span>
           <span class="arrow">→</span>
-          ${shirtSVG(m.inn.teamName.toUpperCase(),m.inn.pos===1,24)}
+          ${kitSm(m.inn,30)}
           <span class="tp"><span class="n">${esc(m.inn.web_name)}</span><span class="s">£${m.inn.price.toFixed(1)} · ${(m.inn.gw[g]?.pts||0).toFixed(1)}</span></span>
           <span class="gain">+${m.gain.toFixed(1)}</span></div>`).join("")}
         <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--ink3);padding-top:9px">
@@ -1803,11 +1805,9 @@ function compareModalHTML(){
   }
   const pend=C.pendLocks.length+C.pendBans.length,applied=C.locks.length+C.bans.length,bName=B?B.label:"B";
   const apply=C.b==="fh"||C.b==="wc"?`Play ${C.b==="fh"?"Free Hit":"Wildcard"} with B in GW${g}`:`Use B for GW${g}`;
-  const body=`<div class="cv-src">${chips}<button class="cv-new" onclick="act('cmpsave')">${lic("save",14)} Save B as…</button></div>
-    <div class="cv-main"><div class="cv-side">${head("A",A)}${cmpPitchHTML("A",A,B)}</div><div class="cv-spine">${spine}</div><div class="cv-side">${head("B",B)}${cmpPitchHTML("B",B,A)}</div></div>
-    <div class="mfoot cv-foot">${cmpBuilder(C.b)?`<button class="${pend?"pri":""}" onclick="act('cmprerun')">${lic("refresh-cw",14)} Re-run B${pend?` (${pend})`:""}</button>${applied||pend?`<button onclick="act('cmpclear')">Clear locks</button>`:""}`:""}
-      ${C.ed.A||C.ed.B?`<button onclick="act('cmpundo')">Undo edits</button>`:""}<span style="flex:1"></span>
-      <button onclick="act('cmpsave')">${lic("save",14)} Save B</button><button class="pri" onclick="act('cmpapply')" ${B&&B.ids?"":"disabled"}>${apply}</button></div>`;
+  const body=`<div class="cv-src">${chips}<span class="cv-acts">${cmpBuilder(C.b)?`<button class="${pend?"pri":""}" onclick="act('cmprerun')">${lic("refresh-cw",14)} Re-run B${pend?` (${pend})`:""}</button>${applied||pend?`<button onclick="act('cmpclear')">Clear locks</button>`:""}`:""}
+      ${C.ed.A||C.ed.B?`<button onclick="act('cmpundo')">Undo edits</button>`:""}<button onclick="act('cmpsave')">${lic("save",14)} Save B</button><button class="pri" onclick="act('cmpapply')" ${B&&B.ids?"":"disabled"}>${apply}</button></span></div>
+    <div class="cv-main"><div class="cv-side">${head("A",A)}${cmpPitchHTML("A",A,B)}</div><div class="cv-spine">${spine}</div><div class="cv-side">${head("B",B)}${cmpPitchHTML("B",B,A)}</div></div>`;
   return modalHTML("Compare Squads",body,{wide:true,ctl:`<span class="cv-pick">${sel("A")}<span class="cv-vs">vs</span>${sel("B")}</span>${hzc}`,close:"cmpclose",cls:"cv"});
 }
 
@@ -2808,7 +2808,7 @@ function playerDataHTML(){
     ${D.extra.map((k,j)=>{const[l,s]=HSUB[k]||[D.C[k].label,""];return th(k,l,D.C[k].tip,j?"":"gs",s);}).join("")}<th></th></tr>`;
   const body=rows.slice(0,lim).map(p=>{const on=ticks.includes(p.id),own=mine.has(p.id),sg=signals(p,g),proj=D.C.proj.val(p)||0;
     return `<tr class="${own?"mine":""}${on?" ticked":""}"${p.avail===0?' style="opacity:.45"':""}>
-      <td class="nm"><span class="pcell"><span class="pdshirt">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,26)}<input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></span>
+      <td class="nm"><span class="pcell"><span class="pdshirt">${kitSm(p,34)}<input type="checkbox" class="tick" ${on?"checked":""} ${!on&&ticks.length>=5?"disabled":""} onchange="act('tick',${p.id})" aria-label="Compare ${esc(p.web_name)}"></span>
         <span class="pmeta"><span class="prow1">${pName(p)}${INJ(p)}${role(p)}</span><span class="prow2">${esc(p.teamName)} · ${POS[p.pos]}</span></span></span></td>
       <td class="fig pdprice">${D.C.price.cell(p)}</td>
       <td class="pdbestc">${D.C.best.cell(p)}</td>
