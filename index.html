@@ -1203,7 +1203,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 /* remaining plans */
 .cx-rgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .cx-rbox{background:#181818;border-radius:12px;padding:11px 12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);display:flex;flex-direction:column;gap:10px;min-width:0}
-.cx-rbox.done{opacity:.38;filter:grayscale(.8)}.cx-rdone{font-size:12px;color:#8A8A8A;padding:18px 0;text-align:center}
+.cx-rbox.done{opacity:.6;filter:grayscale(.6)}.cx-rdone{font-size:12px;color:#8A8A8A;padding:18px 0;text-align:center}
 .cx-rbh{display:flex;align-items:center;gap:8px}.cx-rbh b{font:600 14px 'Geist',sans-serif;white-space:nowrap}.cx-pps{margin-left:auto;display:flex;gap:4px}
 .cx-pp{font:600 11px 'Geist',sans-serif;padding:3px 9px;border-radius:999px;background:#232323;color:#9A9A9A;border:0;min-height:0}button.cx-pp{cursor:pointer}
 .cx-pp.pick{background:var(--tc);color:#0B0B0B}.cx-pp.off{background:transparent;color:#666;box-shadow:inset 0 0 0 1px #2C2C2C}
@@ -1211,6 +1211,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 .cx-roo{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:#1F1F1F;border:0;border-radius:9px;padding:9px 4px 7px;color:#EDEDED;min-height:0;cursor:pointer;font-family:'Geist',sans-serif}
 .cx-roo>b{font:600 15px 'Geist',sans-serif}.cx-rov{font:600 11.5px 'Geist Mono',monospace;font-style:normal;color:var(--mint)}
 .cx-roo.pick{background:color-mix(in srgb,var(--tc) 14%,#1A1A1A);box-shadow:inset 0 0 0 1.5px var(--tc)}.cx-roo:hover{background:#262626}.cx-roo.pick:hover{background:color-mix(in srgb,var(--tc) 20%,#1A1A1A)}
+.cx-roo.ro{cursor:default}.cx-roo.ro:hover{background:#1F1F1F}.cx-roo.ro.pick:hover{background:color-mix(in srgb,var(--tc) 14%,#1A1A1A)}.cx-rov.dn{color:var(--red)}
 .cx-ft{position:absolute;top:-7px;right:5px;font-size:8px;padding:2px 4px}
 .cx-rmk{font:600 9px 'Geist',sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--tc);margin-top:1px}
 .cx-rbf{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#8A8A8A}.cx-rbf span{flex:1;min-width:0}
@@ -1574,13 +1575,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.11.0"></script>
-<script src="./app-squad.js?v=13.11.0"></script>
-<script src="./app-render.js?v=13.11.0"></script>
-<script src="./app-odds.js?v=13.11.0"></script>
-<script src="./app-tracker.js?v=13.11.0"></script>
-<script src="./app-main.js?v=13.11.0"></script>
-<script src="./app-scout.js?v=13.11.0"></script>
+<script src="./app-core.js?v=13.11.1"></script>
+<script src="./app-squad.js?v=13.11.1"></script>
+<script src="./app-render.js?v=13.11.1"></script>
+<script src="./app-odds.js?v=13.11.1"></script>
+<script src="./app-tracker.js?v=13.11.1"></script>
+<script src="./app-main.js?v=13.11.1"></script>
+<script src="./app-scout.js?v=13.11.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
