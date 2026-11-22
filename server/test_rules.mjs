@@ -78,7 +78,7 @@ try {
   vm.runInContext(`window.__g={get S(){return S},render,act,sellPrice,applySwap,planBank,hitCost,planFT,transfersIn,
     weekPts,bestCombo,chipRuleBreak,freeTransfers,squadPlayers,startingXI,chipPlayed,VG,
     teamScore,chipCurve,chipTeam,teamRating,effectiveSquadIds,chipPlans,ftPath,chipWeighted,chipPlayer,legalBestXI,cmpSide,filtered,
-    flagNow,flagTitle,startChance,newsDown,statusState,
+    flagNow,flagTitle,startChance,newsDown,statusState,dsTile,dsChips,dsFace,hz4HTML,hzWeeks,lastNextHTML,applyHash,
     get CRELLIN(){return CRELLIN}}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
@@ -500,6 +500,25 @@ try {
     S.status = keepStatus;
     [S.news, S.social, S.squadNews, S.newsState, S.newsWindow, S.newsSources] = keepNews; S.flags = keepFlags;
     p.avail = keepP.avail; p.news = keepP.news; S.tab = "squad"; g.render();
+  }
+
+  /* ---------- This Week batch 1 (22 Nov 2026) ---------- */
+  {
+    const t = g.dsTile("Gap", "−6.3", "points this week", "dn");
+    check(/class="ds-tile dn"/.test(t) && t.includes("<em>Gap</em>") && t.includes("<i>points this week</i>"), "Design parts: a tile has label, figure and sub-line");
+    const ch = g.dsChips(["wildcard", "bboost"], "bboost");
+    check((ch.match(/class="ds-chip[ "]/g) || []).length === 4 && (ch.match(/ds-chip on/g) || []).length === 2 && / act"/.test(ch), "Design parts: chips are always four fixed slots, used filled, active ringed");
+    const hz = g.hz4HTML("ROS", "x", [1]);
+    check(/>ROS</.test(hz) && /disabled/.test(hz) && /class="on"/.test(hz), "Design parts: the 1/3/5/ROS switch marks the current one and greys off ones");
+    check(g.hzWeeks("ROS", 12) === 27 && g.hzWeeks(3, 12) === 3, "Design parts: ROS covers the rest of the season");
+    const ln = g.lastNextHTML(sq.slice(0, 2));
+    check(/Actual/.test(ln) && /Predicted/.test(ln) && (ln.match(/stroke-dasharray="4 3"/g) || []).length === 6, "Design parts: the last-3 / next-3 chart draws three predicted bars a player");
+    /* a pop-up belongs to its page: leaving the page closes it */
+    S.pop = "move"; S.tab = "transfers"; w.location.hash = "#/planner"; g.applyHash();
+    check(S.pop === null && S.tab === "squad", "Audit fix: leaving a page closes its pop-up", JSON.stringify([S.pop, S.tab]));
+    S.pop = "cap"; g.act("tab", "fixtures");
+    check(S.pop === null, "Audit fix: switching tab closes the pop-up");
+    S.tab = "squad"; g.render();
   }
 
   /* ---------- F60 best combination ---------- */

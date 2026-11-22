@@ -1702,6 +1702,29 @@ svg.chart circle[data-tip]{cursor:pointer}
    Planner, and the last two tiles open theirs leftwards to stay on screen */
 .panel.pz-stats{overflow:visible;position:relative;z-index:20}
 .pz-st:nth-last-child(-n+2) .fci::after{left:auto;right:-8px}
+/* This Week design parts (22 Nov 2026): ds- */
+.ds-sh{display:flex;align-items:center;gap:8px;min-height:30px}.ds-sh>svg{color:var(--mute);flex:none}.ds-sh h3{margin:0;font:600 14px 'Geist',sans-serif;color:#EDEDED}
+.ds-shr{margin-left:auto;display:flex;align-items:center;gap:8px;font:500 12px 'Geist',sans-serif;color:var(--mute)}
+.ds-fig{font:700 12.5px 'Geist Mono',monospace;color:#EDEDED}.ds-fig.up{color:var(--mint)}.ds-fig.dn{color:#FF8095}
+.ds-tiles{display:grid;gap:8px}
+.ds-tile{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;height:62px;padding:9px 8px;border-radius:12px;background:#161616;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);text-align:center;min-width:0}
+.ds-tile em{font:500 11px 'Geist',sans-serif;font-style:normal;color:var(--mute);white-space:nowrap}
+.ds-tile b{font:700 17px 'Geist Mono',monospace;color:#EDEDED;white-space:nowrap;line-height:1.1}
+.ds-tile i{font:500 10.5px 'Geist',sans-serif;font-style:normal;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ds-tile.up b{color:var(--mint)}.ds-tile.dn b{color:#FF8095}.ds-tile.big b{font-size:22px}
+.ds-chips{display:inline-flex;gap:3px;flex:none}
+.ds-chip{display:inline-grid;place-items:center;width:20px;height:16px;border-radius:5px;font:700 8.5px 'Geist',sans-serif;color:#5A5A5A;background:#1C1C1C;box-shadow:inset 0 0 0 1px #2A2A2A}
+.ds-chip.on{background:var(--tc);color:#0B0B0B;box-shadow:none}.ds-chip.act{box-shadow:0 0 0 2px #0B0B0B,0 0 0 3.5px var(--tc)}
+.ds-face{display:block;width:26px;height:32px;border-radius:6px;background:#1E1E1E;overflow:hidden;flex:none;cursor:pointer}.ds-face img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.ds-face.kit{background:transparent}.ds-face.kit img{object-fit:contain}
+.ds-name{font:600 12.5px 'Geist',sans-serif;color:#EDEDED;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ds-sub{font:500 11px 'Geist',sans-serif;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ds-th{font:500 10.5px 'Geist',sans-serif;color:var(--mute)}
+.ds-hz button.off{opacity:.35;cursor:not-allowed}
+.ds-chart .chart{width:100%;height:auto;display:block}.ds-cd{font:700 10.5px 'Geist Mono',monospace}.ds-cd.up{fill:var(--mint)}.ds-cd.dn{fill:#FF8095}
+.ds-cv{font:700 10.5px 'Geist Mono',monospace;fill:#DADADA}.ds-ck{font:600 10px 'Geist',sans-serif;fill:#6A6A6A;letter-spacing:.04em}.cax.ds-now{fill:#EDEDED;font-weight:700}
+.ds-lg{display:flex;gap:14px;font:500 11.5px 'Geist',sans-serif;color:var(--mute);margin-bottom:4px}.ds-lg span{display:inline-flex;align-items:center;gap:6px}.ds-lg i{width:10px;height:10px;border-radius:3px}.ds-lgr{margin-left:auto}
+.ds-lg i.a{background:#9A9A9A}.ds-lg i.p{background:rgba(154,154,154,.28);box-shadow:inset 0 0 0 1.5px #9A9A9A}
 </style>
 </head>
 <body>
@@ -1715,13 +1738,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      that and falls back to the existing heuristic automatically. -->
 <!-- F80 (cutover): the solver pinned to the exact file served when it was tested, checked by hash -->
 <script src="https://unpkg.com/javascript-lp-solver@1.0.3/dist/solver.global.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH" crossorigin="anonymous"></script>
-<script src="./app-core.js?v=13.13.4"></script>
-<script src="./app-squad.js?v=13.13.4"></script>
-<script src="./app-render.js?v=13.13.4"></script>
-<script src="./app-odds.js?v=13.13.4"></script>
-<script src="./app-tracker.js?v=13.13.4"></script>
-<script src="./app-main.js?v=13.13.4"></script>
-<script src="./app-scout.js?v=13.13.4"></script>
+<script src="./app-core.js?v=13.14.0"></script>
+<script src="./app-squad.js?v=13.14.0"></script>
+<script src="./app-render.js?v=13.14.0"></script>
+<script src="./app-odds.js?v=13.14.0"></script>
+<script src="./app-tracker.js?v=13.14.0"></script>
+<script src="./app-main.js?v=13.14.0"></script>
+<script src="./app-scout.js?v=13.14.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

@@ -136,6 +136,14 @@ async function loadNeighbours(){
   try{const d=JSON.parse(await dataText("/data/feeds/neighbours.json"));if(d&&d.own)S.neighbours=d;}
   catch(e){if(!/HTTP 404/.test(String(e&&e.message)))loadWarn("rank neighbours");}
 }
+/* This Week batch 1 (22 Nov 2026): the field sample (near you, top 10k),
+   the rank bands and the price log, from the server's jobs */
+async function loadFieldFeeds(){
+  S.field=null;S.rankBands=null;S.priceLog=null;if(BACKUP)return;
+  const one=async(name,key,ok)=>{try{const d=JSON.parse(await dataText("/data/feeds/"+name+".json"));if(ok(d))S[key]=d;}
+    catch(e){if(!/HTTP 404/.test(String(e&&e.message)))loadWarn(name);}};
+  await Promise.all([one("field","field",d=>d&&d.gws),one("rankbands","rankBands",d=>d&&d.bands),one("pricelog","priceLog",d=>d&&d.samples)]);
+}
 /* Penalties: FPL's order, except where this season's kicks and a published
    source agree on someone else (research/setpieces.md, 19 Oct 2026). */
 const PEN_OVERRIDE={COV:"Torp",NEW:"Wissa",SUN:"Le Fée"};
@@ -245,16 +253,19 @@ const TABPATH={squad:"planner",transfers:"transfers",rivals:"league/rivals",chip
 const FROM_ROUTE={...Object.fromEntries(Object.entries(TABPATH).map(([k,v])=>[v,k])),
   "team-planner":"squad","players":"table","fixtures":"fixtures","tracker":"tracker","rivals":"rivals","xfpl-model":"xfpl"};
 function routeFor(tab){return "#/"+(TABPATH[tab]||"planner");}
+/* A pop-up belongs to the page it was opened on: leaving the page closes it
+   (audit 22 Nov 2026: one opened from #/transfers stayed over the next page) */
+function closePops(){S.pop=null;S.popTab=null;S.cmp=null;S.cardId=null;S.pMenu=null;}
 function applyHash(){
   const h=(location.hash||"").replace(/^#\/?/,"").replace(/\/$/,"");
   /* Signals tabs have their own links: #/signals/transfers and so on */
   const sg=/^signals\/(transfers|squad|teams|players)$/.exec(h);
-  if(sg){const ch=S.tab!=="signals"||S.sgTab!==sg[1];S.tab="signals";S.sgTab=sg[1];return ch;}
+  if(sg){const ch=S.tab!=="signals"||S.sgTab!==sg[1];if(ch)closePops();S.tab="signals";S.sgTab=sg[1];return ch;}
   const t=FROM_ROUTE[h];
-  if(t&&t!==S.tab){S.tab=t;return true;}
+  if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.13.4";
+const APP_VERSION="13.14.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -542,7 +553,7 @@ async function loadAll(force,opts){
     /* nothing new on the server (or the server is unreachable): keep the
        built model, refresh the light feeds, and re-render once */
     S.capture={};
-    await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours(),loadDcDoubles(),loadTv()]);
+    await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadFplLive(),loadNeighbours(),loadDcDoubles(),loadTv(),loadFieldFeeds()]);
     if(_snap&&_snap.files){Object.assign(_snap.files,S.capture);_snap.at=Date.now();
       if(st){_snap.status=st;_snap.statusAt=S.statusAt;}IDB.set("snap",_snap);}
     S.capture=null;

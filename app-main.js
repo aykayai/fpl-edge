@@ -23,7 +23,7 @@ function act(k,a,b,c){
   if(k!=="pmenu"&&S.pMenu!=null)S.pMenu=null;
   switch(k){
     case"load":loadAll().then(()=>loadNews());return;
-    case"tab":if(a!==S.tab)savePaint();S.tab=a;S.menuOpen=false;break;
+    case"tab":if(a!==S.tab){savePaint();closePops();}S.tab=a;S.menuOpen=false;break;
     case"menu":S.menuOpen=!S.menuOpen;break;
     case"chipview":S.chipView=a;break;
     case"chiphalf":S.chipHalf=a;break;
@@ -128,7 +128,7 @@ function act(k,a,b,c){
     case"sigpos":S.sigPos=+a||0;LS.set("sig",{pos:S.sigPos,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});break;
     case"sigh":S.sigH=+a||3;LS.set("sig",{pos:S.sigPos||0,h:S.sigH,fold:S.sigFold||[],tab:S.sgTab});break;
     /* Signals tabs (25 Oct 2026) */
-    case"sgtab":S.sgTab=["transfers","squad","teams","players"].includes(a)?a:"transfers";
+    case"sgtab":closePops();S.sgTab=["transfers","squad","teams","players"].includes(a)?a:"transfers";
       LS.set("sig",{pos:S.sigPos||0,h:S.sigH||3,fold:S.sigFold||[],tab:S.sgTab});
       try{history.replaceState({},"","#/signals/"+S.sgTab);}catch(e){}break;
     case"sigfold":{const f=new Set(S.sigFold||[]);f.has(a)?f.delete(a):f.add(a);S.sigFold=[...f];
