@@ -80,7 +80,7 @@ async function runApp(url, idb, offline) {
   vm.runInContext(`IDB.get=async k=>{const v=window.__idb.get(k);return v===undefined?null:JSON.parse(v);};
     IDB.set=async (k,v)=>{window.__idb.set(k,JSON.stringify(v));};`, ctx);
   for (const f of FILES.slice(1)) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
-  vm.runInContext(`window.__g={get S(){return S},render,act,learningFrom,itemHTML}`, ctx);
+  vm.runInContext(`window.__g={get S(){return S},render,act,learningFrom,nwCardHTML,nwSoRow}`, ctx);
   const g = w.__g, S = g.S;
   const until = Date.now() + 180000;
   while (Date.now() < until && !(S.model && !S.loading)) await new Promise(r => setTimeout(r, 250));
@@ -112,15 +112,17 @@ try {
   }
   check(!bad.length, "X33 every page renders, the Planner in both Pitch and List view", bad.join("; "));
 
-  /* news with hostile data */
+  /* news with hostile data (the News page rebuilt 22 Nov 2026: story cards
+     and social media rows) */
   const H = '<img id="xss" src=x>';
-  const item = { src: "src" + H, title: "t" + H, url: "javascript:alert(1)", time: Date.now(), score: '<b id="xs">9</b>', comments: '"><img id="xc">', extra: H };
-  const out = a.g.itemHTML(item, true);
-  const box = a.doc.createElement("div"); box.innerHTML = out;
-  check(!box.querySelector("img,b"), "X33 news: hostile text stays text", box.innerHTML.slice(0, 120));
-  check(box.querySelector("a").getAttribute("href") === "#", "X33 news: only http(s) links", box.querySelector("a").getAttribute("href"));
-  const okItem = a.g.itemHTML({ ...item, url: "https://example.com/x", score: "12", comments: 3 }, true);
-  check(/href="https:\/\/example\.com\/x"/.test(okItem) && /▲ 12/.test(okItem) && /3 comments/.test(okItem), "X33 news: real links and numbers still show");
+  const item = { src: "src" + H, pub: "pub" + H, title: "t" + H, sum: "s" + H, url: "javascript:alert(1)", time: Date.now(), cat: "inj" + H, ids: [], img: "javascript:alert(2)" };
+  const box = a.doc.createElement("div");
+  box.innerHTML = a.g.nwCardHTML(item) + a.g.nwSoRow({ ...item, kind: "bs" }) + a.g.nwSoRow({ ...item, kind: "pin" });
+  check(!box.querySelector("#xss,b img"), "X33 news: hostile text stays text", box.innerHTML.slice(0, 120));
+  check([...box.querySelectorAll("a")].every(x => x.getAttribute("href") === "#") && ![...box.querySelectorAll("img")].some(x => /^javascript:/i.test(x.getAttribute("src") || "")),
+    "X33 news: only http(s) links and pictures");
+  const okItem = a.g.nwCardHTML({ ...item, url: "https://example.com/x", title: "Fine title" });
+  check(/href="https:\/\/example\.com\/x"/.test(okItem) && /Fine title/.test(okItem), "X33 news: real links and titles still show");
 
   /* learningFrom on synthetic samples */
   const mk = (n, p, a2) => Array.from({ length: n }, (_, i) => ({ p: p + (i % 2 ? 0.5 : -0.5), a: a2 + (i % 2 ? 1 : -1) }));

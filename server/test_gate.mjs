@@ -95,13 +95,14 @@ function datasetFile(path, truncated) {
 let mode = "good";   // good | truncated | down
 const deadline = new Date(Date.now() + 2 * 24 * 3600000).toISOString().replace(/\.\d+Z$/, "Z");
 
+/* dates relative to now: the news job keeps eight days (22 Nov 2026) */
 const HOSTILE_RSS = `<?xml version="1.0"?><rss><channel>
 <item><title>Breaking &lt;img src=x onerror=alert(1)&gt; transfer news &amp; prices</title>
-<link>https://example.com/story-one</link><pubDate>Thu, 09 Oct 2026 10:00:00 GMT</pubDate></item>
+<link>https://example.com/story-one</link><pubDate>${new Date(Date.now() - 1 * 3600000).toUTCString()}</pubDate></item>
 <item><title>Evil link headline about the gameweek</title>
-<link>javascript:alert(document.cookie)</link><pubDate>Thu, 09 Oct 2026 09:00:00 GMT</pubDate></item>
+<link>javascript:alert(document.cookie)</link><pubDate>${new Date(Date.now() - 2 * 3600000).toUTCString()}</pubDate></item>
 <item><title><![CDATA[Plain captain pick headline]]></title>
-<link>https://example.com/story-two</link><pubDate>Thu, 09 Oct 2026 08:00:00 GMT</pubDate></item>
+<link>https://example.com/story-two</link><pubDate>${new Date(Date.now() - 3 * 3600000).toUTCString()}</pubDate></item>
 </channel></rss>`;
 
 function stubHandler(req, res) {
@@ -294,15 +295,14 @@ async function main() {
     });
     r = await get("/api/news");
     const news = JSON.parse(r.body);
-    const all = [...news.news, ...news.reddit];
+    const all = [...news.news, ...(news.social || [])];
     check("news: items present", all.length >= 2, "items=" + all.length);
     check("news: hostile markup stripped from titles",
       all.every(i => !/[<>]/.test(i.title) && !/onerror/i.test(i.title)),
       JSON.stringify(all.map(i => i.title)));
     check("news: javascript: url dropped, all urls http(s)",
       all.every(i => /^https?:\/\//.test(i.url)) && !all.some(i => /Evil link/.test(i.title)));
-    const red = news.reddit[0];
-    check("news: reddit numbers coerced", red && red.score === 12 && red.comments === 7, JSON.stringify(red));
+    check("news: every item has a category and a player list", news.news.every(i => typeof i.cat === "string" && Array.isArray(i.ids)), JSON.stringify(news.news[0]));
     check("news: failed source would stay listed (perSource present)", !!news.perSource["Hostile Feed"]);
 
     /* odds: stub answered, and the key never leaks anywhere */

@@ -62,7 +62,7 @@ function playerCardHTML(){
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
     ${sigHTML(p,G)?`<div>${sigHTML(p,G)}</div>`:""}
-    ${p.avail<1?`<div class="pkwarn">${esc(p.news||"Fitness doubt")}${p.back?` · back ${esc(p.back)}`:""}${p.availAssumed?` · 50% to play${availTag(p)}`:""}</div>`:""}
+    ${p.avail<1?`<div class="pkwarn" title="${esc(flagTitle(p))}">${esc(p.news||"Fitness doubt")}${p.back?` · back ${esc(p.back)}`:""}${p.availAssumed?` · 50% to play${availTag(p)}`:""}${(flagNow(p)||{}).since?` · since ${esc(flagDay(flagNow(p).since))}`:""}</div>`:""}
     <div class="pkkv">
       <div><span>Selected by</span><b>${(+s.selected_by_percent||p.owned).toFixed(1)}%</b><em>${rk(s.selected_rank_type)}</em></div>
       <div><span>Your rivals</span><b>${rv!=null?`${rv} of ${R.n}`:"–"}</b><em>own him</em></div>
@@ -106,7 +106,40 @@ function playerCardHTML(){
     <div class="pkrow3"><div class="pkpanel"><div class="pkh">Against Other ${posN}s<span>rank among regular starters · 1 is best</span></div><div class="pkpct">${pct}</div></div>
       <div class="pkpanel"><div class="pkh">This Season<span>totals</span></div><div class="pkkv tot">${tot}</div></div>${hist}</div>
   </div></div>`;
-  return modalHTML(`${esc(p.web_name)} · ${esc(p.teamName)}`,body,{wide:true,close:"card",cls:"pkcard"});
+  /* News tab (22 Nov 2026): the flag, his chance of starting, the one flag
+     log, minutes by gameweek, and every story and post naming him */
+  const pStories=pkStories(p),flagged=p.avail<1;
+  const tabs=`<span class="hz pk-tabs"><button class="${S.cardTab!=="news"?"on":""}" onclick="act('cardtab','overview')">Overview</button><button class="${S.cardTab==="news"?"on":""}" onclick="act('cardtab','news')">News${pStories.length||flagged?` <i class="${flagged?"warn":""}">${pStories.length}</i>`:""}</button></span>`;
+  const out=S.cardTab==="news"?`<div class="pk2">${hero}<div class="pkright">${pkNewsHTML(p,pStories)}</div></div>`:body;
+  return modalHTML(`${esc(p.web_name)} · ${esc(p.teamName)}`,out,{wide:true,close:"card",cls:"pkcard",ctl:tabs});
+}
+/* every story naming him: the feeds, the squad's searches and his own */
+function pkStories(p){
+  const seen=new Set(),out=[];
+  [...(S.news||[]),...(S.squadNews||[]),...((S.pNews||{})[p.id]||[])].forEach(n=>{
+    if(!(n.ids||[]).includes(p.id))return;const k=newsKey(n.title);if(seen.has(k))return;seen.add(k);out.push(n);});
+  return out.sort((a,b)=>((NW_CAT[a.cat]||NW_CAT.news)[2]-(NW_CAT[b.cat]||NW_CAT.news)[2])||b.time-a.time);
+}
+function pkNewsHTML(p,stories){
+  const f=flagNow(p),c=Math.round((p.avail==null?1:p.avail)*100),sc=startChance(p);
+  const l=(typeof fplLive==="function"?fplLive(p):null)||{},pc=l.pcp;
+  const inj=stories.filter(n=>n.cat==="inj").length;
+  const ct=(l2,v,e2,col)=>`<div class="pktile"><span>${l2}</span><b${col?` style="color:${col}"`:""}>${v}</b><em>${e2||"&nbsp;"}</em></div>`;
+  const tiles=ct("FPL Chance",c+"%",f&&f.since?(f.cleared?"fit since ":"since ")+flagDay(f.since):(c<100?"flag before the log":"no flag"),chCol(c))
+    +ct("Start Chance",sc+"%","last six, × FPL chance",sc<60?"#FF9F2E":"#9FD9BE")
+    +ct("Expected Back",p.avail<1?(p.back&&p.back!=="unknown"?esc(nwBack(p.back).replace("Back ","")):"–"):"Fit",p.avail<1?(p.back==="unknown"?"FPL: unknown":p.back?"from FPL":"no date from FPL"):"&nbsp;")
+    +ct("xMins",Math.round(p.xMins||0)+"′",p.avail<1&&p.roleMins!=null?`was ${Math.round(p.roleMins)}′ before the flag`:"model")
+    +ct("Stories",String(stories.length),inj?`${inj} injury`:"this week")
+    +ct("Price",`£${p.price.toFixed(1)}m`,pc==null?"&nbsp;":`${Math.abs(Math.round(pc))}% to a ${pc>=0?"rise":"fall"} tonight`,pc>0?"var(--mint)":pc<0?"#FF8FAB":null);
+  const cat=S.pkCat||"all",cats=[["all","All"],...Object.entries(NW_CAT).filter(([k])=>stories.some(n=>n.cat===k)).map(([k,v])=>[k,v[0]])];
+  const shown=stories.filter(n=>cat==="all"||n.cat===cat).slice(0,12);
+  const soc=(S.social||[]).filter(n=>(n.ids||[]).includes(p.id)).slice(0,6);
+  return `<div class="pktiles">${tiles}</div>
+    <div class="pk-nrow"><div class="pkpanel"><div class="pkh">Flag History<span>FPL's changes, newest first</span></div>${flagHistoryHTML(p,4)}</div>
+      <div class="pkpanel"><div class="pkh">Availability This Season<span>minutes · bar = FPL chance at the deadline</span></div>${availStripHTML(p)}</div></div>
+    <div class="pk-nrow b"><div class="pkpanel pk-nst"><div class="pkh">Stories<span class="nw-cat">${cats.map(([k,l2])=>`<button class="${cat===k?"on":""}" onclick="act('pkcat','${k}')">${l2}${k==="all"?" "+stories.length:" "+stories.filter(n=>n.cat===k).length}</button>`).join("")}</span></div>
+        <div class="pk-nsl">${shown.length?shown.map(n=>`<a class="pk-ns" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">${nwTag(n.cat)}<b>${esc(n.title)}</b>${n.sum?`<span>${esc(n.sum)}</span>`:""}<small>${nwSrc(n)}</small></a>`).join(""):sgEmpty(S.newsState==="loading"?"Reading the feeds…":"No stories name him this week.")}</div></div>
+      <div class="pkpanel"><div class="pkh">Social Media<span>this week</span></div><div class="pk-nsl">${soc.length?soc.map(nwSoRow).join(""):sgEmpty("No posts name him this week.")}</div></div></div>`;
 }
 
 /* ============================================================
@@ -156,7 +189,7 @@ function pcardHTML(p,bench){
   const sub=S.subFrom===p.id,menu=S.pMenu===p.id&&!official;
   const armband=isC?`<span class="pz-cv"${official?` title="Captain (official)"`:` title="Captain"`}>C</span>`
     :isV?`<span class="pz-cv v"${official?` title="Vice-captain (official)"`:` title="Vice-captain"`}>V</span>`:"";
-  const inj=p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(p.news||"Doubt")}">${lic("triangle-alert",13)}<i>${Math.round(p.avail*100)}%</i></span>`:"";
+  const inj=p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(flagTitle(p))}">${lic("triangle-alert",13)}<i>${Math.round(p.avail*100)}%</i></span>`:"";
   const strip=isPast?fxRun(pastFxGW(p,g),"sm"):fxNext(p,g,5,"sm");
   const ptsTip=noData?`No data for GW${g}`:hasAct?`${p.total} pts this season. GW${g}: ${actShown.toFixed(1)}${hasPred?` against ${sp&&sp.src==="backtest"?"backtest":"predicted"} ${shownPts.toFixed(1)}`:""}`:`${p.total} pts this season. Predicted for ${S.horizon>1?wkSpan(g,S.horizon):"GW"+g}`;
   /* past weeks: the prediction against the actual, where the signals sit */
@@ -534,8 +567,8 @@ function replHTML(){
         :`<div class="pbody"><p class="note">No affordable option at this position.</p></div>`}</div>`;
   }).join("");
 }
-const INJ=p=>p.avail===0?`<span title="${esc(p.news||"Unavailable")}" style="color:var(--red);font-size:11px">✚</span>`
-  :(p.avail<1?`<span title="${esc(p.news||"Doubt")}" style="color:var(--amber);font-size:11px">✚</span>`:"");
+const INJ=p=>p.avail===0?`<span title="${esc(flagTitle(p))}" style="color:var(--red);font-size:11px">✚</span>`
+  :(p.avail<1?`<span title="${esc(flagTitle(p))}" style="color:var(--amber);font-size:11px">✚</span>`:"");
 const PD_PAGE=100;
 function listHTML(){
   const g=VG();
@@ -571,7 +604,7 @@ function listHTML(){
       title="${afford?"":"Over budget by £"+(p.price-budget).toFixed(1)}"
       style="${p.avail===0?"opacity:.35;":""}${!afford?"opacity:.42;":""}">
       ${kitSm(p,30)}
-      <span class="pr2-who"><span class="pr2-l1"><b>${esc(p.web_name)}</b>${tagOf(p)}${p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(p.news||"Doubt")}">${lic("triangle-alert",11)}<i>${Math.round(p.avail*100)}%</i></span>`:""}<span class="pr2-sig">${sigHTML(p,g)}</span></span>
+      <span class="pr2-who"><span class="pr2-l1"><b>${esc(p.web_name)}</b>${tagOf(p)}${p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(flagTitle(p))}">${lic("triangle-alert",11)}<i>${Math.round(p.avail*100)}%</i></span>`:""}<span class="pr2-sig">${sigHTML(p,g)}</span></span>
         <span class="pr2-l2"><i>${esc(p.teamName)} · ${POS[p.pos]}</i>${fix3(p,g)}</span></span>
       <span class="pr2-c pr2-price">£${p.price.toFixed(1)}${arw(p.priceChange)}</span>
       <span class="pr2-c mu">${p.xMins}′</span>
@@ -1622,28 +1655,6 @@ function chipGridHTML(half){
    page no longer relies on it: only http(s) links, numbers as numbers */
 const safeUrl=u=>/^https?:\/\//i.test(String(u||""))?String(u):"#";
 const safeInt=v=>{const n=Number(v);return Number.isFinite(n)?Math.round(n):0;};
-function itemHTML(n,score){
-  const h=hits(n.title),ago=Math.max(0,Math.round((Date.now()-n.time)/3600000));
-  const when=ago<1?"just now":(ago<24?ago+"h ago":Math.round(ago/24)+"d ago");
-  return `<a class="item ${h.length?"hit":""}" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">
-    <div class="ttl" ${h.length?'style="color:var(--mint)"':""}>${h.length?`<span class="tag">${esc(h.join(", "))}</span>`:""}${esc(n.title)}</div>
-    <div class="meta"><span class="src">${esc(n.src)}</span><span>${when}</span>
-      ${score&&safeInt(n.score)?`<span>▲ ${safeInt(n.score)}</span>`:""}${safeInt(n.comments)?`<span>${safeInt(n.comments)} comments</span>`:""}
-      ${n.extra?`<span>${esc(n.extra)}</span>`:""}</div></a>`;
-}
-const CREATORS=[["Ben Crellin","Blanks, doubles and fixture swings","https://x.com/BenCrellin"],
- ["FPL Harry","Data-led weekly analysis","https://x.com/FPLHarry"],
- ["FPL General","Three top-500 finishes","https://x.com/FPLGeneral"],
- ["FPL Salah","Four top-1k finishes","https://x.com/FPL_Salah"],
- ["Lateriser","Differential-hunting","https://x.com/FPL_Lateriser"],
- ["Holly Shand","Predicted lineups and team news","https://x.com/FFCommunity_"],
- ["Mark Sutherns","Founded FFScout; FPL BlackBox","https://x.com/markyfpl"],
- ["Big Man Bakar","The weekly Review thread","https://x.com/BigManBakar"],
- ["Pras","13 straight top-100k seasons","https://x.com/prasFPL"],
- ["Gianni Buttice","Sky Sports regular","https://x.com/GianniButtice"],
- ["The FPL Wire","Long-form pre-deadline pod","https://www.youtube.com/@TheFPLWire"],
- ["FPL BlackBox","Deep tactical discussion","https://www.youtube.com/@FPLBlackBox"],
- ["Let's Talk FPL","Daily video round-ups","https://www.youtube.com/@LetsTalkFPL"]];
 
 
 /* ============================================================
@@ -1810,9 +1821,9 @@ function popHTML(){
   if(k==="form")return modalHTML("Form",dashHTML(["form"]),{});
   if(k==="warn"){
     const sw=new Map();bestSwaps(60,h).forEach(m=>{if(!sw.has(m.out.id))sw.set(m.out.id,m);});
-    return modalHTML("Fitness and Risk",(D.warn.length?`<table class="mkt"><thead><tr><th>Player</th><th>Where</th><th>Chance</th><th>xMins</th><th>News</th><th>Best replacement</th></tr></thead><tbody>
+    return modalHTML("Fitness and Risk",(D.warn.length?`<table class="mkt"><thead><tr><th>Player</th><th>Where</th><th>Chance</th><th>Since</th><th>xMins</th><th>News</th><th>Best replacement</th></tr></thead><tbody>
       ${D.warn.map(({p,inXI})=>{const m=sw.get(p.id);return `<tr><td>${esc(p.web_name)} <span class="mu">${esc(p.teamName)}</span></td><td>${inXI?"XI":"Bench"}</td>
-        <td>${p.avail<1?Math.round(p.avail*100)+"%":"fit"}</td><td>${Math.round(p.xMins||0)}</td><td style="text-align:left;white-space:normal;max-width:360px">${esc(p.news||"")}</td>
+        <td>${p.avail<1?Math.round(p.avail*100)+"%":"fit"}</td><td>${(f=>f&&f.since&&!f.cleared?`${esc(flagDay(f.since))}${f.was!=null&&f.was!==f.c?`<br><span class="mu">was ${f.was}%</span>`:""}`:"–")(flagNow(p))}</td><td>${Math.round(p.xMins||0)}</td><td style="text-align:left;white-space:normal;max-width:360px">${esc(p.news||"")}</td>
         <td>${m?`${esc(m.inn.web_name)} <b class="up">${sgn1(m.gain)}</b> <button class="mini" onclick="act('doswap',${p.id},${m.inn.id})">Make</button>`:"—"}</td></tr>`;}).join("")}</tbody></table>`
       :`<p class="note">Every player in your squad is fit and expected to start.</p>`)+dashHTML(["risk"]),{wide:true});
   }
@@ -1876,7 +1887,7 @@ function cmpCardHTML(p,side,T,other,bench){
   const g=VG(),v=T.val(p)*(p===T.cap?2:1),col=ptsCol(v/Math.max(1,T.h));
   const uniq=!!(other&&other.ids&&other.ids.length)&&!other.ids.includes(p.id),C=S.cmp,menu=C.menu&&C.menu.side===side&&C.menu.id===p.id;
   const sub=C.sub&&C.sub.side===side&&C.sub.id===p.id,lock=side==="B"&&(C.pendLocks.includes(p.id)||C.locks.includes(p.id)),ban=side==="B"&&(C.pendBans.includes(p.id)||C.bans.includes(p.id));
-  const inj=p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(p.news||"Doubt")}">${lic("triangle-alert",13)}<i>${Math.round(p.avail*100)}%</i></span>`:"";
+  const inj=p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(flagTitle(p))}">${lic("triangle-alert",13)}<i>${Math.round(p.avail*100)}%</i></span>`:"";
   return `<div class="pz-c${uniq?" cv-"+(side==="A"?"out":"in"):""}${sub?" subsel":""}${menu?" open":""}${ban?" dim":""}" data-pid="${p.id}"
     onclick="act('cmpclick','${side}',${p.id})" oncontextmenu="event.preventDefault();act('cmpmenu','${side}',${p.id})" draggable="true"
     ondragstart="pzDrag(event,${p.id})" ondragover="pzOver(event)" ondragleave="this.classList.remove('drop')" ondrop="pzDrop(event,${p.id},'${side}')" title="${esc(p.web_name)}">
@@ -3015,4 +3026,76 @@ function pdHeadHTML(rows,r){
           return `<button class="pdsigchip${on?" on":""}" style="--tc:${tone==="NAVY"?"#7AA2FF":tone}" onclick="act('iconf','${k}')" aria-pressed="${on}" title="${esc(SIG_RULE[k](S.horizon||1))}"><span class="tile">${lic(ic)}</span>${label}<b>${cnt[k]||0}</b></button>`;}).join("")}</div>
       </div>
     </div>`;
+}
+
+/* ============================================================
+   THE ONE FLAG MECHANISM (22 Nov 2026, Andy). FPL keeps only a player's
+   latest flag; the server writes down every change (/api/flags, the same
+   log The Scout reads). Every page draws a flag from these four:
+   flagNow (the chance, since when, and the chance before), flagTitle (the
+   hover text on every injury badge), flagHistoryHTML (the list of
+   changes) and availStripHTML (minutes each gameweek, the bar coloured by
+   FPL's chance at that deadline). The chance itself is always p.avail, so
+   every page agrees. The log began on 12 Nov 2026: earlier deadlines are
+   grey.
+   ============================================================ */
+const FLAG_LOG_START=Date.parse("2026-11-12T00:00:00Z");
+const flagChance=r=>r.st==="a"&&!r.news?100:(r.st==="u"||r.st==="n"||r.st==="s")?0:(r.cn==null||r.cn===""?(r.st==="a"?100:50):+r.cn);
+const flagT=r=>Date.parse(r.t||r.seen)||Date.parse(r.seen)||0;
+const flagDay=ms=>new Date(ms).toLocaleDateString("en-GB",{timeZone:"Europe/London",weekday:"short",day:"numeric",month:"short"});
+const flagWhen=ms=>flagDay(ms)+", "+new Date(ms).toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit"});
+const chCol=c=>c==null?"#4A4A4A":c<=0?"var(--red)":c<=50?"#FF9F2E":c<100?"#FFD23F":"var(--mint)";
+const chPill=c=>`<span class="fh-pc" style="--fl:${chCol(c)}">${c==null?"–":c+"%"}</span>`;
+function flagRows(p){const F=S.flags&&S.flags.players;return (F&&(F[p.id]||F[String(p.id)]))||[];}
+function flagNow(p){
+  const c=Math.round((p.avail==null?1:p.avail)*100),rows=flagRows(p);
+  if(!rows.length)return c<100?{c,since:null,was:null}:null;
+  let i=rows.length-1;const cl=flagChance(rows[i]);
+  while(i>0&&flagChance(rows[i-1])===cl)i--;
+  const since=flagT(rows[i]),was=i>0?flagChance(rows[i-1]):(cl<100?100:null);
+  if(c>=100)return cl>=100&&was!=null&&was<100?{c:100,since,was,cleared:true}:null;
+  return {c,since,was};
+}
+/* the chance FPL gave him at a moment (null before the log began) */
+function flagAt(p,ms){
+  if(!(ms>=FLAG_LOG_START))return null;
+  const rows=flagRows(p);let c=100;
+  for(const r of rows){if(flagT(r)<=ms)c=flagChance(r);else break;}
+  return c;
+}
+function flagTitle(p){
+  const f=flagNow(p),n=p.news||"Fitness doubt";
+  if(!f||f.cleared)return p.news||"Fit";
+  return `${n} · ${f.c}%${f.since?" since "+flagDay(f.since):""}${f.was!=null&&f.was!==f.c?" · was "+f.was+"%":""}`;
+}
+function flagHistoryHTML(p,max){
+  const rows=flagRows(p);
+  if(!rows.length)return sgEmpty(p.avail<1?"Flagged before the log began on 12 Nov.":"No FPL flag since the log began on 12 Nov.");
+  const out=[];let prev=100;
+  rows.forEach(r=>{const c=flagChance(r);out.push({t:flagT(r),a:prev,b:c,n:r.news||(c>=100?"Flag removed":"")});prev=c;});
+  return `<div class="fh-list">${out.reverse().slice(0,max||8).map(x=>`<div class="fh-row"><span class="fh-t">${esc(flagWhen(x.t))}</span>
+    <span class="fh-ch">${chPill(x.a)}<span class="fh-ar" style="color:${x.b>x.a?"var(--mint)":x.b<x.a?"var(--red)":"#6A6A6A"}">${lic("arrow-right",12)}</span>${chPill(x.b)}</span><span class="fh-n">${esc(x.n)}</span></div>`).join("")}</div>`;
+}
+function availStripHTML(p){
+  const G=S.model.next.id,rows=((S.hist||{})[String(p.code)]||[]).filter(r=>r.tag==="now");
+  const cells=[];
+  for(let e=1;e<=G;e++){
+    const ev=(S.events||[]).find(x=>x.id===e),dl=ev&&Date.parse(ev.deadline);
+    const ms=rows.filter(r=>r.gw===e),mins=e<G?ms.reduce((a,r)=>a+(+r.mins||0),0):null;
+    const c=e===G?Math.round((p.avail==null?1:p.avail)*100):flagAt(p,dl);
+    cells.push(`<div class="fh-av" style="--fl:${chCol(c)}" title="GW${e}: ${mins==null?"to play":mins+" minutes"}${c==null?" · before the flag log":" · FPL chance "+c+"% at the deadline"}"><i>GW${e}</i><b>${mins==null?"–":mins}</b><span></span></div>`);
+  }
+  return `<div class="fh-avs" style="grid-template-columns:repeat(${cells.length},minmax(0,1fr))">${cells.join("")}</div>`;
+}
+/* Start Chance (Andy, 22 Nov 2026): the share of his club's last six league
+   matches he started, times FPL's chance of playing. With fewer than three
+   matches this season, the model's expected minutes stand in. */
+function startChance(p){
+  const G=S.model.next.id,code=Math.round(num(p.teamCode)),av=p.avail==null?1:p.avail;
+  const ms=Object.entries(S.teamMatch||{}).filter(([,m])=>m.tag==="now"&&m.gw<G&&(m.h===code||m.a===code))
+    .sort((a,b)=>b[1].gw-a[1].gw).slice(0,6).map(([id])=>id);
+  let v;
+  if(ms.length>=3){const rows=((S.hist||{})[String(p.code)]||[]);v=ms.filter(id=>rows.some(r=>r.mid===id&&r.start===0)).length/ms.length;}
+  else v=clamp((p.roleMins!=null?p.roleMins:(p.xMins||0))/85,0,1);
+  return Math.round(v*av*100);
 }

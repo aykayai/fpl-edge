@@ -32,6 +32,10 @@ export const CONFIG = {
   REDDIT_JSON_URL: env.REDDIT_JSON_URL || "https://www.reddit.com/r/FantasyPL/hot.json?limit=50&raw_json=1",
   REDDIT_RSS_URL: env.REDDIT_RSS_URL || "https://www.reddit.com/r/FantasyPL/hot/.rss?limit=50",
   GOOGLE_NEWS_BASE: env.GOOGLE_NEWS_BASE || "https://news.google.com/rss/search",
+  YOUTUBE_FEED_BASE: env.YOUTUBE_FEED_BASE || "https://www.youtube.com/feeds/videos.xml",
+  BLUESKY_API_BASE: env.BLUESKY_API_BASE || "https://public.api.bsky.app/xrpc",
+  /* "0" turns the social media sources off (the gate's stub has none) */
+  NEWS_SOCIAL: env.NEWS_SOCIAL || "1",
 
   DATASET_REPO: "olbauday/FPL-Core-Insights",
   DATASET_PATH: "data",

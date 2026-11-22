@@ -952,64 +952,42 @@ function chipRuleBreak(k,e){
 }
 
 /* ---------- news ---------- */
-/* All feeds are fetched, parsed and sanitised by the FPL Signals server every
-   15 minutes, so the page makes two cheap same-origin calls: /api/news for
-   the general feeds and r/FantasyPL, and /api/player-news for the per-player
-   Google News searches (the page knows the squad; the server does not). A
-   source that fails upstream keeps serving its last good copy and reports its
-   error in perSource, which fills srcLog. Nothing here blocks the squad data. */
+/* News (rebuilt 22 Nov 2026). The server reads every source every 15
+   minutes, tags each story with a category and the players it names, and
+   keeps the one flag log. The page makes three same-origin calls: /api/news
+   (stories and social media), /api/flags (every FPL flag change) and
+   /api/player-news for the squad's own searches (the page knows the
+   squad; the server does not). The flag log loads even when the news does
+   not: the player card, the Planner's badges and Fitness and Risk use it. */
 async function loadNews(){
   if(!S.model)return;
   if(BACKUP){S.newsState="backup";render();return;}
-  S.newsState="loading";S.news=[];S.reddit=[];S.squadNews=[];S.srcLog={};render();
-  const log={};
+  S.newsState="loading";render();
+  fetch("/api/flags").then(r=>r.ok?r.json():null).then(d=>{if(d&&d.players){S.flags=d;render();}}).catch(()=>{});
   try{
     const r=await fetch("/api/news");
     if(!r.ok)throw new Error("HTTP "+r.status);
     const d=await r.json();
-    const news=Array.isArray(d.news)?d.news:[];
-    const reddit=Array.isArray(d.reddit)?d.reddit:[];
-    Object.entries(d.perSource||{}).forEach(([name,s])=>{
-      log[name]=s&&s.ok?(s.count??0):"failed"+(s&&s.error?" ("+s.error+")":"");
-    });
-    S.newsFetchedAt=d.fetchedAt||null;
-    /* one server call for all fifteen squad searches, searched by full name
-       as before; items come back keyed by the name that was sent */
-    const squad=[];
+    const arr=a=>Array.isArray(a)?a.filter(n=>n&&n.title&&Number.isFinite(+n.time)):[];
+    S.news=arr(d.news);S.social=arr(d.social);S.newsSources=d.perSource||{};S.newsFetchedAt=d.fetchedAt||null;
+    let squad=[];
     try{
-      const sp=squadPlayers();
-      const names=sp.map(p=>(((p.first||"")+" "+(p.last||"")).trim())||p.web_name);
-      const r2=await fetch("/api/player-news?names="+encodeURIComponent(names.join(",")));
-      if(r2.ok){
-        const d2=await r2.json();
-        sp.forEach((p,i)=>{
-          const items=(d2.items&&d2.items[names[i]])||[];
-          items.forEach(it=>squad.push({...it,src:p.web_name}));
-          log["· "+p.web_name]=items.length;
-        });
-      }
-    }catch(e){/* squad search is additive; the general feed already landed */}
-    const seen=new Set();
-    const dedupe=a=>a.filter(n=>{const k=(n.title||"").slice(0,64).toLowerCase();
-      if(!k||seen.has(k))return false;seen.add(k);return true;});
-    S.news=dedupe(news.sort((a,b)=>b.time-a.time));
-    S.squadNews=dedupe(squad.sort((a,b)=>b.time-a.time));
-    S.reddit=dedupe(reddit);
-    S.srcLog=log;
-    S.newsState=(S.news.length||S.reddit.length||S.squadNews.length)?"ok":"fail";
-  }catch(e){
-    S.srcLog=log;S.newsState="fail";
-  }
+      const r2=await fetch("/api/player-news?ids="+(S.squad||[]).join(","));
+      if(r2.ok){const d2=await r2.json();squad=Object.values(d2.items||{}).flat();}
+    }catch(e){/* the squad's own searches are additive */}
+    const seen=new Set(S.news.map(n=>newsKey(n.title)));
+    S.squadNews=arr(squad).filter(n=>{const k=newsKey(n.title);if(seen.has(k))return false;seen.add(k);return true;});
+    S.newsState=(S.news.length||S.social.length||S.squadNews.length)?"ok":"fail";
+  }catch(e){S.newsState="fail";}
   render();
 }
-function hits(title){
-  if(!S.model||!S.squad)return[];
-  const t=title.toLowerCase();
-  return squadPlayers().filter(p=>{
-    const n=norm(p.web_name),l=norm(p.last||"");
-    return (n.length>3&&t.replace(/[^a-z]/gi,"").toLowerCase().includes(n))||
-           (l.length>4&&t.toLowerCase().includes((p.last||"").toLowerCase()));
-  }).map(p=>p.web_name);
+const newsKey=t=>String(t||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().slice(0,70);
+/* one player's stories for his card: the feeds plus his own search, fetched
+   once when his News tab first opens */
+async function loadPlayerNews(id){
+  S.pNews=S.pNews||{};if(S.pNews[id]||BACKUP)return;
+  S.pNews[id]=[];
+  try{const r=await fetch("/api/player-news?ids="+id);if(r.ok){const d=await r.json();S.pNews[id]=(d.items&&d.items[id])||[];render();}}catch(e){}
 }
 
 /* ============================================================
@@ -1293,7 +1271,7 @@ function squadListHTML(){
   const head=`<div class="lv-h">${cols.map(([k,n])=>`<button class="lv-hc lv-${k}${key===k?" act":""}" onclick="act('sqsort','${k}')" aria-sort="${key===k?(dir==="asc"?"ascending":"descending"):"none"}">${n}${arrow(k)}</button>`).join("")}<span class="lv-act"></span></div>`;
   const row=p=>{const on=xi.includes(p),buy=purchaseOf(p).paid,sell=sellPrice(p),c=pts.get(p.id),menu=S.pMenu===p.id&&!official,fl=S.flagged.includes(p.id);
     return `<div class="lv-r${on?"":" sub"}${fl?" dim":""}${menu?" open":""}" data-pid="${p.id}"${official?"":` oncontextmenu="event.preventDefault();act('pmenu',${p.id})"`}>
-      <span class="lv-pos"><button class="lv-pl" onclick="act('card',${p.id})">${photoHTML(p,"lv-ph")}<span class="lv-nm"><b>${esc(p.web_name)}</b>${capId===p.id?`<span class="pz-cv"${official?' title="Captain (official)"':""}>C</span>`:viceId===p.id?`<span class="pz-cv v"${official?' title="Vice-captain (official)"':""}>V</span>`:""}${inDT(p)?dtStar("pz-dts",9):""}${p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(p.news||"Doubt")}">${lic("triangle-alert",12)}<i>${Math.round(p.avail*100)}%</i></span>`:""}${on||key==="pos"?"":`<span class="lv-sub">SUB</span>`}<i>${esc(p.teamName)} · ${POSL[p.pos]}</i></span></button></span>
+      <span class="lv-pos"><button class="lv-pl" onclick="act('card',${p.id})">${photoHTML(p,"lv-ph")}<span class="lv-nm"><b>${esc(p.web_name)}</b>${capId===p.id?`<span class="pz-cv"${official?' title="Captain (official)"':""}>C</span>`:viceId===p.id?`<span class="pz-cv v"${official?' title="Vice-captain (official)"':""}>V</span>`:""}${inDT(p)?dtStar("pz-dts",9):""}${p.avail<1?`<span class="pz-inj" style="--fl:${p.avail===0?"var(--red)":p.avail>=.75?"#FFD23F":"#FF9F2E"}" title="${esc(flagTitle(p))}">${lic("triangle-alert",12)}<i>${Math.round(p.avail*100)}%</i></span>`:""}${on||key==="pos"?"":`<span class="lv-sub">SUB</span>`}<i>${esc(p.teamName)} · ${POSL[p.pos]}</i></span></button></span>
       <span class="lv-sell"><b>£${sell.toFixed(1)}${arw(p.priceChange)}</b><i class="${sell>buy?"up":sell<buy?"dn":""}">paid £${buy.toFixed(1)}</i></span>
       <span class="lv-total">${p.total}</span><span class="lv-form">${p.form.toFixed(1)}</span><span class="lv-xmins mu">${Math.round(p.xMins)}′</span>
       <span class="lv-pred"><span class="lv-pt" style="background:${c.v==null?"var(--ink3)":c.col[0]};color:${c.v==null?"var(--mute)":c.col[1]}${c.elite?";box-shadow:0 0 0 2px #EAFFEF,0 0 10px rgba(125,251,158,.7)":""}" title="${c.actual?"Actual":"Predicted"} GW${g}${capId===p.id?", captain":""}">${c.v==null?"—":c.v.toFixed(1)}</span></span>
@@ -1314,6 +1292,8 @@ function squadListHTML(){
   return `<div class="lv">${head}${body}</div>`;
 }
 /* icons for the Chips page (Lucide 1.52.0, ISC) */
+/* News redesign icons (22 Nov 2026) */
+Object.assign(LUCIDE,{"shirt": "<path d=\"M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z\" />", "newspaper": "<path d=\"M15 18h-5\" /> <path d=\"M18 14h-8\" /> <path d=\"M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2\" /> <rect width=\"8\" height=\"4\" x=\"10\" y=\"6\" rx=\"1\" />", "heart-pulse": "<path d=\"M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5\" /> <path d=\"M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27\" />", "pin": "<path d=\"M12 17v5\" /> <path d=\"M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z\" />", "calendar-days": "<path d=\"M8 2v3\" /> <path d=\"M16 2v3\" /> <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /> <path d=\"M3 9h18\" /> <path d=\"M8 13h.01\" /> <path d=\"M12 13h.01\" /> <path d=\"M16 13h.01\" /> <path d=\"M8 17h.01\" /> <path d=\"M12 17h.01\" /> <path d=\"M16 17h.01\" />", "play": "<path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\" />", "cloud": "<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />"});
 Object.assign(LUCIDE,{"chart-column":"<path d=\"M3 3v16a2 2 0 0 0 2 2h16\" /><path d=\"M18 17V9\" /><path d=\"M13 17V5\" /><path d=\"M8 17v-3\" />","wand-sparkles":"<path d=\"m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72\" /><path d=\"m14 7 3 3\" /><path d=\"M5 6v4\" /><path d=\"M19 14v4\" /><path d=\"M10 2v2\" /><path d=\"M7 8H3\" /><path d=\"M21 16h-4\" /><path d=\"M11 3H9\" />","zap":"<path d=\"M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z\" />","armchair":"<path d=\"M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3\" /><path d=\"M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z\" /><path d=\"M5 18v2\" /><path d=\"M19 18v2\" />","layers":"<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\" /><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\" /><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\" />","calendar-range":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" /><path d=\"M16 2v3\" /><path d=\"M3 9h18\" /><path d=\"M8 2v3\" /><path d=\"M17 13h-6\" /><path d=\"M13 17H7\" /><path d=\"M7 13h.01\" /><path d=\"M17 17h.01\" />","circle-check":"<circle cx=\"12\" cy=\"12\" r=\"10\" /><path d=\"m16 9-5.5 5.5L8 12\" />"});
 /* ============================================================
    CHIPS (20 Nov 2026, Andy): one team score for every chip.
