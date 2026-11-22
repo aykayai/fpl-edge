@@ -171,7 +171,7 @@ try {
     const capActs = (actuals.players || {})[String(capPick.id)] || {};
     const capPts = (capActs[String(gw)] ?? capActs[gw]);
     if (capPts != null && capBadges.length === 1) {
-      const wantShown = (capPts * capPick.multiplier).toFixed(1);
+      const wantShown = String(capPts * capPick.multiplier);
       const card = capBadges[0].closest(".pz-c");
       if (!card.textContent.includes(wantShown)) { ok = false; why.push(`captain card misses actual ${wantShown}`); }
     }

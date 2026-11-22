@@ -5,7 +5,7 @@
 
    F26  A sale credits the selling price: purchase price plus half the rise,
         rounded down to 0.1 (the official examples).
-   F46  A transfer the bank cannot cover is refused; bank and squad unchanged.
+   F46  A transfer the bank cannot cover goes into the plan with a warning; Save refuses while over budget.
    F19  Each transfer beyond the free ones costs 4; free transfers grow by one
         a week to a cap of 5; Wildcard and Free Hit weeks are free.
    F47  Chip plans that break the rules are refused with a reason.
@@ -131,14 +131,18 @@ try {
   check(ok1 === true && Math.abs(g.planBank() - wantBank) < 0.001, "F26 the bank after a sale uses the selling price", `bank ${g.planBank()} want ${wantBank}`);
   restore(clean); g.render();
 
-  /* ---------- F46 over budget refused ---------- */
+  /* ---------- F46 over budget: allowed in the plan, Save refuses (22 Nov 2026) ---------- */
   const o2 = sq.find(p => p.pos === 2) || sq[1];
   const room = g.planBank() + g.sellPrice(o2);
   const dear = P.filter(q => q.pos === o2.pos && !S.squad.includes(q.id) && q.price > room + 0.05).sort((a, b) => b.price - a.price)[0];
   const before = snapshot();
   const ok2 = g.applySwap(o2.id, dear.id);
-  check(ok2 === false && snapshot() === before, "F46 an unaffordable swap is refused, bank and squad unchanged", `returned ${ok2}`);
-  check(/Not enough in the bank: £\d+\.\d short/.test(toastText()) && doc.getElementById("toast").classList.contains("warn"), "F46 the refusal says how much is short, in the warning style", toastText());
+  check(ok2 === true && g.planBank() < 0 && g.effectiveSquadIds(g.VG()).ids.includes(dear.id), "F46 an unaffordable swap goes into the plan, bank below zero", `returned ${ok2}, bank ${g.planBank()}`);
+  check(/Over budget by £\d+\.\d/.test(toastText()) && doc.getElementById("toast").classList.contains("warn"), "F46 it warns how much over, in the warning style", toastText());
+  g.render();
+  const savedBefore = JSON.stringify(S.original);
+  g.act("save");
+  check(JSON.stringify(S.original) === savedBefore && /Over budget by £\d+\.\d/.test(toastText()) && !!doc.querySelector(".pz-head .pri.blocked"), "F46 Save refuses an overspent squad and shows as blocked", toastText());
   restore(clean); g.render();
 
   /* ---------- F19 hits ---------- */
@@ -209,6 +213,19 @@ try {
     const draggable = doc.querySelectorAll(".pz-c[draggable=true]").length;
     check(draggable === 15, `Planner: all 15 players can be dragged in an editable week (${draggable})`);
     S.forceXI = keepXI; g.render();
+  }
+  /* ---------- a finished week (22 Nov 2026): summary, results, events, prediction pills, review ---------- */
+  {
+    const fin = ((S.tracker && S.tracker.gw) || []).filter(r => Array.isArray(r.picks) && r.picks.length && r.event < NEXT).map(r => r.event).sort((a, b) => b - a)[0];
+    if (fin) {
+      g.act("startgw", fin); await new Promise(r => setTimeout(r, 2500)); g.render();
+      const cards = doc.querySelectorAll(".pz-pitch.past .pz-c");
+      check(cards.length === 15 && doc.querySelectorAll(".pz-pitch.past .pv-pills").length === 15 && doc.querySelectorAll(".pz-pitch.past .pv-res").length >= 15 && !doc.querySelector(".pz-pitch.past .pz-xf"),
+        `Finished week GW${fin}: every card has its result and prediction pills, and no edit buttons`, cards.length);
+      check(!!doc.querySelector(".pv-sum") && /GW\d+ points/.test(doc.querySelector(".pv-sum")?.textContent || "") && !!doc.querySelector(".pv-rev") && !doc.querySelector(".poolpanel") && /read-only/.test(doc.querySelector(".pz-head")?.textContent || ""),
+        `Finished week GW${fin}: the summary bar, the GW Review in place of the Player Pool, read-only head`);
+      g.act("startgw", NEXT);
+    } else check(false, "Finished week setup: an official week before the next deadline");
   }
   /* ---------- Compare v3, the List view, the Player Pool filters (21 Nov 2026) ---------- */
   {

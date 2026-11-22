@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { CONFIG } from "./lib/config.mjs";
 import { log } from "./lib/util.mjs";
 import { initDataset, pollDataset, datasetStatus, datasetGW, currentDir } from "./lib/dataset.mjs";
-import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus, fplPlayersPayload, currentGw } from "./lib/fpl.mjs";
+import { fetchBootstrap, fetchLive, nearDeadline, withinHoursOfDeadline, anyFixtureLive, priceFetchDue, fplStatus, fplPlayersPayload, fplWeekPayload, currentGw } from "./lib/fpl.mjs";
 import { buildNeighbours, neighboursStatus } from "./lib/neighbours.mjs";
 import { refreshNews, newsPayload, newsStatus, playerNews } from "./lib/news.mjs";
 import { initOdds, refreshOdds, oddsPayload, oddsStatus } from "./lib/odds.mjs";
@@ -205,6 +205,7 @@ async function handle(req, res) {
     }
     if (path === "/api/odds") { sendJson(res, method, 200, oddsPayload()); return; }
     if (path === "/api/fpl-players") { sendJson(res, method, 200, await fplPlayersPayload()); return; }
+    { const wk = /^\/api\/fpl-week\/(\d{1,2})$/.exec(path); if (wk) { sendJson(res, method, 200, await fplWeekPayload(wk[1])); return; } }
     /* TV channels (12 Nov 2026): the Premier League lists them by the
        caller's country and the server is in the Netherlands, so Andy's PC
        fetches the Irish listings weekly and pushes them into STATE_DIR */

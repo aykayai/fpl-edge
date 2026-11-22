@@ -828,11 +828,11 @@ function applySwap(oid,iid){
   if(iid!==oid&&cur.includes(iid)){toast(i.web_name+" is already in your squad");return;}
   const ids=cur.map(x=>x===oid?iid:x);
   /* F26: a sale credits the selling price (purchase price plus half the
-     rise, rounded down), not the current price. F46: a swap the bank cannot
-     cover is refused here, where every route to a swap passes, and the bank
-     is left untouched. */
+     rise, rounded down), not the current price. F46, changed 22 Nov 2026
+     (Andy): a swap the bank cannot cover is allowed into the plan with a
+     warning; Save is what refuses an overspent squad. */
   const bank=+((planBank())+sellPrice(o)-i.price).toFixed(1);
-  if(bank<-0.001){toast(`Not enough in the bank: £${(-bank).toFixed(1)} short for ${i.web_name}`,{warn:true});return false;}
+  if(bank<-0.001)toast(`Over budget by £${(-bank).toFixed(1)} for ${i.web_name}. Plan it, but Save stays off until the bank is back to £0.0`,{warn:true});
   const extra={bank};
   if(S.captain===oid)extra.captain=iid;
   if(S.vice===oid)extra.vice=iid;
