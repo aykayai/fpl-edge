@@ -23,7 +23,7 @@ function act(k,a,b,c){
   if(k!=="pmenu"&&S.pMenu!=null)S.pMenu=null;
   switch(k){
     case"load":loadAll().then(()=>loadNews());return;
-    case"tab":if(a!==S.tab){savePaint();closePops();}S.tab=a;S.menuOpen=false;break;
+    case"tab":if(a!==S.tab){savePaint();closePops();}if(a!=="squad"&&S.liveAuto){S.startGW=0;S.liveAuto=false;}S.tab=a;S.menuOpen=false;break;
     case"menu":S.menuOpen=!S.menuOpen;break;
     case"chipview":S.chipView=a;break;
     case"chiphalf":S.chipHalf=a;break;
@@ -45,6 +45,14 @@ function act(k,a,b,c){
     case"trfilt":S.trFilt=a;break;
     case"rkmode":S.rkMode=a==="pts"?"pts":"rank";break;
     case"trh":S.trH=[1,3,5].includes(+a)?+a:1;break;
+    /* batch 5: the live gameweek */
+    case"lkf":S.lkF=["near","top10k","overall"].includes(a)?a:"top10k";break;
+    case"lkl":S.lkL=a==="live"?"live":"season";break;
+    case"mcm":S.mcM=a==="table"?"table":"matches";break;
+    case"mco":{const cur=S.mcOpen==null?S._mcAuto:S.mcOpen;S.mcOpen=cur===+a?0:+a;}break;
+    case"h2h":S.h2h=String(a);S.pop="h2h";break;
+    case"h2hv":S.h2hV=a==="pitch"?"pitch":"list";break;
+    case"h2ht":S.h2hT=S.h2hT===String(a)?null:String(a);break;
     case"cmpmove":{S.pop=null;S.cmp=cmpNew("cur","plan");const ids=effectiveSquadIds(VG()).ids.map(i=>i===a?b:i);S.cmp.ed.B={ids};break;}
     /* wave 3: Players hub */
     /* Teams (redesign 12 Nov 2026): Fixture Grid and Matches */
@@ -181,7 +189,7 @@ function act(k,a,b,c){
       S.benchOrder=ids;saveState();break;}
     case"horizon":S.horizon=clamp(+a||1,1,8);break;
     case"vgw":
-    case"startgw":S.startGW=clamp(Math.round(+a)||S.model.next.id,1,38);break;
+    case"startgw":S.startGW=clamp(Math.round(+a)||S.model.next.id,1,38);S.liveAuto=false;S.liveOff=true;break;
     case"pos":S.fPos=+a;break;
     case"team":S.fTeam=+a;break;
     case"lpos":S.lPos=+a;break;
@@ -490,7 +498,7 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
      moves the chip to Live. A full load still only happens on open, on
      Check now, or when the server reports a new dataset commit. */
   if(!BACKUP)setInterval(()=>{if(S.loading)return;
-    loadStatus().then(s=>{if(s)refreshStatusUI();});},60000);
+    loadStatus().then(s=>{if(s)refreshStatusUI();});if(typeof lkTick==="function")lkTick();},60000);
 })();
 /* drag a chip onto a roadmap week (21 Nov 2026) */
 function chipDrag(ev,k){try{ev.dataTransfer.setData("text/plain",k);ev.dataTransfer.effectAllowed="move";}catch(_){}}

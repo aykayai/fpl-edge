@@ -202,11 +202,12 @@ export async function fplWeekPayload(gwIn) {
   const gw = Math.round(+gwIn), cur = state.currentGw || state.gw || 0;
   if (!(gw >= 1 && gw <= 38)) return { gw, players: {}, fixtures: [] };
   const hit = _week.get(gw);
-  if (hit && (gw < cur || Date.now() - hit.at < 120000)) return hit.body;
+  if (hit && (gw < cur || Date.now() - hit.at < 50000)) return hit.body;
   const lp = join(DIR(), `live-gw${gw}.json`), fp = join(DIR(), `fixtures-gw${gw}.json`);
   let live = null, fx = null;
   try { live = JSON.parse(await readFile(lp, "utf8")); } catch { /* not kept yet */ }
-  if (!live && (!cur || gw <= cur)) {
+  /* batch 5: the week in play is fetched again; a finished one is kept */
+  if ((!live || (cur && gw >= cur)) && (!cur || gw <= cur)) {
     try { live = await getJson(`/event/${gw}/live/`); await mkdir(DIR(), { recursive: true }); await writeFile(lp, JSON.stringify(live)); }
     catch (e) { log("fpl.week", "live fail gw=" + gw + " " + e.message, 0); }
   }
@@ -221,9 +222,20 @@ export async function fplWeekPayload(gwIn) {
     const dc = (e.explain || []).some(x => (x.stats || []).some(y => y.identifier === "defensive_contribution" && y.points > 0));
     players[e.id] = { p: t.total_points ?? 0, m: t.minutes ?? 0, g: t.goals_scored || 0, a: t.assists || 0, cs: t.clean_sheets || 0,
       b: t.bonus || 0, sv: t.saves || 0, yc: t.yellow_cards || 0, rc: t.red_cards || 0, og: t.own_goals || 0,
-      ps: t.penalties_saved || 0, pm: t.penalties_missed || 0, dc: dc ? 1 : 0, dt: t.in_dreamteam ? 1 : 0 };
+      ps: t.penalties_saved || 0, pm: t.penalties_missed || 0, dc: dc ? 1 : 0, dt: t.in_dreamteam ? 1 : 0,
+      /* batch 5 (22 Nov 2026): the live Planner's BPS and DefCon count */
+      bps: t.bps ?? 0, dcn: t.defensive_contribution ?? null };
   }
-  const fixtures = (Array.isArray(fx) ? fx : []).map(f => ({ h: f.team_h, a: f.team_a, hs: f.team_h_score, as: f.team_a_score, done: !!f.finished }));
+  /* batch 5 (22 Nov 2026): kick-off, minute and state, and the match's own
+     stats (goals, assists, cards, saves, bonus, BPS, DefCon) for the live
+     Planner's Match Centre: {identifier: {h: [[element, value]], a: [...]}} */
+  const ST = ["goals_scored", "assists", "own_goals", "penalties_saved", "penalties_missed", "yellow_cards", "red_cards", "saves", "bonus", "bps", "defensive_contribution"];
+  const fixtures = (Array.isArray(fx) ? fx : []).map(f => {
+    const st = {};
+    for (const s of f.stats || []) if (ST.includes(s.identifier)) st[s.identifier] = { h: (s.h || []).map(x => [x.element, x.value]), a: (s.a || []).map(x => [x.element, x.value]) };
+    return { id: f.id, h: f.team_h, a: f.team_a, hs: f.team_h_score, as: f.team_a_score, done: !!f.finished, fp: !!f.finished_provisional,
+      started: !!f.started, min: f.minutes ?? 0, ko: f.kickoff_time || null, st };
+  });
   const body = { gw, players, fixtures };
   _week.set(gw, { at: Date.now(), body });
   return body;

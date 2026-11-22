@@ -1031,6 +1031,8 @@ function renderPage(){
      on the new homes (Teams > Odds, the Planner's Top Move pop-up) */
   if(S.tab==="transfers"){S.tab="squad";S.pop="move";S.popTab="all";try{history.replaceState({},"",routeFor("squad"));}catch(e){}}
   if(S.tab==="odds"){S.tab="fixtures";S.fixMode="matches";try{history.replaceState({},"",routeFor("fixtures"));}catch(e){}}
+  /* batch 5: while a gameweek is being played the Planner opens on it */
+  if(S.tab==="squad"&&!S.startGW&&!S.liveOff){const lg0=liveGW();if(lg0){S.startGW=lg0;S.liveAuto=true;}}
   const g=VG();
   /* a flagged player counts as sold: value drops, bank rises by his selling price */
   const flaggedP=squadPlayers().filter(p=>S.flagged.includes(p.id));
@@ -1071,16 +1073,16 @@ function renderPage(){
         <button style="margin-top:10px" onclick="act('cancelopt')">Cancel</button></div></div>`:"";
     /* Team Planner (21 Nov 2026, round 4): the Planner and the Player Pool
        side by side, then Chips and This Week full width */
-    main=`<div class="grid2 pz-grid"><div>
+    main=`<div class="grid2 pz-grid${isLiveWk(g)?" lk":""}"><div>
       <div class="panel plpanel">${plannerHeadHTML()}${S.sqView==="list"?squadListHTML():plannerPitchHTML()}${plannerChipsHTML()}</div>${conf}${flag}</div>
-      ${offRowOf(g)&&g<S.model.next.id?`<div class="poolcol pv-col"><div class="pv-wrap">${pastReviewHTML(g)}`:`      <div class="poolcol">
+      ${offRowOf(g)&&g<S.model.next.id?`<div class="poolcol pv-col"><div class="pv-wrap">${isLiveWk(g)?lkPanelHTML(g):pastReviewHTML(g)}`:`      <div class="poolcol">
         <div class="panel poolpanel"><div class="phead"><h2>Player Pool</h2>
         <a class="btnlink" href="${routeFor("table")}" onclick="return go(event,'table')">Player Data →</a></div>
         ${replHTML()}${poolFiltersHTML()}<div class="plist">${listHTML()}</div>
         ${S.selected?`<div class="pbody" style="border-top:1px solid var(--ink3)">
           <span class="note" style="color:var(--mint)">Pick a replacement for ${esc(S.selected.web_name)}</span>
           <button style="margin-top:8px" onclick="act('cancel')">Cancel</button></div>`:""}`}</div></div></div>
-      ${thisWeekHTML()}`;
+      ${isLiveWk(g)?lkLowerHTML(g):thisWeekHTML()}`;
   }
   else if(S.tab==="table")main=playerDataHTML();
   else if(S.tab==="tracker")main=leagueTabsHTML()+trackerHTML();
@@ -1117,6 +1119,7 @@ function renderPage(){
    <main id="main" style="display:block;max-width:100%">${main}</main>
    ${S.tab==="table"&&!S.pCmp&&(S.pTicks||[]).length?cmpTrayHTML():""}
    <div class="foot">FPL Signals v${APP_VERSION}</div>`;
+  if(S._lkRestore){const f=S._lkRestore;S._lkRestore=null;try{f();}catch(_){}}
 }
 /* Figure card (Fintel style): title with (i), figure, change line and a
    sparkline. No commentary: explanations live in the (i). */

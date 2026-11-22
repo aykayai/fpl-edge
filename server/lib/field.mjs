@@ -157,7 +157,8 @@ export async function buildRankBands(gw) {
       await sleep(GAP_MS);
     }
     if (!bands.length) throw new Error("no standings");
-    const body = { gw, final, builtAt: new Date().toISOString(), me: { rank: me.summary_overall_rank, total: me.summary_overall_points }, bands };
+    /* batch 5: FPL's own figures for the week in play (it updates them through the week) */
+    const body = { gw, final, builtAt: new Date().toISOString(), me: { rank: me.summary_overall_rank, total: me.summary_overall_points, gwRank: me.summary_event_rank ?? null, gwPts: me.summary_event_points ?? null, gw: me.current_event ?? null }, bands };
     await writeJson("rankbands.json", body);
     state.bands = { gw, lastOk: body.builtAt, error: null };
     log("rankbands", `ok gw=${gw}${final ? " final" : ""} bands=${bands.length}`, Date.now() - t0);
