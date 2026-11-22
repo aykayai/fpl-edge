@@ -42,7 +42,7 @@ const SUITES = [
 /* regression 17 -> 16 (22 Nov 2026): Rivals left the strict text comparison
    on purpose (folded into League); it is reported as changed by design */
 const FLOORS = { "gate": 35, "regression": 16, "planner history": 16, "signals": 42, "broken items": 84, "extra": 14,
-  "the scout": 26, "model": 45, "pages": 18, "test_rules.mjs": 169 };
+  "the scout": 26, "model": 45, "pages": 18, "test_rules.mjs": 170 };
 
 const t0 = Date.now();
 const run = s => new Promise(res => {

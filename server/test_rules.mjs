@@ -779,6 +779,18 @@ try {
     S.startGW = NEXT; S.tab = "squad"; g.render();
   }
 
+  /* ---------- Season Against History: Transfer Pts over transfer weeks only (22 Nov 2026) ---------- */
+  {
+    const keep = S.tracker;
+    /* an invented season: two weeks with transfers (+6, +2), two without (0, 0) */
+    S.tracker = { ...keep, gw: [1, 2, 3, 4].map(e => ({ event: e, points: 50, gwRank: 1e6, orRank: 1e6, captain: 4, transfers: e % 2 ? 1 : 0, transferDiff: e === 1 ? 6 : e === 3 ? 2 : 0 })) };
+    S.tab = "tracker"; g.render();
+    const tr = [...doc.querySelectorAll("#r-trkhist tbody tr")].find(r => /Transfer Pts/.test(r.textContent));
+    const cell = tr ? tr.children[1].textContent.replace(" ★", "").trim() : null;
+    check(cell === "+4", "Season Against History: Transfer Pts averages only the weeks with transfers (+6, +2 → +4, not +2)", cell);
+    S.tracker = keep; S.tab = "squad"; g.render();
+  }
+
   /* ---------- F60 best combination ---------- */
   const outIds = sq.filter(p => p.pos >= 2).slice(0, 3).map(p => p.id);
   const combo = g.bestCombo(outIds);
