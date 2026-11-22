@@ -273,7 +273,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.20.0";
+const APP_VERSION="13.21.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -456,7 +456,6 @@ const PBAND=[["#4A0010","#FFD9DF"],["#96122A","#FFE3E8"],["#D4545E","#3A0009"],
    lightness changes at every step so it reads without colour too. */
 const FDR5={1:["#2BD47D","#04210F"],2:["#1E7A4D","#E2F8EC"],3:["#3A3A3A","#E4E4E4"],4:["#B54A2C","#FFF1EC"],5:["#7E1733","#FFDDE5"]};
 const fdrBand=d=>Math.min(5,Math.max(1,Math.round(+d)||3));
-const fdrCol=d=>FDR5[fdrBand(d)];
 /* THE fixture chip (Andy's pick B, 20 Nov 2026): a strip of equal cells,
    three capitals, "@" before an away opponent (drawn by CSS), and a
    difficulty bar along the bottom of each cell. Every fixture on the site
