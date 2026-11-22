@@ -107,7 +107,8 @@ try {
   /* 25 Oct 2026: Signals has four tabs (Transfers, My Squad, Teams, Players) */
   const showTab = t => { S.tab = "signals"; g.act("sgtab", t); };
   /* 12 Nov 2026: Value by Price Band and Minutes Watch moved to Players */
-  const WANT = { transfers: 11, squad: 9, teams: 6, players: 10 };
+  /* 22 Nov 2026 (batch 3): five reports moved into the Performance pop-up */
+  const WANT = { transfers: 11, squad: 8, teams: 6, players: 6 };
   let allText = "";
   for (const [t, n] of Object.entries(WANT)) {
     showTab(t);
@@ -252,8 +253,8 @@ try {
   /* ---------- 2. behaviour ---------- */
   const squadNames = new Set(S.model.players.filter(p => (S.squad || []).includes(p.id)).map(p => p.web_name));
   showTab("squad");
-  const formNames = [...doc.querySelectorAll("#r-sqform .hbl b")].map(b => b.textContent.trim());
-  check(formNames.length > 0 && formNames.every(n => squadNames.has(n)), `My Squad "In Form" names only squad players`, formNames.filter(n => !squadNames.has(n)).join(", "));
+  /* batch 3 (22 Nov 2026): My Squad In Form moved into the Performance pop-up */
+  check(!doc.querySelector("#r-sqform"), `My Squad "In Form" is gone (Performance pop-up has it)`);
   const availNames = [...doc.querySelectorAll("#r-sqflag .sgwho b")].map(b => b.textContent.trim());
   check(availNames.every(n => squadNames.has(n)), `My Squad "Availability" names only squad players`, availNames.join(", "));
   showTab("transfers");
@@ -265,6 +266,9 @@ try {
   showTab("players");
   g.act("sigpos", 3);
   check(!cardBy2("scorers").querySelector(".sgcol") && cardBy2("scorers").querySelectorAll(".hbr").length > 0, "position filter MID leaves one ranking");
+  { const fn = [...cardBy2("form").querySelectorAll(".hbl b")].map(x => x.textContent.trim());
+    check(fn.length > 0 && fn.every(n => !squadNames.has(n)), `Players "In Form" names only players you do not own`, fn.filter(n => squadNames.has(n)).join(", ")); }
+  check(["threat", "xg", "dream", "minwatch"].every(k => !doc.querySelector("#r-" + k)), "Underlying Threat, Goals Against xG, Dream Team Appearances and Minutes Watch are gone (Performance has them)");
   const posTags = [...cardBy2("form").querySelectorAll(".sgpos")].map(s => s.textContent);
   check(posTags.length > 0 && posTags.every(t => t === "MID"), "position filter MID applies to the In Form leaderboard", posTags.join(","));
   g.act("sigpos", 0);

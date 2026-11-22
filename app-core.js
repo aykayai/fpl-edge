@@ -265,7 +265,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="13.14.0";
+const APP_VERSION="13.16.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -906,7 +906,7 @@ async function loadAll(force,opts){
     S.datasetCommit=commit;
     /* FPL's live set-piece orders feed the model, so they load first */
     await Promise.all([loadFplLive(),loadDcDoubles()]);
-    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadNeighbours(),loadTv()]);
+    buildModel();dedupeSquad();snapshotPredictions();localFtTrack();await Promise.all([loadActuals(),loadRivals(),loadPredictions(),loadNeighbours(),loadTv(),loadFieldFeeds()]);
     /* Bring the planner onto the latest official squad when a newer one has
        been published (this also upgrades a seed made before the feeds landed). */
     syncOfficialSquad();

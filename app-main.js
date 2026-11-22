@@ -41,6 +41,14 @@ function act(k,a,b,c){
     case"twin":S.tWin=a==="ros"?"ros":[3,5].includes(+a)?+a:1;break;
     case"topen":S.tOpen=S.tOpen===a?null:a;break;
     case"mgw":S.mGw=clamp(+a||1,1,38);break;
+    /* This Week batch 3 (22 Nov 2026): Team News, Price Watch, Fixture Outlook, Performance */
+    case"tnh":S.tnH=a==="ROS"?"ROS":[1,3,5].includes(+a)?+a:5;break;
+    case"foh":S.foH=a==="ROS"?"ROS":[1,3,5].includes(+a)?+a:5;break;
+    case"folens":S.foLens=["att","def"].includes(a)?a:"all";break;
+    case"pwtab":S.pwTab=["mine","watch","all"].includes(a)?a:"mine";break;
+    case"pwmkt":S.pwMkt=a==="fall"?"fall":"rise";break;
+    case"pwstar":{const w=LS.get("pwWatch")||[],i=w.indexOf(+a);if(i>=0)w.splice(i,1);else w.push(+a);LS.set("pwWatch",w);break;}
+    case"pmwin":S.pmWin=a==="season"?"season":[3,6].includes(+a)?+a:6;break;
     case"tmatch":S.fixMode="matches";S.mGw=clamp(+a||1,1,38);window.scrollTo(0,0);break;
     /* wave 7: Status options */
     case"cleardrafts":LS.set("drafts",[]);toast("Drafts deleted");break;
