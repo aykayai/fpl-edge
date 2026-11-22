@@ -255,6 +255,10 @@ try {
     g.act("fitonly");
     check(g.filtered("planner").every(p => p.avail >= 1), "Pool: Fit only hides doubts and injuries");
     g.act("fitonly"); g.act("fmax", 16); S.poolPop = null; g.render();
+    /* compact rows (22 Nov 2026): squad players carry Player Data's tags */
+    const tags = [...doc.querySelectorAll(".plist .prow.pr2.mine .pdrole")].map(e => e.textContent);
+    check(doc.querySelectorAll(".plist .prow.pr2").length > 0 && tags.length > 0 && tags.every(t => /^(XI|Bench|C|VC)$/.test(t)) && !/in squad/.test(doc.querySelector(".plist").textContent),
+      "Pool: compact rows tag your players XI, Bench, C or VC as Player Data does", tags.join(","));
   }
   {
     const W2 = Math.max(NEXT, 20), keep = { ...S.chips };
