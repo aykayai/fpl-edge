@@ -24,12 +24,6 @@ function act(k,a,b,c){
   switch(k){
     case"load":loadAll().then(()=>loadNews());return;
     case"tab":if(a!==S.tab){savePaint();closePops();}if(a!=="squad"&&S.liveAuto){S.startGW=0;S.liveAuto=false;}S.tab=a;S.menuOpen=false;break;
-    case"menu":S.menuOpen=!S.menuOpen;break;
-    case"chipview":S.chipView=a;break;
-    case"chiphalf":S.chipHalf=a;break;
-    case"fhForm":S.fhForm=a||null;break;
-    case"wcForm":S.wcForm=a||null;break;
-    /* wave 2: This Week strip and the Compare pop-up */
     case"weekh":S.weekH=[1,3,5].includes(+a)?+a:1;LS.set("weekh",S.weekH);break;
     case"pop":S.pop=a||null;S.popTab=null;break;
     case"poptab":S.popTab=a;break;
@@ -188,15 +182,6 @@ function act(k,a,b,c){
       const L=out.length;out.splice(i,1);out.splice((i+1)%L,0,a);
       const gk=notXI.filter(p=>p.pos===1).map(p=>p.id);
       S.benchOrder=[...gk,...out];saveState();toast("Bench order updated");break;}
-    case"benchmove":{
-      const xi=startingXI();
-      const bench=orderBench(squadPlayers().filter(p=>!xi.includes(p)));
-      const ids=bench.map(p=>p.id);
-      const i0=ids.indexOf(a), j0=i0+(b==="up"?-1:1);
-      if(i0<0||j0<0||j0>=ids.length)break;
-      [ids[i0],ids[j0]]=[ids[j0],ids[i0]];
-      S.benchOrder=ids;saveState();break;}
-    case"horizon":S.horizon=clamp(+a||1,1,8);break;
     case"vgw":
     case"startgw":S.startGW=clamp(Math.round(+a)||S.model.next.id,1,38);S.liveAuto=false;S.liveOff=true;break;
     case"pos":S.fPos=+a;break;
@@ -206,7 +191,6 @@ function act(k,a,b,c){
     case"lsearch":S.lSearch=a;break;
     case"lmax":S.lMax=clamp(+a||16,Math.max(3.5,S.lMin||0),16);break;
     case"lmin":S.lMin=clamp(+a||0,0,S.lMax||16);if(S.lMin<=3.5)S.lMin=0;break;
-    case"lhorizon":S.lHorizon=clamp(Math.round(+a)||1,1,8);break;
     case"lgwfrom":{const v=clamp(Math.round(+a)||1,1,38);S.lGwFrom=v;
       if(S.lGwTo&&S.lGwTo<v)S.lGwTo=v;break;}
     case"lgwto":{const from=S.lGwFrom||(S.model?S.model.next.id:1);
@@ -229,7 +213,6 @@ function act(k,a,b,c){
       toast(p.web_name+" added to your squad");break;}
     case"star":S.stars=S.stars.includes(a)?S.stars.filter(x=>x!==a):[...S.stars,a];
       LS.set("stars",S.stars);break;
-    case"fmin":S.fMin=Math.min(Math.max(3.5,+a||3.5),S.fMax);break;
     case"fmax":S.fMax=Math.max(Math.min(16,+a||16),S.fMin);break;
     case"search":S.fSearch=a;break;
     /* Stats always sort high→low on a header tap; only the name column toggles.
@@ -261,7 +244,6 @@ function act(k,a,b,c){
       if(!was){const o=P(a);if(o)S.fPos=o.pos;}
       else if(!S.flagged.length){S.fPos=0;}
       break;}
-    case"pick":S.selected=P(a);break;
     case"cancel":S.selected=null;break;
     case"sub":
       if(S.subFrom===a){S.subFrom=null;break;}
@@ -334,11 +316,6 @@ function act(k,a,b,c){
       /* Say what actually happened: the seed is a fallback, never "official". */
       toast(src==="official"?"Reset to your official squad (this week onward)"
         :"Reset to the GW1 seed squad (no official history available yet)");break;}
-    case"resetOld":{if(!S.original)break;
-      const cur=(S.squad||[]).reduce((s,i)=>s+(P(i)?.price||0),0);
-      const org=S.original.reduce((s,i)=>s+(P(i)?.price||0),0);
-      S.bank=+(S.bank+cur-org).toFixed(1);S.squad=S.original;S.flagged=[];S.forceXI=null;
-      S.pendingOpt=null;saveState();toast("Reverted to saved squad");break;}
     case"seed":resolveSeed();break;
     case"setchip":{const why=chipRuleBreak(a,b);if(why){toast(why,{warn:true});break;}
       S.chips={...S.chips,[a]:b};saveState();toast("Chip set for GW"+b);break;}
@@ -363,7 +340,6 @@ function act(k,a,b,c){
       S.chips={...S.chips,[k]:e};S.chipPick=null;saveState();toast(`${CHIP_UI[chipKind(k)].n} ${k.slice(-1)} planned for GW${e}`);break;}
     case"chippop":S.chipPop=a||null;break;
     case"chippopclose":S.chipPop=null;break;
-    case"expand":S.expand={...S.expand,[a]:!S.expand[a]};break;
     case"fixmode":S.fixMode=a==="matches"?"matches":"grid";if(a==="matches")S.mGw=null;break;
     case"toggleout":S.outList=S.outList.includes(a)?S.outList.filter(x=>x!==a):[...S.outList,a];break;
     case"clearout":S.outList=[];break;
@@ -388,25 +364,9 @@ function act(k,a,b,c){
     case"cardnews":S.cardId=a||null;S.cardTab="news";S.pkCat="all";if(a)loadPlayerNews(a);break;
     case"cardtab":S.cardTab=a==="news"?"news":"overview";if(S.cardTab==="news"&&S.cardId)loadPlayerNews(S.cardId);break;
     case"odds":loadOdds();return;
-    case"oddsdemo":S.oddsDemo=!S.oddsDemo;break;
     case"oddspv":S.oddsPv=a;break;
-    case"addrival":{const n=document.getElementById("rvName")?.value?.trim();
-      const id=document.getElementById("rvId")?.value?.trim();
-      if(!n){toast("Give the rival a name");break;}
-      S.rivals=[...(S.rivals||[]),{name:n,id,squad:[]}];S.rivalSel=S.rivals.length-1;
-      LS.set("rivals",S.rivals);break;}
     case"rivalpick":S.rivalPick=a;break;
     case"rivalgw":S.rivalGwView=a;break;
-    case"selrival":S.rivalSel=a;break;
-    case"rivalsquad":{const raw=document.getElementById("rvSquad")?.value||"";
-      const names=raw.split(",").map(x=>x.trim()).filter(Boolean);
-      const ids=[];const used=new Set();
-      names.forEach(nm=>{const t=norm(nm);
-        const c=S.model.players.filter(p=>!used.has(p.id)&&(norm(p.web_name)===t||norm(p.web_name).includes(t)||norm(p.first+" "+p.last).includes(t)));
-        if(c[0]){used.add(c[0].id);ids.push(c[0].id);}});
-      if(!ids.length){toast("Couldn't match any of those names");break;}
-      S.rivals[S.rivalSel].squad=ids;LS.set("rivals",S.rivals);
-      toast(`Matched ${ids.length} of ${names.length}`);break;}
   }
   render();
 }
@@ -489,7 +449,9 @@ window.addEventListener("scroll",()=>{const on=window.scrollY>170;
     const app=document.getElementById("app");
     if(snap&&snap.files&&snap.v===SNAP_V){
       _snap=snap;
-      if(paint&&paint.html&&paint.tab===S.tab){
+      /* H3 (Bundle E): a page saved by an older version is not painted, so a
+         deploy never shows the old markup and handlers first */
+      if(paint&&paint.html&&paint.tab===S.tab&&paint.v===APP_VERSION){
         app.innerHTML=paint.html;app.classList.add("booting");S.booting=true;}
       else render();
       await loadAll(false,{fromSnap:true});

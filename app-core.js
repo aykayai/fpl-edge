@@ -278,7 +278,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.1.1";
+const APP_VERSION="14.2.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -485,7 +485,6 @@ function fxNext(p,g,n,cls){let h="";for(let e=g;e<g+n&&e<=38;e++)h+=fxGW(p,e);re
 /* Which difficulty applies to this player: keepers and defenders are judged on
    the opponent's attack, midfielders and forwards on their defence. */
 function posDiff(p,f){return p.pos<=2?(f.diffDef??f.diff):(f.diffAtt??f.diff);}
-function fdrPill(opp,home,diff,opts){return fxChip(opp,home,diff,opts&&opts.title?{title:opts.title}:null);}
 
 /* ---------- CSV ---------- */
 function parseCSV(text){
@@ -779,9 +778,12 @@ async function loadAll(force,opts){
     const teamMatch={};                  // match_id -> {h,a,gw}
     try{
       for(const[season,tag] of [[LAST,"last"],[SEASON,"now"]]){
-        for(let batch=1;batch<=38;batch+=10){
+        /* Bundle E: this season's files exist only up to the week in play;
+           asking for the rest cost 52 requests that always 404'd */
+        const top=tag==="now"&&events.length?Math.min(38,events.filter(e=>e.finished).reduce((m,e)=>Math.max(m,e.id),0)+1):38;
+        for(let batch=1;batch<=top;batch+=10){
           const jobs3=[];
-          for(let gw=batch;gw<batch+10&&gw<=38;gw++)
+          for(let gw=batch;gw<batch+10&&gw<=top;gw++)
             jobs3.push(Promise.all([
               getCSV(`${season}/By%20Gameweek/GW${gw}/playermatchstats.csv`).catch(()=>[]),
               getCSV(`${season}/By%20Gameweek/GW${gw}/matches.csv`).catch(()=>[])
@@ -945,7 +947,7 @@ function savePaint(){
   if(S.loading||S.statusPending||S.booting)return;
   /* One picture per page (20 Nov 2026), so opening any page seen before
      shows it at once rather than a loading screen. */
-  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint:"+S.tab,{tab:S.tab,html:app.innerHTML,at:Date.now()});
+  if(app&&S.model&&app.innerHTML.length>1000)IDB.set("paint:"+S.tab,{tab:S.tab,html:app.innerHTML,at:Date.now(),v:APP_VERSION});
 }
 
 /* ============================================================

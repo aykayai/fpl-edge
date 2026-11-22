@@ -200,35 +200,6 @@ function oddsPlayers(gw){
 /* S10 (Stage 1, 19 Oct 2026): captain options from the XI. Gap is the cost
    against the best option (the armband doubles it); Plays is the chance he
    appears; League C is how many of the league captained him last week. */
-function captaincyHTML(){
-  const g=VG();if(!S.model||g<S.model.next.id)return "";
-  const xi=startingXI();if(!xi.length)return "";
-  const v=p=>p.gw[g]?.pts||0;
-  const opts=xi.slice().sort((a,b)=>v(b)-v(a)).slice(0,6);
-  const top=v(opts[0]);
-  const rf=S.rivalsFeed||{},caps={};let nRiv=0;
-  Object.entries(rf.entries||{}).forEach(([id,e])=>{if(id===TEAM_ID)return;
-    const last=(e.gw||[])[(e.gw||[]).length-1];const c=last&&(last.picks||[]).find(x=>x.isC);
-    nRiv++;if(c)caps[c.id]=(caps[c.id]||0)+1;});
-  const {captain}=effectiveCaptainVice(g);
-  /* research list (20 Oct 2026): scoring odds and haul chance beside each option */
-  const mk={};try{Object.values(oddsPlayers(g)||{}).forEach(r=>{if(r&&r.p)mk[r.p.id]=r;});}catch(e){}
-  return `<div class="panel"><div class="phead"><h2>Captaincy</h2><span class="note">GW${g} · your XI</span></div>
-    <div class="pbody" style="padding-top:6px"><div class="scroll"><table class="mkt"><thead><tr><th>Option</th><th>Predicted</th><th>Gap</th><th>Plays</th><th>Scores</th><th>Haul</th>
-      <th class="hide-ph">xGI/90</th><th class="hide-ph">Owned</th>${nRiv?"<th>League C</th>":""}<th></th></tr></thead><tbody>
-    ${opts.map(p=>{const q=p.gw[g]||{},f=(q.fixtures||[])[0],gap=v(p)-top,isC=p.id===captain;
-      return `<tr${isC?' class="me"':""}><td>${esc(p.web_name)}<span class="mu" style="display:block;font-size:11.5px">${f?esc(f.opp)+(f.home?" (H)":" (A)"):""}</span></td>
-        <td><b>${v(p).toFixed(1)}</b></td><td>${Math.abs(gap)<0.05?'<span class="up">best</span>':`<span class="dn">${sgn1(gap*2)}</span>`}</td>
-        <td>${Math.round((q.pPlay??1)*100)}%</td>
-        <td>${(()=>{const m=mk[p.id],md=modelChance(p,p.xg90||0);return m&&m.goal!=null?`<span title="Bookmakers (model ${Math.round(md*100)}%)">${Math.round(m.goal*100)}%</span>`:`<span class="mu" title="Model: no price yet">${Math.round(md*100)}%</span>`;})()}</td>
-        <td>${Math.round(haulChance(p)*100)}%</td><td class="hide-ph">${(p.xg90+p.xa90).toFixed(2)}</td><td class="hide-ph">${p.owned}%</td>
-        ${nRiv?`<td>${caps[p.id]||0}/${nRiv}</td>`:""}
-        <td>${isC?'<span class="tagy">C</span>':`<button class="mini" onclick="act('cap',${p.id})" aria-label="Make ${esc(p.web_name)} captain">C</button>`}</td></tr>`;}).join("")}
-    </tbody></table></div>
-    <details class="infotip"><summary><span class="infoi" aria-hidden="true">i</span>Reading this</summary><div class="infobox">
-      <p style="margin:0">Gap is what each option costs against the best one with the armband on (the difference doubled). Plays is the chance he appears at all. Scores is the bookmakers' anytime-scorer chance where priced (grey: the model's own figure), if he plays. Haul is the model's chance of a 10-point week if he plays: two or more goals or assists for a midfielder or forward, a clean sheet plus a goal or assist for a defender or keeper. ${nRiv?"League C is how many of your league captained him last week: a popular pick protects your place, an unpopular one is the differential. ":""}Tap C to make him captain for this week.</p></div></details>
-    </div></div>`;
-}
 /* D17: say so when the captain will not score as the armband suggests */
 function capWarnHTML(){
   const g=VG();if(!S.model||g<S.model.next.id)return "";
@@ -825,15 +796,6 @@ function statusState(){
 function newsDown(){
   const ps=((S.status||{}).news||{}).perSource||{};
   return Object.entries(ps).filter(([,v])=>v&&!v.ok&&v.failingSince&&Date.now()-Date.parse(v.failingSince)>3600000).map(([k])=>k);
-}
-function newsSourcesHTML(){
-  const ps=((S.status||{}).news||{}).perSource||{},rows=Object.entries(ps);
-  if(!rows.length)return `<div class="pbody"><p class="note" style="margin:0">${BACKUP?"News runs on the FPL Signals server only.":"No news check reported yet."}</p></div>`;
-  const down=new Set(newsDown());
-  rows.sort((a,b)=>(down.has(b[0])-down.has(a[0]))||(!a[1].ok-!b[1].ok)*-1||((a[1].kind==="social")-(b[1].kind==="social"))||a[0].localeCompare(b[0]));
-  return `<table class="mkt nw-srcs"><thead><tr><th>Source</th><th>Kind</th><th>Items</th><th>Last good copy</th><th>State</th></tr></thead><tbody>${rows.map(([k,v])=>{
-    const st=v.ok?`<span class="up">Live</span>`:down.has(k)?`<span class="dn">Down since ${esc(ukWhen(v.failingSince))}</span>`:`<span style="color:var(--amber)">Retrying</span>`;
-    return `<tr><td>${esc(k)}</td><td>${v.kind==="social"?"Social media":"News"}</td><td>${+v.count||0}</td><td>${v.fetchedAt?esc(agoText(v.fetchedAt)):"never"}</td><td title="${esc(v.error||"")}">${st}</td></tr>`;}).join("")}</tbody></table>`;
 }
 function statusChipHTML(){
   const{cls,txt}=statusState();
