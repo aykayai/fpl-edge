@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.5.0";
+const APP_VERSION="14.6.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1408,6 +1408,12 @@ const GK_START=89, GK_BACKUP=15;
    xG engine now supplying genuine fixture swing this only needs to be a light
    touch, not the heavy correction it was before that engine existed. */
 const FIXTURE_AMP=1.45;
+/* Attackers (23 Nov 2026, Andy: apply). The xFPL curve squeezes the gap
+   between fixtures, and midfielders and forwards in the kindest fifth of
+   fixtures scored 11% above projection while the hardest were right
+   (defenders balanced at 1.45). GW5-10 backtest: 2.2 balances both ends
+   (1.08 / 1.06), regulars' rank .191 -> .198, MAE 1.493 -> 1.489. */
+const FIXTURE_AMP_ATT=2.2;
 /* Pecking order isn't derivable from minutes alone (a settled keeper is rested
    in pre-season). Taken from the published projections — one per club. */
 const GK_FIRST=["Raya","Donnarumma","A.Becker","Lammens","Pope","Sánchez","Kelleher","Leno",
@@ -2173,7 +2179,7 @@ function buildModel(){
       const mean=ws.reduce((a,w)=>a+p.gw[w].pts,0)/ws.length;
       if(mean>0.3)ws.forEach(w=>{
         p.gw[w].pre=p.gw[w].pts;
-        p.gw[w].pts=Math.max(0,mean+(p.gw[w].pts-mean)*FIXTURE_AMP);});
+        p.gw[w].pts=Math.max(0,mean+(p.gw[w].pts-mean)*(p.pos>=3?FIXTURE_AMP_ATT:FIXTURE_AMP));});
     }
     /* the figure every page shows: next week's minutes, flag applied */
     p.xMins=Math.round(minsAt(nextId)*availAt(nextId));

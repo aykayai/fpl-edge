@@ -428,7 +428,8 @@ try {
       const e0 = Object.keys(g.CRELLIN.weeks).map(Number).find(e => e >= gw && g.CRELLIN.weeks[e].t === "double");
       if (e0) {
         const keepW = g.CRELLIN.weeks[e0], ids0 = g.effectiveSquadIds(e0).ids, sp = ids0.map(g.chipPlayer).filter(Boolean);
-        const pv = p => p.gw[e0]?.pts || 0, xi = g.legalBestXI(sp, pv), bench = sp.filter(p => !xi.includes(p) && pv(p) > 0);
+        /* the bench player worth most, so the check is the mechanism, not a near-zero player */
+        const pv = p => p.gw[e0]?.pts || 0, xi = g.legalBestXI(sp, pv), bench = sp.filter(p => !xi.includes(p) && pv(p) > 0).sort((a, b) => pv(b) - pv(a));
         const raw = g.teamScore(ids0, e0, "bboost") - g.teamScore(ids0, e0, null);
         if (bench.length && g.chipWeighted("bboost", e0, raw, ids0).f) {
           const club = S.model.teams.find(t => t.id === bench[0].team).short;

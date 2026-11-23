@@ -506,12 +506,12 @@ function computeModel(R, o = {}) {
       const af = m > 30 ? appearP(m) / .985 : 1;
       p.gw[e] = { pts: Math.max(0, tot * af), n: F.length, pPlay: cl(av, 0, 1) * appearP(m) * Math.min(1, F.length) };
     }
-    /* stretch single weeks around his own mean by 1.45; doubles keep their sum */
+    /* stretch single weeks around his own mean: 1.45, attackers 2.2; doubles keep their sum */
     const singles = Object.keys(p.gw).filter(e => p.gw[e].n === 1);
     Object.values(p.gw).forEach(q => { if (q.n > 1) q.pre = q.pts; });
     if (singles.length > 1) {
       const mean = singles.reduce((a, e) => a + p.gw[e].pts, 0) / singles.length;
-      if (mean > 0.3) singles.forEach(e => { const q = p.gw[e]; q.pre = q.pts; q.pts = Math.max(0, mean + (q.pts - mean) * 1.45); });
+      if (mean > 0.3) singles.forEach(e => { const q = p.gw[e]; q.pre = q.pts; q.pts = Math.max(0, mean + (q.pts - mean) * (p.pos >= 3 ? 2.2 : 1.45)); });
     }
     p.xMins = Math.round(minsAt(NEXT) * availAt(NEXT));
   }
