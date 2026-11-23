@@ -180,7 +180,9 @@ const DCT = { 1: 99, 2: 10, 3: 12, 4: 12 };
 const KEEPERS = ["Raya", "Donnarumma", "A.Becker", "Lammens", "Pope", "Sánchez", "Kelleher", "Leno", "Sels", "Martinez", "Verbruggen", "Pickford", "Kinsky", "Henderson", "Perri", "Roefs", "Petrović", "Butland", "Rushworth", "Scherpen"].map(nm);
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const CAL = { 1: [0.51, 0.77], 2: [1.92, 0.33], 3: [2.45, 0.39], 4: [1.18, 0.55] };
-const LEVEL = { 1: 1.289, 2: 1.361, 3: 1.237, 4: 1.501 };
+/* xFPL curve (23 Nov 2026), replacing the flat D5 levels: c[pos] x raw^k per match, last */
+const CURVE_K = 0.625, CURVE_C = { 1: 1.86, 2: 1.73, 3: 1.66, 4: 1.94 };
+const curve = (x, pos, n) => { if (!(x > 0)) return 0; const m = Math.max(1, n || 1); return m * CURVE_C[pos] * Math.pow(x / m, CURVE_K); };
 const GOAL = { 1: 10, 2: 6, 3: 5, 4: 4 }, CSP = { 1: 4, 2: 4, 3: 1, 4: 0 };
 const SHARE = [[45, .494], [60, .682], [75, .786], [90, .882]];
 const appearP = m => m > 30 ? (SHARE.find(([h]) => m <= h) || SHARE[3])[1] : cl(m / 17, 0, .985);
@@ -502,7 +504,7 @@ function computeModel(R, o = {}) {
       const [cA, cB] = CAL[p.pos];
       const tot = cA * cl(m / 88, 0, 1.02) * av * F.length + cB * raw;
       const af = m > 30 ? appearP(m) / .985 : 1;
-      p.gw[e] = { pts: Math.max(0, tot * af * LEVEL[p.pos]), n: F.length, pPlay: cl(av, 0, 1) * appearP(m) * Math.min(1, F.length) };
+      p.gw[e] = { pts: Math.max(0, tot * af), n: F.length, pPlay: cl(av, 0, 1) * appearP(m) * Math.min(1, F.length) };
     }
     /* stretch single weeks around his own mean by 1.45; doubles keep their sum */
     const singles = Object.keys(p.gw).filter(e => p.gw[e].n === 1);
@@ -519,6 +521,7 @@ function computeModel(R, o = {}) {
     players.forEach(p => { const q = p.gw[e]; if (q && !q.blank && q.pre != null) { a += q.pre; b += q.pts; n++; } });
     if (n > 20 && b > 0) players.forEach(p => { const q = p.gw[e]; if (q && !q.blank) q.pts = Math.max(0, q.pts * a / b); });
   }
+  players.forEach(p => { for (let e = NEXT; e <= 38; e++) { const q = p.gw[e]; if (q && !q.blank) q.pts = curve(q.pts, p.pos, q.n); } });
   return { next: NEXT, gwPlayed, liveOn, clubLive, teams, players, byId: new Map(players.map(p => [p.id, p])) };
 }
 

@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.4.1";
+const APP_VERSION="14.5.0";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1590,7 +1590,20 @@ let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); 
    Out of sample: bias -0.42 -> 0.00, MAE 1.40 -> 1.51 (MAE rewards under-
    prediction on skewed points), top-50 picks unchanged. Was the GW1-5 half
    step {1:1.167,2:1.048,3:0.948,4:1.049}. Which scoring parts are short is next. */
-const POS_LEVEL={1:1.289,2:1.361,3:1.237,4:1.501};
+/* xFPL curve (23 Nov 2026, Andy: apply, no FPL ep blend, re-test both at
+   GW15). Replaces the D5 flat levels above, which lifted every projection by
+   the same share: right for the average player but 15-20% high for the ones
+   the model rates best (top 50 a week predicted 5.03, scored 4.20; his XI
+   +15.6 a week over GW5-11). The curve lifts small projections more than big
+   ones: pts = c[pos] x raw^k, applied per match to the final projection.
+   Leave-one-week-out GW5-11: bias 0.00, MAE 1.893 -> 1.889, top 50 4.01 vs
+   4.15 scored, his XI -3.5 a week; a free-form calibration did no better. */
+const CURVE={k:0.625,c:{1:1.86,2:1.73,3:1.66,4:1.94}};
+function curvePts(x,pos,n){
+  if(!(x>0))return 0;
+  const m=Math.max(1,n||1);                         // a double: the curve per match
+  return m*(CURVE.c[pos]||1.8)*Math.pow(x/m,CURVE.k);
+}
 /* D17: chance he appears at all in a week, on the same evidence as D1 */
 function appearShare(m){
   if(!(m>30))return clamp(m/17,0,.985);
@@ -2145,7 +2158,7 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)*(POS_LEVEL[p.pos]||1)),fixtures:fx,blank:false,csPs,
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)),fixtures:fx,blank:false,csPs,
         pPlay:clamp(availE,0,1)*appearShare(mE)*Math.min(1,fx.length)};
     }
     /* --- fixture sensitivity ---
@@ -2176,6 +2189,9 @@ function buildModel(){
     if(n>20&&b>0){const f=a/b;players.forEach(p=>{const q=p.gw[w];
       if(q&&!q.blank)q.pts=Math.max(0,q.pts*f);});}
   }
+  /* the xFPL curve, last, on the figure it was fitted on */
+  players.forEach(p=>{for(let w=nextEv.id;w<=38;w++){const q=p.gw[w];
+    if(q&&!q.blank)q.pts=curvePts(q.pts,p.pos,(q.fixtures||[]).length);}});
   /* A club can only field so many players in a position. Where the projected
      minutes across a club's midfield or defence add up to far more than the
      eleven shirts allow, somebody is going to be rotated — and last season's
