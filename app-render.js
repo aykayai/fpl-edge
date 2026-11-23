@@ -13,6 +13,58 @@
    five on one timeline with fixture chips; ranks against regular
    starters in his position; season totals. Opens from any name, and from a
    shirt on the Planner pitch. */
+/* The player card in a live gameweek (23 Nov 2026, Andy's mock m17b): his
+   live points with FPL's own breakdown, how your league holds him, and who
+   started or benched him (an auto-sub moves across). Null when no week is
+   in play or the live data has not arrived. */
+const PKL_LAB={minutes:"Minutes",goals_scored:"Goals",assists:"Assists",clean_sheets:"Clean sheet",goals_conceded:"Goals conceded",saves:"Saves",
+  bonus:"Bonus",yellow_cards:"Yellow card",red_cards:"Red card",own_goals:"Own goal",penalties_saved:"Penalty saved",penalties_missed:"Penalty missed",
+  defensive_contribution:"DefCon"};
+function pkLiveHTML(p){
+  const g=typeof liveGW==="function"?liveGW():null;if(g==null)return null;
+  const L=lkCalc(g);if(!L||!L.W)return null;
+  const W=L.W,lp=W.players[p.id]||{},st=L.status(p.id),team=(S.model.teams||S.teams).find(t=>t.id===p.team);
+  const chips=(st.fx||[]).map(f=>{const home=f.h===p.team,oid=home?f.a:f.h,o=(S.model.teams||S.teams).find(t=>t.id===oid);
+    return o?fxChip(o.short,home,fdrOf(o,home,team,p.pos<=2?"def":"att"),{cls:"sm"}):"";}).join("");
+  const state=st.s==="in"?`${st.min||0}′`:st.s==="dn"||st.s==="dnp"?"FT":st.s==="tp"&&st.ko?esc(new Date(st.ko).toLocaleString("en-GB",{weekday:"short",hour:"2-digit",minute:"2-digit"})):"";
+  const sg=v=>`<b class="pkl-p ${v>0?"up":v<0?"dn":"z"}">${v>0?"+":v<0?"−":""}${Math.abs(v)}</b>`;
+  let body;
+  if(st.s==="bl")body=`<p class="pkl-none">No match this week</p>`;
+  else if(st.s==="tp"){const pr=pastPred(p,g);body=`<p class="pkl-none">Not kicked off${pr?` · predicted ${pr.v.toFixed(1)} pts`:""}</p>`;}
+  else{
+    /* FPL's lines, summed over a double; bonus shows the provisional 3-2-1 until FPL adds it */
+    const sum={};(lp.x||[]).forEach(([,ls])=>ls.forEach(([k,v,pt])=>{const s=sum[k]||(sum[k]={v:0,pt:0});s.v+=v;s.pt+=pt;}));
+    /* FPL leaves a line out when it scores nothing; saves and DefCon still show, at 0 */
+    if((lp.m||0)>0){if(p.pos===1&&!sum.saves&&lp.sv)sum.saves={v:lp.sv,pt:0};
+      if(p.pos>1&&!sum.defensive_contribution&&lp.dcn)sum.defensive_contribution={v:lp.dcn,pt:0};}
+    const rows=Object.keys(sum).filter(k=>k!=="bonus"&&(sum[k].pt||k==="minutes"||k==="saves"||k==="goals_conceded"||k==="defensive_contribution")).map(k=>
+      `<span class="pkl-k">${PKL_LAB[k]||esc(k.replace(/_/g," "))}</span><span class="pkl-v">${k==="minutes"?sum[k].v+"′":sum[k].v}</span>${sg(sum[k].pt)}`);
+    const bon=sum.bonus&&sum.bonus.pt?sum.bonus.pt:(L.prov[p.id]||0),conf=!!(sum.bonus&&sum.bonus.pt);
+    if((lp.m||0)>0||bon)rows.push(`<span class="pkl-k">Bonus${conf||!bon?"":` <em>provisional</em>`}</span><span class="pkl-v">${lp.bps??0} BPS</span>${sg(bon)}`);
+    body=rows.length?`<div class="pkl-x">${rows.join("")}</div>`:`<p class="pkl-none">Did not play</p>`;
+  }
+  const tot=st.s==="bl"||st.s==="tp"?"–":String(L.pts(p.id));
+  const live=`<div class="pkl-card"><div class="pkl-h"><span class="pkl-live"><span class="lp-dot"></span>Live</span><span class="pkl-fx">${chips?`<span class="fxrun">${chips}</span>`:""}${state?`<span class="pkl-min">${state}</span>`:""}</span>
+    <span class="pkl-tot"><b>${tot}</b><em>pts</em></span></div>${body}</div>`;
+  /* the league: each manager's pick of him, after FPL's auto-subs */
+  const started=[],bench=[];let eo=0;
+  (L.league||[]).forEach(e=>{const pk=(e.picks||[]).map((k,i)=>({id:k.id,p:L.P(k.id),m:k.multiplier!=null?k.multiplier:(i<11?1:0),i,isC:!!k.isC,isVC:!!k.isVC}));
+    const k=pk.find(x=>x.id===p.id);if(!k)return;
+    const sb=L.subsFor(pk,e.act==="bboost",0),auto=sb.subs.some(s=>s.inn&&s.inn.id===p.id),out=sb.subs.some(s=>s.out&&s.out.id===p.id);
+    const xk=(sb.xi||[]).find(x=>x.id===p.id),m=e.act==="bboost"?k.m:auto?(xk?xk.m:1):out?0:(xk?xk.m:k.m);
+    eo+=m;
+    const who={name:e.mine?"You":e.name,mgr:e.manager||"",mine:e.mine,c:m>=2,tc:m>=3,auto,slot:out?"off":k.i===11?"GK":String(k.i-11)};
+    (m>0?started:bench).push(who);});
+  const n=L.nLg||0,av=w=>esc(String(w.mgr||w.name||"?").trim().split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase());
+  started.sort((a,b)=>b.mine-a.mine);
+  const rowB=(w,tag)=>`<div class="pkl-br${w.mine?" me":""}${tag?" bn":""}"><span class="pkl-av">${av(w)}</span><span class="pkl-bn"><b>${esc(w.name)}</b>${w.mgr?`<em>${esc(w.mgr)}</em>`:""}</span>${w.auto?`<span class="pkl-bs">Auto-sub</span>`:""}${tag?`<span class="pkl-bs">${tag}</span>`:""}${w.c?`<span class="pkl-c">${w.tc?"TC":"C"}</span>`:""}</div>`;
+  const kv=`<div class="pkkv pkl-kv"><div><span>Started</span><b>${n?`${started.length} of ${n}`:"–"}</b><em>of your league</em></div>
+    <div><span>League EO</span><b>${n?Math.round(eo/n*100)+"%":"–"}</b><em>with captaincy</em></div>
+    <div><span>Selected by</span><b>${(+p.owned||0).toFixed(1)}%</b><em>overall</em></div></div>`;
+  const by=n?`<div class="pkl-by"><div class="pkl-byh"><span>Started By</span><b>${started.length}</b></div>${started.map(w=>rowB(w)).join("")||`<p class="pkl-none">Nobody in your league</p>`}
+    <div class="pkl-byh sub"><span>On The Bench</span><b>${bench.length}</b></div>${bench.map(w=>rowB(w,w.slot==="off"?"Subbed off":w.slot==="GK"?"Bench GK":"Bench "+w.slot)).join("")||`<p class="pkl-none">Nobody benched him</p>`}</div>`:"";
+  return live+kv+by;
+}
 function playerCardHTML(){
   const p=S.model.players.find(x=>x.id===S.cardId);
   if(!p)return "";
@@ -28,7 +80,13 @@ function playerCardHTML(){
   const opp=e=>{const f=(S.model.byEv[e]||[]).find(f=>f.ht===team||f.at===team);return f?(f.ht===team?f.at:f.ht):null;};
   const sp=setPieceText(p);
   const pcTxt=pc==null?"":`<span class="pkpc" style="color:${pc>0?"var(--mint)":pc<0?"#FF8FAB":"#BDBDBD"}">${pc>0?"▲":pc<0?"▼":""} ${Math.abs(Math.round(pc))}% to a ${pc>=0?"rise":"fall"} tonight</span>`;
-  const hero=`<div class="pkhero" style="--k:${kit}">
+  const lvH=pkLiveHTML(p);
+  const hero=lvH?`<div class="pkhero pklh" style="--k:${kit}">
+    <div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
+    <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
+    <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
+    <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
+    ${lvH}</div>`:`<div class="pkhero" style="--k:${kit}">
     <div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
     <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
@@ -2658,8 +2716,9 @@ function lkCalc(g){
   /* auto-subs as FPL would make them now: a starter whose matches are all
      over without a minute makes way for the first bench player who played,
      keeping a legal formation; the vice takes the armband */
-  function postSubs(pk){
-    if(bb)return{pts:pk.reduce((a,k)=>a+pts(k.id)*k.m,0)-cost,subs:[]};
+  function postSubs(pk,bbX,costX){
+    if(bbX===undefined)bbX=bb;if(costX===undefined)costX=cost;
+    if(bbX)return{pts:pk.reduce((a,k)=>a+pts(k.id)*k.m,0)-costX,subs:[]};
     const xi=pk.slice(0,11).map(k=>({...k})),bn=pk.slice(11).map(k=>({...k})),subs=[];
     const st=k=>status(k.id).s,pos=k=>(k.p||{}).pos||0,cnt=(l,q)=>l.filter(k=>pos(k)===q).length;
     xi.forEach((k,ix)=>{if(st(k)!=="dnp"&&st(k)!=="bl")return;
@@ -2669,7 +2728,7 @@ function lkCalc(g){
         b.used=1;subs.push({out:k.p,inn:b.p});xi[ix]={...b,m:1};break;}});
     const c=xi.find(k=>k.isC),v=xi.find(k=>k.isVC);
     if(c&&["dnp","bl"].includes(st(c))&&v&&st(v)==="dn"){const cm=Math.max(2,c.m||2);v.m=cm;c.m=0;}
-    return{pts:xi.reduce((a,k)=>a+pts(k.id)*k.m,0)-cost,subs};
+    return{pts:xi.reduce((a,k)=>a+pts(k.id)*k.m,0)-costX,subs,xi};
   }
   const post=postSubs(picks);
   const prevTotal=prevRow&&prevRow.totalPoints!=null?prevRow.totalPoints:((row.totalPoints||0)-(row.points||0));
@@ -2720,7 +2779,7 @@ function lkCalc(g){
   const B=S.rankBands,me=B&&B.me&&B.me.gw===g?B.me:null;
   const v={g,W,row,prevRow,P,pts,prov,provFx,status,picks,pre,post,cost,prevTotal,total,totalPost,oldRank,liveRank,postRank,safety,
     arrow:safety!=null?pre-safety:null,rpp,league,lgPct,starts,nLg,edge,threats,vsField,all,filt,eoOf,fs,fieldScore,expected,
-    done:cnt("dn"),playing:cnt("in"),toPlay:cnt("tp"),avg:ev.avg||null,gwRank:me?me.gwRank:null,bb,mult};
+    done:cnt("dn"),playing:cnt("in"),toPlay:cnt("tp"),avg:ev.avg||null,gwRank:me?me.gwRank:null,bb,mult,subsFor:postSubs};
   _lk={W,g,rf:S.rivalsFeed,fd:S.field,rb:S.rankBands,f:filt,tr:S.tracker,v};
   return v;
 }
