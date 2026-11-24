@@ -692,6 +692,13 @@ async function loadAll(force,opts){
     const lastByCode2={};
     lastStats.forEach(s=>{const code=lastIdToCode[String(Math.round(num(s.id)))];
       if(code)lastByCode2[code]=s;});
+    /* Injury history (INJ_HIST): the share of his gameweeks FPL flagged him injured
+       or doubtful, last season and this, while he was at a club ('u' = gone) */
+    const injN={};
+    const injAdd=(code,st)=>{if(!code||!st||st==="u")return;const h=injN[code]=injN[code]||[0,0];h[0]++;if(st==="i"||st==="d")h[1]++;};
+    lastStats.forEach(s=>injAdd(lastIdToCode[String(Math.round(num(s.id)))],s.status));
+    pstats.forEach(s=>{const p=byId[s.id];if(p)injAdd(String(p.code),s.status);});
+    S.injExcess=Object.fromEntries(Object.entries(injN).map(([c,[n,f]])=>[c,n>=5?Math.max(0,f/n-INJ_HIST.t):0]));
 
     /* last season's team goals for and against — the base for the ratings */
     const lt={};const tstat={};
@@ -1604,7 +1611,23 @@ let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); 
    ones: pts = c[pos] x raw^k, applied per match to the final projection.
    Leave-one-week-out GW5-11: bias 0.00, MAE 1.893 -> 1.889, top 50 4.01 vs
    4.15 scored, his XI -3.5 a week; a free-form calibration did no better. */
-const CURVE={k:0.625,c:{1:1.86,2:1.73,3:1.66,4:1.94}};
+/* c re-scaled 23 Nov with the injury factor (GK x.992 DEF x1.035 MID x1.007
+   FWD x1.028) so next week's total stays right; was 1.86/1.73/1.66/1.94 */
+const CURVE={k:0.625,c:{1:1.85,2:1.79,3:1.67,4:1.99}};
+/* INJ_HIST (23 Nov 2026, Andy: "only for injury-prone players"). Regulars FPL had
+   flagged injured or doubtful in 20%+ of their gameweeks scored 0.78 of their
+   projection next week and 0.65-0.69 two to five weeks out; rarely flagged
+   players were right. A blanket discount was rejected. The factor
+   exp(-(a + b x weeks after next) x excess), excess = flagged share above
+   12%, weeks capped at 4 (tested no further). GW5-10, fitted on the other
+   weeks: regulars' next-week rank .171 -> .190, top 50 4.24 -> 4.26,
+   weeks 2-5 MAE 1.934 -> 1.908; injury-prone .78/.69/.66/.65/.69 ->
+   .83/.80/.83/.89/1.03, rarely flagged unchanged. */
+const INJ_HIST={t:0.12,a:0.4,b:0.45,maxK:4};
+function injFactor(code,k){
+  const x=(S.injExcess||{})[String(code||"")]||0;
+  return x>0?Math.exp(-(INJ_HIST.a+INJ_HIST.b*Math.min(INJ_HIST.maxK,Math.max(0,k)))*x):1;
+}
 function curvePts(x,pos,n){
   if(!(x>0))return 0;
   const m=Math.max(1,n||1);                         // a double: the curve per match
@@ -2195,9 +2218,9 @@ function buildModel(){
     if(n>20&&b>0){const f=a/b;players.forEach(p=>{const q=p.gw[w];
       if(q&&!q.blank)q.pts=Math.max(0,q.pts*f);});}
   }
-  /* the xFPL curve, last, on the figure it was fitted on */
+  /* the xFPL curve, last, on the figure it was fitted on; then injury history */
   players.forEach(p=>{for(let w=nextEv.id;w<=38;w++){const q=p.gw[w];
-    if(q&&!q.blank)q.pts=curvePts(q.pts,p.pos,(q.fixtures||[]).length);}});
+    if(q&&!q.blank)q.pts=curvePts(q.pts,p.pos,(q.fixtures||[]).length)*injFactor(p.code,w-nextEv.id);}});
   /* A club can only field so many players in a position. Where the projected
      minutes across a club's midfield or defence add up to far more than the
      eleven shirts allow, somebody is going to be rotated — and last season's

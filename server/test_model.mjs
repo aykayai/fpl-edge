@@ -181,7 +181,7 @@ const KEEPERS = ["Raya", "Donnarumma", "A.Becker", "Lammens", "Pope", "Sánchez"
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const CAL = { 1: [0.51, 0.77], 2: [1.92, 0.33], 3: [2.45, 0.39], 4: [1.18, 0.55] };
 /* xFPL curve (23 Nov 2026), replacing the flat D5 levels: c[pos] x raw^k per match, last */
-const CURVE_K = 0.625, CURVE_C = { 1: 1.86, 2: 1.73, 3: 1.66, 4: 1.94 };
+const CURVE_K = 0.625, CURVE_C = { 1: 1.85, 2: 1.79, 3: 1.67, 4: 1.99 };
 const curve = (x, pos, n) => { if (!(x > 0)) return 0; const m = Math.max(1, n || 1); return m * CURVE_C[pos] * Math.pow(x / m, CURVE_K); };
 const GOAL = { 1: 10, 2: 6, 3: 5, 4: 4 }, CSP = { 1: 4, 2: 4, 3: 1, 4: 0 };
 const SHARE = [[45, .494], [60, .682], [75, .786], [90, .882]];
@@ -308,6 +308,11 @@ function computeModel(R, o = {}) {
   for (const s of R.lstat.slice().sort((a, b) => N(a.gw) - N(b.gw))) { const c = lastCode[String(Math.round(N(s.id)))]; if (c) lastStats[c] = s; }
   const codeOf = {}; R.lp.forEach(r => codeOf["last|" + Math.round(N(r.player_id))] = String(r.player_code));
   R.plist.forEach(r => codeOf["now|" + Math.round(N(r.player_id))] = String(r.player_code));
+  /* injury history (INJ, 23 Nov 2026): share of his rows flagged i/d above 12%, both seasons, 'u' rows out */
+  const injN = {}; const injAdd = (c, st) => { if (!c || !st || st === "u") return; const h = injN[c] = injN[c] || [0, 0]; h[0]++; if (st === "i" || st === "d") h[1]++; };
+  R.lstat.forEach(s => injAdd(lastCode[String(Math.round(N(s.id)))], s.status));
+  R.pstat.forEach(s => injAdd(codeOf["now|" + Math.round(N(s.id))], s.status));
+  const injX = c => { const h = injN[c]; return h && h[0] >= 5 ? Math.max(0, h[1] / h[0] - 0.12) : 0; };
   const hist = {};
   for (const [tag, M, P] of [["last", R.mLast, R.pmLast], ["now", R.mNow, R.pmNow]]) for (let gw = 1; gw <= 38; gw++) {
     const prem = new Set(M[gw - 1].filter(m => isPrem(m.match_id)).map(m => String(m.match_id)));
@@ -521,7 +526,7 @@ function computeModel(R, o = {}) {
     players.forEach(p => { const q = p.gw[e]; if (q && !q.blank && q.pre != null) { a += q.pre; b += q.pts; n++; } });
     if (n > 20 && b > 0) players.forEach(p => { const q = p.gw[e]; if (q && !q.blank) q.pts = Math.max(0, q.pts * a / b); });
   }
-  players.forEach(p => { for (let e = NEXT; e <= 38; e++) { const q = p.gw[e]; if (q && !q.blank) q.pts = curve(q.pts, p.pos, q.n); } });
+  players.forEach(p => { for (let e = NEXT; e <= 38; e++) { const q = p.gw[e]; if (q && !q.blank) q.pts = curve(q.pts, p.pos, q.n) * Math.exp(-(0.4 + 0.45 * Math.min(4, e - NEXT)) * injX(p.code)); } });
   return { next: NEXT, gwPlayed, liveOn, clubLive, teams, players, byId: new Map(players.map(p => [p.id, p])) };
 }
 
