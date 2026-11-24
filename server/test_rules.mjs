@@ -831,6 +831,26 @@ try {
     S.cardId = null; g.render();
   }
 
+  /* ---------- the live view lasts until midnight after the week's last match (24 Nov 2026) ---------- */
+  {
+    const G0 = NEXT - 1, hasRow = vm.runInContext(`!!offRowOf(${G0})`, ctx);
+    if (G0 >= 1 && hasRow) {
+      S.wkLive = S.wkLive || {};
+      const keepW = S.wkLive[G0], keepTab = S.tab, keepStart = S.startGW, keepOff = S.liveOff;
+      const at = ms => ({ ...(keepW || {}), players: (keepW && keepW.players) || {}, fixtures: [{ id: 1, h: 1, a: 2, ko: new Date(ms).toISOString(), done: true, started: true }] });
+      /* last match a minute ago: still live tonight, and the Planner opens on it, even with every match over */
+      S.wkLive[G0] = at(Date.now() - 60000);
+      S.tab = "squad"; S.startGW = 0; S.liveAuto = false; S.liveOff = false; g.render();
+      check(vm.runInContext("liveGW()", ctx) === G0 && S.startGW === G0, "Live view: the Planner opens on the week in play until midnight after its last match", `${vm.runInContext("liveGW()", ctx)} / ${S.startGW}`);
+      /* last match the day before yesterday: past midnight, so the Planner moves on to the next week */
+      S.wkLive[G0] = at(Date.now() - 48 * 3600000);
+      vm.runInContext("lkTick()", ctx);
+      check(vm.runInContext("liveGW()", ctx) === null && !S.startGW && g.VG() === NEXT, "Live view: past that midnight the open Planner switches to the next gameweek", `${vm.runInContext("liveGW()", ctx)} / ${g.VG()}`);
+      if (keepW) S.wkLive[G0] = keepW; else delete S.wkLive[G0];
+      S.tab = keepTab; S.startGW = keepStart || NEXT; S.liveAuto = false; S.liveOff = keepOff; g.render();
+    } else check(true, "Live view: no picks for the last week in this state (skipped)");
+  }
+
   /* ---------- F60 best combination ---------- */
   const outIds = sq.filter(p => p.pos >= 2).slice(0, 3).map(p => p.id);
   const combo = g.bestCombo(outIds);

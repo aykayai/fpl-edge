@@ -2624,10 +2624,25 @@ function ratingPopHTML(){
 LUCIDE["chevron-up"]=LUCIDE["chevron-up"]||"<path d=\"m18 15-6-6-6 6\"/>";
 /* the gameweek being played: the last one past its deadline, with official
    picks, not finished by FPL and not every match over */
+/* 24 Nov 2026 (Andy): the live view holds until midnight at the end of the
+   day of the week's last match, then the Planner moves on to the next week,
+   whether or not FPL has finalised it. The last kick-off comes from the live
+   week's fixtures, else the season's fixture list; null when neither has it. */
+function lkWeekEnd(g){
+  const W=S.wkLive&&S.wkLive[g];
+  const ko=[...((W&&W.fixtures)||[]).map(f=>f.ko),...((S.model&&S.model.byEv[g])||[]).map(f=>f.kickoff)]
+    .map(k=>k?Date.parse(k):NaN).filter(t=>!isNaN(t));
+  if(!ko.length)return null;
+  const d=new Date(Math.max(...ko));d.setHours(24,0,0,0);
+  return d.getTime();
+}
 function liveGW(){
   if(!S.model||BACKUP)return null;
   const g=S.model.next.id-1;
-  if(g<1||!offRowOf(g)||weekFinal(g))return null;
+  if(g<1||!offRowOf(g))return null;
+  const end=lkWeekEnd(g);
+  if(end!=null)return Date.now()<end?g:null;
+  if(weekFinal(g))return null;
   const W=S.wkLive&&S.wkLive[g];
   if(W&&Array.isArray(W.fixtures)&&W.fixtures.length&&W.fixtures.every(f=>f.done))return null;
   return g;
@@ -2635,7 +2650,10 @@ function liveGW(){
 const isLiveWk=g=>g!=null&&liveGW()===g;
 /* the minute timer (app-main's status tick calls this) */
 function lkTick(){
-  const g=liveGW();if(!g)return;
+  const g=liveGW();
+  /* midnight after the last match: an open Planner on the live week moves on */
+  if(!g&&S.liveAuto&&S.startGW){S.startGW=0;S.liveAuto=false;if(S.tab==="squad")render();return;}
+  if(!g)return;
   if(S.wkAt&&Date.now()-(S.wkAt[g]||0)<55000)return;
   if(S.tab==="squad"&&VG()===g)lkKeep(()=>weekLive(g,true));
 }

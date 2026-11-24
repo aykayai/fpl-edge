@@ -810,6 +810,9 @@ function renderPage(){
   if(S.tab==="odds"){S.tab="fixtures";S.fixMode="matches";try{history.replaceState({},"",routeFor("fixtures"));}catch(e){}}
   /* batch 5: while a gameweek is being played the Planner opens on it */
   if(S.tab==="squad"&&!S.startGW&&!S.liveOff){const lg0=liveGW();if(lg0){S.startGW=lg0;S.liveAuto=true;}}
+  /* 24 Nov 2026: past midnight after the week's last match, a Planner that
+     opened on the live week moves on to the next one by itself */
+  if(S.liveAuto&&S.startGW&&liveGW()!==S.startGW){S.startGW=0;S.liveAuto=false;}
   const g=VG();
   /* a flagged player counts as sold: value drops, bank rises by his selling price */
   const flaggedP=squadPlayers().filter(p=>S.flagged.includes(p.id));
