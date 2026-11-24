@@ -41,7 +41,9 @@ function pkLiveHTML(p){
       `<span class="pkl-k">${PKL_LAB[k]||esc(k.replace(/_/g," "))}</span><span class="pkl-v">${k==="minutes"?sum[k].v+"′":sum[k].v}</span>${sg(sum[k].pt)}`);
     const bon=sum.bonus&&sum.bonus.pt?sum.bonus.pt:(L.prov[p.id]||0),conf=!!(sum.bonus&&sum.bonus.pt);
     if((lp.m||0)>0||bon)rows.push(`<span class="pkl-k">Bonus${conf||!bon?"":` <em>provisional</em>`}</span><span class="pkl-v">${lp.bps??0} BPS</span>${sg(bon)}`);
-    body=rows.length?`<div class="pkl-x">${rows.join("")}</div>`:`<p class="pkl-none">Did not play</p>`;
+    /* the points are in but FPL's lines are not (an older copy of the week): say so, never a wrong sum */
+    body=(lp.m||0)>0&&!(lp.x&&lp.x.length)?`<p class="pkl-none">Points breakdown not in yet</p>`
+      :rows.length?`<div class="pkl-x">${rows.join("")}</div>`:`<p class="pkl-none">Did not play</p>`;
   }
   const tot=st.s==="bl"||st.s==="tp"?"–":String(L.pts(p.id));
   const live=`<div class="pkl-card"><div class="pkl-h"><span class="pkl-live"><span class="lp-dot"></span>Live</span><span class="pkl-fx">${chips?`<span class="fxrun">${chips}</span>`:""}${state?`<span class="pkl-min">${state}</span>`:""}</span>

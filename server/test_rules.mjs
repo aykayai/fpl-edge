@@ -812,7 +812,9 @@ try {
         check(!!hero && !/Bought|Set pieces/.test(hero.textContent), "Live card: the live hero replaces the season tiles", pl && pl.web_name);
         const tot = hero && hero.querySelector(".pkl-tot b"), st = L.status(pid).s;
         check(tot && tot.textContent === (st === "bl" || st === "tp" ? "–" : String(L.pts(pid))), "Live card: the points match the live Planner", `${tot && tot.textContent} vs ${L.pts(pid)}`);
-        if (st === "dn" || st === "in") {
+        /* only where FPL's lines are stored (a week fetched without them shows "not in yet") */
+        const lpx = (L.W.players[pid] || {}).x;
+        if ((st === "dn" || st === "in") && lpx && lpx.length) {
           const sumRows = [...hero.querySelectorAll(".pkl-x .pkl-p")].reduce((a, b) => a + Number(b.textContent.replace("−", "-").replace("+", "")), 0);
           check(sumRows === L.pts(pid), "Live card: the breakdown lines add up to his points", `${sumRows} vs ${L.pts(pid)}`);
         }
