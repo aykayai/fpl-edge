@@ -428,7 +428,8 @@ try {
       const e0 = Object.keys(g.CRELLIN.weeks).map(Number).find(e => e >= gw && g.CRELLIN.weeks[e].t === "double");
       if (e0) {
         const keepW = g.CRELLIN.weeks[e0], ids0 = g.effectiveSquadIds(e0).ids, sp = ids0.map(g.chipPlayer).filter(Boolean);
-        const pv = p => p.gw[e0]?.pts || 0, xi = g.legalBestXI(sp, pv), bench = sp.filter(p => !xi.includes(p) && pv(p) > 0);
+        /* the bench player worth most, so the check is the mechanism, not a near-zero player */
+        const pv = p => p.gw[e0]?.pts || 0, xi = g.legalBestXI(sp, pv), bench = sp.filter(p => !xi.includes(p) && pv(p) > 0).sort((a, b) => pv(b) - pv(a));
         const raw = g.teamScore(ids0, e0, "bboost") - g.teamScore(ids0, e0, null);
         if (bench.length && g.chipWeighted("bboost", e0, raw, ids0).f) {
           const club = S.model.teams.find(t => t.id === bench[0].team).short;
@@ -789,6 +790,45 @@ try {
     const cell = tr ? tr.children[1].textContent.replace(" ★", "").trim() : null;
     check(cell === "+4", "Season Against History: Transfer Pts averages only the weeks with transfers (+6, +2 → +4, not +2)", cell);
     S.tracker = keep; S.tab = "squad"; g.render();
+  }
+
+  /* ---------- the player card in a live gameweek (23 Nov 2026) ---------- */
+  {
+    const keepLive = vm.runInContext("liveGW", ctx);
+    /* the latest week with your picks, treated as the week in play */
+    const LW = ((S.tracker && S.tracker.gw) || []).filter(r => Array.isArray(r.picks) && r.picks.length && r.event < NEXT).map(r => r.event).sort((a, b) => b - a)[0];
+    if (LW) {
+      vm.runInContext(`liveGW=()=>${LW}`, ctx);
+      vm.runInContext(`weekLive(${LW})`, ctx);
+      for (let i = 0; i < 40 && !(S.wkLive && S.wkLive[LW]); i++) await new Promise(r => setTimeout(r, 250));
+      const L = g.lkCalc(LW);
+      if (L && L.W && Object.keys(L.W.players || {}).length) {
+        /* the player most of the league picked */
+        const own = {};
+        (L.league || []).forEach(e => (e.picks || []).forEach(k => { own[k.id] = (own[k.id] || 0) + 1; }));
+        const pid = +Object.keys(own).sort((a, b) => own[b] - own[a])[0], pl = S.model.players.find(p => p.id === pid);
+        S.tab = "squad"; S.cardId = pid; S.cardTab = "overview"; g.render();
+        const hero = doc.querySelector(".pkhero.pklh");
+        check(!!hero && !/Bought|Set pieces/.test(hero.textContent), "Live card: the live hero replaces the season tiles", pl && pl.web_name);
+        const tot = hero && hero.querySelector(".pkl-tot b"), st = L.status(pid).s;
+        check(tot && tot.textContent === (st === "bl" || st === "tp" ? "–" : String(L.pts(pid))), "Live card: the points match the live Planner", `${tot && tot.textContent} vs ${L.pts(pid)}`);
+        /* only where FPL's lines are stored (a week fetched without them shows "not in yet") */
+        const lpx = (L.W.players[pid] || {}).x;
+        if ((st === "dn" || st === "in") && lpx && lpx.length) {
+          const sumRows = [...hero.querySelectorAll(".pkl-x .pkl-p")].reduce((a, b) => a + Number(b.textContent.replace("−", "-").replace("+", "")), 0);
+          check(sumRows === L.pts(pid), "Live card: the breakdown lines add up to his points", `${sumRows} vs ${L.pts(pid)}`);
+        }
+        const byRows = hero.querySelectorAll(".pkl-by .pkl-br").length;
+        check(byRows === own[pid], "Live card: Started By plus On The Bench lists every league manager who owns him", `${byRows} vs ${own[pid]}`);
+        /* a manager's benched owner whose XI player did not play comes on: invented */
+        S.cardId = null;
+      } else check(true, "Live card: no stored live week in this state (skipped)");
+      ctx.__keepLive = keepLive; vm.runInContext("liveGW=__keepLive", ctx);
+    }
+    /* outside a live week the card is unchanged */
+    const p0 = g.squadPlayers()[0]; S.cardId = p0.id; g.render();
+    check(vm.runInContext("liveGW()", ctx) !== null || (!doc.querySelector(".pklh") && /Bought/.test((doc.querySelector(".pkhero") || {}).textContent || "")), "Card: outside a live week the hero keeps Bought and Set pieces");
+    S.cardId = null; g.render();
   }
 
   /* ---------- F60 best combination ---------- */

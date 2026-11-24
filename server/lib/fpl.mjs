@@ -233,7 +233,10 @@ export async function fplWeekPayload(gwIn) {
       b: t.bonus || 0, sv: t.saves || 0, yc: t.yellow_cards || 0, rc: t.red_cards || 0, og: t.own_goals || 0,
       ps: t.penalties_saved || 0, pm: t.penalties_missed || 0, dc: dc ? 1 : 0, dt: t.in_dreamteam ? 1 : 0,
       /* batch 5 (22 Nov 2026): the live Planner's BPS and DefCon count */
-      bps: t.bps ?? 0, dcn: t.defensive_contribution ?? null };
+      bps: t.bps ?? 0, dcn: t.defensive_contribution ?? null,
+      /* 23 Nov 2026: FPL's own points breakdown for the live player card,
+         per fixture: [fixture, [[identifier, value, points], ...]] */
+      x: (e.explain || []).map(f => [f.fixture, (f.stats || []).map(y => [y.identifier, y.value ?? 0, y.points ?? 0])]) };
   }
   /* batch 5 (22 Nov 2026): kick-off, minute and state, and the match's own
      stats (goals, assists, cards, saves, bonus, BPS, DefCon) for the live
