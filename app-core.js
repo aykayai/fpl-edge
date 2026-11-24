@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.7.0";
+const APP_VERSION="14.7.1";
 const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
  <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
  <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
@@ -1611,22 +1611,24 @@ let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); 
    ones: pts = c[pos] x raw^k, applied per match to the final projection.
    Leave-one-week-out GW5-11: bias 0.00, MAE 1.893 -> 1.889, top 50 4.01 vs
    4.15 scored, his XI -3.5 a week; a free-form calibration did no better. */
-/* c re-scaled 23 Nov with the injury factor (GK x.992 DEF x1.035 MID x1.007
-   FWD x1.028) so next week's total stays right; was 1.86/1.73/1.66/1.94 */
-const CURVE={k:0.625,c:{1:1.85,2:1.79,3:1.67,4:1.99}};
-/* INJ_HIST (23 Nov 2026, Andy: "only for injury-prone players"). Regulars FPL had
-   flagged injured or doubtful in 20%+ of their gameweeks scored 0.78 of their
-   projection next week and 0.65-0.69 two to five weeks out; rarely flagged
-   players were right. A blanket discount was rejected. The factor
-   exp(-(a + b x weeks after next) x excess), excess = flagged share above
-   12%, weeks capped at 4 (tested no further). GW5-10, fitted on the other
-   weeks: regulars' next-week rank .171 -> .190, top 50 4.24 -> 4.26,
-   weeks 2-5 MAE 1.934 -> 1.908; injury-prone .78/.69/.66/.65/.69 ->
-   .83/.80/.83/.89/1.03, rarely flagged unchanged. */
-const INJ_HIST={t:0.12,a:0.4,b:0.45,maxK:4};
+/* c re-scaled 24 Nov with the injury factor (GK x.992 DEF x1.031 MID x1.006
+   FWD x1.019) so next week's total stays right; was 1.86/1.73/1.66/1.94 */
+const CURVE={k:0.625,c:{1:1.85,2:1.78,3:1.67,4:1.98}};
+/* INJ_HIST (23-24 Nov 2026, Andy: "only for injury-prone players"). Regulars
+   FPL had flagged injured or doubtful in 20%+ of their gameweeks scored 0.77
+   of their projection next week and ~0.55-0.80 every week after; rarely
+   flagged players were right, so a blanket discount was rejected. The drop
+   steps down after next week and then stays flat, and it stops growing past
+   about a quarter of weeks flagged. So: excess = flagged share above 12%,
+   capped at 12 points; next week x exp(-0.6 x excess), later weeks
+   x exp(-3.1 x excess); worst case x0.93 next week, x0.69 after. GW5-10,
+   fitted on the other weeks: weeks 2-5 MAE 1.934 -> 1.887, regulars' rank
+   .171 -> .187, top 50 4.24 -> 4.26; flagged 35%+ no longer over-corrected
+   (a growing factor had them at 1.27-1.79 of projection). */
+const INJ_HIST={t:0.12,cap:0.12,a:0.6,b:2.5};
 function injFactor(code,k){
-  const x=(S.injExcess||{})[String(code||"")]||0;
-  return x>0?Math.exp(-(INJ_HIST.a+INJ_HIST.b*Math.min(INJ_HIST.maxK,Math.max(0,k)))*x):1;
+  const x=Math.min(INJ_HIST.cap,(S.injExcess||{})[String(code||"")]||0);
+  return x>0?Math.exp(-(INJ_HIST.a+(k>=1?INJ_HIST.b:0))*x):1;
 }
 function curvePts(x,pos,n){
   if(!(x>0))return 0;
