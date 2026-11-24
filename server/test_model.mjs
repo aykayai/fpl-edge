@@ -181,7 +181,7 @@ const KEEPERS = ["Raya", "Donnarumma", "A.Becker", "Lammens", "Pope", "Sánchez"
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const CAL = { 1: [0.51, 0.77], 2: [1.92, 0.33], 3: [2.45, 0.39], 4: [1.18, 0.55] };
 /* xFPL curve (23 Nov 2026), replacing the flat D5 levels: c[pos] x raw^k per match, last */
-const CURVE_K = 0.625, CURVE_C = { 1: 1.85, 2: 1.79, 3: 1.67, 4: 1.99 };
+const CURVE_K = 0.625, CURVE_C = { 1: 1.85, 2: 1.78, 3: 1.67, 4: 1.98 };
 const curve = (x, pos, n) => { if (!(x > 0)) return 0; const m = Math.max(1, n || 1); return m * CURVE_C[pos] * Math.pow(x / m, CURVE_K); };
 const GOAL = { 1: 10, 2: 6, 3: 5, 4: 4 }, CSP = { 1: 4, 2: 4, 3: 1, 4: 0 };
 const SHARE = [[45, .494], [60, .682], [75, .786], [90, .882]];
@@ -526,7 +526,7 @@ function computeModel(R, o = {}) {
     players.forEach(p => { const q = p.gw[e]; if (q && !q.blank && q.pre != null) { a += q.pre; b += q.pts; n++; } });
     if (n > 20 && b > 0) players.forEach(p => { const q = p.gw[e]; if (q && !q.blank) q.pts = Math.max(0, q.pts * a / b); });
   }
-  players.forEach(p => { for (let e = NEXT; e <= 38; e++) { const q = p.gw[e]; if (q && !q.blank) q.pts = curve(q.pts, p.pos, q.n) * Math.exp(-(0.4 + 0.45 * Math.min(4, e - NEXT)) * injX(p.code)); } });
+  players.forEach(p => { for (let e = NEXT; e <= 38; e++) { const q = p.gw[e]; if (q && !q.blank) q.pts = curve(q.pts, p.pos, q.n) * Math.exp(-(0.6 + (e > NEXT ? 2.5 : 0)) * Math.min(0.12, injX(p.code))); } });
   return { next: NEXT, gwPlayed, liveOn, clubLive, teams, players, byId: new Map(players.map(p => [p.id, p])) };
 }
 
