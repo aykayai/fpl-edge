@@ -2202,6 +2202,88 @@ svg.chart circle[data-tip]{cursor:pointer}
   .cx-bpn b{white-space:normal}
   .prow.pr2>:nth-child(4),.prow.pr2>:nth-child(5),.prow.pr2>:nth-child(6),.pr2-h>:nth-child(3),.pr2-h>:nth-child(4),.pr2-h>:nth-child(5){display:none}
 }
+/* ============ Pixel 7a pass, part 4 (25 Nov 2026): pop-up sections stack ============ */
+@media(max-width:620px){
+  /* every pop-up's side-by-side panels (Transfers, Captain, Your Week, Rating,
+     Rank, Transfer Record, Performance, player card News, Chip Report) sit one
+     under the other at full width; the sheet scrolls instead of each panel */
+  .modal .mbox :is(.tw-grid,.tw-rg,.tw-sf,.ca-grid,.ca-rg,.yw-g,.rt-top,.rk-g,.xr-g,.pm-two,.pk-nrow,.cx-crs){
+    grid-template-columns:minmax(0,1fr)!important;flex:none!important;min-height:auto!important;height:auto!important}
+  .modal .mbox :is(.tw-grid,.tw-rg,.tw-sf,.ca-grid,.ca-rg,.yw-g,.rt-top,.rk-g,.xr-g,.pm-two,.pk-nrow,.cx-crs)>*{grid-column:auto!important;grid-row:auto!important;min-height:auto!important;height:auto!important}
+  /* figure rows: six tiles go three by two, four go two by two */
+  .modal .mbox :is(.xr-t,.rk-t){grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .modal .mbox .tw-pt{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  /* lists inside pop-ups: the name always reads; the deciding figures stay,
+     the supporting columns step aside (as in the Player Pool) */
+  .modal .tw-row{grid-template-columns:20px minmax(0,1fr) auto 30px!important;max-height:none;gap:8px}
+  .modal .tw-row>.fxrun,.modal .tw-row>.tw-sig,.modal .tw-row .tw-gb .tw-bt{display:none}
+  .modal .tw-rv{grid-template-columns:26px minmax(0,1fr) 40px 44px!important;max-height:none;row-gap:2px;padding:6px 0}
+  .modal .tw-rv .tw-rb .tw-bt,.modal .tw-rvh>:nth-child(5){display:none}
+  .modal :is(.ca-hd,.ca-row){grid-template-columns:20px minmax(0,1fr) 44px 40px 64px!important;max-height:none}
+  .modal :is(.ca-hd,.ca-row)>:is(:nth-child(3),:nth-child(6),:nth-child(7),:nth-child(8),:nth-child(9)),.modal .ca-row .ca-bar .tw-bt{display:none}
+  .modal .ca-rings{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  .modal .ca-rings>.ca-own{grid-column:1/-1}
+  .modal .tw-weeks{overflow-x:auto;scrollbar-width:none;scroll-snap-type:x mandatory;padding-bottom:2px}
+  .modal .tw-weeks>*{scroll-snap-align:start}
+  .modal .fo-r{grid-template-columns:22px minmax(0,1fr) repeat(5,33px) 32px!important;gap:4px}
+  .modal .fo-r>:nth-child(9){display:none}
+  .modal .fo-r .fo-c{flex-direction:column;gap:1px;min-width:0}
+  .modal .fo-r .fo-c .fxc{width:100%;min-width:0;font-size:9px;letter-spacing:0}
+  .modal .pm-r{grid-template-columns:22px minmax(0,1fr) 30px 50px 44px 24px!important}
+  .modal .pm-r>:is(:nth-child(3),:nth-child(7),:nth-child(8),:nth-child(9),:nth-child(10)){display:none}
+  .modal .xr-r{grid-template-columns:36px minmax(0,1fr) 56px 48px!important}
+  .modal .xr-r>:is(:nth-child(3),:nth-child(4),:nth-child(5),:nth-child(7)){display:none}
+  .modal :is(.tn-row,.tn-hd){grid-template-columns:minmax(0,1fr) auto!important;row-gap:2px}
+  .modal .tn-rows .tn-row{padding:6px 8px}
+  .modal :is(.tn-row,.tn-hd)>:nth-child(n+3){display:none}
+  .modal .tn-row:not(.tn-hd)>.tn-h{display:flex;grid-column:1/-1;text-align:left;justify-content:flex-start}
+  .modal .tw-rv{grid-template-columns:26px minmax(0,1fr) auto 44px!important}
+  .modal .tw-bfly{grid-template-columns:minmax(0,1fr)!important}
+  .modal .pw-r{grid-template-columns:26px minmax(0,1fr) 48px 64px!important}
+  .modal .pw-r>:is(:nth-child(3),:nth-child(4),:nth-child(5),:nth-child(8),:nth-child(9)){display:none}
+  .modal .rt-row{grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr) 40px!important;row-gap:6px;gap:8px}
+  .modal .rt-row>:first-child{grid-column:1/-1}
+  .modal .rt-rh>:first-child{display:none}
+  .modal .rt-p{max-width:100%;min-width:0;gap:5px;padding-right:7px;font-size:12px}
+  .modal .ca-m{grid-template-columns:44px 22px minmax(0,1fr) 12px 22px minmax(0,1fr) 36px!important;gap:6px}
+  .modal .ca-top{gap:12px}
+  .modal .ca-top>.ds-face{width:72px!important;height:90px!important}
+  .modal .ca-tags{flex-wrap:wrap}
+  .modal .xr-r{grid-template-columns:30px minmax(0,1fr) 56px!important;gap:6px}
+  .modal .xr-r>:nth-child(8){display:none}
+  .modal .tw-rv:not(.tw-rvh)>:nth-child(5){grid-column:2/-1;justify-content:flex-start;text-align:left}
+  /* Fixture Outlook clubs: name and run on top, the fixtures and "yours" underneath */
+  .modal .fo-cl{grid-template-columns:30px minmax(0,1fr) auto!important;row-gap:6px;padding:8px 12px}
+  .modal .fo-cl>:nth-child(1){grid-row:1/span 2}
+  .modal .fo-cl>:nth-child(3){grid-row:2;grid-column:2}
+  .modal .fo-cl>:nth-child(4){grid-row:2;grid-column:3}
+  .modal .fo-cl>:nth-child(5){grid-row:1;grid-column:3}
+  /* Transfers hero: OUT and IN stand as two columns, face over name, the gain between */
+  .modal .tw-duel{grid-template-columns:minmax(0,1fr) 52px minmax(0,1fr)!important;gap:6px}
+  .modal .tw-duel .tw-top{flex-direction:column;align-items:center;text-align:center;gap:8px}
+  .modal .tw-duel .ds-face.xl{width:64px;height:80px}
+  .modal .tw-duel .tw-who{width:100%;align-items:center;text-align:center}
+  .modal .tw-duel .fxrun{flex-wrap:wrap;justify-content:center;gap:1px;width:100%;padding:0}
+  .modal .tw-duel .fxrun .fxc{width:21px;font-size:8px;letter-spacing:-.02em}
+  .modal .tw-mid b{font-size:19px}
+  .modal .tw-hzs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  /* Sell & Fund: the position label sits above its row; five players share the width */
+  .modal .tw-prow{padding:24px 0 8px;gap:5px}
+  .modal .tw-pl{top:7px}
+  .modal .tw-pk{flex:1 1 0;min-width:0;width:auto;max-width:88px}
+  .modal .tw-pk{padding:7px 1px}
+  .modal .tw-pk b{max-width:100%;font-size:10.5px;letter-spacing:-.02em}
+  .modal .tw-pk .ds-face.md{width:44px;height:55px}
+  /* Chip Report, chips played: name, what you got and your pick on top; the weeks strip underneath */
+  .modal .cx-hr2{grid-template-columns:minmax(0,1fr) 56px 56px!important;gap:10px;row-gap:8px}
+  .modal .cx-hr2>:is(:nth-child(3),:nth-child(6)),.modal .cx-hr2.hd>:nth-child(5){display:none}
+  .modal .cx-hr2:not(.hd)>:nth-child(5){grid-column:1/-1;margin-top:14px}
+  /* Captain's season table: week, your pick, the best in your squad, points lost */
+  .modal .cr-row{grid-template-columns:36px minmax(0,1fr) minmax(0,1fr) 36px!important;gap:6px}
+  .modal .cr-row>:is(:nth-child(5),:nth-child(6),:nth-child(7)){display:none}
+  .modal .cr-rows .cr-row{max-height:none;padding:4px 6px}
+  .modal :is(.xr-wc,.xr-lt) :is(.ds-name,.ds-sub){white-space:normal}
+}
 </style>
 </head>
 <body>
@@ -2217,13 +2299,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.10.6"></script>
-<script src="./app-squad.js?v=14.10.6"></script>
-<script src="./app-render.js?v=14.10.6"></script>
-<script src="./app-odds.js?v=14.10.6"></script>
-<script src="./app-tracker.js?v=14.10.6"></script>
-<script src="./app-main.js?v=14.10.6"></script>
-<script src="./app-scout.js?v=14.10.6"></script>
+<script src="./app-core.js?v=14.10.7"></script>
+<script src="./app-squad.js?v=14.10.7"></script>
+<script src="./app-render.js?v=14.10.7"></script>
+<script src="./app-odds.js?v=14.10.7"></script>
+<script src="./app-tracker.js?v=14.10.7"></script>
+<script src="./app-main.js?v=14.10.7"></script>
+<script src="./app-scout.js?v=14.10.7"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
