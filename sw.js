@@ -4,7 +4,7 @@
    new version deployed to the server is picked up on the next load rather than
    being pinned to a stale cache. The API and /data are never cached here: the
    server is the source of truth and the app handles its own waiting states. */
-const CACHE = "fpl-signals-v14.8.2";
+const CACHE = "fpl-signals-v14.9.0";
 const IMG_CACHE = "fpl-signals-img";
 const SHELL = [
   "./",
@@ -21,7 +21,10 @@ const SHELL = [
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png",
-  "./favicon-32.png"
+  "./favicon-32.png",
+  "./favicon-16.png",
+  "./favicon.svg",
+  "./icon-512-maskable.png"
 ];
 
 self.addEventListener("install", e => {
