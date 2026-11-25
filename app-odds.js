@@ -663,14 +663,27 @@ function navLinksHTML(){
   const home=NAV_HOME[S.tab]||S.tab;
   return `<nav class="tn" aria-label="Pages">${NAV.map(([k,n])=>`<a class="navlink ${home===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')">${n}</a>`).join("")}</nav>`;
 }
+/* Pixel 7a pass (25 Nov 2026): on a phone the page list moves to a bottom bar
+   within thumb reach, Android style. Four pages and More; More opens a sheet
+   with the rest. Hidden above 620px, where the top bar carries every page. */
+const MNAV=[["squad","Planner","shirt"],["signals","Signals","radar"],["table","Players","users"],["fixtures","Teams","shield"]];
+const MMORE=[["tracker","League","trophy"],["chips","Chips","zap"],["news","News","newspaper"],["xfpl","Status","activity"]];
+function mnavHTML(){
+  const home=NAV_HOME[S.tab]||S.tab, inMore=MMORE.some(([k])=>k===home);
+  const it=([k,n,ic])=>`<a class="${home===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')"${home===k?' aria-current="page"':""}><span class="mi">${lic(ic,21)}</span><span>${n}</span></a>`;
+  return `<nav class="mnav" aria-label="Pages">${MNAV.map(it).join("")}
+    <button class="${inMore||S.moreOpen?"on":""}" onclick="act('more')" aria-expanded="${!!S.moreOpen}"><span class="mi">${lic("ellipsis",21)}</span><span>More</span></button></nav>
+    ${S.moreOpen?`<div class="msheet-bg" onclick="act('more')"></div><div class="msheet" role="dialog" aria-label="More pages">${MMORE.map(([k,n,ic])=>
+      `<a class="${home===k?"on":""}" href="${routeFor(k)}" onclick="return go(event,'${k}')"><span class="mi">${lic(ic,20)}</span>${n}</a>`).join("")}</div>`:""}`;
+}
 function navHTML(){
-  return `<header class="tb"><div class="tbin"><a class="brand" href="${routeFor("squad")}" onclick="return go(event,'squad')"><span class="bl">${LOGO}</span><span class="bw">FPL Signals</span></a>${navLinksHTML()}</div></header>`;
+  return `<header class="tb"><div class="tbin"><a class="brand" href="${routeFor("squad")}" onclick="return go(event,'squad')"><span class="bl">${LOGO}</span><span class="bw">FPL Signals</span></a>${navLinksHTML()}</div></header>${mnavHTML()}`;
 }
 /* left-click routes in place; ctrl/cmd-click and long-press use the real href */
 function go(ev,tab){
   if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.button===1)return true;
   ev.preventDefault();
-  S.menuOpen=false;
+  S.menuOpen=false;S.moreOpen=false;
   history.pushState({},"",routeFor(tab));
   act('tab',tab);
   return false;
@@ -757,6 +770,55 @@ function provHTML(){
 /* The outer guard (F7): if even the header cannot be drawn, show the menu and
    a plain message rather than a frozen page. The pass after it makes every
    clickable element reachable by keyboard and named for screen readers. */
+/* Phone pass (Pixel 7a, 25 Nov 2026). After every render on a phone:
+   a sticky row of section tabs for long pages (built from the page's own
+   cards, so a new card gets a tab without any change here), and a fade on
+   anything that scrolls sideways until its end is reached. */
+const SEC_LABEL={plpanel:"Pitch",poolpanel:"Player Pool",gb:"Brief"};
+function mobilePass(){
+  const main=document.getElementById("main");if(!main)return;
+  const old=document.querySelector(".sectabs");if(old)old.remove();
+  if(!PHONE())return;
+  sheetPass();
+  const secs=[...main.querySelectorAll(".rep,.panel,.pz-sec")].filter(e=>!e.parentElement.closest(".rep,.panel,.pz-sec,.modal")&&e.offsetHeight>60);
+  const items=secs.map((e,i)=>{const h=e.querySelector("h2,h3");let t=h?h.textContent.trim().replace(/\s+/g," "):"";
+    const k=Object.keys(SEC_LABEL).find(c=>e.classList.contains(c));if(k)t=SEC_LABEL[k];
+    if(!t)return null;e.id=e.id||("sec-"+i);e.classList.add("secanchor");return [e.id,t.length>22?t.slice(0,21)+"…":t];}).filter(Boolean);
+  if(items.length>=3){
+    secs[0].insertAdjacentHTML("beforebegin",`<nav class="sectabs" aria-label="Sections">${items.map(([id,t],i)=>`<a href="#${id}" data-sec="${id}" class="${i?"":"on"}" onclick="event.preventDefault();secGo('${id}')">${esc(t)}</a>`).join("")}</nav>`);
+    secSpy();
+  }
+  main.querySelectorAll(".scroll,.tg-scroll,.wkrow,.rb,.pz-scr").forEach(el=>{
+    if(el.scrollWidth<=el.clientWidth+4){el.classList.remove("sxh");return;}
+    el.classList.add("sxh");
+    const end=()=>el.classList.toggle("sxend",el.scrollLeft+el.clientWidth>=el.scrollWidth-4);end();
+    if(!el._sx){el._sx=1;el.addEventListener("scroll",end,{passive:true});}
+  });
+}
+/* Sheets behave like Android's own: the back gesture closes the open sheet
+   (it gets a history step of its own while it is up) and so does a firm
+   swipe down from its top edge. */
+function sheetClose(){const m=document.querySelector("#app .modal");if(m)m.dispatchEvent(new MouseEvent("click",{bubbles:true}));}
+function sheetPass(){
+  const m=document.querySelector("#app .modal"),st=history.state||{};
+  if(m&&!st.sheet)history.pushState({...st,sheet:1},"",location.href);
+  else if(!m&&st.sheet)history.back();
+  const box=m&&m.querySelector(".mbox");if(!box||box._sw)return;box._sw=1;
+  let y0=null,dy=0;
+  box.addEventListener("touchstart",e=>{const t=e.touches[0];y0=(t.clientY-box.getBoundingClientRect().top<64)?t.clientY:null;dy=0;},{passive:true});
+  box.addEventListener("touchmove",e=>{if(y0==null)return;dy=Math.max(0,e.touches[0].clientY-y0);box.style.transition="none";box.style.transform="translateY("+dy+"px)";},{passive:true});
+  box.addEventListener("touchend",()=>{if(y0==null)return;box.style.transition="transform .2s ease";
+    if(dy>110)sheetClose();else box.style.transform="";y0=null;});
+}
+function secGo(id){const e=document.getElementById(id);if(e)e.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});}
+/* the tab of the section under the bar lights up and slides into view */
+function secSpy(){
+  const nav=document.querySelector(".sectabs");if(!nav)return;
+  const links=[...nav.querySelectorAll("a")];let cur=links[0];
+  links.forEach(a=>{const e=document.getElementById(a.dataset.sec);if(e&&e.getBoundingClientRect().top<150)cur=a;});
+  if(cur&&!cur.classList.contains("on")){links.forEach(a=>a.classList.toggle("on",a===cur));
+    nav.scrollTo({left:cur.offsetLeft-nav.clientWidth/2+cur.offsetWidth/2,behavior:"smooth"});}
+}
 function render(){
   try{renderPage();}
   catch(e){
@@ -768,6 +830,7 @@ function render(){
   }
   try{a11yPass();}catch(_){}
   try{popFit();}catch(_){}
+  try{mobilePass();}catch(_){}
 }
 /* Pop-ups fill the window with no scroll (designed at 1536x864). On a shorter
    window their panels were squeezed and cut off (Andy, 25 Nov 2026). After
@@ -817,6 +880,8 @@ function a11yPass(){
 }
 function renderPage(){
   const app=document.getElementById("app");
+  /* before anything is drawn: the armbands follow the week's projections */
+  if(S.model)try{armbandsAuto();}catch(_){}
   /* Instant start: while the saved picture of the last page is showing and the
      model is still being built from the saved data, leave the picture alone
      instead of flashing the loading screen. The first real render clears it. */
@@ -965,7 +1030,7 @@ function topbarHTML(o){
         :`<span class="gwsw"><button onclick="act('startgw',${Math.max(1,o.gv-1)})" aria-label="Previous gameweek">‹</button><b>GW${o.gv}</b><button onclick="act('startgw',${Math.min(38,o.gv+1)})" aria-label="Next gameweek">›</button></span>`}
       ${dl?`<span class="dl" title="Deadline ${esc(dl.full)}"><span class="dlk">Deadline</span><b>${esc(dl.when)}</b><span class="dlk${dl.soon?" soon":""}">${dl.left}</span></span>`:""}
       <a class="live ${ss.cls}" href="${routeFor("xfpl")}" onclick="return go(event,'xfpl')" title="${esc(ss.plain)}. Opens Status." aria-label="Data status: ${esc(ss.plain)}"><i></i></a>
-    </div></div></header>`;
+    </div></div></header>${mnavHTML()}`;
 }
 
 

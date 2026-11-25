@@ -614,22 +614,53 @@ function dGain(inn,out,g,h){
 function weekPtsFor(g,h){
   h=h||1;
   const xi=startingXI();if(!xi.length)return 0;
-  const cap=S.model.players.find(p=>p.id===S.captain),capIn=cap&&xi.includes(cap)?cap:null;
-  const bench=squadPlayers().filter(p=>!xi.includes(p)),ob=orderBench(bench),vice=S.model.players.find(p=>p.id===S.vice);
+  const cv=effectiveCaptainVice(g),cap=S.model.players.find(p=>p.id===cv.captain),vice=S.model.players.find(p=>p.id===cv.vice);
+  return teamPts(xi,squadPlayers().filter(p=>!xi.includes(p)),cap,vice,g,h,chipForWeek)-hitsOver(g,h);
+}
+/* Andy, 25 Nov 2026: the armbands set themselves. For a week that can still
+   be edited, the captain is the starter projected highest that week and the
+   vice-captain the second highest, unless he picked one himself (capSet /
+   viceSet, written only by the C and V actions) and that player still
+   starts. Runs before each draw, for the week in view. */
+function armbandsAuto(){
+  const g=VG();if(!S.model||g<S.model.next.id)return;
+  const xi=startingXI();if(xi.length<11)return;
+  const pl=(S.planByGw||{})[g]||{},inXI=id=>id!=null&&xi.some(p=>p.id===id);
+  const w=p=>p.gw[g]?.pts||0,byPts=xi.slice().sort((a,b)=>w(b)-w(a));
+  const c=inXI(pl.capSet)?pl.capSet:byPts[0].id;
+  const v=inXI(pl.viceSet)&&pl.viceSet!==c?pl.viceSet:byPts.find(p=>p.id!==c).id;
+  const cur=effectiveCaptainVice(g);
+  if(cur.captain===c&&cur.vice===v&&(g!==S.model.next.id||(S.captain===c&&S.vice===v)))return;
+  writePlan(g,null,{captain:c,vice:v});saveState();
+}
+/* FPL's armband rule: a captain left on the bench does not play, so the
+   vice-captain takes the armband (25 Nov 2026: Haaland benched with the
+   armband scored no captain points at all) */
+function armbands(xi,cap,vice){
+  if(cap&&xi.includes(cap))return{cap,vice:vice&&vice!==cap&&xi.includes(vice)?vice:null};
+  if(vice&&xi.includes(vice))return{cap:vice,vice:null};
+  return{cap:null,vice:null};
+}
+/* One team total (25 Nov 2026): XI, captain, chip, vice and bench cover,
+   week by week. The header's Predicted and every Compare Squads side use
+   it, so the same team reads the same everywhere. chipOf(e) gives the
+   week's chip, or leave it out for none. */
+function teamPts(xi,bench,cap,vice,g,h,chipOf){
+  const A=armbands(xi,cap,vice),capIn=A.cap,ob=orderBench(bench);
   /* Week by week, each with its own planned chip (audit C6, 22 Nov 2026):
      a Bench Boost in the viewed week used to be added to every week of the
      horizon (+33.2 at 3 GW for a +9.2 chip), and later chips were ignored. */
   let s=0;
-  for(let e=g;e<g+h&&e<=38;e++){
-    const chip=chipForWeek(e),w=p=>p.gw[e]?.pts||0;
+  for(let e=g;e<g+(h||1)&&e<=38;e++){
+    const chip=chipOf?chipOf(e):null,w=p=>p.gw[e]?.pts||0;
     s+=xi.reduce((a,p)=>a+w(p),0);
     if(capIn)s+=w(capIn)*(chip==="3xc"?2:1);
     /* M4 (Andy, 22 Nov 2026): a Bench Boost week keeps the vice-captain
        cover; only the bench cover goes, as the bench already scores */
-    if(chip==="bboost")s+=bench.reduce((a,p)=>a+w(p),0)+coverPts(xi,[],capIn,vice,e,2);
-    else s+=coverPts(xi,ob,capIn,vice,e,chip==="3xc"?3:2);
+    if(chip==="bboost")s+=bench.reduce((a,p)=>a+w(p),0)+coverPts(xi,[],capIn,A.vice,e,2);
+    else s+=coverPts(xi,ob,capIn,A.vice,e,chip==="3xc"?3:2);
   }
-  return s-hitsOver(g,h);
+  return s;
 }
 function weekPts(){return weekPtsFor(VG(),S.horizon);}
 /* ---------- transfer engine ---------- */
@@ -883,14 +914,6 @@ function bankFromFeed(){
   const rows=S.tracker.gw.filter(r=>r.bank!=null&&r.event<=g).sort((a,b)=>a.event-b.event);
   if(!rows.length)return null;
   return +rows[rows.length-1].bank;
-}
-/* F59: FPL's own team value for the latest published week (it includes the
-   bank), so the header can set it beside the squad's buy prices. */
-function valueFromFeed(){
-  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
-  const g=S.model.next.id;
-  const rows=S.tracker.gw.filter(r=>r.value!=null&&r.event<=g).sort((a,b)=>a.event-b.event);
-  return rows.length?{value:+rows[rows.length-1].value,event:rows[rows.length-1].event}:null;
 }
 /* D12 (13 Oct 2026): what a Free Hit or Wildcard can spend, by FPL's rule:
    the squad's selling value plus the bank. One function for the Chips page,

@@ -851,6 +851,51 @@ try {
     } else check(true, "Live view: no picks for the last week in this state (skipped)");
   }
 
+  /* ---------- Compare Squads totals match the header (25 Nov 2026) ---------- */
+  {
+    const r = vm.runInContext(`(()=>{const keep=S.cmp,gNow=VG();S.cmp=cmpNew("plan","fh");
+      const A=cmpSide("A"),B=cmpSide("B"),R=teamRating();S.cmp=keep;
+      return{plan:A.total,pred:weekPtsFor(gNow,1),fh:B.total,noOpt:!!B.infeasible,best:R&&gNow>=S.model.next.id?R.best:null};})()`, ctx);
+    check(Math.abs(r.plan - r.pred) < 0.01, "Compare: Your plan totals the same as the header's Predicted", `${r.plan.toFixed(2)} vs ${r.pred.toFixed(2)}`);
+    if (r.noOpt || r.best == null) check(true, "Compare: Best Free Hit against Best XI (no optimiser in this test page, skipped; checked live)");
+    else check(Math.abs(r.fh - r.best) < 0.01, "Compare: Best Free Hit totals the same as the header's Best XI", `${r.fh.toFixed(2)} vs ${r.best}`);
+    /* FPL's rule: a captain on the bench does not play, so the vice takes the armband */
+    const b = vm.runInContext(`(()=>{const sq=squadPlayers(),xi=startingXI(),bench=sq.filter(p=>!xi.includes(p)),g=VG();
+      const c=bench.find(p=>p.pos!==1)||bench[0],v=xi[xi.length-1];
+      return{benched:teamPts(xi,bench,c,v,g,1),asVice:teamPts(xi,bench,v,null,g,1),none:teamPts(xi,bench,null,null,g,1)};})()`, ctx);
+    check(Math.abs(b.benched - b.asVice) < 1e-9 && b.benched > b.none, "Totals: a benched captain hands the armband to the vice-captain", `${b.benched} / ${b.asVice} / ${b.none}`);
+    /* his rule (25 Nov 2026): C on the week's highest projected starter, V on
+       the second, unless he picked one himself; a picked captain who is
+       benched hands it back to the top starter */
+    const m = vm.runInContext(`(()=>{const keep=JSON.stringify({c:S.captain,v:S.vice,f:S.forceXI,p:S.planByGw,t:S.tab,g:S.startGW});
+      S.tab="squad";S.startGW=S.model.next.id;const g=VG();
+      if(S.planByGw&&S.planByGw[g]){delete S.planByGw[g].capSet;delete S.planByGw[g].viceSet;}
+      render();
+      const w=p=>p.gw[g]?.pts||0,top=()=>startingXI().slice().sort((a,b)=>w(b)-w(a));
+      const badge=id=>{const el=document.querySelector('.pz-pitch [data-pid="'+id+'"] .pz-cv');return el?el.textContent+(el.closest('.pz-bench')?"@bench":"@pitch"):"";};
+      const t0=top(),auto=badge(t0[0].id)==="C@pitch"&&badge(t0[1].id)==="V@pitch"&&effectiveCaptainVice(g).captain===t0[0].id;
+      const xi=startingXI(),bench=squadPlayers().filter(p=>!xi.includes(p));
+      const sub=bench.find(b=>b.pos!==1&&xi.some(p=>p.pos===b.pos&&p.id!==t0[0].id));
+      const pick=sub?xi.find(p=>p.pos===sub.pos&&p.id!==t0[0].id):t0[t0.length-1];
+      act("cap",pick.id);const kept=badge(pick.id)==="C@pitch"&&effectiveCaptainVice(g).captain===pick.id;
+      let benched=null;if(sub){trySub(pick.id,sub.id);render();const t1=top();benched=badge(t1[0].id)==="C@pitch"&&!/C/.test(badge(pick.id));}
+      const k=JSON.parse(keep);S.captain=k.c;S.vice=k.v;S.forceXI=k.f;S.planByGw=k.p;S.tab=k.t;S.startGW=k.g;render();
+      return{auto,kept,benched};})()`, ctx);
+    check(m.auto, "Armband: by default the C is on the week's top projected starter and the V on the second", JSON.stringify(m));
+    check(m.kept, "Armband: a captain he picks himself stays", JSON.stringify(m));
+    check(m.benched !== false, "Armband: his captain benched, the C goes back to the top projected starter", JSON.stringify(m));
+  }
+
+  /* ---------- header money adds up (25 Nov 2026) ---------- */
+  {
+    S.tab = "squad"; g.render();
+    const tips = [...doc.querySelectorAll(".pz-st .fci")].map(b => b.getAttribute("data-tip") || "");
+    const sv = tips.find(t => /Sold today they raise/.test(t)) || "", tr = tips.find(t => /best team/.test(t)) || "";
+    const num = (t, re) => { const m = re.exec(t); return m ? +m[1] : NaN; };
+    const sell = num(sv, /raise £(\d+\.\d)/), budget = num(tr, /best team £(\d+\.\d)/), sales = num(tr, /sales £(\d+\.\d)/), bank = num(tr, /bank £(\d+\.\d)/);
+    check(Math.abs(sell - sales) < 0.05 && Math.abs(sales + bank - budget) < 0.11, "Header: Squad Value's selling figure plus the bank is the Team Rating's budget", `${sv} | ${tr}`);
+  }
+
   /* ---------- pop-ups never cut off on a short window (25 Nov 2026) ---------- */
   {
     S.pop = "cap"; S.popTab = null; g.render();

@@ -499,7 +499,11 @@ function plannerStatsHTML(o){
   const chg=(d,f,goodUp)=>(d==null||!isFinite(d)||Math.abs(d)<1e-9)?"":`<span class="${(d>0)===goodUp?"up":"dn"}">${d>0?"▲":"▼"} ${f(Math.abs(d))}</span>`;
   const ln=(c,wk)=>`<i>${c}${c&&wk?" · ":""}${wk||""}</i>`;
   const tipB=t=>`<button class="fci" aria-label="About" data-tip="${esc(t)}">i</button>`;
-  const fv=valueFromFeed();
+  /* 25 Nov 2026 (Andy: "make it make sense"): one money story. Squad Value is
+     today's prices; selling raises less (FPL keeps half of each rise); that
+     plus the bank is what the Team Rating's best team may cost. FPL's own
+     figure from the last deadline is left out: it was a third number. */
+  const sellV=squadPlayers().reduce((a,p)=>a+sellPrice(p),0);
   /* 22 Nov 2026 (batch 4): Overall Rank and GW Rank open Rank, Team Rating its own */
   const st=(label,tip,fig,line,series,tone,extra,pop)=>`<div class="pz-st${pop?" pz-stc":""}"${pop?` role="button" tabindex="0" onclick="act('pop','${pop}')" onkeydown="if(event.key==='Enter')act('pop','${pop}')"`:""}><span class="pz-stl">${label}${tipB(tip)}</span><b>${fig}</b>${line||""}${series&&series.length>1?spark(series,tone||"#3DDC97"):""}${extra||""}</div>`;
   const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
@@ -513,10 +517,10 @@ function plannerStatsHTML(o){
       lastG?lastG.gwRank.toLocaleString():"—",
       ln(prevG&&lastG?chg(prevG.gwRank-lastG.gwRank,x=>Math.round(x).toLocaleString(),true):"",lastG?"GW"+lastG.event:""),
       fRows.filter(r=>r.gwRank).slice(-8).map(r=>-r.gwRank),null,null,"rank")}
-    ${st("Team Rating",`Your predicted score against the best XI £${rating?rating.budget.toFixed(1):"—"} could buy this week.`,
+    ${st("Team Rating",`Your score against the best team £${rating?rating.budget.toFixed(1):"—"} buys: sales £${sellV.toFixed(1)} + bank £${o.bank.toFixed(1)}.`,
       `<span style="color:${rateCol}">${rating?rating.pct:"—"}</span>`,rating?`<i>Best XI ${rating.best.toFixed(1)}</i>`:"",null,null,
       rating?`<span class="pz-ring" style="--v:${rating.pct};--rc:${rateCol}"></span>`:"","rating")}
-    ${st("Squad Value",`Your ${o.n} players at today's prices, without the bank.${fv?` FPL's team value, bank included, is £${fv.value.toFixed(1)}.`:""}`,
+    ${st("Squad Value",`Your ${o.n} at today's prices. Sold today they raise £${sellV.toFixed(1)}.`,
       `£${o.sv.toFixed(1)}`,o.raised>0?`<i>£${o.raised.toFixed(1)} from sales</i>`:ln(prev&&last&&prev.value!=null?chg((last.value-(last.bank||0))-(prev.value-(prev.bank||0)),x=>x.toFixed(1),true):"",""),
       fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value-(+r.bank||0)),"#8A8A8A")}
     ${st("Bank",`Money left after this week's planned transfers. FT: free transfers (max 5).`,
@@ -1457,7 +1461,7 @@ function chipsHTML(){
       ${chipTile(kind,30,false,planned?"ring":"")}<span class="cx-crn"><b>${chipKeyName(k)}</b><span>${planned?"Planned":"Suggested"}${h2?"":" · expires GW19"}</span></span>
       <span class="cx-mini">${bars}</span><span class="cx-crw"><b>GW${e||"—"}</b><i class="${v>=0?"up":"dn"}">${sgnPts(v)}</i></span>
 </div>`;};
-  const axisRow=h2=>{let a="";for(let w=h2?20:1;w<=(h2?38:19);w++)a+=`<span>${w%2===0?w:""}</span>`;return `<div class="cx-cr ax"><span></span><span></span><span class="cx-mini cx-axis">${a}</span><span></span></div>`;};
+  const axisRow=h2=>{let a="";for(let w=h2?20:1;w<=(h2?38:19);w++)a+=`<span>${w%(PHONE()?5:2)===0?w:""}</span>`;return `<div class="cx-cr ax"><span></span><span></span><span class="cx-mini cx-axis">${a}</span><span></span></div>`;};
   const leftH=[1,2].map(h=>left.filter(k=>k.endsWith(String(h)))).filter(a=>a.length);
   const chipsLeftSec=rep("chleft","target","Chips Left",
     "Each chip still to play and its best weeks.",
@@ -3230,8 +3234,10 @@ function cmpSquad(src){
   if(src==="plan"){const e=effectiveSquadIds(g),cv=effectiveCaptainVice(g);
     return{ids:e.ids,xi:startingXI().map(p=>p.id),cap:cv.captain,vice:cv.vice,bank:planBank(),label:"Your plan",sub:`GW${g}`};}
   if(cmpBuilder(src)){const kind=src==="wc"?"wildcard":"freehit",budget=squadBudget(),h=src==="fh"?1:C.h;
-    const r=optimalSquad(kind,g,budget,null,{weeks:h,locks:C.locks,bans:C.bans});
+    let r=optimalSquad(kind,g,budget,null,{weeks:h,locks:C.locks,bans:C.bans});
     if(!r)return{ids:null,label:src==="fh"?"Best Free Hit":"Best Wildcard",sub:"no legal squad",infeasible:true};
+    /* the same bench-weighted team as the header's Best XI (25 Nov 2026) */
+    if(src==="fh"&&!C.locks.length&&!C.bans.length)r=benchWeighted(r,[...r.xi,...r.bench].map(p=>p.id),g,budget).t;
     return{ids:[...r.xi,...r.bench].map(p=>p.id),xi:r.xi.map(p=>p.id),cap:r.cap&&r.cap.id,vice:null,bank:+(budget-r.value).toFixed(1),
       label:src==="fh"?"Best Free Hit":"Best Wildcard",sub:src==="fh"?`GW${g}`:wkSpan(g,h),how:r.heuristic?"quick builder":r.proven?"proven best":r.checking?"best found · checking":"best found"};}
   const m=/^d(\d+)$/.exec(src||"");if(m){const d=(LS.get("drafts")||[])[+m[1]];if(!d)return null;
@@ -3248,8 +3254,13 @@ function cmpSide(side){
   if(!xiIds||!legalXI(xiIds)||xiIds.some(i=>!ids.includes(i)))xiIds=legalBestXI(players,val).map(p=>p.id);
   const xi=xiIds.map(P).filter(Boolean),bench=players.filter(p=>!xiIds.includes(p.id)).sort((a,b)=>(a.pos===1?-1:b.pos===1?1:val(b)-val(a)));
   const byV=xi.slice().sort((a,b)=>val(b)-val(a));
-  const cap=xi.find(p=>p.id===(ed.cap??base.cap))||byV[0],vice=xi.find(p=>p.id===(ed.vice??base.vice)&&p!==cap)||byV.find(p=>p!==cap);
-  const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0);
+  /* armbands and total by the one team rule (teamPts, 25 Nov 2026): a benched
+     captain hands the armband to the vice; a built squad with no vice takes
+     its second-best starter, as the header's Best XI does */
+  const src=C[side==="A"?"a":"b"],rawV=ed.vice??base.vice,A=armbands(xi,P(ed.cap??base.cap),P(rawV));
+  const cap=A.cap||byV[0],vice=A.cap?(A.vice||(rawV==null?byV.find(p=>p!==cap):null)):byV.find(p=>p!==cap);
+  const plan=src==="plan";
+  const total=teamPts(xi,players.filter(p=>!xiIds.includes(p.id)),cap,vice,g,h,plan?chipForWeek:null)-(plan?hitsOver(g,h):0);
   const sellOrPay=p=>(S.squad||[]).includes(p.id)?sellPrice(p):p.price;
   return{...base,ids,players,xi,bench,cap,vice,total,val,h,bank:ed.bank??base.bank,edited:!!ed.ids||ed.cap!=null||!!ed.xi,sellOrPay};
 }
@@ -4226,9 +4237,10 @@ function pdHeadHTML(rows,r){
   const box=(on,label,action)=>`<label class="pdchk"><input type="checkbox" ${on?"checked":""} onchange="act('${action}')"> ${label}</label>`;
   return `<div class="pagetabs"><h1>Player Data <span class="pdcount">${rows.length} players${nMine?` · <b>${nMine}</b> from your squad`:""}</span></h1>
       <span style="display:flex;gap:8px;align-items:center">${ticks.length?"":`<button class="fci" data-tip="Tick up to 5 players to compare them." aria-label="About comparing">i</button>`}</span></div>
-    <div class="pdcard">
+    <div class="pdcard${S.pdPh?" phopen":""}">
       <div class="pdbar">
         <label class="pdsearch">${lic("search",15)}<input id="srch-l" placeholder="Search players" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" aria-label="Search players"></label>
+        <button class="pdphbtn${S.pdPh?" on":""}" onclick="act('pdph')" aria-expanded="${!!S.pdPh}">${lic("sliders-horizontal",15)} Filters${(S.lTeam||lo>3.5||hi<top||S.iconF.length)?` <b>${[S.lTeam,lo>3.5||hi<top,S.iconF.length].filter(Boolean).length}</b>`:""}</button>
         <div class="pdctl"><span class="pdl">Position</span>${seg(S.lPos||0,[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],"lpos","Position")}</div>
         <div class="pdctl"><span class="pdl">Projection</span>${seg(win,[[1,"1 GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS",`Rest of season, GW${g}–38`]],"pwin","Projection window")}</div>
         <div class="pdctl"><span class="pdl">Club</span><select class="pdsel" onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.slice().sort((x,y)=>String(x.name).localeCompare(y.name)).map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select></div>

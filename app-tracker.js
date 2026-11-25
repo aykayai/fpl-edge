@@ -111,13 +111,16 @@ function trkHeadHTML(){
   const kick=`${last?`GW${last.event}${live?" in play":""}`:""}${me?` · ${esc(lg)} ${me.rank===1?"1st":me.rank===2?"2nd":me.rank===3?"3rd":me.rank+"th"} of ${st.length}`:""}`;
   const evs=(S.events||[]).filter(e=>e.finished);
   const avgSum=rows.filter(r=>weekFinal(r.event)).reduce((s,r)=>{const e=evs.find(x=>x.id===r.event);return s+(e&&e.avg!=null?r.points-e.avg:0);},0);
+  /* 25 Nov 2026: today's value, as FPL's Finance box shows it (squad value
+     plus bank), not the figure frozen at the last deadline */
+  const offP=last&&latestOfficialPicks(),tvNow=offP&&S.model?+(offP.picks.reduce((a,pk)=>a+((S.model.players.find(p=>p.id===pk.id)||{}).price||0),0)+(+last.bank||0)).toFixed(1):last&&+last.value;
   const figs=last?[
     figCard("Overall Rank",live?`Your overall rank, live during GW${last.event}.`:`Your overall rank after GW${last.event}.`,trkRank(last.orRank),
       prev&&prev.orRank&&last.orRank&&prev.orRank!==last.orRank?`<span class="${prev.orRank>last.orRank?"up":"dn"}">${prev.orRank>last.orRank?"▲":"▼"} ${trkRank(Math.abs(prev.orRank-last.orRank))}</span>`:"",rows.filter(r=>r.orRank).slice(-10).map(r=>-r.orRank),"#3DDC97"),
     figCard("Top %","Where your rank sits among all managers.",last.orRank&&tp?trkNum(last.orRank/tp*100,2)+"%":"—",tp?`of ${trkCompact(tp)} managers`:"",null),
     figCard("Season Points","Your points so far, after hits.",String(last.totalPoints??rows.reduce((s,r)=>s+(r.points||0),0)),
       `<span class="${avgSum>=0?"up":"dn"}">${avgSum>=0?"+":""}${Math.round(avgSum)}</span> vs average`,rows.map((r,i)=>rows.slice(0,i+1).reduce((s,x)=>s+(x.points||0),0)),"#3DDC97"),
-    figCard("Team Value","FPL's team value, bank included.","£"+trkNum(last.value,1),`£${trkNum(last.bank||0,1)} in the bank`,rows.filter(r=>r.value!=null).slice(-10).map(r=>+r.value),"#22D3EE")]
+    figCard("Team Value","Your 15 at today's prices plus the bank, as FPL shows it.","£"+trkNum(tvNow,1),`£${trkNum(last.bank||0,1)} in the bank`,rows.filter(r=>r.value!=null).slice(-10).map(r=>+r.value).concat(tvNow!==+last.value?[tvNow]:[]),"#22D3EE")]
     :[figCard("Overall Rank","Your overall rank.","—","",null)];
   return `<div class="sx-hdr"><div><div class="cx-kick">${kick}</div><h1>League</h1></div><div class="nw-figs sx-figs">${figs.join("")}</div></div>`;
 }
