@@ -224,10 +224,13 @@ function act(k,a,b,c){
       else S.sortDir="desc";S.sortKey=a;break;}
     case"lsort":{if(a==="name")S.lDir=(S.lSort==="name"&&S.lDir==="asc")?"desc":"asc";
       else S.lDir="desc";S.lSort=a;break;}
+    /* his own pick sticks (capSet/viceSet); armbandsAuto fills the other */
     case"cap":{const gw=editableGw();if(gw==null)break;S.captain=a;if(S.vice===a)S.vice=null;
-      writePlan(gw,null,{captain:a,vice:S.vice});saveState();break;}
+      const pv=(S.planByGw||{})[gw]||{};
+      writePlan(gw,null,{captain:a,vice:S.vice,capSet:a,viceSet:pv.viceSet===a?null:pv.viceSet});saveState();break;}
     case"vice":{const gw=editableGw();if(gw==null)break;S.vice=a;if(S.captain===a)S.captain=null;
-      writePlan(gw,null,{vice:a,captain:S.captain});saveState();break;}
+      const pc=(S.planByGw||{})[gw]||{};
+      writePlan(gw,null,{vice:a,captain:S.captain,viceSet:a,capSet:pc.capSet===a?null:pc.capSet});saveState();break;}
     case"flag":{
       /* Un-flagging a player brought in as a replacement puts the original
          back, rather than leaving the squad a man short with a stale flag. */

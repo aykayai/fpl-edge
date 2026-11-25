@@ -880,8 +880,8 @@ function a11yPass(){
 }
 function renderPage(){
   const app=document.getElementById("app");
-  /* before anything is drawn: a benched captain's armband moves to the vice */
-  if(S.model)try{armbandsFollowXI();}catch(_){}
+  /* before anything is drawn: the armbands follow the week's projections */
+  if(S.model)try{armbandsAuto();}catch(_){}
   /* Instant start: while the saved picture of the last page is showing and the
      model is still being built from the saved data, leave the picture alone
      instead of flashing the loading screen. The first real render clears it. */

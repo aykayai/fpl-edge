@@ -614,24 +614,24 @@ function dGain(inn,out,g,h){
 function weekPtsFor(g,h){
   h=h||1;
   const xi=startingXI();if(!xi.length)return 0;
-  const cap=S.model.players.find(p=>p.id===S.captain),vice=S.model.players.find(p=>p.id===S.vice);
+  const cv=effectiveCaptainVice(g),cap=S.model.players.find(p=>p.id===cv.captain),vice=S.model.players.find(p=>p.id===cv.vice);
   return teamPts(xi,squadPlayers().filter(p=>!xi.includes(p)),cap,vice,g,h,chipForWeek)-hitsOver(g,h);
 }
-/* Andy, 25 Nov 2026 (his pick 1): a captain moved to the bench hands the
-   armband to the vice-captain on the pitch too, as the total counts it; the
-   vice's place goes to the best other starter. A benched vice is replaced
-   the same way. Only for a week that can still be edited. */
-function armbandsFollowXI(){
+/* Andy, 25 Nov 2026: the armbands set themselves. For a week that can still
+   be edited, the captain is the starter projected highest that week and the
+   vice-captain the second highest, unless he picked one himself (capSet /
+   viceSet, written only by the C and V actions) and that player still
+   starts. Runs before each draw, for the week in view. */
+function armbandsAuto(){
   const g=VG();if(!S.model||g<S.model.next.id)return;
   const xi=startingXI();if(xi.length<11)return;
-  const ids=xi.map(p=>p.id),cv=effectiveCaptainVice(g);let c=cv.captain,v=cv.vice;
-  const capOut=c!=null&&!ids.includes(c),viceOut=v!=null&&!ids.includes(v);
-  if(!capOut&&!viceOut)return;
-  if(capOut){c=v!=null&&!viceOut?v:null;}
-  const w=p=>p.gw[g]?.pts||0,rest=xi.filter(p=>p.id!==c).sort((a,b)=>w(b)-w(a));
-  if(c==null)c=rest.shift().id;
-  v=(rest.find(p=>p.id!==c)||{}).id??null;
-  S.captain=c;S.vice=v;writePlan(g,null,{captain:c,vice:v});saveState();
+  const pl=(S.planByGw||{})[g]||{},inXI=id=>id!=null&&xi.some(p=>p.id===id);
+  const w=p=>p.gw[g]?.pts||0,byPts=xi.slice().sort((a,b)=>w(b)-w(a));
+  const c=inXI(pl.capSet)?pl.capSet:byPts[0].id;
+  const v=inXI(pl.viceSet)&&pl.viceSet!==c?pl.viceSet:byPts.find(p=>p.id!==c).id;
+  const cur=effectiveCaptainVice(g);
+  if(cur.captain===c&&cur.vice===v&&(g!==S.model.next.id||(S.captain===c&&S.vice===v)))return;
+  writePlan(g,null,{captain:c,vice:v});saveState();
 }
 /* FPL's armband rule: a captain left on the bench does not play, so the
    vice-captain takes the armband (25 Nov 2026: Haaland benched with the

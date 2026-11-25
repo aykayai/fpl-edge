@@ -864,18 +864,26 @@ try {
       const c=bench.find(p=>p.pos!==1)||bench[0],v=xi[xi.length-1];
       return{benched:teamPts(xi,bench,c,v,g,1),asVice:teamPts(xi,bench,v,null,g,1),none:teamPts(xi,bench,null,null,g,1)};})()`, ctx);
     check(Math.abs(b.benched - b.asVice) < 1e-9 && b.benched > b.none, "Totals: a benched captain hands the armband to the vice-captain", `${b.benched} / ${b.asVice} / ${b.none}`);
-    /* his pick 1 (25 Nov 2026): on the pitch too, the armband moves to the vice */
+    /* his rule (25 Nov 2026): C on the week's highest projected starter, V on
+       the second, unless he picked one himself; a picked captain who is
+       benched hands it back to the top starter */
     const m = vm.runInContext(`(()=>{const keep=JSON.stringify({c:S.captain,v:S.vice,f:S.forceXI,p:S.planByGw,t:S.tab,g:S.startGW});
-      S.tab="squad";S.startGW=S.model.next.id;render();
-      const xi=startingXI(),bench=squadPlayers().filter(p=>!xi.includes(p));
-      const sub=bench.find(b=>b.pos!==1&&xi.some(p=>p.pos===b.pos));if(!sub)return{skip:true};
-      const c0=xi.find(p=>p.pos===sub.pos),v0=xi.find(p=>p!==c0&&p.pos!==1);
-      act("cap",c0.id);act("vice",v0.id);trySub(c0.id,sub.id);render();
+      S.tab="squad";S.startGW=S.model.next.id;const g=VG();
+      if(S.planByGw&&S.planByGw[g]){delete S.planByGw[g].capSet;delete S.planByGw[g].viceSet;}
+      render();
+      const w=p=>p.gw[g]?.pts||0,top=()=>startingXI().slice().sort((a,b)=>w(b)-w(a));
       const badge=id=>{const el=document.querySelector('.pz-pitch [data-pid="'+id+'"] .pz-cv');return el?el.textContent+(el.closest('.pz-bench')?"@bench":"@pitch"):"";};
-      const out={cap:S.captain===v0.id,newVice:S.vice!=null&&S.vice!==v0.id&&startingXI().some(p=>p.id===S.vice),c0b:badge(c0.id),v0b:badge(v0.id)};
-      const k=JSON.parse(keep);S.captain=k.c;S.vice=k.v;S.forceXI=k.f;S.planByGw=k.p;S.tab=k.t;S.startGW=k.g;render();return out;})()`, ctx);
-    if (m.skip) check(true, "Armband: no same-position bench player in this state (skipped)");
-    else check(m.cap && m.newVice && !/C/.test(m.c0b) && /C@pitch/.test(m.v0b), "Armband: benching the captain moves the C to the vice on the pitch, and a new vice is named", JSON.stringify(m));
+      const t0=top(),auto=badge(t0[0].id)==="C@pitch"&&badge(t0[1].id)==="V@pitch"&&effectiveCaptainVice(g).captain===t0[0].id;
+      const xi=startingXI(),bench=squadPlayers().filter(p=>!xi.includes(p));
+      const sub=bench.find(b=>b.pos!==1&&xi.some(p=>p.pos===b.pos&&p.id!==t0[0].id));
+      const pick=sub?xi.find(p=>p.pos===sub.pos&&p.id!==t0[0].id):t0[t0.length-1];
+      act("cap",pick.id);const kept=badge(pick.id)==="C@pitch"&&effectiveCaptainVice(g).captain===pick.id;
+      let benched=null;if(sub){trySub(pick.id,sub.id);render();const t1=top();benched=badge(t1[0].id)==="C@pitch"&&!/C/.test(badge(pick.id));}
+      const k=JSON.parse(keep);S.captain=k.c;S.vice=k.v;S.forceXI=k.f;S.planByGw=k.p;S.tab=k.t;S.startGW=k.g;render();
+      return{auto,kept,benched};})()`, ctx);
+    check(m.auto, "Armband: by default the C is on the week's top projected starter and the V on the second", JSON.stringify(m));
+    check(m.kept, "Armband: a captain he picks himself stays", JSON.stringify(m));
+    check(m.benched !== false, "Armband: his captain benched, the C goes back to the top projected starter", JSON.stringify(m));
   }
 
   /* ---------- header money adds up (25 Nov 2026) ---------- */
