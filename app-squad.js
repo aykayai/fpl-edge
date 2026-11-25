@@ -614,22 +614,37 @@ function dGain(inn,out,g,h){
 function weekPtsFor(g,h){
   h=h||1;
   const xi=startingXI();if(!xi.length)return 0;
-  const cap=S.model.players.find(p=>p.id===S.captain),capIn=cap&&xi.includes(cap)?cap:null;
-  const bench=squadPlayers().filter(p=>!xi.includes(p)),ob=orderBench(bench),vice=S.model.players.find(p=>p.id===S.vice);
+  const cap=S.model.players.find(p=>p.id===S.captain),vice=S.model.players.find(p=>p.id===S.vice);
+  return teamPts(xi,squadPlayers().filter(p=>!xi.includes(p)),cap,vice,g,h,chipForWeek)-hitsOver(g,h);
+}
+/* FPL's armband rule: a captain left on the bench does not play, so the
+   vice-captain takes the armband (25 Nov 2026: Haaland benched with the
+   armband scored no captain points at all) */
+function armbands(xi,cap,vice){
+  if(cap&&xi.includes(cap))return{cap,vice:vice&&vice!==cap&&xi.includes(vice)?vice:null};
+  if(vice&&xi.includes(vice))return{cap:vice,vice:null};
+  return{cap:null,vice:null};
+}
+/* One team total (25 Nov 2026): XI, captain, chip, vice and bench cover,
+   week by week. The header's Predicted and every Compare Squads side use
+   it, so the same team reads the same everywhere. chipOf(e) gives the
+   week's chip, or leave it out for none. */
+function teamPts(xi,bench,cap,vice,g,h,chipOf){
+  const A=armbands(xi,cap,vice),capIn=A.cap,ob=orderBench(bench);
   /* Week by week, each with its own planned chip (audit C6, 22 Nov 2026):
      a Bench Boost in the viewed week used to be added to every week of the
      horizon (+33.2 at 3 GW for a +9.2 chip), and later chips were ignored. */
   let s=0;
-  for(let e=g;e<g+h&&e<=38;e++){
-    const chip=chipForWeek(e),w=p=>p.gw[e]?.pts||0;
+  for(let e=g;e<g+(h||1)&&e<=38;e++){
+    const chip=chipOf?chipOf(e):null,w=p=>p.gw[e]?.pts||0;
     s+=xi.reduce((a,p)=>a+w(p),0);
     if(capIn)s+=w(capIn)*(chip==="3xc"?2:1);
     /* M4 (Andy, 22 Nov 2026): a Bench Boost week keeps the vice-captain
        cover; only the bench cover goes, as the bench already scores */
-    if(chip==="bboost")s+=bench.reduce((a,p)=>a+w(p),0)+coverPts(xi,[],capIn,vice,e,2);
-    else s+=coverPts(xi,ob,capIn,vice,e,chip==="3xc"?3:2);
+    if(chip==="bboost")s+=bench.reduce((a,p)=>a+w(p),0)+coverPts(xi,[],capIn,A.vice,e,2);
+    else s+=coverPts(xi,ob,capIn,A.vice,e,chip==="3xc"?3:2);
   }
-  return s-hitsOver(g,h);
+  return s;
 }
 function weekPts(){return weekPtsFor(VG(),S.horizon);}
 /* ---------- transfer engine ---------- */

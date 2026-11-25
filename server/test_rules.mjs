@@ -851,6 +851,21 @@ try {
     } else check(true, "Live view: no picks for the last week in this state (skipped)");
   }
 
+  /* ---------- Compare Squads totals match the header (25 Nov 2026) ---------- */
+  {
+    const r = vm.runInContext(`(()=>{const keep=S.cmp,gNow=VG();S.cmp=cmpNew("plan","fh");
+      const A=cmpSide("A"),B=cmpSide("B"),R=teamRating();S.cmp=keep;
+      return{plan:A.total,pred:weekPtsFor(gNow,1),fh:B.total,noOpt:!!B.infeasible,best:R&&gNow>=S.model.next.id?R.best:null};})()`, ctx);
+    check(Math.abs(r.plan - r.pred) < 0.01, "Compare: Your plan totals the same as the header's Predicted", `${r.plan.toFixed(2)} vs ${r.pred.toFixed(2)}`);
+    if (r.noOpt || r.best == null) check(true, "Compare: Best Free Hit against Best XI (no optimiser in this test page, skipped; checked live)");
+    else check(Math.abs(r.fh - r.best) < 0.01, "Compare: Best Free Hit totals the same as the header's Best XI", `${r.fh.toFixed(2)} vs ${r.best}`);
+    /* FPL's rule: a captain on the bench does not play, so the vice takes the armband */
+    const b = vm.runInContext(`(()=>{const sq=squadPlayers(),xi=startingXI(),bench=sq.filter(p=>!xi.includes(p)),g=VG();
+      const c=bench.find(p=>p.pos!==1)||bench[0],v=xi[xi.length-1];
+      return{benched:teamPts(xi,bench,c,v,g,1),asVice:teamPts(xi,bench,v,null,g,1),none:teamPts(xi,bench,null,null,g,1)};})()`, ctx);
+    check(Math.abs(b.benched - b.asVice) < 1e-9 && b.benched > b.none, "Totals: a benched captain hands the armband to the vice-captain", `${b.benched} / ${b.asVice} / ${b.none}`);
+  }
+
   /* ---------- pop-ups never cut off on a short window (25 Nov 2026) ---------- */
   {
     S.pop = "cap"; S.popTab = null; g.render();

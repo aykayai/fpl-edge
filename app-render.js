@@ -3230,8 +3230,10 @@ function cmpSquad(src){
   if(src==="plan"){const e=effectiveSquadIds(g),cv=effectiveCaptainVice(g);
     return{ids:e.ids,xi:startingXI().map(p=>p.id),cap:cv.captain,vice:cv.vice,bank:planBank(),label:"Your plan",sub:`GW${g}`};}
   if(cmpBuilder(src)){const kind=src==="wc"?"wildcard":"freehit",budget=squadBudget(),h=src==="fh"?1:C.h;
-    const r=optimalSquad(kind,g,budget,null,{weeks:h,locks:C.locks,bans:C.bans});
+    let r=optimalSquad(kind,g,budget,null,{weeks:h,locks:C.locks,bans:C.bans});
     if(!r)return{ids:null,label:src==="fh"?"Best Free Hit":"Best Wildcard",sub:"no legal squad",infeasible:true};
+    /* the same bench-weighted team as the header's Best XI (25 Nov 2026) */
+    if(src==="fh"&&!C.locks.length&&!C.bans.length)r=benchWeighted(r,[...r.xi,...r.bench].map(p=>p.id),g,budget).t;
     return{ids:[...r.xi,...r.bench].map(p=>p.id),xi:r.xi.map(p=>p.id),cap:r.cap&&r.cap.id,vice:null,bank:+(budget-r.value).toFixed(1),
       label:src==="fh"?"Best Free Hit":"Best Wildcard",sub:src==="fh"?`GW${g}`:wkSpan(g,h),how:r.heuristic?"quick builder":r.proven?"proven best":r.checking?"best found · checking":"best found"};}
   const m=/^d(\d+)$/.exec(src||"");if(m){const d=(LS.get("drafts")||[])[+m[1]];if(!d)return null;
@@ -3248,8 +3250,13 @@ function cmpSide(side){
   if(!xiIds||!legalXI(xiIds)||xiIds.some(i=>!ids.includes(i)))xiIds=legalBestXI(players,val).map(p=>p.id);
   const xi=xiIds.map(P).filter(Boolean),bench=players.filter(p=>!xiIds.includes(p.id)).sort((a,b)=>(a.pos===1?-1:b.pos===1?1:val(b)-val(a)));
   const byV=xi.slice().sort((a,b)=>val(b)-val(a));
-  const cap=xi.find(p=>p.id===(ed.cap??base.cap))||byV[0],vice=xi.find(p=>p.id===(ed.vice??base.vice)&&p!==cap)||byV.find(p=>p!==cap);
-  const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0);
+  /* armbands and total by the one team rule (teamPts, 25 Nov 2026): a benched
+     captain hands the armband to the vice; a built squad with no vice takes
+     its second-best starter, as the header's Best XI does */
+  const src=C[side==="A"?"a":"b"],rawV=ed.vice??base.vice,A=armbands(xi,P(ed.cap??base.cap),P(rawV));
+  const cap=A.cap||byV[0],vice=A.cap?(A.vice||(rawV==null?byV.find(p=>p!==cap):null)):byV.find(p=>p!==cap);
+  const plan=src==="plan";
+  const total=teamPts(xi,players.filter(p=>!xiIds.includes(p.id)),cap,vice,g,h,plan?chipForWeek:null)-(plan?hitsOver(g,h):0);
   const sellOrPay=p=>(S.squad||[]).includes(p.id)?sellPrice(p):p.price;
   return{...base,ids,players,xi,bench,cap,vice,total,val,h,bank:ed.bank??base.bank,edited:!!ed.ids||ed.cap!=null||!!ed.xi,sellOrPay};
 }
