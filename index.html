@@ -156,6 +156,8 @@ body.scrolled .tbfig{display:flex}
 .modal:has(.mbox.mfull){align-items:stretch;padding:12px}
 .mbox.mfull .mhead{position:static;flex:none;padding:12px 18px}
 .mbox.mfull .mbody{flex:1;min-height:0;overflow:auto;padding:14px 18px 16px}
+/* a window too short for the pop-up: natural heights and a scroll, never a cut (popFit) */
+@media(min-width:761px){.mbox.mfull.mscroll .mbody{overflow-y:auto!important}}
 
 .poptabs{margin-right:10px}
 

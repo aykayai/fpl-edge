@@ -851,6 +851,23 @@ try {
     } else check(true, "Live view: no picks for the last week in this state (skipped)");
   }
 
+  /* ---------- pop-ups never cut off on a short window (25 Nov 2026) ---------- */
+  {
+    S.pop = "cap"; S.popTab = null; g.render();
+    const box = doc.querySelector(".mbox.mfull");
+    check(box && !box.classList.contains("mscroll"), "Pop-up fit: a pop-up that fits keeps the filled, no-scroll layout");
+    /* jsdom has no layout: stand in a panel that is 200px of content squeezed into 100px */
+    const pan = box && box.querySelector(".mbody .panel");
+    if (pan) {
+      pan.style.overflow = "hidden"; pan.style.overflowY = "hidden"; pan.style.minHeight = "0px"; pan.parentElement.style.display = "flex";
+      Object.defineProperty(pan, "clientHeight", { configurable: true, get: () => 100 });
+      Object.defineProperty(pan, "scrollHeight", { configurable: true, get: () => 200 });
+      vm.runInContext("popFit()", ctx);
+      check(box.classList.contains("mscroll") && pan.style.minHeight === "min-content", "Pop-up fit: a cut-off panel makes the pop-up scroll at natural heights instead", `${box.className} / ${pan.style.minHeight}`);
+    } else check(false, "Pop-up fit: Captain has a panel to test");
+    S.pop = null; g.render();
+  }
+
   /* ---------- F60 best combination ---------- */
   const outIds = sq.filter(p => p.pos >= 2).slice(0, 3).map(p => p.id);
   const combo = g.bestCombo(outIds);
