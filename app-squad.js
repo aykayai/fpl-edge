@@ -617,6 +617,22 @@ function weekPtsFor(g,h){
   const cap=S.model.players.find(p=>p.id===S.captain),vice=S.model.players.find(p=>p.id===S.vice);
   return teamPts(xi,squadPlayers().filter(p=>!xi.includes(p)),cap,vice,g,h,chipForWeek)-hitsOver(g,h);
 }
+/* Andy, 25 Nov 2026 (his pick 1): a captain moved to the bench hands the
+   armband to the vice-captain on the pitch too, as the total counts it; the
+   vice's place goes to the best other starter. A benched vice is replaced
+   the same way. Only for a week that can still be edited. */
+function armbandsFollowXI(){
+  const g=VG();if(!S.model||g<S.model.next.id)return;
+  const xi=startingXI();if(xi.length<11)return;
+  const ids=xi.map(p=>p.id),cv=effectiveCaptainVice(g);let c=cv.captain,v=cv.vice;
+  const capOut=c!=null&&!ids.includes(c),viceOut=v!=null&&!ids.includes(v);
+  if(!capOut&&!viceOut)return;
+  if(capOut){c=v!=null&&!viceOut?v:null;}
+  const w=p=>p.gw[g]?.pts||0,rest=xi.filter(p=>p.id!==c).sort((a,b)=>w(b)-w(a));
+  if(c==null)c=rest.shift().id;
+  v=(rest.find(p=>p.id!==c)||{}).id??null;
+  S.captain=c;S.vice=v;writePlan(g,null,{captain:c,vice:v});saveState();
+}
 /* FPL's armband rule: a captain left on the bench does not play, so the
    vice-captain takes the armband (25 Nov 2026: Haaland benched with the
    armband scored no captain points at all) */

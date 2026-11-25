@@ -864,6 +864,18 @@ try {
       const c=bench.find(p=>p.pos!==1)||bench[0],v=xi[xi.length-1];
       return{benched:teamPts(xi,bench,c,v,g,1),asVice:teamPts(xi,bench,v,null,g,1),none:teamPts(xi,bench,null,null,g,1)};})()`, ctx);
     check(Math.abs(b.benched - b.asVice) < 1e-9 && b.benched > b.none, "Totals: a benched captain hands the armband to the vice-captain", `${b.benched} / ${b.asVice} / ${b.none}`);
+    /* his pick 1 (25 Nov 2026): on the pitch too, the armband moves to the vice */
+    const m = vm.runInContext(`(()=>{const keep=JSON.stringify({c:S.captain,v:S.vice,f:S.forceXI,p:S.planByGw,t:S.tab,g:S.startGW});
+      S.tab="squad";S.startGW=S.model.next.id;render();
+      const xi=startingXI(),bench=squadPlayers().filter(p=>!xi.includes(p));
+      const sub=bench.find(b=>b.pos!==1&&xi.some(p=>p.pos===b.pos));if(!sub)return{skip:true};
+      const c0=xi.find(p=>p.pos===sub.pos),v0=xi.find(p=>p!==c0&&p.pos!==1);
+      act("cap",c0.id);act("vice",v0.id);trySub(c0.id,sub.id);render();
+      const badge=id=>{const el=document.querySelector('.pz-pitch [data-pid="'+id+'"] .pz-cv');return el?el.textContent+(el.closest('.pz-bench')?"@bench":"@pitch"):"";};
+      const out={cap:S.captain===v0.id,newVice:S.vice!=null&&S.vice!==v0.id&&startingXI().some(p=>p.id===S.vice),c0b:badge(c0.id),v0b:badge(v0.id)};
+      const k=JSON.parse(keep);S.captain=k.c;S.vice=k.v;S.forceXI=k.f;S.planByGw=k.p;S.tab=k.t;S.startGW=k.g;render();return out;})()`, ctx);
+    if (m.skip) check(true, "Armband: no same-position bench player in this state (skipped)");
+    else check(m.cap && m.newVice && !/C/.test(m.c0b) && /C@pitch/.test(m.v0b), "Armband: benching the captain moves the C to the vice on the pitch, and a new vice is named", JSON.stringify(m));
   }
 
   /* ---------- header money adds up (25 Nov 2026) ---------- */
