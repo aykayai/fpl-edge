@@ -767,7 +767,35 @@ function render(){
       <b>This page hit a problem and could not be drawn.</b> Try another page or Check now. <span class="mono" style="font-size:11px">${esc(String(e&&e.message||e))}</span></div></div></div>`;
   }
   try{a11yPass();}catch(_){}
+  try{popFit();}catch(_){}
 }
+/* Pop-ups fill the window with no scroll (designed at 1536x864). On a shorter
+   window their panels were squeezed and cut off (Andy, 25 Nov 2026). After
+   every render, any pop-up with a clipped panel lets its parts take their
+   natural height and scrolls instead; one that fits keeps the filled layout. */
+function popClipped(body){
+  return [...body.querySelectorAll("*")].some(el=>{
+    if(el.clientHeight<=20||el.scrollHeight<=el.clientHeight+3)return false;
+    const o=getComputedStyle(el).overflowY;return o==="hidden"||o==="clip";});
+}
+function popFit(){
+  document.querySelectorAll("#app .mbox.mfull").forEach(box=>{
+    const body=box.querySelector(".mbody");
+    if(!body||!popClipped(body))return;
+    box.classList.add("mscroll");
+    body.querySelectorAll("*").forEach(el=>{
+      const p=el.parentElement&&getComputedStyle(el.parentElement).display;
+      if(!/flex|grid/.test(p||""))return;
+      /* min-content, not auto: a panel that hides its overflow may still shrink to 0 under auto */
+      const cs=getComputedStyle(el);
+      if(cs.minHeight==="0px"||(cs.minHeight==="auto"&&cs.overflowY!=="visible"))el.style.minHeight="min-content";});
+  });
+}
+let popFitT=0;
+window.addEventListener("resize",()=>{clearTimeout(popFitT);popFitT=setTimeout(()=>{
+  /* phones already scroll their pop-ups; never redraw under a field being typed in */
+  if(innerWidth<=760||/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||""))return;
+  if(document.querySelector("#app .mbox.mfull"))render();},150);});
 /* F10, F11, F89: after every render. Elements that act on click but are not
    buttons or links get a tab stop and a button role (Enter and Space press
    them, see the key handler in app-main.js); inputs without a label take
