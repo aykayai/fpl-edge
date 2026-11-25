@@ -8,6 +8,7 @@
    Optional: OLD_REF for the regression baseline (default: HEAD). */
 
 import { spawn, execFileSync } from "node:child_process";
+import { freePort } from "./test_server.mjs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,15 +25,15 @@ if (git(["rev-parse", OLD_REF]) === git(["rev-parse", "HEAD"]) && !git(["status"
 }
 const SUITES = [
   { name: "gate", file: "test_gate.mjs", env: {} },
-  { name: "regression", file: "test_regression.mjs", env: { PORT: "8093", OLD_REF, SERVE_FULL_LAST: "1" } },
-  { name: "planner history", file: "test_planner_history.mjs", env: { PORT: "8094" } },
-  { name: "signals", file: "test_signals.mjs", env: { PORT: "8097" } },
-  { name: "broken items", file: "test_broken.mjs", env: { PORT: "8098" } },
-  { name: "extra", file: "test_extra.mjs", env: { PORT: "8091" } },
+  { name: "regression", file: "test_regression.mjs", env: { OLD_REF, SERVE_FULL_LAST: "1" } },
+  { name: "planner history", file: "test_planner_history.mjs", env: {} },
+  { name: "signals", file: "test_signals.mjs", env: {} },
+  { name: "broken items", file: "test_broken.mjs", env: {} },
+  { name: "extra", file: "test_extra.mjs", env: {} },
   { name: "the scout", file: "test_scout.mjs", env: {} },
-  { name: "model", file: "test_model.mjs", env: { PORT: "8112" } },
-  { name: "pages", file: "test_pages.mjs", env: { PORT: "8113" } },
-  ...(process.env.EXTRA ? process.env.EXTRA.split(",").map((f, i) => ({ name: f, file: f, env: { PORT: String(8120 + i) } })) : []),
+  { name: "model", file: "test_model.mjs", env: {} },
+  { name: "pages", file: "test_pages.mjs", env: {} },
+  ...(process.env.EXTRA ? process.env.EXTRA.split(",").map((f, i) => ({ name: f, file: f, env: {} })) : []),
 ];
 
 /* The least number of checks each suite passes today (Bundle F, 22 Nov
@@ -43,6 +44,11 @@ const SUITES = [
    on purpose (folded into League); it is reported as changed by design */
 const FLOORS = { "gate": 35, "regression": 16, "planner history": 16, "signals": 42, "broken items": 84, "extra": 14,
   "the scout": 26, "model": 45, "pages": 18, "test_rules.mjs": 186 };
+
+/* every suite but the gate (which picks its own) gets a port the OS says is
+   free (25 Nov 2026): fixed ports collided when two runs went at once, and a
+   harness then talked to the other run's server (see test_server.mjs) */
+for (const s of SUITES) if (s.name !== "gate") s.env.PORT = String(await freePort());
 
 const t0 = Date.now();
 const run = s => new Promise(res => {
