@@ -1,3 +1,9 @@
+THE SCOUT ICONS (redrawn 25 Nov 2026 for the Convergence brand)
+
+Same family and file names as before; the smile is now a short blade and a
+small blade sits over the lens like a raised brow. Drawn by design/brand/build.mjs.
+After any change run: node scripts/scout-icons.mjs
+
 THE SCOUT ICONS (12 Nov 2026)
 
 Redrawn as SVG from Andy's Figma example (contact sheet shared 12 Nov 2026),

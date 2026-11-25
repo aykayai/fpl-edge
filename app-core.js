@@ -281,19 +281,10 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.8.2";
-const LOGO=`<svg width="40" height="44" viewBox="0 0 100 110" style="flex:none" aria-label="FPL Signals">
- <path d="M50 6 C40 24 30 40 27 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
- <path d="M50 6 C60 24 70 40 73 56" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
- <circle cx="50" cy="64" r="34" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="5 4" opacity=".55"/>
- <circle cx="50" cy="64" r="22" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="4 4" opacity=".45"/>
- <circle cx="50" cy="64" r="11" fill="none" stroke="#E8743B" stroke-width="2" stroke-dasharray="3 3" opacity=".4"/>
- <path d="M50 30 A34 34 0 0 1 82 52" fill="none" stroke="#E8743B" stroke-width="3.5"/>
- <line x1="50" y1="22" x2="50" y2="106" stroke="#E8743B" stroke-width="1.5" opacity=".6"/>
- <line x1="54" y1="62" x2="86" y2="24" stroke="#8BE33A" stroke-width="3"/>
- <path d="M92 16 L78 22 L88 32 Z" fill="#8BE33A"/>
- <circle cx="73" cy="38" r="3.5" fill="#E8743B"/>
- <circle cx="50" cy="34" r="8" fill="#8BE33A"/></svg>`;
+const APP_VERSION="14.9.0";
+/* The Convergence mark (25 Nov 2026, Andy): three blades meeting at one point,
+   in the UI green. Source and every size: design/brand/. */
+const LOGO=`<svg width="40" height="40" viewBox="0 0 40 40" style="flex:none" role="img" aria-label="FPL Signals"><g transform="translate(0.80 3.68) scale(0.19200)"><polygon points="56,6 100,6 198,84 148,79" fill="#2DDC87"/><polygon points="30,61 198,86 12,103" fill="#2DDC87"/><polygon points="0,164 58,164 192,92 114,99" fill="#2DDC87"/></g></svg>`;
 /* ---------- UK time ----------
    Every displayed date or time is Europe/London, whatever zone the viewer's
    device is set to. Deadlines carry the GMT/BST label, derived from Intl so
