@@ -2064,6 +2064,103 @@ svg.chart circle[data-tip]{cursor:pointer}
 .gb-fx{display:inline-flex;justify-content:flex-end;min-width:0}.gb-fx .fxc{min-width:32px;height:19px;line-height:19px;font-size:9.5px}
 .gb-ft{margin-top:auto;padding-top:9px;border-top:1px solid rgba(255,255,255,.06);font:500 12px 'Geist',sans-serif;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:27px}
 .gb-ft b{font-family:'Geist Mono',monospace;color:#EDEDED}.gb-ft b.up{color:var(--mint)}.gb-ft b.dn{color:#FF8095}
+
+/* ============ Pixel 7a pass (25 Nov 2026): 412px wide, home-screen app ============ */
+.mnav,.msheet,.msheet-bg,.pdphbtn{display:none}
+@media(max-width:620px){
+  /* one slim top row; pages live in the bottom bar */
+  .tb .tn{display:none}
+  .tbin{flex-wrap:nowrap!important;height:52px!important;padding:0!important;gap:10px!important}
+  .tb .tr{margin-left:auto;gap:10px}
+  .gwsw button{min-width:40px;min-height:40px;padding:0 10px}
+  .gwsw b{font-size:15px}
+  .tb .live{display:grid;place-items:center;width:40px;height:40px}
+  .wrap{overflow-x:clip;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:900;padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    background:rgba(12,12,12,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,.08)}
+  .mnav>a,.mnav>button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;
+    padding:0;background:none;border:0;border-radius:14px;color:#8E8E8E;font:500 11.5px 'Geist',sans-serif;text-decoration:none;-webkit-tap-highlight-color:transparent}
+  .mnav .mi{width:56px;height:30px;border-radius:999px;display:grid;place-items:center;transition:background .15s}
+  .mnav .on{color:#EDEDED}.mnav .on .mi{background:color-mix(in srgb,var(--mint) 18%,transparent);color:var(--mint)}
+  .msheet-bg{display:block;position:fixed;inset:0;z-index:890;background:rgba(0,0,0,.55)}
+  .msheet{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:fixed;left:10px;right:10px;z-index:895;
+    bottom:calc(78px + env(safe-area-inset-bottom));padding:10px;border-radius:18px;background:#161616;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 18px 50px rgba(0,0,0,.6)}
+  .msheet a{display:flex;align-items:center;gap:10px;min-height:56px;padding:0 14px;border-radius:12px;background:#1E1E1E;color:#EDEDED;font:500 15px 'Geist',sans-serif;text-decoration:none}
+  .msheet a .mi{color:#9A9A9A;display:grid}.msheet a.on{background:color-mix(in srgb,var(--mint) 14%,#1E1E1E)}.msheet a.on .mi{color:var(--mint)}
+  /* The Scout sits above the bar, and steps aside for pop-ups */
+  .scx-btn{right:14px!important;bottom:calc(84px + env(safe-area-inset-bottom))!important;width:48px!important;height:48px!important}
+  .scx-btn svg{width:48px!important;height:48px!important}
+  body:has(.modal) .mnav,body:has(.modal) .scx-btn,body:has(.scx-panel.open) .mnav{display:none!important}
+  /* every (i) keeps its look but takes a finger-sized tap */
+  .fci::after,.infoi::after{content:"";position:absolute;inset:-11px}
+  html,body{overflow-x:clip}
+  .fci,.infoi{position:relative}
+  /* fixture chips readable in pool rows (doubles were 8px) */
+  .fxdbl .fxc{height:13px;font-size:9.5px}
+  .cx-fx{font-size:9.5px!important}.cx-rmk{font-size:10px}
+  /* Planner: the five figures as a two-column grid, not five full rows */
+  .pz-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .pz-stats>:first-child{grid-column:1/-1}
+  .pz-st{border-top:1px solid rgba(255,255,255,.06)}
+  /* News: four figures two by two */
+  .nw-figs{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px}
+  /* Chips: the usage table scrolls inside its card instead of widening the page */
+  .rb:has(>.cx-ur){overflow-x:auto;scrollbar-width:none}
+  /* Player Data: search, position and projection stay; the rest folds behind Filters */
+  .pdphbtn{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:10px;border:0;background:#1E1E1E;color:#EDEDED;font:500 14px 'Geist',sans-serif;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+  .pdphbtn b{background:var(--mint);color:#04170E;border-radius:999px;padding:0 6px;font-size:11px}
+  .pdphbtn.on{background:#2A2A2A}
+  .pdbar{display:flex;flex-wrap:wrap;gap:10px}
+  .pdbar .pdsearch{flex:1;min-width:0}
+  /* readable small print: pool fixture chips, role tags, week strip, club form */
+  .pr2-l2 .fxc{width:30px!important;height:18px!important;font-size:10px!important}
+  .pdrole{font-size:10px}.pz-gp{font-size:10.5px}
+  .tg-form i{width:17px;height:17px;font-size:10.5px}
+  /* Chips: summary two by two; the season roadmap scrolls inside its card; plan boxes one per row */
+  .cx-shc{grid-template-columns:repeat(2,minmax(0,1fr))!important;row-gap:12px}
+  .rb:has(.cx-rm){overflow-x:auto;scrollbar-width:thin}
+  .cx-rm{min-width:760px}
+  .cx-rgrid{grid-template-columns:minmax(0,1fr)!important}
+  body:has(.msheet) .scx-btn{display:none!important}
+  .pdcard:not(.phopen) .pdctl:has(.pdsel),.pdcard:not(.phopen) .pdpricectl,.pdcard:not(.phopen) .pdmorewrap,.pdcard:not(.phopen) .pdsigs{display:none}
+}
+
+/* ============ Pixel 7a pass, part 2: sheets, section tabs, hints ============ */
+@media(max-width:620px){
+  /* pop-ups rise from the bottom as sheets */
+  .modal{padding:0!important;align-items:flex-end!important;overflow:hidden!important;animation:mfade .2s ease}
+  .modal .mbox{max-width:none!important;width:100%!important;border-radius:24px 24px 0 0!important;max-height:94dvh;display:flex;flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom);animation:mrise .28s cubic-bezier(.2,.8,.2,1)}
+  .modal .mbox.mfull{height:94dvh!important}
+  .modal .mbox::before{content:"";display:block;flex:none;width:36px;height:4px;border-radius:2px;background:#444;margin:8px auto 2px}
+  .modal .mbox .mhead{position:static!important;flex:none;border-radius:0;padding:8px 16px 10px}
+  .modal .mbox .mbody{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  .modal .mbox:not(:has(.mbody)){overflow-y:auto;overscroll-behavior:contain}
+  @keyframes mrise{from{transform:translateY(36%);opacity:.5}to{transform:none;opacity:1}}
+  @keyframes mfade{from{background:rgba(4,6,9,0)}}
+  /* section tabs under the bar */
+  .sectabs{position:sticky;top:52px;z-index:55;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;
+    margin:-6px -16px 10px;padding:8px 16px 10px;background:linear-gradient(#0A0A0A 78%,rgba(10,10,10,0));transition:top .22s ease}
+  .sectabs::-webkit-scrollbar{display:none}
+  .sectabs a{flex:none;display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border-radius:999px;background:#171717;color:#A3A3A3;
+    font:500 13px 'Geist',sans-serif;text-decoration:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);-webkit-tap-highlight-color:transparent}
+  .sectabs a.on{background:#EDEDED;color:#0A0A0A;box-shadow:none}
+  .secanchor{scroll-margin-top:112px}
+  /* the top bar slides away while reading down */
+  .tb{transition:transform .22s ease}
+  body.tbhide .tb{transform:translateY(-100%)}
+  body.tbhide .sectabs{top:0}
+  body.tbhide .secanchor{scroll-margin-top:60px}
+  /* a fade says "more this way" until the end is reached */
+  .sxh:not(.sxend){-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+  /* compact page titles; pressed feedback */
+  #main h1{font-size:26px!important;letter-spacing:-.02em}
+  button,.mnav a,.msheet a,.sectabs a{transition:transform .08s ease}
+  button:active,.mnav a:active,.msheet a:active,.sectabs a:active{transform:scale(.96)}
+}
+@media(max-width:620px) and (prefers-reduced-motion:reduce){
+  .modal,.modal .mbox{animation:none}.tb,.sectabs{transition:none}
+}
 </style>
 </head>
 <body>
@@ -2079,13 +2176,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.9.1"></script>
-<script src="./app-squad.js?v=14.9.1"></script>
-<script src="./app-render.js?v=14.9.1"></script>
-<script src="./app-odds.js?v=14.9.1"></script>
-<script src="./app-tracker.js?v=14.9.1"></script>
-<script src="./app-main.js?v=14.9.1"></script>
-<script src="./app-scout.js?v=14.9.1"></script>
+<script src="./app-core.js?v=14.10.1"></script>
+<script src="./app-squad.js?v=14.10.1"></script>
+<script src="./app-render.js?v=14.10.1"></script>
+<script src="./app-odds.js?v=14.10.1"></script>
+<script src="./app-tracker.js?v=14.10.1"></script>
+<script src="./app-main.js?v=14.10.1"></script>
+<script src="./app-scout.js?v=14.10.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
