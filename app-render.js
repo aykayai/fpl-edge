@@ -1457,7 +1457,7 @@ function chipsHTML(){
       ${chipTile(kind,30,false,planned?"ring":"")}<span class="cx-crn"><b>${chipKeyName(k)}</b><span>${planned?"Planned":"Suggested"}${h2?"":" · expires GW19"}</span></span>
       <span class="cx-mini">${bars}</span><span class="cx-crw"><b>GW${e||"—"}</b><i class="${v>=0?"up":"dn"}">${sgnPts(v)}</i></span>
 </div>`;};
-  const axisRow=h2=>{let a="";for(let w=h2?20:1;w<=(h2?38:19);w++)a+=`<span>${w%2===0?w:""}</span>`;return `<div class="cx-cr ax"><span></span><span></span><span class="cx-mini cx-axis">${a}</span><span></span></div>`;};
+  const axisRow=h2=>{let a="";for(let w=h2?20:1;w<=(h2?38:19);w++)a+=`<span>${w%(PHONE()?5:2)===0?w:""}</span>`;return `<div class="cx-cr ax"><span></span><span></span><span class="cx-mini cx-axis">${a}</span><span></span></div>`;};
   const leftH=[1,2].map(h=>left.filter(k=>k.endsWith(String(h)))).filter(a=>a.length);
   const chipsLeftSec=rep("chleft","target","Chips Left",
     "Each chip still to play and its best weeks.",
@@ -4226,9 +4226,10 @@ function pdHeadHTML(rows,r){
   const box=(on,label,action)=>`<label class="pdchk"><input type="checkbox" ${on?"checked":""} onchange="act('${action}')"> ${label}</label>`;
   return `<div class="pagetabs"><h1>Player Data <span class="pdcount">${rows.length} players${nMine?` · <b>${nMine}</b> from your squad`:""}</span></h1>
       <span style="display:flex;gap:8px;align-items:center">${ticks.length?"":`<button class="fci" data-tip="Tick up to 5 players to compare them." aria-label="About comparing">i</button>`}</span></div>
-    <div class="pdcard">
+    <div class="pdcard${S.pdPh?" phopen":""}">
       <div class="pdbar">
         <label class="pdsearch">${lic("search",15)}<input id="srch-l" placeholder="Search players" value="${esc(S.lSearch||"")}" oninput="searchInput('lsearch',this)" aria-label="Search players"></label>
+        <button class="pdphbtn${S.pdPh?" on":""}" onclick="act('pdph')" aria-expanded="${!!S.pdPh}">${lic("sliders-horizontal",15)} Filters${(S.lTeam||lo>3.5||hi<top||S.iconF.length)?` <b>${[S.lTeam,lo>3.5||hi<top,S.iconF.length].filter(Boolean).length}</b>`:""}</button>
         <div class="pdctl"><span class="pdl">Position</span>${seg(S.lPos||0,[[0,"All"],[1,"GKP"],[2,"DEF"],[3,"MID"],[4,"FWD"]],"lpos","Position")}</div>
         <div class="pdctl"><span class="pdl">Projection</span>${seg(win,[[1,"1 GW"],[3,"3 GW"],[5,"5 GW"],["ros","ROS",`Rest of season, GW${g}–38`]],"pwin","Projection window")}</div>
         <div class="pdctl"><span class="pdl">Club</span><select class="pdsel" onchange="act('lteam',this.value)" aria-label="Club"><option value="0">All clubs</option>${S.model.teams.slice().sort((x,y)=>String(x.name).localeCompare(y.name)).map(t=>`<option value="${t.id}" ${S.lTeam===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select></div>

@@ -77,6 +77,8 @@ function act(k,a,b,c){
     case"pshow":S.pShow=["all","out","mine"].includes(a)?a:"all";S.pdLimit=PD_PAGE;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
     case"pown":S.pOwn=["rank","eo"].includes(a)?a:"all";LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
     case"pstart":S.pStarters=!S.pStarters;break;
+    case"more":S.moreOpen=!S.moreOpen;break;
+    case"pdph":S.pdPh=!S.pdPh;break;
     case"pdmorefilters":S.pdMore=!S.pdMore;LS.set("pd",{show:S.pShow,own:S.pOwn,more:S.pdMore});break;
     case"pwin":{const g0=S.model?S.model.next.id:1;S.lGwFrom=g0;S.lGwTo=a==="ros"?38:Math.min(38,g0+([1,3,5].includes(+a)?+a:5)-1);break;}
     case"pdreset":S.lSearch="";S.lTeam=0;S.lMax=16;S.lMin=0;S.lPos=0;S.pShow="all";S.pOwn="all";S.pStarters=false;S.starOnly=false;S.iconF=[];S.lWin=38;
@@ -384,6 +386,8 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&(S.pop||S.cmp||S.pCmp||S.chipPop||S.chipPick)){S.pop=null;S.cmp=null;S.pCmp=false;S.chipPop=null;S.chipPick=null;render();}
 });
 window.addEventListener("popstate",()=>{savePaint();if(applyHash())render();});
+/* phone: back with a sheet up closes the sheet, not the page */
+window.addEventListener("popstate",()=>{if(typeof PHONE==="function"&&PHONE()&&document.querySelector("#app .modal")&&typeof sheetClose==="function")sheetClose();});
 /* Signals charts: the hover card reads data-tip "title|figure|note" */
 /* Player Data signal tiles: a card above the tile with the signal's name
    and one short line (data-tt), on hover or keyboard focus */
@@ -410,6 +414,15 @@ document.addEventListener("mouseover",e=>{const tip=document.getElementById("cti
 document.addEventListener("mousemove",e=>{const tip=document.getElementById("ctip");
   if(tip&&!tip.hidden&&!tip.classList.contains("sigtip")){tip.style.left=Math.min(window.innerWidth-190,e.clientX+14)+"px";tip.style.top=(e.clientY+16)+"px";}});
 /* wave 1: Predicted, Bank and FT join the sticky bar once the hero is gone */
+/* phone: the top bar steps out of the way while reading down, back on the way up */
+let _lastY=0;
+window.addEventListener("scroll",()=>{const y=window.scrollY;
+  if(typeof PHONE==="function"&&PHONE()){
+    if(y>140&&y>_lastY+6)document.body.classList.add("tbhide");
+    else if(y<_lastY-6||y<=140)document.body.classList.remove("tbhide");
+    if(typeof secSpy==="function")secSpy();
+  }
+  _lastY=y;},{passive:true});
 window.addEventListener("scroll",()=>{const on=window.scrollY>170;
   if(document.body.classList.contains("scrolled")!==on)document.body.classList.toggle("scrolled",on);},{passive:true});
 (function(){
