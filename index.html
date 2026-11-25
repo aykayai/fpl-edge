@@ -2165,6 +2165,28 @@ svg.chart circle[data-tip]{cursor:pointer}
 @media(max-width:620px) and (prefers-reduced-motion:reduce){
   .modal,.modal .mbox{animation:none}.tb,.sectabs{transition:none}
 }
+
+/* ============ Pixel 7a pass, part 3 (25 Nov 2026): line graphs off, layout and spacing ============ */
+@media(max-width:620px){
+  /* line graphs squash on a phone: sparklines go, line charts go and their figure tiles stay */
+  .spk{display:none!important}
+  /* Planner figures: the change line sits under its figure, in full */
+  .pz-st{grid-template-columns:minmax(0,1fr)!important;row-gap:2px}
+  .pz-st>i{white-space:normal}
+  .chartbox:has(polyline){display:none}
+  /* card headers: the title keeps one line; switches and filters take a row of their own */
+  .rep .rh{flex-wrap:wrap;row-gap:10px}
+  .rep .rh>h3{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rep .rh>.sx-tog,.rep .rh>.hz,.rep .rh>.nw-cat,.rep .rh>.cx-lg{order:9;flex:1 0 100%;margin:0;justify-content:flex-start;overflow-x:auto;scrollbar-width:none}
+  /* League rival snapshot: name on top, the four figures in an even row below */
+  .lg-snap{flex-wrap:wrap;row-gap:10px}
+  .lg-snap .lg-nm{flex:1;min-width:0}
+  .lg-mini{flex:1 0 100%;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0}
+  .lg-mini>span{min-width:0;align-items:flex-start}
+  /* Player Pool: price, xPts and 3GW only, so names and fixtures have room; the rest sort from the menu */
+  .pr2-h,.prow.pr2{grid-template-columns:30px minmax(0,1fr) 46px 36px 38px!important;gap:6px}
+  .prow.pr2>:nth-child(4),.prow.pr2>:nth-child(5),.prow.pr2>:nth-child(6),.pr2-h>:nth-child(3),.pr2-h>:nth-child(4),.pr2-h>:nth-child(5){display:none}
+}
 </style>
 </head>
 <body>
@@ -2180,13 +2202,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.10.2"></script>
-<script src="./app-squad.js?v=14.10.2"></script>
-<script src="./app-render.js?v=14.10.2"></script>
-<script src="./app-odds.js?v=14.10.2"></script>
-<script src="./app-tracker.js?v=14.10.2"></script>
-<script src="./app-main.js?v=14.10.2"></script>
-<script src="./app-scout.js?v=14.10.2"></script>
+<script src="./app-core.js?v=14.10.3"></script>
+<script src="./app-squad.js?v=14.10.3"></script>
+<script src="./app-render.js?v=14.10.3"></script>
+<script src="./app-odds.js?v=14.10.3"></script>
+<script src="./app-tracker.js?v=14.10.3"></script>
+<script src="./app-main.js?v=14.10.3"></script>
+<script src="./app-scout.js?v=14.10.3"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
