@@ -499,7 +499,11 @@ function plannerStatsHTML(o){
   const chg=(d,f,goodUp)=>(d==null||!isFinite(d)||Math.abs(d)<1e-9)?"":`<span class="${(d>0)===goodUp?"up":"dn"}">${d>0?"▲":"▼"} ${f(Math.abs(d))}</span>`;
   const ln=(c,wk)=>`<i>${c}${c&&wk?" · ":""}${wk||""}</i>`;
   const tipB=t=>`<button class="fci" aria-label="About" data-tip="${esc(t)}">i</button>`;
-  const fv=valueFromFeed();
+  /* 25 Nov 2026 (Andy: "make it make sense"): one money story. Squad Value is
+     today's prices; selling raises less (FPL keeps half of each rise); that
+     plus the bank is what the Team Rating's best team may cost. FPL's own
+     figure from the last deadline is left out: it was a third number. */
+  const sellV=squadPlayers().reduce((a,p)=>a+sellPrice(p),0);
   /* 22 Nov 2026 (batch 4): Overall Rank and GW Rank open Rank, Team Rating its own */
   const st=(label,tip,fig,line,series,tone,extra,pop)=>`<div class="pz-st${pop?" pz-stc":""}"${pop?` role="button" tabindex="0" onclick="act('pop','${pop}')" onkeydown="if(event.key==='Enter')act('pop','${pop}')"`:""}><span class="pz-stl">${label}${tipB(tip)}</span><b>${fig}</b>${line||""}${series&&series.length>1?spark(series,tone||"#3DDC97"):""}${extra||""}</div>`;
   const rateCol=rating?(rating.pct>=85?"var(--mint)":rating.pct>=70?"var(--amber)":"var(--red)"):"var(--cream)";
@@ -513,10 +517,10 @@ function plannerStatsHTML(o){
       lastG?lastG.gwRank.toLocaleString():"—",
       ln(prevG&&lastG?chg(prevG.gwRank-lastG.gwRank,x=>Math.round(x).toLocaleString(),true):"",lastG?"GW"+lastG.event:""),
       fRows.filter(r=>r.gwRank).slice(-8).map(r=>-r.gwRank),null,null,"rank")}
-    ${st("Team Rating",`Your predicted score against the best XI £${rating?rating.budget.toFixed(1):"—"} could buy this week.`,
+    ${st("Team Rating",`Your score against the best team £${rating?rating.budget.toFixed(1):"—"} buys: sales £${sellV.toFixed(1)} + bank £${o.bank.toFixed(1)}.`,
       `<span style="color:${rateCol}">${rating?rating.pct:"—"}</span>`,rating?`<i>Best XI ${rating.best.toFixed(1)}</i>`:"",null,null,
       rating?`<span class="pz-ring" style="--v:${rating.pct};--rc:${rateCol}"></span>`:"","rating")}
-    ${st("Squad Value",`Your ${o.n} players at today's prices, without the bank.${fv?` FPL's team value, bank included, is £${fv.value.toFixed(1)}.`:""}`,
+    ${st("Squad Value",`Your ${o.n} at today's prices. Sold today they raise £${sellV.toFixed(1)}.`,
       `£${o.sv.toFixed(1)}`,o.raised>0?`<i>£${o.raised.toFixed(1)} from sales</i>`:ln(prev&&last&&prev.value!=null?chg((last.value-(last.bank||0))-(prev.value-(prev.bank||0)),x=>x.toFixed(1),true):"",""),
       fRows.filter(r=>r.value!=null).slice(-8).map(r=>+r.value-(+r.bank||0)),"#8A8A8A")}
     ${st("Bank",`Money left after this week's planned transfers. FT: free transfers (max 5).`,

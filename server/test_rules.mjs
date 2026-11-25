@@ -866,6 +866,16 @@ try {
     check(Math.abs(b.benched - b.asVice) < 1e-9 && b.benched > b.none, "Totals: a benched captain hands the armband to the vice-captain", `${b.benched} / ${b.asVice} / ${b.none}`);
   }
 
+  /* ---------- header money adds up (25 Nov 2026) ---------- */
+  {
+    S.tab = "squad"; g.render();
+    const tips = [...doc.querySelectorAll(".pz-st .fci")].map(b => b.getAttribute("data-tip") || "");
+    const sv = tips.find(t => /Sold today they raise/.test(t)) || "", tr = tips.find(t => /best team/.test(t)) || "";
+    const num = (t, re) => { const m = re.exec(t); return m ? +m[1] : NaN; };
+    const sell = num(sv, /raise £(\d+\.\d)/), budget = num(tr, /best team £(\d+\.\d)/), sales = num(tr, /sales £(\d+\.\d)/), bank = num(tr, /bank £(\d+\.\d)/);
+    check(Math.abs(sell - sales) < 0.05 && Math.abs(sales + bank - budget) < 0.11, "Header: Squad Value's selling figure plus the bank is the Team Rating's budget", `${sv} | ${tr}`);
+  }
+
   /* ---------- pop-ups never cut off on a short window (25 Nov 2026) ---------- */
   {
     S.pop = "cap"; S.popTab = null; g.render();

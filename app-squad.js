@@ -899,14 +899,6 @@ function bankFromFeed(){
   if(!rows.length)return null;
   return +rows[rows.length-1].bank;
 }
-/* F59: FPL's own team value for the latest published week (it includes the
-   bank), so the header can set it beside the squad's buy prices. */
-function valueFromFeed(){
-  if(!S.tracker||!Array.isArray(S.tracker.gw)||!S.model)return null;
-  const g=S.model.next.id;
-  const rows=S.tracker.gw.filter(r=>r.value!=null&&r.event<=g).sort((a,b)=>a.event-b.event);
-  return rows.length?{value:+rows[rows.length-1].value,event:rows[rows.length-1].event}:null;
-}
 /* D12 (13 Oct 2026): what a Free Hit or Wildcard can spend, by FPL's rule:
    the squad's selling value plus the bank. One function for the Chips page,
    the Team Rating and anything else that needs the whole budget. */
