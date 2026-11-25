@@ -24,9 +24,10 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 
+import { freePort, watchServer } from "./test_server.mjs";
 process.env.TZ = "Europe/London";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PORT = Number(process.env.PORT || 8113);
+const PORT = Number(process.env.PORT) || await freePort();   /* never a fixed port: see test_server.mjs */
 const BASE = `http://127.0.0.1:${PORT}`;
 const STATE_DIR = process.env.STATE_DIR;
 if (!STATE_DIR) { console.error("Set STATE_DIR to a populated server state dir."); process.exit(2); }
@@ -55,9 +56,11 @@ function startServer() {
     env: { ...process.env, PORT: String(PORT), STATE_DIR, ODDS_API_KEY: "", SIGNALS_TICK_MS: "86400000" },
     stdio: ["ignore", "pipe", "pipe"] });
   child.stdout.on("data", () => {}); child.stderr.on("data", d => process.stderr.write("[server] " + d));
+  watchServer(child, PORT);
   return child;
 }
 async function waitForServer() {
+  await server.ready;   /* our own server, not another run's on the same port */
   for (let i = 0; i < 60; i++) {
     try { if ((await fetch(BASE + `/data/insights/${SEASON}/players.csv`, { method: "HEAD" })).ok) return; } catch { /* not up */ }
     await new Promise(r => setTimeout(r, 1000));

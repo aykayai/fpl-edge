@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
+import { freePort, watchServer } from "./test_server.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = process.env.STATE_DIR;
@@ -17,12 +18,13 @@ if (!SRC || !existsSync(SRC)) { console.error("STATE_DIR (the frozen test state)
 const STATE = mkdtempSync(join(tmpdir(), "scout-test-"));
 cpSync(SRC, STATE, { recursive: true });
 rmSync(join(STATE, ".frozen"), { force: true });
-const PORT = 8000 + Math.floor(Math.random() * 400) + 500;
+const PORT = Number(process.env.PORT) || await freePort();   /* never a guessed port: see test_server.mjs */
 const TOKEN = "scout-test-token-0123456789abcdef";
 const srv = spawn(process.execPath, [join(ROOT, "server", "server.mjs")], {
   env: { ...process.env, STATE_DIR: STATE, PORT: String(PORT), SIGNALS_TICK_MS: "86400000", FPL_SCOUT_MCP_TOKEN: TOKEN, FPL_ASSISTANT_TOKEN: "", ODDS_API_KEY: "" },
-  stdio: ["ignore", "ignore", "pipe"] });
+  stdio: ["ignore", "pipe", "pipe"] });
 srv.stderr.on("data", () => {});
+watchServer(srv, PORT);
 
 let pass = 0, fail = 0;
 const check = (name, ok, got) => { if (ok) pass++; else { fail++; console.log("FAIL " + name + (got !== undefined ? " · got " + JSON.stringify(got).slice(0, 200) : "")); } };
@@ -38,6 +40,7 @@ const get = (path, headers) => new Promise((ok, bad) => {
 const J = s => { try { return JSON.parse(s); } catch { return null; } };
 
 try {
+  await srv.ready;   /* our own server, not another run's */
   for (let i = 0; i < 80; i++) { try { await get("/api/status"); break; } catch { await new Promise(r => setTimeout(r, 250)); } }
   const good = { Host: "fpl-signals:8090", Authorization: "Bearer " + TOKEN };
   const rpc = (method, params, h = good) => post("/mcp", { jsonrpc: "2.0", id: 7, method, params }, h);
