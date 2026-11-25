@@ -2185,6 +2185,19 @@ svg.chart circle[data-tip]{cursor:pointer}
   .lg-mini>span{min-width:0;align-items:flex-start}
   /* Player Pool: price, xPts and 3GW only, so names and fixtures have room; the rest sort from the menu */
   .pr2-h,.prow.pr2{grid-template-columns:30px minmax(0,1fr) 46px 36px 38px!important;gap:6px}
+  /* names never cut: bar lists drop the bar track (as the narrow Signals columns already do) */
+  .hbr{grid-template-columns:auto minmax(0,1fr) auto auto!important;gap:8px}
+  .hb:not(:has(.hbn)) .hbr{grid-template-columns:minmax(0,1fr) auto auto!important}
+  .hbr .hbt{display:none}
+  /* side-by-side lists (Leaders by Position...) become a swipe row, the next list peeking in */
+  .sgcols{display:flex!important;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;margin:0 -16px;padding:0 16px;scroll-padding:0 16px}
+  .sgcols::-webkit-scrollbar{display:none}
+  .sgcols>.sgcol{flex:0 0 86%;min-width:0;scroll-snap-align:start}
+  /* Status: news sources two across, the signal key two across, tile notes wrap */
+  .ax-src4{grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:16px}
+  .legend{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .ds-tile i,.ds-tile em{white-space:normal}
+  .cx-bpn b{white-space:normal}
   .prow.pr2>:nth-child(4),.prow.pr2>:nth-child(5),.prow.pr2>:nth-child(6),.pr2-h>:nth-child(3),.pr2-h>:nth-child(4),.pr2-h>:nth-child(5){display:none}
 }
 </style>
@@ -2202,13 +2215,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.10.3"></script>
-<script src="./app-squad.js?v=14.10.3"></script>
-<script src="./app-render.js?v=14.10.3"></script>
-<script src="./app-odds.js?v=14.10.3"></script>
-<script src="./app-tracker.js?v=14.10.3"></script>
-<script src="./app-main.js?v=14.10.3"></script>
-<script src="./app-scout.js?v=14.10.3"></script>
+<script src="./app-core.js?v=14.10.4"></script>
+<script src="./app-squad.js?v=14.10.4"></script>
+<script src="./app-render.js?v=14.10.4"></script>
+<script src="./app-odds.js?v=14.10.4"></script>
+<script src="./app-tracker.js?v=14.10.4"></script>
+<script src="./app-main.js?v=14.10.4"></script>
+<script src="./app-scout.js?v=14.10.4"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
