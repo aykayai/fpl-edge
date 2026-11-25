@@ -2087,9 +2087,13 @@ svg.chart circle[data-tip]{cursor:pointer}
     bottom:calc(78px + env(safe-area-inset-bottom));padding:10px;border-radius:18px;background:#161616;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 18px 50px rgba(0,0,0,.6)}
   .msheet a{display:flex;align-items:center;gap:10px;min-height:56px;padding:0 14px;border-radius:12px;background:#1E1E1E;color:#EDEDED;font:500 15px 'Geist',sans-serif;text-decoration:none}
   .msheet a .mi{color:#9A9A9A;display:grid}.msheet a.on{background:color-mix(in srgb,var(--mint) 14%,#1E1E1E)}.msheet a.on .mi{color:var(--mint)}
-  /* The Scout sits above the bar, and steps aside for pop-ups */
-  .scx-btn{right:14px!important;bottom:calc(84px + env(safe-area-inset-bottom))!important;width:48px!important;height:48px!important}
-  .scx-btn svg{width:48px!important;height:48px!important}
+  /* The Scout lives in the top bar on a phone (floating, it covered pitch
+     players), slides away with the bar, and steps aside for pop-ups */
+  .scx-btn{top:calc(6px + env(safe-area-inset-top))!important;right:12px!important;bottom:auto!important;width:40px!important;height:40px!important;transition:transform .22s ease!important}
+  .scx-btn svg{width:40px!important;height:40px!important}
+  .scx-btn:hover{transform:none}
+  .tb .tr{margin-right:46px}
+  body.tbhide .scx-btn{transform:translateY(-64px)!important}
   body:has(.modal) .mnav,body:has(.modal) .scx-btn,body:has(.scx-panel.open) .mnav{display:none!important}
   /* every (i) keeps its look but takes a finger-sized tap */
   .fci::after,.infoi::after{content:"";position:absolute;inset:-11px}
@@ -2176,13 +2180,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.10.0"></script>
-<script src="./app-squad.js?v=14.10.0"></script>
-<script src="./app-render.js?v=14.10.0"></script>
-<script src="./app-odds.js?v=14.10.0"></script>
-<script src="./app-tracker.js?v=14.10.0"></script>
-<script src="./app-main.js?v=14.10.0"></script>
-<script src="./app-scout.js?v=14.10.0"></script>
+<script src="./app-core.js?v=14.10.1"></script>
+<script src="./app-squad.js?v=14.10.1"></script>
+<script src="./app-render.js?v=14.10.1"></script>
+<script src="./app-odds.js?v=14.10.1"></script>
+<script src="./app-tracker.js?v=14.10.1"></script>
+<script src="./app-main.js?v=14.10.1"></script>
+<script src="./app-scout.js?v=14.10.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
