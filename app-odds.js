@@ -70,13 +70,16 @@ function fromCorrectScore(mk){
   });
   if(raw.length<6)return null;
   const p=devig(raw);
-  let csHome=0,csAway=0,xgHome=0,xgAway=0;
+  let csHome=0,csAway=0,xgHome=0,xgAway=0,haulHome=0,haulAway=0;
   labels.forEach(([h,a],i)=>{
     if(a===0)csHome+=p[i];
     if(h===0)csAway+=p[i];
+    /* 26 Nov 2026: three or more, where attackers haul (Markets tab) */
+    if(h>=3)haulHome+=p[i];
+    if(a>=3)haulAway+=p[i];
     xgHome+=h*p[i];xgAway+=a*p[i];
   });
-  return{csHome,csAway,xgHome,xgAway,n:raw.length};
+  return{csHome,csAway,xgHome,xgAway,haulHome,haulAway,n:raw.length};
 }
 /* fall back to the totals and both-teams markets where Correct Score is absent */
 function fromTotals(mk){
@@ -221,13 +224,16 @@ function buildPropMarket(){
     for(const [e,list] of Object.entries(S.model.byEv)){
       if(list.some(f=>f.ht&&f.at&&f.ht.id===fx.ht.id&&f.at.id===fx.at.id))return +e;}
     return null;};
-  const out={};
+  const out={},cards={};
   Object.values(oddsPlayers()).forEach(r=>{
-    const e=gwOf(r.fx);if(!e||(r.goal==null&&r.assist==null))return;
+    const e=gwOf(r.fx);if(!e||(r.goal==null&&r.assist==null&&r.card==null))return;
     const lam=p=>p>0&&p<0.99?-Math.log(1-p):null;
-    (out[r.p.id]=out[r.p.id]||{})[e]={g:lam(r.goal),a:lam(r.assist)};
+    (out[r.p.id]=out[r.p.id]||{})[e]={g:lam(r.goal),a:lam(r.assist),c:r.card??null};
+    if(r.card!=null)(cards[e]=cards[e]||[]).push(r.card);
   });
   S.propMarket=out;
+  /* the week's average priced booking chance: the card term is relative to it */
+  S.cardMean={};Object.entries(cards).forEach(([e,a])=>{if(a.length>=20)S.cardMean[e]=a.reduce((x,y)=>x+y,0)/a.length;});
 }
 /* Turn match prices into expected goals per side, margin removed. D10
    (13 Oct 2026): the same conversion the Odds page shows (Correct Score when

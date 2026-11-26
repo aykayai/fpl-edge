@@ -49,6 +49,7 @@ const SIGNAL={
   heat:["flame","#4ADE80","Heating Up"],
   cool:["snowflake","#FF5A6E","Cooling Off"],
   defcon:["shield-check","#E8743B","DefCon Monster"],
+  ban:["rectangle-vertical","#FACC15","Ban Risk"],
   rival:["swords","#B388FF","Rival Threat"],
   diff:["gem","#BAE6FD","Differential"],
   pen:["circle-dot","NAVY","Penalty"],
@@ -63,6 +64,7 @@ const SIG_RULE={
   heat:()=>"Heating Up: his recent threat, or his team's form, is well above its season rate",
   cool:()=>"Cooling Off: his recent threat is down, or he is losing his place",
   defcon:()=>"DefCon Monster: reaches the DefCon target in two of every three matches",
+  ban:()=>"One booking from a ban: 4 yellows before GW19 (or 9 before GW32) means a ban on the next",
   rival:()=>"Owned by managers around you, not by you",
   diff:()=>"Differential: top 10% predicted in his position, and rarely owned",
   pen:()=>"First-choice penalty taker",
@@ -80,6 +82,7 @@ function sigShort(k,t){
   if(k==="heat"||k==="cool")return t.replace(/^(Heating Up|Cooling Off):\s*/,"").replace(/last-4 /,"last 4: ").replace(" vs season",", season");
   if(k==="defcon")return t.replace(/^DefCon Monster:\s*/,"Hit the target ").replace(" · strong next match: "," · next: ").replace(/, whose opponents.*$/,"");
   if(k==="set")return t.replace(/^Set pieces:\s*/,"");
+  if(k==="ban")return t.replace(" · booking chance "," · booked ");
   if(k==="diff")return t.replace(", predicted"," · predicted");
   return t;
 }
@@ -225,6 +228,18 @@ function defconMonster(p,g){
    by none of his league rivals and under 15% overall. Bright (filled gem)
    when none of the rivals own him. */
 let _diffCut=null;
+/* Ban Risk (26 Nov 2026): one yellow from a suspension. Premier League: 5
+   yellows in a club's first 19 league games is one game out, 10 by its 32nd is
+   two, 15 at any time is three. The booking chance is the bookmakers' when
+   priced (the GW8-11 backtest: their riskiest fifth were booked 26% of the
+   time, the safest 7%). */
+function banRisk(p,g){
+  const L=fplLive(p),yc=L&&L.yc!=null?L.yc:null;if(yc==null)return null;
+  const at=(yc===4&&g<=19)?[1,19]:(yc===9&&g<=32)?[2,32]:yc===14?[3,38]:null;
+  if(!at||((p.roleMins||0)<30&&!(S.squad||[]).includes(p.id)))return null;
+  let bk=null;try{if(S.oddsState==="ok"){const r=(oddsPlayers(g)||{})[p.id];if(r&&r.card!=null)bk=r.card;}}catch(e){}
+  return{yc,games:at[0],bk,tip:`${yc} yellows: one more before GW${at[1]} is a ${at[0]}-game ban${bk!=null?" · booking chance "+Math.round(bk*100)+"% next match":""}`};
+}
 function differential(p,g){
   const pts=x=>(x.gw[g]&&!x.gw[g].blank)?x.gw[g].pts:0;
   if(!_diffCut||_diffCut.m!==S.model||_diffCut.g!==g){const c={};
@@ -281,6 +296,8 @@ function signals(p,g,noSell,hh){
   if(mo&&mo.cool)out.push(["cool",`Cooling Off: ${mo.why}`]);
   const dm=defconMonster(p,g);
   if(dm)out.push(["defcon",dm.tip,dm.strong]);
+  const br=banRisk(p,g);
+  if(br)out.push(["ban",br.tip]);
   const R=rivalOwn();
   if(R&&R.n&&!mine){const k=R.own[p.id]||0;
     if(k>=Math.max(2,Math.ceil(R.n*0.3)))out.push(["rival",`Owned by ${k} of ${R.n} rivals, not you`]);}

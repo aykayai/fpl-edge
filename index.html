@@ -1746,11 +1746,43 @@ svg.chart circle[data-tip]{cursor:pointer}
 .wp .ds-tile{height:auto;min-height:62px}
 .pw-mkt{flex:1}.pw-mks{flex:1;justify-content:space-around}.fo-cbox{flex:none}.fo-wk{flex:1}.fo-wk>svg{flex:1;min-height:0}.pm-sc{flex:1}.pm-sc>svg{flex:1;min-height:0}.pm-hot{flex:none}
 /* Team News */
-.tn-t{grid-template-columns:repeat(5,minmax(0,1fr))}
+.tn-t{grid-template-columns:repeat(6,minmax(0,1fr))}
+/* Team News odds columns (26 Nov 2026) */
+.tn-so{cursor:pointer;white-space:nowrap;display:inline-flex;gap:3px;align-items:center;justify-content:center}.tn-so i{font-style:normal;font-size:9px;color:#5A5A5A}
+.tn-so.on{color:#EDEDED}.tn-so.on i{color:#3DDC97}
+.tn-ox{font:500 12.5px 'Geist Mono',ui-monospace,monospace;color:#BDBDBD;display:flex;align-items:center;justify-content:center;gap:3px}
+.tn-ox.mu{color:#4A4A4A}.tn-ox.hi{color:#3DDC97;font-weight:600}.tn-ox.hi.cs{color:#22D3EE}.tn-ox.bk{color:#FACC15;font-weight:600}
+/* Signals > Markets (26 Nov 2026) */
+.mk-src{font-size:12.5px;color:var(--mute);padding:6px 12px;border-radius:999px;background:#171717;box-shadow:0 0 0 1px rgba(255,255,255,.07);white-space:nowrap}
+.mk-mg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.mk-m{background:#171717;border-radius:10px;padding:10px 12px;box-shadow:0 0 0 1px rgba(255,255,255,.05)}
+.mk-mt{display:flex;align-items:center;gap:6px;font-size:13px}.mk-mt b{font-weight:600}.mk-v{color:#6A6A6A;font-size:11px}
+.mk-mt em{margin-left:auto;font-style:normal;font-size:11px;color:#7A7A7A;white-space:nowrap}
+.mk-bar{display:flex;height:20px;border-radius:6px;overflow:hidden;margin:9px 0 7px;gap:2px}
+.mk-bar span{display:flex;align-items:center;justify-content:center;font:600 10.5px 'Geist Mono',ui-monospace,monospace;color:#0A0A0A;min-width:30px}
+.mk-bar span.d{background:#5A5A5A;color:#EDEDED}.mk-bar.none{background:#1E1E1E;color:#6A6A6A;font-size:11px;align-items:center;justify-content:center}
+.mk-ml{display:flex;justify-content:space-between;gap:6px;font-size:11.5px;color:#8A8A8A}.mk-ml b{color:#EDEDED;font-family:'Geist Mono',ui-monospace,monospace;font-weight:500}
+.mk-key{display:flex;gap:16px;padding-top:10px;font-size:11.5px;color:#8A8A8A}.mk-key i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px}
+.hbk{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#EDEDED;opacity:.8;z-index:1}
+.mk-ban{color:#FACC15;display:inline-flex}
+.mk-db{display:grid;gap:4px}
+.mk-d{display:grid;grid-template-columns:minmax(150px,1fr) minmax(80px,1.2fr) 40px;align-items:center;gap:12px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05);cursor:pointer}
+.mk-dt{position:relative;height:16px}.mk-dt::before{content:"";position:absolute;left:0;right:0;top:7px;height:2px;background:#262626;border-radius:1px}
+.mk-line{position:absolute;top:7px;height:2px;background:#5A5A5A}
+.mk-dot{position:absolute;top:2px;width:12px;height:12px;border-radius:50%;margin-left:-6px}.mk-dot.md{background:#0A0A0A;box-shadow:0 0 0 2px #8A8A8A}
+.mk-d>b{font:600 13px 'Geist Mono',ui-monospace,monospace;text-align:right}
+@media(max-width:1100px){.mk-mg{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* player card Next Match Odds (26 Nov 2026) */
+.pk-odds{margin-top:10px;background:rgba(0,0,0,.28);border-radius:12px;padding:10px 12px}
+.pk-odh{font:600 13px 'Geist',sans-serif;color:#EDEDED;display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}.pk-odh span{font-weight:400;font-size:11px;color:#9A9A9A}
+.pk-odg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pk-od{background:rgba(255,255,255,.06);border-radius:9px;padding:6px 9px}.pk-od em{display:block;font-style:normal;font-size:11px;color:#9A9A9A}
+.pk-od b{font:600 17px 'Geist Mono',ui-monospace,monospace;color:#EDEDED}.pk-od i{display:block;font-style:normal;font-size:10.5px;color:#8A8A8A}
+.pk-od.bk b{color:#FACC15}
 .tn-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,2.7fr) minmax(0,1fr);gap:16px}
 .tn-board{padding:6px 8px 8px;display:flex;flex-direction:column;min-height:0}
 .tn-row{display:grid;gap:8px;align-items:center;text-align:center;padding:0 8px;border-radius:9px;min-height:0}
-.tn-hd{padding:6px 8px}.tn-hd span:nth-child(1),.tn-hd span:nth-child(5){text-align:left}.tn-hd span:nth-child(2){text-align:left;padding-left:10px}
+.tn-hd{padding:6px 8px}.tn-hd span:nth-child(1),.tn-hd .tn-lh{text-align:left}.tn-hd span:nth-child(2){text-align:left;padding-left:10px}
 .tn-rows{flex:1;min-height:0;display:flex;flex-direction:column;gap:2px}.tn-rows .tn-row{flex:1}
 .tn-row.out{background:linear-gradient(90deg,#2A1015,transparent 60%)}.tn-row.hot{background:linear-gradient(90deg,#2A2110,transparent 60%)}
 .tn-p{display:flex;align-items:center;gap:8px;min-width:0;text-align:left}.tn-p .ds-face{width:24px;height:30px;border-radius:5px}.tn-p .ds-name{font-size:12px}.tn-p .ds-sub{font-size:10.5px}
@@ -2306,13 +2338,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.10.8"></script>
-<script src="./app-squad.js?v=14.10.8"></script>
-<script src="./app-render.js?v=14.10.8"></script>
-<script src="./app-odds.js?v=14.10.8"></script>
-<script src="./app-tracker.js?v=14.10.8"></script>
-<script src="./app-main.js?v=14.10.8"></script>
-<script src="./app-scout.js?v=14.10.8"></script>
+<script src="./app-core.js?v=14.13.0"></script>
+<script src="./app-squad.js?v=14.13.0"></script>
+<script src="./app-render.js?v=14.13.0"></script>
+<script src="./app-odds.js?v=14.13.0"></script>
+<script src="./app-tracker.js?v=14.13.0"></script>
+<script src="./app-main.js?v=14.13.0"></script>
+<script src="./app-scout.js?v=14.13.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

@@ -268,7 +268,7 @@ function routeFor(tab){return "#/"+(TABPATH[tab]||"planner");}
 /* A pop-up belongs to the page it was opened on: leaving the page closes it
    (audit 22 Nov 2026: one opened from #/transfers stayed over the next page) */
 function closePops(){S.pop=null;S.popTab=null;S.cmp=null;S.cardId=null;S.pMenu=null;}
-const sgTabKey=k=>({transfers:"players",squad:"season",teams:"clubs"})[k]||(["players","clubs","season"].includes(k)?k:"players");
+const sgTabKey=k=>({transfers:"players",squad:"season",teams:"clubs"})[k]||(["players","clubs","markets","season"].includes(k)?k:"players");
 function applyHash(){
   const h=(location.hash||"").replace(/^#\/?/,"").replace(/\/$/,"");
   /* Signals tabs have their own links: #/signals/transfers and so on */
@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.10.8";
+const APP_VERSION="14.13.0";
 /* The Convergence mark (25 Nov 2026, Andy): three blades meeting at one point,
    in the UI green. Source and every size: design/brand/. */
 const LOGO=`<svg width="40" height="40" viewBox="0 0 40 40" style="flex:none" role="img" aria-label="FPL Signals"><g transform="translate(0.80 3.68) scale(0.19200)"><polygon points="56,6 100,6 198,84 148,79" fill="#2DDC87"/><polygon points="30,61 198,86 12,103" fill="#2DDC87"/><polygon points="0,164 58,164 192,92 114,99" fill="#2DDC87"/></g></svg>`;
@@ -1587,6 +1587,16 @@ const CS_FROM_FIXTURE=true;
    miss 2.375 -> 2.345 for priced players, 1.258 -> 1.243 overall, out-of-sample
    pick 0.75-1. Closing prices know the line-ups, so this flatters them; it is
    re-tested at GW12 on the prices archived at each deadline. */
+/* Booking odds (26 Nov 2026, Andy said yes). The model was calibrated on
+   points that already include yellow cards, so the average card cost is in
+   there; this term is RELATIVE: a player the bookmakers price likelier to be
+   booked than the week's average priced player loses the difference, a careful
+   one gains it, unpriced players are unchanged. GW8-11 backtest (781
+   player-matches): booking odds ranked who was booked at AUC 0.64 against
+   0.59 for his own card record; 15.5% of priced players who played were
+   booked, the base used to scale the market's relative price. Capped at
+   +/-0.3 a match. */
+const CARD_BASE=0.155, CARD_CAP=0.3;
 let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); method being rebuilt and re-tested */
 /* D5 (re-fit 12 Nov 2026, Andy: apply now). Per-position level on the final
    projection, fitted on GW5-10 (after the minutes ramp ends, xMins matches
@@ -2076,7 +2086,9 @@ function buildModel(){
       const pPlay=clamp(mE/17,0,.985);
       const p60=clamp((mE-22)/62,0,.985);
       const share=clamp(mE/90,0,1);
-      let tot=0;const csPs=[];
+      let tot=0,cardAdj=0;const csPs=[];
+      {const pc=fx.length===1&&S.cardMean&&S.cardMean[e]&&S.propMarket&&S.propMarket[p.id]&&S.propMarket[p.id][e];
+       if(pc&&pc.c!=null)cardAdj=-clamp((pc.c/S.cardMean[e]-1)*CARD_BASE,-CARD_CAP,CARD_CAP)*availE*share;}
       fx.forEach(f=>{
         const opp=f.oppT||{};
         /* Fixture factors: atk scales goals and assists, def feeds the DefCon
@@ -2180,7 +2192,7 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)),fixtures:fx,blank:false,csPs,
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)),fixtures:fx,blank:false,csPs,card:cardAdj,
         pPlay:clamp(availE,0,1)*appearShare(mE)*Math.min(1,fx.length)};
     }
     /* --- fixture sensitivity ---
@@ -2197,6 +2209,8 @@ function buildModel(){
         p.gw[w].pre=p.gw[w].pts;
         p.gw[w].pts=Math.max(0,mean+(p.gw[w].pts-mean)*(p.pos>=3?FIXTURE_AMP_ATT:FIXTURE_AMP));});
     }
+    /* booking odds, after the stretch so the fixture amplifier does not scale them */
+    Object.keys(p.gw).forEach(w=>{const q=p.gw[w];if(q&&q.card)q.pts=Math.max(0,q.pts+q.card);});
     /* the figure every page shows: next week's minutes, flag applied */
     p.xMins=Math.round(minsAt(nextId)*availAt(nextId));
     delete p._team;
@@ -2349,7 +2363,7 @@ const avgFP=(p,g,h)=>(p.form+hPts(p,g,h))/2;
 /* Line icons from Lucide 1.52.0 (https://lucide.dev), ISC licence: see
    LICENSE-lucide.txt. Only the shapes are copied; every icon is drawn at
    stroke 2 in currentColor so a tile's tone colours it. */
-const LUCIDE={"calendar-check":'<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="m9 15 2 2 4-4"/>',
+const LUCIDE={"rectangle-vertical":'<rect width="12" height="20" x="6" y="2" rx="2" fill="currentColor" fill-opacity=".3"/>',"calendar-check":'<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="m9 15 2 2 4-4"/>',
   "list-ordered":'<path d="M11 5h10"/><path d="M11 12h10"/><path d="M11 19h10"/><path d="M4 4h1v5"/><path d="M4 9h2"/><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"/>',"circle-arrow-up":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 12-4-4-4 4\"/><path d=\"M12 16V8\"/>",
  "circle-arrow-down":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 8v8\"/><path d=\"m8 12 4 4 4-4\"/>",
  "trending-up":"<path d=\"M16 7h6v6\"/><path d=\"m22 7-8.5 8.5-5-5L2 17\"/>",
