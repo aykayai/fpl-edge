@@ -3376,7 +3376,7 @@ function fixPills(p,g,n){return fxNext(p,g,n);}
 const CP_COL=["#3DDC97","#6FB7FF","#F5B841","#FF7A9A","#B58CFF"];
 const CP_ST={ /* label, note, format, better (1 high, -1 low), short */
   xgi6:["xGI per 90","Last 6 matches",v=>v.toFixed(2),1,"xGI"],
-  goalmk:["Anytime Goal","Bookmakers, next match",v=>Math.round(v*100)+"%",1,"Goal %"],
+  retmk:["Goal or Assist, Market","Bookmakers, next match, if he plays",v=>Math.round(v*100)+"%",1,"Return %"],
   npxg:["npxG per 90","Season",v=>v.toFixed(2),1,"npxG"],
   xa:["xA per 90","Season",v=>v.toFixed(2),1,"xA"],
   sot:["Shots on Target per 90","Season",v=>v.toFixed(2),1,"SoT"],
@@ -3390,9 +3390,10 @@ const CP_ST={ /* label, note, format, better (1 high, -1 low), short */
   gprev:["Goals Prevented","Season",v=>(v>0?"+":"")+v.toFixed(1),1,"G prev"],
   total:["Total Points","Season",v=>v.toFixed(0),1,"Pts"]};
 const CP_SETS={1:["cs","csmk","sv90","gprev","gc90","bonus"],2:["cs","csmk","xgi6","dchit","bps","bonus"],
-  3:["xgi6","goalmk","npxg","xa","dchit","bonus"],4:["xgi6","goalmk","npxg","sot","xa","bonus"],0:["xgi6","cs","dchit","bonus","total"]};
+  3:["xgi6","retmk","npxg","xa","dchit","bonus"],4:["xgi6","retmk","npxg","sot","xa","bonus"],0:["xgi6","cs","dchit","bonus","total"]};
 const CP_POS={1:"Goalkeeper",2:"Defender",3:"Midfielder",4:"Forward"};
 let _cpC=null;
+const mkRet=x=>!x?null:x.ret!=null?x.ret:(x.goal!=null&&x.assist!=null)?1-(1-x.goal)*(1-x.assist):null;
 function cpVal(k,p){
   if(!_cpC||_cpC.m!==S.model)_cpC={m:S.model,C:pdCols().C,pool:{}};
   try{const v=_cpC.C[k].val(p);return v==null||!isFinite(v)?null:+v;}catch(e){return null;}
@@ -4056,8 +4057,8 @@ function sgChipsHTML(){
    the odds are in; the model's own figure is in the hover.
    ============================================================ */
 const PD_POS_COLS={0:["xgi6","cs","dchit","dchits","bonus","total"],1:["cs","csmk","gc90","sv90","gprev","bonus"],
-  2:["cs","csmk","xgi6","dchit","dchits","bps","bonus"],3:["xgi6","goalmk","npxg","xa","ict","dchit","dchits","bonus"],
-  4:["xgi6","goalmk","npxg","xa","ict","sot","bonus"]};
+  2:["cs","csmk","xgi6","dchit","dchits","bps","bonus"],3:["xgi6","retmk","npxg","xa","ict","dchit","dchits","bonus"],
+  4:["xgi6","retmk","npxg","xa","ict","sot","bonus"]};
 /* Value (12 Nov 2026, Andy): "vs Budget" is a player's model points over
    the xPts window minus those of an average budget starter in his position
    (the regular starters, 60+ expected minutes, priced within £0.5 of the
@@ -4108,8 +4109,13 @@ function pdCols(){
     xgi6:{label:"xGI/90 L6",tip:"Expected goals plus assists per 90, last 6 matches (the study's best underlying number for midfielders and forwards)",val:L6,cell:p=>f2(L6(p)),heat:1},
     cs:{label:"CS %",tip:"Model chance of a clean sheet next match, as its points use it (bookmakers' odds when priced)",val:p=>csProbNext(p,g),cell:p=>pct(csProbNext(p,g)),heat:1},
     csmk:{label:"CS mkt",tip:"Bookmakers' clean-sheet chance next match (margin removed)",val:p=>mcs?mcs[p.team]??null:null,cell:p=>pct(mcs?mcs[p.team]:null),heat:1,market:1},
-    goalmk:{label:"Goal mkt",tip:"Bookmakers' chance he scores next match, if he plays (the model's figure in the hover)",val:p=>mk&&mk[p.id]?mk[p.id].goal:null,
-      cell:p=>{const x=mk&&mk[p.id];return x&&x.goal!=null?`<span title="Model ${pct(modelChance(p,p.xg90||0))}">${pct(x.goal)}</span>`:"—";},heat:1,market:1},
+    /* 26 Nov 2026: goal or assist, the market's chance of an FPL attacking
+       return; when only goal and assist lines are priced, combined. */
+    retmk:{label:"Return mkt",tip:"Bookmakers' chance he scores or assists next match, if he plays (goal, assist and the model's figure in the hover)",val:p=>mkRet(mk&&mk[p.id]),
+      cell:p=>{const x=mk&&mk[p.id],v=mkRet(x);if(v==null)return "—";
+        const mr=1-(1-modelChance(p,p.xg90||0))*(1-modelChance(p,p.xa90||0));
+        const t=[x.goal!=null?"Goal "+pct(x.goal):"",x.assist!=null?"Assist "+pct(x.assist):"","Model "+pct(mr)].filter(Boolean).join(" · ");
+        return `<span title="${t}">${pct(v)}</span>`;},heat:1,market:1},
     npxg:{label:"npxG/90",tip:"Non-penalty expected goals per 90 (stats window; penalties scored or missed taken out)",val:p=>W(p).npxg90??null,cell:p=>f2(W(p).npxg90),heat:1},
     xa:{label:"xA/90",tip:"Expected assists per 90 (Season: FPL's figure; Last N: match records)",val:p=>sv(p,"xa"),cell:p=>f2(sv(p,"xa")),heat:1},
     ict:{label:"ICT",tip:"FPL's ICT index, season total (ranks first for forwards over 5 gameweeks)",val:p=>p.ict||0,cell:p=>(p.ict||0).toFixed(0),heat:1},

@@ -116,7 +116,7 @@ try {
   }
   S.lPos = 0; show("table");
   /* redesign (12 Nov 2026): signals always on show, no Yours tabs, his players marked in place */
-  check(doc.querySelectorAll(".pdsigchip").length === 12 && !S.pdMore, "Player Data shows all 12 signal chips with More filters closed", doc.querySelectorAll(".pdsigchip").length);
+  check(doc.querySelectorAll(".pdsigchip").length === 13 && !S.pdMore, "Player Data shows all 13 signal chips with More filters closed", doc.querySelectorAll(".pdsigchip").length);
   check(![...doc.querySelectorAll(".pdbar button")].some(b => /^(Not yours|Yours)$/.test(b.textContent.trim())), "Player Data has no Yours / Not yours tabs");
   g.act("pdall");
   const mineRows = doc.querySelectorAll(".pdt tbody tr.mine").length, sq = (S.squad || []).length;
@@ -140,7 +140,7 @@ try {
       "Compare opens on the radar with the Scout's verdict and a card per player");
     check(/Midfielder stats/.test(md?.querySelector(".cpchip")?.textContent || ""), "three midfielders get midfielder stats", md?.querySelector(".cpchip")?.textContent);
     const axes = [...(md?.querySelectorAll(".cprgrid svg text") || [])].map(t => t.textContent);
-    check(["xGI", "Goal %", "npxG", "xA", "DefCon", "Bonus"].every(x => axes.includes(x)), "the radar's axes are the midfielder set", axes.slice(0, 12).join("|"));
+    check(["xGI", "Return %", "npxG", "xA", "DefCon", "Bonus"].every(x => axes.includes(x)), "the radar's axes are the midfielder set", axes.slice(0, 12).join("|"));
     const r = vm.runInContext("lGwRange()", ctx), hP = vm.runInContext("hPts", ctx);
     const top = mids.slice().sort((x, y) => hP(y, r.from, r.count) - hP(x, r.from, r.count))[0];
     check((md?.querySelector(".cphl")?.textContent || "") === "Scout pick: " + top.web_name, "the Scout's pick is the best projection over the window", md?.querySelector(".cphl")?.textContent + " vs " + top.web_name);

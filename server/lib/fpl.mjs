@@ -171,6 +171,9 @@ export async function fplPlayersPayload() {
       toe: e.transfers_out_event ?? null,
       form: e.form ?? null,
       tp: e.total_points ?? null,
+      /* 26 Nov 2026: season cards, for Ban Risk (5 yellows by GW19 is a ban) */
+      yc: e.yellow_cards ?? null,
+      rc: e.red_cards ?? null,
       ppg: e.points_per_game ?? null
     };
   }

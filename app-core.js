@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.10.8";
+const APP_VERSION="14.11.0";
 /* The Convergence mark (25 Nov 2026, Andy): three blades meeting at one point,
    in the UI green. Source and every size: design/brand/. */
 const LOGO=`<svg width="40" height="40" viewBox="0 0 40 40" style="flex:none" role="img" aria-label="FPL Signals"><g transform="translate(0.80 3.68) scale(0.19200)"><polygon points="56,6 100,6 198,84 148,79" fill="#2DDC87"/><polygon points="30,61 198,86 12,103" fill="#2DDC87"/><polygon points="0,164 58,164 192,92 114,99" fill="#2DDC87"/></g></svg>`;
@@ -2349,7 +2349,7 @@ const avgFP=(p,g,h)=>(p.form+hPts(p,g,h))/2;
 /* Line icons from Lucide 1.52.0 (https://lucide.dev), ISC licence: see
    LICENSE-lucide.txt. Only the shapes are copied; every icon is drawn at
    stroke 2 in currentColor so a tile's tone colours it. */
-const LUCIDE={"calendar-check":'<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="m9 15 2 2 4-4"/>',
+const LUCIDE={"rectangle-vertical":'<rect width="12" height="20" x="6" y="2" rx="2" fill="currentColor" fill-opacity=".3"/>',"calendar-check":'<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="m9 15 2 2 4-4"/>',
   "list-ordered":'<path d="M11 5h10"/><path d="M11 12h10"/><path d="M11 19h10"/><path d="M4 4h1v5"/><path d="M4 9h2"/><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"/>',"circle-arrow-up":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 12-4-4-4 4\"/><path d=\"M12 16V8\"/>",
  "circle-arrow-down":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 8v8\"/><path d=\"m8 12 4 4 4-4\"/>",
  "trending-up":"<path d=\"M16 7h6v6\"/><path d=\"m22 7-8.5 8.5-5-5L2 17\"/>",
