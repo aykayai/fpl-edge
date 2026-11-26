@@ -73,15 +73,18 @@ function pkLiveHTML(p){
 function pkOddsHTML(p){
   if(!S.model||S.oddsState!=="ok")return "";
   const g=S.model.next.id,f=((p.gw[g]||{}).fixtures||[])[0];if(!f)return "";
-  let r={},cs=null;try{r=(oddsPlayers(g)||{})[p.id]||{};cs=(marketCS(g)||{})[p.team]??null;}catch(e){}
+  let r={},cs=null,haul=null;try{r=(oddsPlayers(g)||{})[p.id]||{};cs=(marketCS(g)||{})[p.team]??null;haul=(marketHaul(g)||{})[p.team]??null;}catch(e){}
   const goal=p.pos===1?null:r.goal??null,ast=r.assist??null,card=r.card??null;
-  if(goal==null&&ast==null&&cs==null&&card==null)return "";
+  if(goal==null&&ast==null&&cs==null&&card==null&&haul==null)return "";
+  /* the model's own: Poisson on his team's expected goals in this fixture */
+  const lam=f.xgf||0,mHaul=f.xgf!=null?1-Math.exp(-lam)*(1+lam+lam*lam/2):null;
   const pc=v=>v==null?"—":Math.round(v*100)+"%",br=banRisk(p,g);
   const mCS=(()=>{try{return modelCS(p);}catch(e){return null;}})();
   const od=(k,v,m,cls,tip)=>`<div class="pk-od${cls?" "+cls:""}"${tip?` title="${esc(tip)}"`:""}><em>${k}</em><b>${pc(v)}</b><i>${m}</i></div>`;
   return `<div class="pk-odds"><div class="pk-odh">Next Match Odds<span>${f.home?"v ":"@ "}${esc(f.opp)} · ${esc((S.oddsBooks||[]).filter(b=>!/william/i.test(b))[0]||"bookmakers")}</span></div><div class="pk-odg">
     ${od("Goal",goal,p.pos===1?"&nbsp;":"model "+pc(modelChance(p,p.xg90||0)))}${od("Assist",ast,"model "+pc(modelChance(p,p.xa90||0)))}
-    ${od("Clean Sheet",cs,"model "+pc(mCS))}${od("Booked",card,br?`${br.yc} yellows: ban on ${br.yc+1}`:"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}</div></div>`;
+    ${od("Clean Sheet",cs,"model "+pc(mCS))}${od("Booked",card,br?`${br.yc} yellows: ban on ${br.yc+1}`:"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}
+    ${od("Haul Chance",haul,`${esc(p.teamName)} score 3+ · model ${pc(mHaul)}`,"wide","His team's chance of scoring 3 or more")}</div></div>`;
 }
 function playerCardHTML(){
   const p=S.model.players.find(x=>x.id===S.cardId);
