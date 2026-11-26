@@ -424,6 +424,14 @@ function modelCS(p){
   if(p.pos===1&&p.gpRate)cs=clamp(cs*(1+clamp(p.gpRate,-0.25,0.25)),0.02,0.75);
   return cs;
 }
+/* the market's chance each team scores 3 or more in gameweek g (from the
+   correct-score grid; 26 Nov 2026, the card's and the Markets tab's Haul Chance) */
+function marketHaul(g){
+  const inGw=new Set((S.model.byEv[g]||[]).filter(f=>f.ht&&f.at).map(f=>f.ht.id+"-"+f.at.id)),m={};
+  oddsFixtures().forEach(f=>{if(!f.goals||f.goals.haulHome==null||!f.ht||!f.at||!inGw.has(f.ht.id+"-"+f.at.id))return;
+    m[f.ht.id]=f.goals.haulHome;m[f.at.id]=f.goals.haulAway;});
+  return m;
+}
 /* the market's clean-sheet chance for each team in gameweek g */
 function marketCS(g){
   const inGw=new Set((S.model.byEv[g]||[]).filter(f=>f.ht&&f.at).map(f=>f.ht.id+"-"+f.at.id)),m={};
