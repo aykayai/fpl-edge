@@ -83,7 +83,7 @@ function pkOddsHTML(p){
   const od=(k,v,m,cls,tip)=>`<div class="pk-od${cls?" "+cls:""}"${tip?` title="${esc(tip)}"`:""}><em>${k}</em><b>${pc(v)}</b><i>${m}</i></div>`;
   return `<div class="pk-odds"><div class="pk-odh">Next Match Odds<span>${f.home?"v ":"@ "}${esc(f.opp)} · ${esc((S.oddsBooks||[]).filter(b=>!/william/i.test(b))[0]||"bookmakers")}</span></div><div class="pk-odg">
     ${od("Goal",goal,p.pos===1?"&nbsp;":"model "+pc(modelChance(p,p.xg90||0)))}${od("Assist",ast,"model "+pc(modelChance(p,p.xa90||0)))}
-    ${od("Clean Sheet",cs,"model "+pc(mCS))}${od("Booked",card,br?"1 from a ban":"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}
+    ${od("CS",cs,"model "+pc(mCS))}${od("Booked",card,br?"ban risk":"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}
     ${od("Haul",haul,`model ${pc(mHaul)}`,"hl",`${p.teamName} score 3 or more: the market ${pc(haul)}, the model ${pc(mHaul)}`)}</div></div>`;
 }
 function playerCardHTML(){
