@@ -1998,8 +1998,8 @@ function teamNewsHTML(){
   const lat=sp.map(p=>({p,n:tnLatest(p)})).sort((a,b)=>(b.n?b.n.time:0)-(a.n?a.n.time:0));
   const feed=`<section class="panel tn-feed">${dsHead("newspaper","Latest",`<span class="ds-sub">reputable sources</span>`)}
     <div class="tn-ev tn-lat">${lat.map(({p,n})=>n?`<a class="tn-e" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">${dsFace(p)}
-      <span class="tn-et"><b>${esc(p.web_name)} <span>${esc(n.title)}</span></b><i>${nwSrc(n)}</i></span><em>${wpAgo(n.time)}</em></a>`
-      :`<div class="tn-e none">${dsFace(p)}<span class="tn-et"><b>${esc(p.web_name)}</b><i>No recent story from a reputable source</i></span><em></em></div>`).join("")}</div>
+      <span class="tn-et"><b>${esc(p.web_name)} <span>${esc(n.title)}</span></b><i>${nwSrc(n)}</i></span></a>`
+      :`<div class="tn-e none">${dsFace(p)}<span class="tn-et"><b>${esc(p.web_name)}</b><i>No recent story from a reputable source</i></span></div>`).join("")}</div>
     <button class="tn-open" onclick="act('tab','news')">Open on News page ${lic("arrow-right",14)}</button></section>`;
   const upd=S.newsFetchedAt?Date.parse(S.newsFetchedAt):(S.flags&&S.flags.updated?Date.parse(S.flags.updated):null);
   const body=`${tiles}<div class="tn-grid"><section class="panel tn-board">${head}<div class="tn-rows">${rows.map(row).join("")}</div></section>${feed}</div>`;
