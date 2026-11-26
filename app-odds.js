@@ -70,13 +70,16 @@ function fromCorrectScore(mk){
   });
   if(raw.length<6)return null;
   const p=devig(raw);
-  let csHome=0,csAway=0,xgHome=0,xgAway=0;
+  let csHome=0,csAway=0,xgHome=0,xgAway=0,haulHome=0,haulAway=0;
   labels.forEach(([h,a],i)=>{
     if(a===0)csHome+=p[i];
     if(h===0)csAway+=p[i];
+    /* 26 Nov 2026: three or more, where attackers haul (Markets tab) */
+    if(h>=3)haulHome+=p[i];
+    if(a>=3)haulAway+=p[i];
     xgHome+=h*p[i];xgAway+=a*p[i];
   });
-  return{csHome,csAway,xgHome,xgAway,n:raw.length};
+  return{csHome,csAway,xgHome,xgAway,haulHome,haulAway,n:raw.length};
 }
 /* fall back to the totals and both-teams markets where Correct Score is absent */
 function fromTotals(mk){

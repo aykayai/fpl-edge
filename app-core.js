@@ -268,7 +268,7 @@ function routeFor(tab){return "#/"+(TABPATH[tab]||"planner");}
 /* A pop-up belongs to the page it was opened on: leaving the page closes it
    (audit 22 Nov 2026: one opened from #/transfers stayed over the next page) */
 function closePops(){S.pop=null;S.popTab=null;S.cmp=null;S.cardId=null;S.pMenu=null;}
-const sgTabKey=k=>({transfers:"players",squad:"season",teams:"clubs"})[k]||(["players","clubs","season"].includes(k)?k:"players");
+const sgTabKey=k=>({transfers:"players",squad:"season",teams:"clubs"})[k]||(["players","clubs","markets","season"].includes(k)?k:"players");
 function applyHash(){
   const h=(location.hash||"").replace(/^#\/?/,"").replace(/\/$/,"");
   /* Signals tabs have their own links: #/signals/transfers and so on */
@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.12.0";
+const APP_VERSION="14.13.0";
 /* The Convergence mark (25 Nov 2026, Andy): three blades meeting at one point,
    in the UI green. Source and every size: design/brand/. */
 const LOGO=`<svg width="40" height="40" viewBox="0 0 40 40" style="flex:none" role="img" aria-label="FPL Signals"><g transform="translate(0.80 3.68) scale(0.19200)"><polygon points="56,6 100,6 198,84 148,79" fill="#2DDC87"/><polygon points="30,61 198,86 12,103" fill="#2DDC87"/><polygon points="0,164 58,164 192,92 114,99" fill="#2DDC87"/></g></svg>`;

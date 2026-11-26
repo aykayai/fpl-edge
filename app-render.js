@@ -67,6 +67,22 @@ function pkLiveHTML(p){
     <div class="pkl-byh sub"><span>On The Bench</span><b>${bench.length}</b></div>${bench.map(w=>rowB(w,w.slot==="off"?"Subbed off":w.slot==="GK"?"Bench GK":"Bench "+w.slot)).join("")||`<p class="pkl-none">Nobody benched him</p>`}</div>`:"";
   return live+kv+by;
 }
+/* Next Match Odds on the player card (26 Nov 2026, Andy approved mock):
+   the bookmakers' goal, assist, clean-sheet and booking chances for his next
+   match, the model's figure under each; shown once anything is priced */
+function pkOddsHTML(p){
+  if(!S.model||S.oddsState!=="ok")return "";
+  const g=S.model.next.id,f=((p.gw[g]||{}).fixtures||[])[0];if(!f)return "";
+  let r={},cs=null;try{r=(oddsPlayers(g)||{})[p.id]||{};cs=(marketCS(g)||{})[p.team]??null;}catch(e){}
+  const goal=p.pos===1?null:r.goal??null,ast=r.assist??null,card=r.card??null;
+  if(goal==null&&ast==null&&cs==null&&card==null)return "";
+  const pc=v=>v==null?"—":Math.round(v*100)+"%",br=banRisk(p,g);
+  const mCS=(()=>{try{return modelCS(p);}catch(e){return null;}})();
+  const od=(k,v,m,cls,tip)=>`<div class="pk-od${cls?" "+cls:""}"${tip?` title="${esc(tip)}"`:""}><em>${k}</em><b>${pc(v)}</b><i>${m}</i></div>`;
+  return `<div class="pk-odds"><div class="pk-odh">Next Match Odds<span>${f.home?"v ":"@ "}${esc(f.opp)} · ${esc((S.oddsBooks||[]).filter(b=>!/william/i.test(b))[0]||"bookmakers")}</span></div><div class="pk-odg">
+    ${od("Goal",goal,p.pos===1?"&nbsp;":"model "+pc(modelChance(p,p.xg90||0)))}${od("Assist",ast,"model "+pc(modelChance(p,p.xa90||0)))}
+    ${od("Clean Sheet",cs,"model "+pc(mCS))}${od("Booked",card,br?`${br.yc} yellows: ban on ${br.yc+1}`:"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}</div></div>`;
+}
 function playerCardHTML(){
   const p=S.model.players.find(x=>x.id===S.cardId);
   if(!p)return "";
@@ -101,7 +117,7 @@ function playerCardHTML(){
       ${owns?`<div><span>Bought</span><b>£${pu.paid.toFixed(1)}${pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):""}</b><em>your price</em></div>
       <div><span>Sells for</span><b style="color:${sell>pu.paid?"var(--mint)":sell<pu.paid?"#FF8FAB":"inherit"}">£${sell.toFixed(1)}</b><em>if sold now</em></div>`:""}
       <div class="wide"><span>Set pieces</span><b class="txt">${esc(sp||"None")}</b></div>
-    </div></div>`;
+    </div>${pkOddsHTML(p)}</div>`;
   const tile=(l2,v,e2,m)=>`<div class="pktile"><span>${l2}</span><b${m?' class="mdl"':""}>${v}</b><em>${e2||"&nbsp;"}</em></div>`;
   const tiles=tile(`xPts GW${G}–${Math.min(38,G+4)}`,hPts(p,G,5).toFixed(1),"model",1)+tile("xMins",Math.round(p.xMins||0)+"′"+minsTag(p),"model",1)
     +tile("Form",(+s.form||p.form||0).toFixed(1)+formTag(p),rk(s.form_rank_type))+tile("Pts / Match",s.points_per_game??p.ppg,rk(s.points_per_game_rank_type))
@@ -114,7 +130,8 @@ function playerCardHTML(){
   const pc2=v=>v==null?"#1C1C1C":v>=10?"#2BD47D":v>=6?"#1E7A4D":v>=3?"#3A3A3A":"#4A1F2B";
   const tl=past.map(x=>`<div class="c"><span class="bw"><span class="v">${x.v??"–"}</span><span class="b" style="height:${Math.max(2,100*(x.v||0)/mx)}%;background:${pc2(x.v)}"></span></span><span class="lab">${x.o?esc(x.o.short):"–"}</span><span class="lab">GW${x.e}</span></div>`).join("")
     +fut.map(x=>`<div class="c pred"><span class="bw"><span class="v">${x.v.toFixed(1)}</span><span class="b" style="height:${Math.max(2,100*x.v/mx)}%"></span></span><span class="sm">${fxGW(p,x.e)}</span><span class="lab">GW${x.e}</span></div>`).join("");
-  const keys=CP_SETS[p.pos]||CP_SETS[0];
+  /* 26 Nov 2026: market odds sit in Next Match Odds, not among the season percentiles */
+  const keys=(CP_SETS[p.pos]||CP_SETS[0]).filter(k=>!/mk$/.test(k));
   const pct=keys.map(k=>{const r=cpPr(k,p),v=cpVal(k,p),col=r?(r.pct>=90?"var(--mint)":r.pct>=70?"#9BE7C4":r.pct>=40?"#6E6E6E":"#FF8FAB"):"#333";
     return `<span title="${esc(CP_ST[k][1])}">${CP_ST[k][0]}</span><span class="pkbar"><span style="width:${r?Math.max(3,r.pct):0}%;background:${col}"></span></span><b>${v==null?"–":CP_ST[k][2](v)}</b><em>${cpRk(r)}</em>`;}).join("");
   const tot=[["Minutes",s.minutes],["Starts",s.starts],["Goals",s.goals_scored],["Assists",s.assists],["xG",(+s.expected_goals||0).toFixed(1)],["xA",(+s.expected_assists||0).toFixed(1)],
@@ -1913,7 +1930,15 @@ function teamNewsHTML(){
   if(!S.tnOpen)tnOpen();
   const g=VG(),H=S.tnH||5,n=hzWeeks(H,g),cols=Math.min(n,8,39-g),sp=squadPlayers(),xi=startingXI(),st=wpStats();
   const since=S.tnSince||0,prev=S.tnPrev;
-  const rows=sp.map(p=>({p,s:tnStatus(p,g,st),xi:xi.includes(p)})).sort((a,b)=>b.s.sev-a.s.sev||(b.xi-a.xi)||a.p.pos-b.p.pos);
+  /* 26 Nov 2026: the bookmakers' next-match odds, one column each (next
+     gameweek only; that is all the market prices) */
+  const oddsOn=g===S.model.next.id&&S.oddsState==="ok";
+  const mk=oddsOn?(()=>{try{return oddsPlayers(g)||{};}catch(e){return {};}})():{},mcs=oddsOn?(()=>{try{return marketCS(g)||{};}catch(e){return {};}})():{};
+  const od=p=>{const r=mk[p.id]||{};return{goal:p.pos===1?null:r.goal??null,assist:r.assist??null,cs:mcs[p.team]??null,card:r.card??null};};
+  let rows=sp.map(p=>({p,s:tnStatus(p,g,st),xi:xi.includes(p),o:od(p)})).sort((a,b)=>b.s.sev-a.s.sev||(b.xi-a.xi)||a.p.pos-b.p.pos);
+  const so=S.tnSort,sv=(r,k)=>k==="start"?startChance(r.p):k==="mins"?(r.p.xMins||0):r.o[k];
+  if(so)rows=rows.slice().sort((a,b)=>{const x=sv(a,so.k),y=sv(b,so.k);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return so.dir<0?y-x:x-y;});
+  const bans=sp.map(p=>({p,b:banRisk(p,g)})).filter(x=>x.b);
   const flagged=sp.filter(p=>p.avail<1||["s","u","n"].includes(p.status));
   const newFlags=flagged.filter(p=>{const f=flagNow(p);return f&&f.since&&f.since>since;}).length;
   const starters=xi.filter(p=>startChance(p)>=60).length;
@@ -1925,17 +1950,21 @@ function teamNewsHTML(){
     ${dsTile("Likely starters",`${starters} of ${xi.length}`,"start chance 60%+")}
     ${dsTile("Points at risk",R.risk.toFixed(1),`of ${R.xi.toFixed(1)} in your XI`,R.risk>0?"dn":"up")}
     ${dsTile("Back fit",String(backFit.length),backFit.length?backFit.slice(0,2).map(p=>esc(p.web_name)).join(" · "):"none this week",backFit.length?"up":"")}
+    ${dsTile("Ban Risk",String(bans.length),bans.length?bans.slice(0,2).map(x=>esc(x.p.web_name)+(x.b.bk!=null?" "+Math.round(x.b.bk*100)+"%":"")).join(" · ")+(bans.some(x=>x.b.bk!=null)?" booked":""):"nobody one booking from a ban",bans.length?"dn":"")}
     ${dsTile("Stories",String(stories.size),"on your players · 24h")}</div>`;
   const W=[];for(let e=g;e<g+cols;e++)W.push(e);
-  const gc=`style="grid-template-columns:132px 152px 46px 76px minmax(0,1fr) repeat(${W.length},${W.length>5?34:38}px)"`;
-  const head=`<div class="tn-row tn-hd ds-th" ${gc}><span>Player</span><span>Status</span><span>Start</span><span>Minutes</span><span>Latest</span>${W.map(e=>`<span>GW${e}</span>`).join("")}</div>`;
-  const row=({p,s})=>{const sc=startChance(p),r=tnRecent(p),h=tnStories(p,since)[0];
+  const gc=`style="grid-template-columns:124px 138px 46px 58px 50px 52px 46px 58px minmax(0,1fr) repeat(${W.length},${W.length>5?30:34}px)"`;
+  const sh=(t,k,tip)=>{const on=so&&so.k===k;return `<span class="tn-so${on?" on":""}" onclick="act('tnsort','${k}')" title="${esc(tip)}">${t}<i>${on?(so.dir<0?"▼":"▲"):"↕"}</i></span>`;};
+  const head=`<div class="tn-row tn-hd ds-th" ${gc}><span class="tn-so" onclick="act('tnsort','none')" title="Default order: most at risk first">Player</span><span>Status</span>${sh("Start","start","Sort by start chance")}${sh("Mins","mins","Sort by expected minutes")}${sh("Goal","goal","Bookmakers: chance he scores, if he plays")}${sh("Assist","assist","Bookmakers: chance he assists, if he plays")}${sh("CS","cs","Bookmakers: his team's clean-sheet chance")}${sh("Booked","card","Bookmakers: chance he is booked")}<span class="tn-lh">Latest</span>${W.map(e=>`<span>GW${e}</span>`).join("")}</div>`;
+  const ox=(v,hi,cls)=>v==null?'<span class="tn-ox mu">—</span>':`<span class="tn-ox${v>=hi?" hi"+(cls?" "+cls:""):""}">${Math.round(v*100)}%</span>`;
+  const row=({p,s,o})=>{const sc=startChance(p),r=tnRecent(p),h=tnStories(p,since)[0],br=banRisk(p,g);
     const scCol=sc>=75?"var(--mint)":sc>=50?"#FFB020":sc>0?"#FF9F2E":"#FF8095";
     return `<div class="tn-row${s.sev>=5?" out":s.sev>=2||(s.k==="dbt")?" hot":""}" ${gc}>
       <span class="tn-p">${dsFace(p)}${wpNm(p)}</span>
       <span class="tn-fl s-${s.k}" title="${esc(flagTitle(p))}">${TN_ICON[s.k]}<span><b>${esc(s.l)}</b><i>${esc(s.s)}</i></span></span>
       ${s.bk?`<span class="tn-st bk">—</span>`:`<b class="tn-st" style="color:${scCol}">${sc}%</b>`}
       <span class="tn-mn" title="Minutes in his club's last three matches, then expected minutes"><span class="tn-mb">${r.mins3.map(v=>`<i style="height:${Math.max(2,v/90*20)}px;background:${v>=60?"#3DDC97":v>0?"#FFB020":"#3A3A3A"}" title="${v}′"></i>`).join("")}</span><b>${Math.round(p.xMins||0)}′</b></span>
+      ${ox(o.goal,.3)}${ox(o.assist,.2)}${ox(o.cs,.35,"cs")}${o.card==null?'<span class="tn-ox mu">—</span>':`<span class="tn-ox${o.card>=.2||br?" bk":""}"${br?` title="${esc(br.tip)}"`:""}>${br?lic("rectangle-vertical",11):""}${Math.round(o.card*100)}%</span>`}
       ${h?`<a class="tn-h" href="${esc(safeUrl(h.url))}" target="_blank" rel="noopener"><b>${esc(h.title)}</b><i>${nwSrc(h)}</i></a>`:`<span class="tn-h"><i class="tn-q">Nothing new since you last looked</i></span>`}
       ${W.map(e=>tnCell(p,e,g,s)).join("")}</div>`;};
   const ev=tnFeed(sp,since,prev,st).slice(0,8);
@@ -3754,7 +3783,7 @@ function signalHitsHTML(){
 LUCIDE["chevron-up"]='<path d="m18 15-6-6-6 6"/>';
 /* 22 Nov 2026 (Andy): Signals › Transfers removed; the Planner's Transfers
    pop-up holds best moves, the plan, funding and the rest */
-const SG_TABS=[["players","Players"],["clubs","Clubs"],["season","My Season"]];
+const SG_TABS=[["players","Players"],["clubs","Clubs"],["markets","Markets"],["season","My Season"]];
 const SG_TONE={mint:"#3DDC97",red:"#FF5A6E",amber:"#FFB020",grey:"#8A8A8A",ice:"#BAE6FD",purple:"#B388FF",cyan:"#22D3EE"};
 function rep(key,icon,title,info,body,o){
   o=o||{};const shut=(S.sigFold||[]).includes(key);
@@ -3773,13 +3802,13 @@ const rkv=figs=>`<div class="rkv">${figs.map(f=>`<div><span>${f.label}</span><b 
 /* ranked bars: rows [{label, sub, value, show, tone, pid, mine, extra}] */
 function hbars(rows,o){
   o=o||{};if(!rows.length)return sgEmpty(o.empty||"Nobody right now.");
-  const mx=Math.max(...rows.map(r=>Math.abs(r.value)),1e-9),lo=o.from!=null?o.from:0;
+  const mx=Math.max(...rows.map(r=>Math.max(Math.abs(r.value),r.tick||0)),1e-9),lo=o.from!=null?o.from:0;
   return `<div class="hb${o.diverge?" dv":""}">${rows.map((r,i)=>{
     const w=o.diverge?Math.abs(r.value)/mx*50:Math.max(2,(r.value-lo)/((mx-lo)||1)*100);
     const tone=r.tone||(o.diverge?(r.value>=0?SG_TONE.mint:SG_TONE.red):SG_TONE.mint);
     return `<div class="hbr${r.mine?" me":""}"${r.pid?` onclick="act('card',${r.pid})"`:""}>
       ${o.rank?`<span class="hbn">${i+1}</span>`:""}<span class="hbl${r.p||r.club?" sx-l":""}">${r.p||r.club?sgWho(r):""}<span class="sx-t"><b>${r.label}</b>${r.sub?`<em>${r.sub}</em>`:""}</span></span>
-      <span class="hbt"><i class="${o.diverge?(r.value<0?"neg":"pos"):""}" style="width:${w.toFixed(1)}%;background:${tone}"></i></span>
+      <span class="hbt"><i class="${o.diverge?(r.value<0?"neg":"pos"):""}" style="width:${w.toFixed(1)}%;background:${tone}"></i>${r.tick!=null&&!o.diverge?`<b class="hbk" style="left:${Math.min(99,Math.max(0,(r.tick-lo)/((mx-lo)||1)*100)).toFixed(1)}%" title="Model ${r.tickShow||r.tick}"></b>`:""}</span>
       <span class="hbv">${r.show!=null?r.show:r.value}</span>${r.extra||""}</div>`;}).join("")}</div>`;
 }
 /* week columns with optional line series:
@@ -3837,13 +3866,13 @@ function signalsHTML(){
   /* Signals looks ahead from the next deadline, not the week the Planner is
      viewing (a week in play has no projections left to rank) */
   const G=S.model.next.id,H=sgHn(G),tab=SG_TABS.some(([k])=>k===S.sgTab)?S.sgTab:"players";
-  const body={players:sgPlayers,clubs:sgClubs,season:sgSeason}[tab](G,H);
+  const body={players:sgPlayers,clubs:sgClubs,markets:sgMarkets,season:sgSeason}[tab](G,H);
   const dl=deadlineInfo();
-  const hz=tab==="season"?"":hz4HTML(S.sigH==="ros"?"ROS":(+S.sigH||3),"sigh");
+  const hz=tab==="season"?"":tab==="markets"?`<span class="mk-src">GW${G} · ${esc((S.oddsBooks||[]).filter(b=>!/william/i.test(b)).join(" and ")||"Bookmakers")}${S.oddsFetchedAt?" · updated "+esc(agoText(S.oddsFetchedAt)):""}</span>`:hz4HTML(S.sigH==="ros"?"ROS":(+S.sigH||3),"sigh");
   return `<div class="sgpage" data-tab="${tab}">
     <div class="sx-hdr"><div><div class="cx-kick">GW${G}${dl?` · Deadline ${esc(dl.when)}`:""}</div><h1>Signals</h1>
       <div class="sx-ctl"><span class="pseg sgtabs">${SG_TABS.map(([k,n])=>`<button class="${tab===k?"on":""}" onclick="act('sgtab','${k}')">${n}</button>`).join("")}</span>${hz}</div></div>
-      <div class="nw-figs sx-figs">${sgFigs(G,H)}</div></div>
+      <div class="nw-figs sx-figs">${tab==="markets"?sgMkFigs(G):sgFigs(G,H)}</div></div>
     <div class="repgrid">${body}</div></div>`;
 }
 /* the four figure cards: Overall Rank, Top Buy, Easiest Run, Price Rises Tonight */
@@ -3869,6 +3898,78 @@ function sgFigs(G,H){
 /* a ranked bar row's label: face and crest for a player, crest for a club */
 const sgWho=(r)=>r.p?`${dsFace(r.p)}${dsBadge(sgTeamOf(r.p),16)}`:r.club?dsBadge(r.club,24):"";
 
+/* ---------------- Markets (26 Nov 2026, Andy approved mock v2) ----------------
+   The bookmakers' view of the next gameweek at a glance, margin removed:
+   match odds, clean sheets, team goals, haul chance, anytime goal, assist,
+   booking risk, and where the market and the model disagree most. Next
+   gameweek only (that is all the market prices); the model's figure is the
+   white tick. Player markets come close to kick-off, so early in a week
+   some lists are short. */
+function sgMk(G){
+  if(S._mkC&&S._mkC.m===S.model&&S._mkC.at===S.oddsFetchedAt&&S._mkC.g===G)return S._mkC.d;
+  const ok=S.oddsState==="ok";
+  const inGw=new Set((S.model.byEv[G]||[]).filter(f=>f.ht&&f.at).map(f=>f.ht.id+"-"+f.at.id));
+  let fx=[],op=[];
+  try{if(ok)fx=oddsFixtures().filter(f=>f.ht&&f.at&&inGw.has(f.ht.id+"-"+f.at.id)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));}catch(e){}
+  try{if(ok)op=Object.values(oddsPlayers(G)||{}).filter(r=>r&&r.p&&((r.p.roleMins||0)>0||(r.p.minutes||0)>0));}catch(e){}
+  const mdl=(t,o,home,k)=>{try{return fdrCalc(t,o,home,k);}catch(e){return null;}};
+  const teams=[];
+  fx.forEach(f=>{const g=f.goals;if(!g)return;
+    [[f.ht,f.at,true,g.xgHome,g.csHome,g.haulHome],[f.at,f.ht,false,g.xgAway,g.csAway,g.haulAway]].forEach(([t,o,home,xg,cs,haul])=>{
+      const mxg=mdl(t,o,home,"xgf"),mxc=mdl(t,o,home,"xgc");
+      const lam=mxg||0,pHaul=1-Math.exp(-lam)*(1+lam+lam*lam/2);
+      teams.push({t,o,home,xg,cs,haul,mxg,mcs:mxc!=null?Math.exp(-mxc):null,mhaul:mxg!=null?pHaul:null});});});
+  const d={fx,op,teams};
+  S._mkC={m:S.model,at:S.oddsFetchedAt,g:G,d};
+  return d;
+}
+Object.assign(LUCIDE,{"scale":'<path d="M12 3v18"/><path d="m19 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"/><path d="m5 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M7 21h10"/>',
+  "goal":'<path d="M12 13V2l8 4-8 4"/><path d="M20.561 10.222a9 9 0 1 1-12.55-5.29"/><path d="M8.002 9.997a5 5 0 1 0 8.9 2.02"/>',
+  "split":'<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>'});
+const mkPct=v=>v==null?"—":Math.round(v*100)+"%";
+function sgMkFigs(G){
+  const{fx,op,teams}=sgMk(G);
+  const fest=fx.filter(f=>f.goals).sort((a,b)=>(b.goals.xgHome+b.goals.xgAway)-(a.goals.xgHome+a.goals.xgAway))[0];
+  const cs=teams.slice().sort((a,b)=>b.cs-a.cs)[0];
+  const sc=op.filter(r=>r.goal!=null).sort((a,b)=>b.goal-a.goal)[0];
+  const club=(t,txt)=>`<span class="sx-fp">${dsBadge(t,22)}${esc(txt)}</span>`;
+  return [figCard("Goal-Fest Game","The match with the most goals expected.",fest?club(fest.ht,fest.ht.short+" v "+fest.at.short):"—",fest?(fest.goals.xgHome+fest.goals.xgAway).toFixed(1)+" goals expected":"",null),
+    figCard("Clean-Sheet Banker","The likeliest clean sheet this gameweek.",cs?club(cs.t,cs.t.name):"—",cs?`${mkPct(cs.cs)} v ${esc(cs.o.short)}`:"",null),
+    figCard("Likeliest Scorer","The player most likely to score, if he plays.",sc?`<span class="sx-fp">${dsFace(sc.p)}${esc(sc.p.web_name)}</span>`:"—",sc?mkPct(sc.goal)+" to score":"",null),
+    figCard("Players Priced","Players with a goalscorer price this gameweek.",String(op.filter(r=>r.goal!=null).length),`${new Set(op.filter(r=>r.goal!=null).map(r=>r.fx)).size} of ${(S.model.byEv[G]||[]).length} matches`,null)].join("");
+}
+function sgMarkets(G){
+  const{fx,op,teams}=sgMk(G),mine=new Set(S.squad||[]);
+  if(!fx.length&&!op.length)return rep("mkt-none","scale","Markets","The bookmakers' prices for the next gameweek.",sgEmpty(S.oddsState==="ok"?`The bookmakers have not priced GW${G} yet.`:"Odds have not loaded."),{wide:1});
+  const h2h=f=>{const ls=f.mk["h2h"]||[],ps=ls.map(l=>{const o=n=>(l.outcomes||[]).find(x=>x.name===n);const h=o("home"),dr=o("draw"),a=o("away");return h&&dr&&a?devig([h.price,dr.price,a.price]):null;}).filter(Boolean);
+    return ps.length?[0,1,2].map(i=>ps.reduce((s,p)=>s+p[i],0)/ps.length):null;};
+  const kick=f=>f.date?ukFmt(new Date(f.date),{weekday:"short",hour:"2-digit",minute:"2-digit"}):"";
+  const tile=f=>{const r=h2h(f),g=f.goals;
+    return `<div class="mk-m"><div class="mk-mt">${dsBadge(f.ht,20)}<b>${esc(f.ht.short)}</b><span class="mk-v">v</span><b>${esc(f.at.short)}</b>${dsBadge(f.at,20)}<em>${esc(kick(f))}</em></div>
+      ${r?`<div class="mk-bar"><span style="flex:${r[0]};background:#3DDC97" title="${esc(f.ht.name)} win">${mkPct(r[0])}</span><span style="flex:${r[1]}" class="d" title="Draw">${mkPct(r[1])}</span><span style="flex:${r[2]};background:#7AA2FF" title="${esc(f.at.name)} win">${mkPct(r[2])}</span></div>`:'<div class="mk-bar none">no result price</div>'}
+      <div class="mk-ml"><span>Goals <b>${g?g.xgHome.toFixed(1)+"–"+g.xgAway.toFixed(1):"—"}</b></span><span>CS <b>${g?mkPct(g.csHome)+" · "+mkPct(g.csAway):"—"}</b></span></div></div>`;};
+  const match=rep("mkt-match","scale","Match Odds","Win chances, goals and clean sheets for every match.",
+    `<div class="mk-mg">${fx.map(tile).join("")}</div><div class="mk-key"><span><i style="background:#3DDC97"></i>Home win</span><span><i style="background:#5A5A5A"></i>Draw</span><span><i style="background:#7AA2FF"></i>Away win</span></div>`,{wide:1});
+  const teamBars=(k,mk,fmt,tone,n)=>hbars(teams.filter(x=>x[k]!=null).sort((a,b)=>b[k]-a[k]).slice(0,n||8).map(x=>({club:x.t,label:esc(x.t.short),sub:(x.home?"v ":"@ ")+esc(x.o.short),value:x[k],show:fmt(x[k]),tick:x[mk],tickShow:x[mk]!=null?fmt(x[mk]):null,tone})),{rank:1,empty:"Not priced yet."});
+  const pBars=(k,tone,model,n)=>hbars(op.filter(r=>r[k]!=null).sort((a,b)=>b[k]-a[k]).slice(0,n||8).map(r=>{const m=model?model(r.p):null,br=banRisk(r.p,G);
+    return{p:r.p,pid:r.p.id,mine:mine.has(r.p.id),label:esc(r.p.web_name),sub:`${esc(r.p.teamName)} · ${POS[r.p.pos]}`,value:r[k],show:mkPct(r[k]),tick:m,tickShow:m!=null?mkPct(m):null,tone,
+      extra:br&&k==="card"?`<span class="mk-ban" title="${esc(br.tip)}">${lic("rectangle-vertical",13)}</span>`:""};}),{rank:1,empty:"Not priced yet: player markets open close to kick-off."});
+  /* market against model on a goal or assist, the largest gaps either way */
+  const gaps=op.map(r=>{const v=mkRet(r);if(v==null)return null;const m=1-(1-modelChance(r.p,r.p.xg90||0))*(1-modelChance(r.p,r.p.xa90||0));return{r,v,m,d:v-m};}).filter(Boolean);
+  const dumb=(rows,tone)=>rows.length?`<div class="mk-db">${rows.map(x=>`<div class="mk-d${mine.has(x.r.p.id)?" me":""}" onclick="act('card',${x.r.p.id})"><span class="hbl sx-l">${sgWho({p:x.r.p})}<span class="sx-t"><b>${esc(x.r.p.web_name)}</b><em>${esc(x.r.p.teamName)} · ${POS[x.r.p.pos]}</em></span></span>
+      <span class="mk-dt" title="Market ${mkPct(x.v)} · model ${mkPct(x.m)}"><span class="mk-line" style="left:${(Math.min(x.v,x.m)*100).toFixed(1)}%;width:${(Math.abs(x.v-x.m)*100).toFixed(1)}%"></span><span class="mk-dot md" style="left:${(x.m*100).toFixed(1)}%"></span><span class="mk-dot" style="left:${(x.v*100).toFixed(1)}%;background:${tone}"></span></span>
+      <b style="color:${tone}">${x.d>0?"+":"−"}${Math.round(Math.abs(x.d)*100)}</b></div>`).join("")}</div>`:sgEmpty("Not priced yet.");
+  const hi=gaps.filter(x=>x.d>0).sort((a,b)=>b.d-a.d).slice(0,6),lo=gaps.filter(x=>x.d<0).sort((a,b)=>a.d-b.d).slice(0,6);
+  return match
+    +rep("mkt-cs","shield","Clean Sheets","Bookmakers' clean-sheet chance; the tick is the model's.",teamBars("cs","mcs",mkPct,SG_TONE.cyan))
+    +rep("mkt-goals","goal","Team Goals","Goals each team is expected to score; the tick is the model's.",teamBars("xg","mxg",v=>v.toFixed(1),SG_TONE.mint))
+    +rep("mkt-goal","goal","Anytime Goal","Chance he scores, if he plays; the tick is the model's.",pBars("goal",SG_TONE.mint,p=>modelChance(p,p.xg90||0)))
+    +rep("mkt-assist","target","Assist","Chance he assists, if he plays; the tick is the model's.",pBars("assist","#7AA2FF",p=>modelChance(p,p.xa90||0)))
+    +rep("mkt-card","rectangle-vertical","Booking Risk","Chance he is booked; a card means one more yellow is a ban.",pBars("card","#FACC15",null))
+    +rep("mkt-haul","flame","Haul Chance","Chance the team scores 3 or more: where attackers haul.",teamBars("haul","mhaul",mkPct,"#FF8A3D"))
+    +rep("mkt-hi","split","Market Higher","Biggest gaps where the market rates him above the model for a goal or assist.",dumb(hi,SG_TONE.mint))
+    +rep("mkt-lo","split","Market Lower","Biggest gaps where the market rates him below the model for a goal or assist.",dumb(lo,SG_TONE.red));
+}
 /* ---------------- Players ---------------- */
 function sgBoardHTML(G,H){
   const mine=new Set(S.squad||[]),by={};SIG_ORDER.forEach(k=>by[k]=[]);

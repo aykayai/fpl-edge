@@ -57,6 +57,8 @@ function act(k,a,b,c){
     case"topen":S.tOpen=S.tOpen===a?null:a;break;
     case"mgw":S.mGw=clamp(+a||1,1,38);break;
     /* This Week batch 3 (22 Nov 2026): Team News, Price Watch, Fixture Outlook, Performance */
+    /* Team News column sort: same key flips the order, Player resets */
+    case"tnsort":{const c=S.tnSort;S.tnSort=!a||a==="none"?null:(c&&c.k===a?{k:a,dir:-c.dir}:{k:a,dir:-1});break;}
     case"tnh":S.tnH=a==="ROS"?"ROS":[1,3,5].includes(+a)?+a:5;break;
     case"foh":S.foH=a==="ROS"?"ROS":[1,3,5].includes(+a)?+a:5;break;
     case"folens":S.foLens=["att","def"].includes(a)?a:"all";break;
