@@ -124,7 +124,7 @@ try {
     const cells = q(".tn-rows .tn-row")[0].querySelectorAll(".tn-c").length;
     check(cells === Math.min(5, 39 - G), "Team News: one availability cell per gameweek in the window", String(cells));
     const tnText = tn ? tn.textContent : "";
-    check(!/Blank|×2|Replace|Fitness and Risk/.test(tnText) && /Open on News page/.test(tnText) && /What's changed/.test(tnText), "Team News: BGW/DGW wording, no Replace column, a link to the News page");
+    check(!/Blank|×2|Replace|Fitness and Risk/.test(tnText) && /Open on News page/.test(tnText) && /Latest/.test(tnText) && !/What's changed/.test(tnText), "Team News: BGW/DGW wording, no Replace column, a link to the News page, Latest in place of What's changed");
     g.act("tnh", "ROS");
     check(q(".tn-rows .tn-row")[0].querySelectorAll(".tn-c").length === Math.min(8, 39 - G), "Team News: ROS shows up to eight gameweek cells");
     /* Price Watch */

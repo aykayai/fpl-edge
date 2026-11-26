@@ -1929,6 +1929,30 @@ function tnCell(p,e,g,s){
   if(e===g&&s.k==="rot")return c("rot",Math.round(p.xMins||0)+"′","expected minutes");
   return c("ok","","fixture");
 }
+/* Reputable sources for Team News > Latest (26 Nov 2026): the official game
+   and clubs, national and regional newspapers and broadcasters, and the
+   established FPL sites. Betting-tips sites, fan blogs, aggregators and
+   tabloids are left out. Squad stories arrive through Google News, so the
+   publisher (pub, else src) decides. */
+const TN_REPUTABLE=["premier league","fantasy premier league","bbc","bbc sport","sky sports","the guardian","the athletic","the new york times","espn",
+  "the independent","the times","the telegraph","london evening standard","evening standard","football london","manchester evening news","liverpool echo",
+  "bournemouth echo","the argus","birmingham mail","chronicle live","yorkshire evening post","nottingham post","coventry live","hull daily mail","ipswich star",
+  "east anglian daily times","sunderland echo","reuters","pa media","tnt sports","fantasy football scout","fantasy football fix","fantasy football hub",
+  "all about fpl","rotowire","premier injuries","fourfourtwo"].map(norm);
+const TN_CLUBS=["arsenal","aston villa","bournemouth","brentford","brighton","chelsea","coventry city","crystal palace","everton","fulham","hull city",
+  "ipswich town","leeds united","liverpool","manchester city","manchester united","newcastle united","nottingham forest","sunderland","tottenham hotspur"].map(norm);
+function tnReputable(n){
+  const pub=String((n&&(n.pub||n.src))||"").replace(/\s*\|.*$/,""),k=norm(pub);if(!k)return false;
+  if(TN_REPUTABLE.includes(k)||/fantasyfootballscout|premierleague/.test(k))return true;
+  /* the clubs' own sites: "Liverpool FC", "Arsenal.com", "Chelsea Football Club" */
+  return TN_CLUBS.some(c=>k===c||k===c+"fc"||k===c+"footballclub"||k===c+"com"||k===c+"officialwebsite");
+}
+/* his latest story from a reputable source, any age the feed still holds */
+function tnLatest(p){
+  const seen=new Set();
+  return [...(S.news||[]),...(S.squadNews||[])].filter(n=>(n.ids||[]).includes(p.id)&&tnReputable(n))
+    .filter(n=>{const k=newsKey(n.title);if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>b.time-a.time)[0]||null;
+}
 function teamNewsHTML(){
   if(!S.tnOpen)tnOpen();
   const g=VG(),H=S.tnH||5,n=hzWeeks(H,g),cols=Math.min(n,8,39-g),sp=squadPlayers(),xi=startingXI(),st=wpStats();
@@ -1956,11 +1980,11 @@ function teamNewsHTML(){
     ${dsTile("Ban Risk",String(bans.length),bans.length?bans.slice(0,2).map(x=>esc(x.p.web_name)+(x.b.bk!=null?" "+Math.round(x.b.bk*100)+"%":"")).join(" · ")+(bans.some(x=>x.b.bk!=null)?" booked":""):"nobody one booking from a ban",bans.length?"dn":"")}
     ${dsTile("Stories",String(stories.size),"on your players · 24h")}</div>`;
   const W=[];for(let e=g;e<g+cols;e++)W.push(e);
-  const gc=`style="grid-template-columns:124px 138px 46px 58px 50px 52px 46px 58px minmax(0,1fr) repeat(${W.length},${W.length>5?30:34}px)"`;
+  const gc=`style="grid-template-columns:132px 160px 50px 66px 56px 58px 52px 62px repeat(${W.length},minmax(30px,1fr))"`;
   const sh=(t,k,tip)=>{const on=so&&so.k===k;return `<span class="tn-so${on?" on":""}" onclick="act('tnsort','${k}')" title="${esc(tip)}">${t}<i>${on?(so.dir<0?"▼":"▲"):"↕"}</i></span>`;};
-  const head=`<div class="tn-row tn-hd ds-th" ${gc}><span class="tn-so" onclick="act('tnsort','none')" title="Default order: most at risk first">Player</span><span>Status</span>${sh("Start","start","Sort by start chance")}${sh("Mins","mins","Sort by expected minutes")}${sh("Goal","goal","Bookmakers: chance he scores, if he plays")}${sh("Assist","assist","Bookmakers: chance he assists, if he plays")}${sh("CS","cs","Bookmakers: his team's clean-sheet chance")}${sh("Booked","card","Bookmakers: chance he is booked")}<span class="tn-lh">Latest</span>${W.map(e=>`<span>GW${e}</span>`).join("")}</div>`;
+  const head=`<div class="tn-row tn-hd ds-th" ${gc}><span class="tn-so" onclick="act('tnsort','none')" title="Default order: most at risk first">Player</span><span>Status</span>${sh("Start","start","Sort by start chance")}${sh("Mins","mins","Sort by expected minutes")}${sh("Goal","goal","Bookmakers: chance he scores, if he plays")}${sh("Assist","assist","Bookmakers: chance he assists, if he plays")}${sh("CS","cs","Bookmakers: his team's clean-sheet chance")}${sh("Booked","card","Bookmakers: chance he is booked")}${W.map(e=>`<span>GW${e}</span>`).join("")}</div>`;
   const ox=(v,hi,cls)=>v==null?'<span class="tn-ox mu">—</span>':`<span class="tn-ox${v>=hi?" hi"+(cls?" "+cls:""):""}">${Math.round(v*100)}%</span>`;
-  const row=({p,s,o})=>{const sc=startChance(p),r=tnRecent(p),h=tnStories(p,since)[0],br=banRisk(p,g);
+  const row=({p,s,o})=>{const sc=startChance(p),r=tnRecent(p),br=banRisk(p,g);
     const scCol=sc>=75?"var(--mint)":sc>=50?"#FFB020":sc>0?"#FF9F2E":"#FF8095";
     return `<div class="tn-row${s.sev>=5?" out":s.sev>=2||(s.k==="dbt")?" hot":""}" ${gc}>
       <span class="tn-p">${dsFace(p)}${wpNm(p)}</span>
@@ -1968,13 +1992,14 @@ function teamNewsHTML(){
       ${s.bk?`<span class="tn-st bk">—</span>`:`<b class="tn-st" style="color:${scCol}">${sc}%</b>`}
       <span class="tn-mn" title="Minutes in his club's last three matches, then expected minutes"><span class="tn-mb">${r.mins3.map(v=>`<i style="height:${Math.max(2,v/90*20)}px;background:${v>=60?"#3DDC97":v>0?"#FFB020":"#3A3A3A"}" title="${v}′"></i>`).join("")}</span><b>${Math.round(p.xMins||0)}′</b></span>
       ${ox(o.goal,.3)}${ox(o.assist,.2)}${ox(o.cs,.35,"cs")}${o.card==null?'<span class="tn-ox mu">—</span>':`<span class="tn-ox${o.card>=.2||br?" bk":""}"${br?` title="${esc(br.tip)}"`:""}>${br?lic("rectangle-vertical",11):""}${Math.round(o.card*100)}%</span>`}
-      ${h?`<a class="tn-h" href="${esc(safeUrl(h.url))}" target="_blank" rel="noopener"><b>${esc(h.title)}</b><i>${nwSrc(h)}</i></a>`:`<span class="tn-h"><i class="tn-q">Nothing new since you last looked</i></span>`}
       ${W.map(e=>tnCell(p,e,g,s)).join("")}</div>`;};
-  const ev=tnFeed(sp,since,prev,st).slice(0,8);
-  const feed=`<section class="panel tn-feed">${dsHead("activity","What's changed",`<span class="ds-sub">since you last looked · ${esc(flagWhen(since))}</span>`)}
-    <div class="tn-ev">${ev.length?ev.map(x=>`<${x.url?`a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener"`:"div"} class="tn-e"><span class="tn-ei" style="--ec:${x.tone}">${lic(x.ic,14)}</span>${dsFace(x.p)}
-      <span class="tn-et"><b>${esc(x.p.web_name)} <span>${esc(x.a)}</span></b><i>${esc(x.b)}</i></span><em>${x.fresh?"new":wpAgo(x.t)}</em></${x.url?"a":"div"}>`).join("")
-      :`<p class="tn-none">Nothing has changed since you last looked.</p>`}</div>
+  /* Latest: one row per player, his newest story from a reputable source,
+     newest first; players with none sit at the bottom */
+  const lat=sp.map(p=>({p,n:tnLatest(p)})).sort((a,b)=>(b.n?b.n.time:0)-(a.n?a.n.time:0));
+  const feed=`<section class="panel tn-feed">${dsHead("newspaper","Latest",`<span class="ds-sub">reputable sources</span>`)}
+    <div class="tn-ev tn-lat">${lat.map(({p,n})=>n?`<a class="tn-e" href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener">${dsFace(p)}
+      <span class="tn-et"><b>${esc(p.web_name)} <span>${esc(n.title)}</span></b><i>${nwSrc(n)}</i></span><em>${wpAgo(n.time)}</em></a>`
+      :`<div class="tn-e none">${dsFace(p)}<span class="tn-et"><b>${esc(p.web_name)}</b><i>No recent story from a reputable source</i></span><em></em></div>`).join("")}</div>
     <button class="tn-open" onclick="act('tab','news')">Open on News page ${lic("arrow-right",14)}</button></section>`;
   const upd=S.newsFetchedAt?Date.parse(S.newsFetchedAt):(S.flags&&S.flags.updated?Date.parse(S.flags.updated):null);
   const body=`${tiles}<div class="tn-grid"><section class="panel tn-board">${head}<div class="tn-rows">${rows.map(row).join("")}</div></section>${feed}</div>`;
