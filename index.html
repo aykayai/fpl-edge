@@ -2278,6 +2278,13 @@ svg.chart circle[data-tip]{cursor:pointer}
   .modal .cx-hr2{grid-template-columns:minmax(0,1fr) 56px 56px!important;gap:10px;row-gap:8px}
   .modal .cx-hr2>:is(:nth-child(3),:nth-child(6)),.modal .cx-hr2.hd>:nth-child(5){display:none}
   .modal .cx-hr2:not(.hd)>:nth-child(5){grid-column:1/-1;margin-top:14px}
+  /* no rings or line graphs on the phone (Andy, 26 Nov 2026): the Team Rating
+     donut on the Planner tile and in its pop-up, and the line graphs in the
+     Transfer Record and Rank pop-ups */
+  .pz-ring,.modal .rt-hero>svg{display:none!important}
+  .modal .rt-hero{grid-template-columns:minmax(0,1fr)!important}
+  .modal .rt-hero .rt-k{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .modal :is(.xr-col,.rk-g>.panel):has(polyline){display:none!important}
   /* Captain's season table: week, your pick, the best in your squad, points lost */
   .modal .cr-row{grid-template-columns:36px minmax(0,1fr) minmax(0,1fr) 36px!important;gap:6px}
   .modal .cr-row>:is(:nth-child(5),:nth-child(6),:nth-child(7)){display:none}
@@ -2299,13 +2306,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.10.7"></script>
-<script src="./app-squad.js?v=14.10.7"></script>
-<script src="./app-render.js?v=14.10.7"></script>
-<script src="./app-odds.js?v=14.10.7"></script>
-<script src="./app-tracker.js?v=14.10.7"></script>
-<script src="./app-main.js?v=14.10.7"></script>
-<script src="./app-scout.js?v=14.10.7"></script>
+<script src="./app-core.js?v=14.10.8"></script>
+<script src="./app-squad.js?v=14.10.8"></script>
+<script src="./app-render.js?v=14.10.8"></script>
+<script src="./app-odds.js?v=14.10.8"></script>
+<script src="./app-tracker.js?v=14.10.8"></script>
+<script src="./app-main.js?v=14.10.8"></script>
+<script src="./app-scout.js?v=14.10.8"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
