@@ -132,7 +132,18 @@ function wordMatch(label,p){
   if(!last.includes(q[q.length-1]))return false;
   return first.includes(q[0])||last.includes(q[0]);
 }
-function oddsPlayers(gw){
+/* one answer per odds fetch, gameweek and model: it reads every player market
+   and scores every name, ~190ms, and pages ask for it per player */
+let _opC=null;
+const oddsKey=x=>(S.oddsFetchedAt||"")+"|"+(S.oddsRows?S.oddsRows.length:0)+"|"+x;
+function oddsMemo(name,x,fn){
+  if(!_opC||_opC.model!==S.model)_opC={model:S.model,m:{}};
+  const k=name+"|"+oddsKey(x);
+  if(!(k in _opC.m))_opC.m[k]=fn();
+  return _opC.m[k];
+}
+function oddsPlayers(gw){return oddsMemo("op",gw||0,()=>oddsPlayersRaw(gw));}
+function oddsPlayersRaw(gw){
   const out={};
   /* gw given: that gameweek's fixtures only (the Odds page). Without it each
      player keeps his soonest priced fixture, so next week's prices never fold
@@ -426,14 +437,16 @@ function modelCS(p){
 }
 /* the market's chance each team scores 3 or more in gameweek g (from the
    correct-score grid; 26 Nov 2026, the card's and the Markets tab's Haul Chance) */
-function marketHaul(g){
+function marketHaul(g){return oddsMemo("mh",g,()=>marketHaulRaw(g));}
+function marketHaulRaw(g){
   const inGw=new Set((S.model.byEv[g]||[]).filter(f=>f.ht&&f.at).map(f=>f.ht.id+"-"+f.at.id)),m={};
   oddsFixtures().forEach(f=>{if(!f.goals||f.goals.haulHome==null||!f.ht||!f.at||!inGw.has(f.ht.id+"-"+f.at.id))return;
     m[f.ht.id]=f.goals.haulHome;m[f.at.id]=f.goals.haulAway;});
   return m;
 }
 /* the market's clean-sheet chance for each team in gameweek g */
-function marketCS(g){
+function marketCS(g){return oddsMemo("mcs",g,()=>marketCSRaw(g));}
+function marketCSRaw(g){
   const inGw=new Set((S.model.byEv[g]||[]).filter(f=>f.ht&&f.at).map(f=>f.ht.id+"-"+f.at.id)),m={};
   oddsFixtures().forEach(f=>{if(!f.goals||!f.ht||!f.at||!inGw.has(f.ht.id+"-"+f.at.id))return;
     m[f.ht.id]=f.goals.csHome;m[f.at.id]=f.goals.csAway;});
