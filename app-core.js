@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.11.0";
+const APP_VERSION="14.12.0";
 /* The Convergence mark (25 Nov 2026, Andy): three blades meeting at one point,
    in the UI green. Source and every size: design/brand/. */
 const LOGO=`<svg width="40" height="40" viewBox="0 0 40 40" style="flex:none" role="img" aria-label="FPL Signals"><g transform="translate(0.80 3.68) scale(0.19200)"><polygon points="56,6 100,6 198,84 148,79" fill="#2DDC87"/><polygon points="30,61 198,86 12,103" fill="#2DDC87"/><polygon points="0,164 58,164 192,92 114,99" fill="#2DDC87"/></g></svg>`;
@@ -1587,6 +1587,16 @@ const CS_FROM_FIXTURE=true;
    miss 2.375 -> 2.345 for priced players, 1.258 -> 1.243 overall, out-of-sample
    pick 0.75-1. Closing prices know the line-ups, so this flatters them; it is
    re-tested at GW12 on the prices archived at each deadline. */
+/* Booking odds (26 Nov 2026, Andy said yes). The model was calibrated on
+   points that already include yellow cards, so the average card cost is in
+   there; this term is RELATIVE: a player the bookmakers price likelier to be
+   booked than the week's average priced player loses the difference, a careful
+   one gains it, unpriced players are unchanged. GW8-11 backtest (781
+   player-matches): booking odds ranked who was booked at AUC 0.64 against
+   0.59 for his own card record; 15.5% of priced players who played were
+   booked, the base used to scale the market's relative price. Capped at
+   +/-0.3 a match. */
+const CARD_BASE=0.155, CARD_CAP=0.3;
 let PROP_W=0;   /* OFF 19 Oct 2026: units mismatch found live (see note above); method being rebuilt and re-tested */
 /* D5 (re-fit 12 Nov 2026, Andy: apply now). Per-position level on the final
    projection, fitted on GW5-10 (after the minutes ramp ends, xMins matches
@@ -2076,7 +2086,9 @@ function buildModel(){
       const pPlay=clamp(mE/17,0,.985);
       const p60=clamp((mE-22)/62,0,.985);
       const share=clamp(mE/90,0,1);
-      let tot=0;const csPs=[];
+      let tot=0,cardAdj=0;const csPs=[];
+      {const pc=fx.length===1&&S.cardMean&&S.cardMean[e]&&S.propMarket&&S.propMarket[p.id]&&S.propMarket[p.id][e];
+       if(pc&&pc.c!=null)cardAdj=-clamp((pc.c/S.cardMean[e]-1)*CARD_BASE,-CARD_CAP,CARD_CAP)*availE*share;}
       fx.forEach(f=>{
         const opp=f.oppT||{};
         /* Fixture factors: atk scales goals and assists, def feeds the DefCon
@@ -2180,7 +2192,7 @@ function buildModel(){
       /* FPL's own ep_next only exists for the next gameweek. Blending it into
          GW1 alone made that week sit ~0.45 below every later week — a step that
          is an artefact of the data, not the fixtures. Left out entirely. */
-      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)),fixtures:fx,blank:false,csPs,
+      p.gw[e]={pts:Math.max(0,tot*appearFactor(mE)),fixtures:fx,blank:false,csPs,card:cardAdj,
         pPlay:clamp(availE,0,1)*appearShare(mE)*Math.min(1,fx.length)};
     }
     /* --- fixture sensitivity ---
@@ -2197,6 +2209,8 @@ function buildModel(){
         p.gw[w].pre=p.gw[w].pts;
         p.gw[w].pts=Math.max(0,mean+(p.gw[w].pts-mean)*(p.pos>=3?FIXTURE_AMP_ATT:FIXTURE_AMP));});
     }
+    /* booking odds, after the stretch so the fixture amplifier does not scale them */
+    Object.keys(p.gw).forEach(w=>{const q=p.gw[w];if(q&&q.card)q.pts=Math.max(0,q.pts+q.card);});
     /* the figure every page shows: next week's minutes, flag applied */
     p.xMins=Math.round(minsAt(nextId)*availAt(nextId));
     delete p._team;
