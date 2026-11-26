@@ -80,11 +80,12 @@ function pkOddsHTML(p){
   const lam=f.xgf||0,mHaul=f.xgf!=null?1-Math.exp(-lam)*(1+lam+lam*lam/2):null;
   const pc=v=>v==null?"—":Math.round(v*100)+"%",br=banRisk(p,g);
   const mCS=(()=>{try{return modelCS(p);}catch(e){return null;}})();
-  const od=(k,v,m,cls,tip)=>`<div class="pk-od${cls?" "+cls:""}"${tip?` title="${esc(tip)}"`:""}><em>${k}</em><b>${pc(v)}</b><i>${m}</i></div>`;
+  const od=(k,v,m,cls,tip)=>{const t=tip||(/^vs /.test(m)?`${k}: bookmakers ${pc(v)}, model ${m.slice(3)}`:"");
+    return `<div class="pk-od${cls?" "+cls:""}"${t?` title="${esc(t)}"`:""}><em>${k}</em><b>${pc(v)}</b><i>${m}</i></div>`;};
   return `<div class="pk-odds"><div class="pk-odh">Next Match Odds<span>${f.home?"v ":"@ "}${esc(f.opp)} · ${esc((S.oddsBooks||[]).filter(b=>!/william/i.test(b))[0]||"bookmakers")}</span></div><div class="pk-odg">
-    ${od("Goal",goal,p.pos===1?"&nbsp;":"model "+pc(modelChance(p,p.xg90||0)))}${od("Assist",ast,"model "+pc(modelChance(p,p.xa90||0)))}
-    ${od("Clean Sheet",cs,"model "+pc(mCS))}${od("Booked",card,br?`${br.yc} yellows: ban on ${br.yc+1}`:"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}
-    ${od("Haul Chance",haul,`${esc(p.teamName)} score 3+ · model ${pc(mHaul)}`,"wide","His team's chance of scoring 3 or more")}</div></div>`;
+    ${od("Goal",goal,p.pos===1?"&nbsp;":"vs "+pc(modelChance(p,p.xg90||0)))}${od("Assist",ast,"vs "+pc(modelChance(p,p.xa90||0)))}
+    ${od("CS",cs,"vs "+pc(mCS))}${od("Booked",card,br?"ban risk":"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}
+    ${od("Haul",haul,`vs ${pc(mHaul)}`,"hl",`${p.teamName} score 3 or more: the market ${pc(haul)}, the model ${pc(mHaul)}`)}</div></div>`;
 }
 function playerCardHTML(){
   const p=S.model.players.find(x=>x.id===S.cardId);
@@ -120,7 +121,7 @@ function playerCardHTML(){
       ${owns?`<div><span>Bought</span><b>£${pu.paid.toFixed(1)}${pu.est?srcTag("est.","Estimated as the season-start price: the feed has not published what you paid."):""}</b><em>your price</em></div>
       <div><span>Sells for</span><b style="color:${sell>pu.paid?"var(--mint)":sell<pu.paid?"#FF8FAB":"inherit"}">£${sell.toFixed(1)}</b><em>if sold now</em></div>`:""}
       <div class="wide"><span>Set pieces</span><b class="txt">${esc(sp||"None")}</b></div>
-    </div>${pkOddsHTML(p)}</div>`;
+    </div></div>`;
   const tile=(l2,v,e2,m)=>`<div class="pktile"><span>${l2}</span><b${m?' class="mdl"':""}>${v}</b><em>${e2||"&nbsp;"}</em></div>`;
   const tiles=tile(`xPts GW${G}–${Math.min(38,G+4)}`,hPts(p,G,5).toFixed(1),"model",1)+tile("xMins",Math.round(p.xMins||0)+"′"+minsTag(p),"model",1)
     +tile("Form",(+s.form||p.form||0).toFixed(1)+formTag(p),rk(s.form_rank_type))+tile("Pts / Match",s.points_per_game??p.ppg,rk(s.points_per_game_rank_type))
@@ -156,7 +157,7 @@ function playerCardHTML(){
   const body=`<div class="pk2">${hero}<div class="pkright">
     <div class="pktiles">${tiles}</div>
     <div class="pkpanel pktlw"><div class="pkh">Points: Last ${past.length} Played, Next ${fut.length} Predicted<span>bars coloured by points · striped = predicted · chips = difficulty for him</span></div><div class="pktl" style="grid-template-columns:repeat(${past.length+fut.length},minmax(0,1fr))">${tl}</div></div>
-    <div class="pkrow3"><div class="pkpanel"><div class="pkh">Against Other ${posN}s<span>rank among regular starters · 1 is best</span></div><div class="pkpct">${pct}</div></div>
+    <div class="pkrow3"><div class="pkpanel"><div class="pkh">Against Other ${posN}s<span>rank among regular starters · 1 is best</span></div><div class="pkpct">${pct}</div>${pkOddsHTML(p)}</div>
       <div class="pkpanel"><div class="pkh">This Season<span>totals</span></div><div class="pkkv tot">${tot}</div></div>${hist}</div>
   </div></div>`;
   /* News tab (22 Nov 2026): the flag, his chance of starting, the one flag
