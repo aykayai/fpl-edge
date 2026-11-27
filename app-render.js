@@ -1291,6 +1291,12 @@ function lpWorker(){
     _lpW.onerror=()=>{Object.values(_lpWait).forEach(f=>f({result:undefined}));Object.keys(_lpWait).forEach(k=>delete _lpWait[k]);_lpW=false;};}
   return _lpW||null;
 }
+/* answers from the worker land one by one; redraw once they settle */
+let _optRedraw=null;
+function optRedraw(){
+  clearTimeout(_optRedraw);
+  _optRedraw=setTimeout(()=>{_optRedraw=null;if(S.tab==="chips"||S.cmp||S.pop)render();},Object.keys(_optPending).length?400:60);
+}
 function buildOptimalAsync(kind,gw,budget,form,opt){
   const w=lpWorker();
   if(!w)return new Promise(res=>setTimeout(()=>res(buildOptimal(kind,gw,budget,true,form,opt)),60));
@@ -1306,24 +1312,13 @@ function buildOptimalAsync(kind,gw,budget,form,opt){
 function optimalSquad(kind,gw,budget,form,opt){
   const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full"+optKey(opt);
   if(_sqCache[fullKey])return _sqCache[fullKey];
-  /* 26 Nov 2026: with the worker, a plain ask (no locks, bans or window;
-     Chips and its chip curves) skips the on-page quick solve (~0.3s): the
-     quick builder's team shows at once and the full answer replaces it */
-  const plain=!opt||(!(opt.locks||[]).length&&!(opt.bans||[]).length&&!opt.weeks);
-  const fastKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|fast"+optKey(opt);
-  if(plain&&_sqCache[fastKey]===undefined&&_sqCache[fullKey]===undefined&&lpWorker()){
-    if(!_optPending[fullKey]){_optPending[fullKey]=1;
-      buildOptimalAsync(kind,gw,budget,form,opt).catch(()=>null).then(()=>{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;
-        if(_sqCache[fullKey]&&(S.tab==="chips"||S.cmp||S.pop))render();});}
-    return null;
-  }
   const fast=buildOptimal(kind,gw,budget,false,form,opt);
   if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
     _optPending[fullKey]=1;
     buildOptimalAsync(kind,gw,budget,form,opt).catch(()=>null).then(()=>{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;
       /* only a stored result is worth a redraw: without the solver nothing is
          stored, and redrawing would schedule the same run again */
-      if(_sqCache[fullKey]&&(S.tab==="chips"||S.cmp))render();});
+      if(_sqCache[fullKey])optRedraw();});
   }
   return fast?Object.assign({},fast,{checking:!!_optPending[fullKey]}):null;
 }
