@@ -1194,8 +1194,8 @@ const _optPending={};
 /* wave 2: opt {weeks, locks, bans} lets the Compare pop-up pick the horizon,
    keep players in (locks) and rule players out (bans) */
 const optKey=opt=>opt?"|"+(opt.weeks||"")+"|"+(opt.locks||[]).join(".")+"|"+(opt.bans||[]).join("."):"";
-function buildOptimal(kind,gw,budget,full,form,opt){
-  if(typeof solver==="undefined"||!solver.Solve)return null;   // library failed to load — fall back
+function buildOptimal(kind,gw,budget,full,form,opt,solved){
+  if(!solved&&(typeof solver==="undefined"||!solver.Solve))return null;   // library failed to load — fall back
   const key="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|"+(full?"full":"fast")+optKey(opt);
   if(_sqCache[key]!==undefined)return _sqCache[key];
   opt=opt||{};const locks=opt.locks||[],bans=opt.bans||[];
@@ -1239,10 +1239,14 @@ function buildOptimal(kind,gw,budget,full,form,opt){
   const timeout=full?OPT_TIMEOUT.full:OPT_TIMEOUT.fast;
   const model={optimize:"profit",opType:"max",constraints,variables:vars,
     binaries:Object.fromEntries(Object.keys(vars).map(k=>[k,1])),timeout};
+  /* solved: "model" asks only for the model (the worker solves it);
+     otherwise {result, ms} is the worker's answer to finish here */
+  if(solved==="model")return {model,key};
   const t0=Date.now();
   let result;
-  try{result=solver.Solve(model);}catch(e){result=null;}
-  const ms=Date.now()-t0;
+  if(solved&&solved.result!==undefined)result=solved.result;
+  else{try{result=solver.Solve(model);}catch(e){result=null;}}
+  const ms=solved&&solved.ms!=null?solved.ms:Date.now()-t0;
   if(!result||!result.feasible){_sqCache[key]=null;return null;}
   const xi=[],bench=[];let cap=null;
   cand.forEach(p=>{
@@ -1275,16 +1279,40 @@ function buildOptimal(kind,gw,budget,full,form,opt){
 /* C7 (audit, 22 Nov 2026): counts full optimiser runs, so the chip curves
    (cached on chipSig) refresh once the full Free Hit team replaces the quick one */
 let _optDone=0;
+/* 26 Nov 2026: the full solve runs in a Web Worker (lp-worker.js), so the
+   page stays responsive (the Wildcard one took about 2 seconds on the page's
+   thread, freezing every click after opening Chips). Without workers (tests,
+   old browsers) it runs as before, on a timer. */
+let _lpW=null,_lpSeq=0;const _lpWait={};
+function lpWorker(){
+  if(_lpW!==null)return _lpW||null;
+  try{_lpW=typeof Worker==="function"?new Worker("./lp-worker.js"):false;}catch(e){_lpW=false;}
+  if(_lpW){_lpW.onmessage=e=>{const d=e.data||{},f=_lpWait[d.id];if(f){delete _lpWait[d.id];f(d);}};
+    _lpW.onerror=()=>{Object.values(_lpWait).forEach(f=>f({result:undefined}));Object.keys(_lpWait).forEach(k=>delete _lpWait[k]);_lpW=false;};}
+  return _lpW||null;
+}
+function buildOptimalAsync(kind,gw,budget,form,opt){
+  const w=lpWorker();
+  if(!w)return new Promise(res=>setTimeout(()=>res(buildOptimal(kind,gw,budget,true,form,opt)),60));
+  const m=buildOptimal(kind,gw,budget,true,form,opt,"model");
+  if(!m||!m.model)return Promise.resolve(m);                 // cached already, or no pool
+  const id=++_lpSeq;
+  return new Promise(res=>{_lpWait[id]=d=>{
+    /* the worker failed: solve here as before */
+    if(d.result===undefined)return res(buildOptimal(kind,gw,budget,true,form,opt));
+    res(buildOptimal(kind,gw,budget,true,form,opt,{result:d.result,ms:d.ms}));};
+    w.postMessage({id,model:m.model});});
+}
 function optimalSquad(kind,gw,budget,form,opt){
   const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full"+optKey(opt);
   if(_sqCache[fullKey])return _sqCache[fullKey];
   const fast=buildOptimal(kind,gw,budget,false,form,opt);
   if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
     _optPending[fullKey]=1;
-    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form,opt);}finally{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;}
+    buildOptimalAsync(kind,gw,budget,form,opt).catch(()=>null).then(()=>{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;
       /* only a stored result is worth a redraw: without the solver nothing is
-         stored, and redrawing would schedule the same run again every 60 ms */
-      if(_sqCache[fullKey]&&(S.tab==="chips"||S.cmp))render();},60);
+         stored, and redrawing would schedule the same run again */
+      if(_sqCache[fullKey]&&(S.tab==="chips"||S.cmp))render();});
   }
   return fast?Object.assign({},fast,{checking:!!_optPending[fullKey]}):null;
 }
