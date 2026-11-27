@@ -1295,7 +1295,9 @@ function lpWorker(){
 let _optRedraw=null;
 function optRedraw(){
   clearTimeout(_optRedraw);
-  _optRedraw=setTimeout(()=>{_optRedraw=null;if(S.tab==="chips"||S.cmp||S.pop)render();},Object.keys(_optPending).length?400:60);
+  _optRedraw=setTimeout(()=>{_optRedraw=null;if(S.tab==="chips"||S.cmp||S.pop)render();
+    /* not on show: refresh Chips quietly so it opens ready */
+    else if(typeof requestIdleCallback==="function")requestIdleCallback(()=>{if(S.model&&S.tab!=="chips")try{chipsHTML();}catch(e){}},{timeout:4000});},Object.keys(_optPending).length?400:60);
 }
 function buildOptimalAsync(kind,gw,budget,form,opt){
   const w=lpWorker();
