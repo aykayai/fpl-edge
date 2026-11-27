@@ -1329,7 +1329,9 @@ function buildSquad(kind,gw,form,budget,o){
   const key=kind+"|"+gw+"|"+(form||"auto")+"|"+budget.toFixed(1)+"|"+(S.model?S.model.players.length:0)+(o?"|"+o.tag:"");
   if(_sqCache[key])return _sqCache[key];
   const weeks=kind==="wildcard"?5:1;
-  const val=o&&o.val?o.val:p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
+  /* each player's value worked out once (the sorts below ask for it thousands of times) */
+  const val0=o&&o.val?o.val:p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
+  const _vc=new Map(),val=p=>{let v=_vc.get(p);if(v===undefined){v=val0(p);_vc.set(p,v);}return v;};
   const pool=o?S.model.players.filter(p=>val(p)>0):S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank&&val(p)>0);
   if(pool.length<30)return null;
   const by={1:[],2:[],3:[],4:[]};
@@ -1338,6 +1340,8 @@ function buildSquad(kind,gw,form,budget,o){
   Object.values(by).forEach(a=>a.sort(rank));
   const shapes=form?[form.split("-").map(Number)]:FORMS;
   const need=RULES.squad;
+  /* the cheapest first, sorted once rather than for every formation */
+  const cheapBy={};[1,2,3,4].forEach(pos=>{cheapBy[pos]=by[pos].slice().sort((a,b)=>a.price-b.price||rank(a,b));});
   /* A Wildcard bench has to be able to come on; a Free Hit bench never will, so
      it is squeezed harder. The floor is whatever four cheap bodies actually
      cost — around £17.5 this season — so the cap sits above that. */
@@ -1354,7 +1358,7 @@ function buildSquad(kind,gw,form,budget,o){
     const bench=[];let bspend=0;
     [1,2,3,4].forEach(pos=>{
       const want=need[pos]-xi.filter(p=>p.pos===pos).length;
-      const cheap=by[pos].slice().sort((a,b)=>a.price-b.price||rank(a,b));
+      const cheap=cheapBy[pos];
       let t=0;
       for(const p of cheap){if(t>=want)break;
         if(xi.includes(p)||bench.includes(p))continue;
@@ -1377,13 +1381,15 @@ function buildSquad(kind,gw,form,budget,o){
     while(up&&g2++<160){
       up=false;const spare=budget-spend();if(spare<0.1)break;
       let pick=null;
-      xi.forEach(out=>{by[out.pos].forEach(q=>{
-        if(xi.includes(q)||bench.includes(q))return;
+      xi.forEach(out=>{const vo=val(out);for(const q of by[out.pos]){
+        /* by[pos] runs best first: past his value no swap can keep the projection */
+        if(val(q)<vo-1e-9)break;
+        if(xi.includes(q)||bench.includes(q))continue;
         const extra=q.price-out.price;
-        if(extra<=0||extra>spare+1e-9)return;
-        if(q.team!==out.team&&(club[q.team]||0)>=3)return;
-        const dd=val(q)-val(out);
-        if(dd>=-1e-9&&(!pick||dd>pick.dd))pick={out,inn:q,dd};});});
+        if(extra<=0||extra>spare+1e-9)continue;
+        if(q.team!==out.team&&(club[q.team]||0)>=3)continue;
+        const dd=val(q)-vo;
+        if(dd>=-1e-9&&(!pick||dd>pick.dd))pick={out,inn:q,dd};}});
       if(pick){club[pick.out.team]--;xi.splice(xi.indexOf(pick.out),1);add(pick.inn);up=true;}}
     const cap=xi.slice().sort(rank)[0];
     const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0)+benchPart(kind,bench,val);
