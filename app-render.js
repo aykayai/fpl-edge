@@ -1306,6 +1306,17 @@ function buildOptimalAsync(kind,gw,budget,form,opt){
 function optimalSquad(kind,gw,budget,form,opt){
   const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full"+optKey(opt);
   if(_sqCache[fullKey])return _sqCache[fullKey];
+  /* 26 Nov 2026: with the worker, a plain ask (no locks, bans or window;
+     Chips and its chip curves) skips the on-page quick solve (~0.3s): the
+     quick builder's team shows at once and the full answer replaces it */
+  const plain=!opt||(!(opt.locks||[]).length&&!(opt.bans||[]).length&&!opt.weeks);
+  const fastKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|fast"+optKey(opt);
+  if(plain&&_sqCache[fastKey]===undefined&&_sqCache[fullKey]===undefined&&lpWorker()){
+    if(!_optPending[fullKey]){_optPending[fullKey]=1;
+      buildOptimalAsync(kind,gw,budget,form,opt).catch(()=>null).then(()=>{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;
+        if(_sqCache[fullKey]&&(S.tab==="chips"||S.cmp||S.pop))render();});}
+    return null;
+  }
   const fast=buildOptimal(kind,gw,budget,false,form,opt);
   if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
     _optPending[fullKey]=1;
