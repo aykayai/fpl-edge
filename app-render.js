@@ -1194,8 +1194,8 @@ const _optPending={};
 /* wave 2: opt {weeks, locks, bans} lets the Compare pop-up pick the horizon,
    keep players in (locks) and rule players out (bans) */
 const optKey=opt=>opt?"|"+(opt.weeks||"")+"|"+(opt.locks||[]).join(".")+"|"+(opt.bans||[]).join("."):"";
-function buildOptimal(kind,gw,budget,full,form,opt){
-  if(typeof solver==="undefined"||!solver.Solve)return null;   // library failed to load — fall back
+function buildOptimal(kind,gw,budget,full,form,opt,solved){
+  if(!solved&&(typeof solver==="undefined"||!solver.Solve))return null;   // library failed to load — fall back
   const key="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|"+(full?"full":"fast")+optKey(opt);
   if(_sqCache[key]!==undefined)return _sqCache[key];
   opt=opt||{};const locks=opt.locks||[],bans=opt.bans||[];
@@ -1239,10 +1239,14 @@ function buildOptimal(kind,gw,budget,full,form,opt){
   const timeout=full?OPT_TIMEOUT.full:OPT_TIMEOUT.fast;
   const model={optimize:"profit",opType:"max",constraints,variables:vars,
     binaries:Object.fromEntries(Object.keys(vars).map(k=>[k,1])),timeout};
+  /* solved: "model" asks only for the model (the worker solves it);
+     otherwise {result, ms} is the worker's answer to finish here */
+  if(solved==="model")return {model,key};
   const t0=Date.now();
   let result;
-  try{result=solver.Solve(model);}catch(e){result=null;}
-  const ms=Date.now()-t0;
+  if(solved&&solved.result!==undefined)result=solved.result;
+  else{try{result=solver.Solve(model);}catch(e){result=null;}}
+  const ms=solved&&solved.ms!=null?solved.ms:Date.now()-t0;
   if(!result||!result.feasible){_sqCache[key]=null;return null;}
   const xi=[],bench=[];let cap=null;
   cand.forEach(p=>{
@@ -1275,16 +1279,48 @@ function buildOptimal(kind,gw,budget,full,form,opt){
 /* C7 (audit, 22 Nov 2026): counts full optimiser runs, so the chip curves
    (cached on chipSig) refresh once the full Free Hit team replaces the quick one */
 let _optDone=0;
+/* 26 Nov 2026: the full solve runs in a Web Worker (lp-worker.js), so the
+   page stays responsive (the Wildcard one took about 2 seconds on the page's
+   thread, freezing every click after opening Chips). Without workers (tests,
+   old browsers) it runs as before, on a timer. */
+let _lpW=null,_lpSeq=0;const _lpWait={};
+function lpWorker(){
+  if(_lpW!==null)return _lpW||null;
+  try{_lpW=typeof Worker==="function"?new Worker("./lp-worker.js"):false;}catch(e){_lpW=false;}
+  if(_lpW){_lpW.onmessage=e=>{const d=e.data||{},f=_lpWait[d.id];if(f){delete _lpWait[d.id];f(d);}};
+    _lpW.onerror=()=>{Object.values(_lpWait).forEach(f=>f({result:undefined}));Object.keys(_lpWait).forEach(k=>delete _lpWait[k]);_lpW=false;};}
+  return _lpW||null;
+}
+/* answers from the worker land one by one; redraw once they settle */
+let _optRedraw=null;
+function optRedraw(){
+  clearTimeout(_optRedraw);
+  _optRedraw=setTimeout(()=>{_optRedraw=null;if(S.tab==="chips"||S.cmp||S.pop)render();
+    /* not on show: refresh Chips quietly so it opens ready */
+    else if(typeof requestIdleCallback==="function")requestIdleCallback(()=>{if(S.model&&S.tab!=="chips")try{chipsHTML();}catch(e){}},{timeout:4000});},Object.keys(_optPending).length?400:60);
+}
+function buildOptimalAsync(kind,gw,budget,form,opt){
+  const w=lpWorker();
+  if(!w)return new Promise(res=>setTimeout(()=>res(buildOptimal(kind,gw,budget,true,form,opt)),60));
+  const m=buildOptimal(kind,gw,budget,true,form,opt,"model");
+  if(!m||!m.model)return Promise.resolve(m);                 // cached already, or no pool
+  const id=++_lpSeq;
+  return new Promise(res=>{_lpWait[id]=d=>{
+    /* the worker failed: solve here as before */
+    if(d.result===undefined)return res(buildOptimal(kind,gw,budget,true,form,opt));
+    res(buildOptimal(kind,gw,budget,true,form,opt,{result:d.result,ms:d.ms}));};
+    w.postMessage({id,model:m.model});});
+}
 function optimalSquad(kind,gw,budget,form,opt){
   const fullKey="opt|"+kind+"|"+gw+"|"+(form||"")+"|"+budget.toFixed(1)+"|full"+optKey(opt);
   if(_sqCache[fullKey])return _sqCache[fullKey];
   const fast=buildOptimal(kind,gw,budget,false,form,opt);
   if(_sqCache[fullKey]===undefined&&!_optPending[fullKey]){
     _optPending[fullKey]=1;
-    setTimeout(()=>{try{buildOptimal(kind,gw,budget,true,form,opt);}finally{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;}
+    buildOptimalAsync(kind,gw,budget,form,opt).catch(()=>null).then(()=>{delete _optPending[fullKey];if(_sqCache[fullKey])_optDone++;
       /* only a stored result is worth a redraw: without the solver nothing is
-         stored, and redrawing would schedule the same run again every 60 ms */
-      if(_sqCache[fullKey]&&(S.tab==="chips"||S.cmp))render();},60);
+         stored, and redrawing would schedule the same run again */
+      if(_sqCache[fullKey])optRedraw();});
   }
   return fast?Object.assign({},fast,{checking:!!_optPending[fullKey]}):null;
 }
@@ -1295,7 +1331,9 @@ function buildSquad(kind,gw,form,budget,o){
   const key=kind+"|"+gw+"|"+(form||"auto")+"|"+budget.toFixed(1)+"|"+(S.model?S.model.players.length:0)+(o?"|"+o.tag:"");
   if(_sqCache[key])return _sqCache[key];
   const weeks=kind==="wildcard"?5:1;
-  const val=o&&o.val?o.val:p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
+  /* each player's value worked out once (the sorts below ask for it thousands of times) */
+  const val0=o&&o.val?o.val:p=>{let t=0;for(let e=gw;e<gw+weeks&&e<=38;e++)t+=(p.gw[e]?.pts||0);return t/weeks;};
+  const _vc=new Map(),val=p=>{let v=_vc.get(p);if(v===undefined){v=val0(p);_vc.set(p,v);}return v;};
   const pool=o?S.model.players.filter(p=>val(p)>0):S.model.players.filter(p=>p.avail>0&&p.gw[gw]&&!p.gw[gw].blank&&val(p)>0);
   if(pool.length<30)return null;
   const by={1:[],2:[],3:[],4:[]};
@@ -1304,6 +1342,8 @@ function buildSquad(kind,gw,form,budget,o){
   Object.values(by).forEach(a=>a.sort(rank));
   const shapes=form?[form.split("-").map(Number)]:FORMS;
   const need=RULES.squad;
+  /* the cheapest first, sorted once rather than for every formation */
+  const cheapBy={};[1,2,3,4].forEach(pos=>{cheapBy[pos]=by[pos].slice().sort((a,b)=>a.price-b.price||rank(a,b));});
   /* A Wildcard bench has to be able to come on; a Free Hit bench never will, so
      it is squeezed harder. The floor is whatever four cheap bodies actually
      cost — around £17.5 this season — so the cap sits above that. */
@@ -1320,7 +1360,7 @@ function buildSquad(kind,gw,form,budget,o){
     const bench=[];let bspend=0;
     [1,2,3,4].forEach(pos=>{
       const want=need[pos]-xi.filter(p=>p.pos===pos).length;
-      const cheap=by[pos].slice().sort((a,b)=>a.price-b.price||rank(a,b));
+      const cheap=cheapBy[pos];
       let t=0;
       for(const p of cheap){if(t>=want)break;
         if(xi.includes(p)||bench.includes(p))continue;
@@ -1343,13 +1383,15 @@ function buildSquad(kind,gw,form,budget,o){
     while(up&&g2++<160){
       up=false;const spare=budget-spend();if(spare<0.1)break;
       let pick=null;
-      xi.forEach(out=>{by[out.pos].forEach(q=>{
-        if(xi.includes(q)||bench.includes(q))return;
+      xi.forEach(out=>{const vo=val(out);for(const q of by[out.pos]){
+        /* by[pos] runs best first: past his value no swap can keep the projection */
+        if(val(q)<vo-1e-9)break;
+        if(xi.includes(q)||bench.includes(q))continue;
         const extra=q.price-out.price;
-        if(extra<=0||extra>spare+1e-9)return;
-        if(q.team!==out.team&&(club[q.team]||0)>=3)return;
-        const dd=val(q)-val(out);
-        if(dd>=-1e-9&&(!pick||dd>pick.dd))pick={out,inn:q,dd};});});
+        if(extra<=0||extra>spare+1e-9)continue;
+        if(q.team!==out.team&&(club[q.team]||0)>=3)continue;
+        const dd=val(q)-vo;
+        if(dd>=-1e-9&&(!pick||dd>pick.dd))pick={out,inn:q,dd};}});
       if(pick){club[pick.out.team]--;xi.splice(xi.indexOf(pick.out),1);add(pick.inn);up=true;}}
     const cap=xi.slice().sort(rank)[0];
     const total=xi.reduce((a,p)=>a+val(p),0)+(cap?val(cap):0)+benchPart(kind,bench,val);
@@ -1375,6 +1417,17 @@ let _chipPlanList=[];
    FH, BB, TC) everywhere. All gains on the Planner's team score; the plan
    is S.chips, the same schedule the Planner uses.
    ============================================================ */
+/* 26 Nov 2026: Chips' heavy work (chip curves, the quick builder, the
+   solver queue) runs once the site sits idle after loading, so opening Chips
+   is instant. Browsers without requestIdleCallback (the tests) skip it. */
+let _warmT=null;
+function warmChips(){
+  if(typeof requestIdleCallback!=="function")return;
+  clearTimeout(_warmT);
+  _warmT=setTimeout(()=>requestIdleCallback(()=>{
+    if(!S.model||S.loading||S.tab==="chips")return;
+    try{chipsHTML();}catch(e){}},{timeout:6000}),3500);
+}
 function chipsHTML(){
   if(!S.model)return "";
   const g=S.model.next.id,left=chipsLeft(),played=((S.tracker&&S.tracker.gw)||[]).filter(r=>r.chip).sort((a,b)=>a.event-b.event);
