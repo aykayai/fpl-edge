@@ -42,7 +42,7 @@ function act(k,a,b,c){
     /* batch 5: the live gameweek */
     case"ywf":S.ywF=["near","top10k","overall","rivals"].includes(a)?a:"near";break;
     case"lkf":S.lkF=["near","top10k","overall"].includes(a)?a:"top10k";break;
-    case"lkl":S.lkL=a==="live"?"live":"season";break;
+    case"lks":S.lkS=["gw","month"].includes(a)?a:"total";break;
     case"mcm":S.mcM=a==="table"?"table":"matches";break;
     case"mco":{const cur=S.mcOpen==null?S._mcAuto:S.mcOpen;S.mcOpen=cur===+a?0:+a;}break;
     case"h2h":S.h2h=String(a);S.pop="h2h";break;
