@@ -1415,6 +1415,17 @@ let _chipPlanList=[];
    FH, BB, TC) everywhere. All gains on the Planner's team score; the plan
    is S.chips, the same schedule the Planner uses.
    ============================================================ */
+/* 26 Nov 2026: Chips' heavy work (chip curves, the quick builder, the
+   solver queue) runs once the site sits idle after loading, so opening Chips
+   is instant. Browsers without requestIdleCallback (the tests) skip it. */
+let _warmT=null;
+function warmChips(){
+  if(typeof requestIdleCallback!=="function")return;
+  clearTimeout(_warmT);
+  _warmT=setTimeout(()=>requestIdleCallback(()=>{
+    if(!S.model||S.loading||S.tab==="chips")return;
+    try{chipsHTML();}catch(e){}},{timeout:6000}),3500);
+}
 function chipsHTML(){
   if(!S.model)return "";
   const g=S.model.next.id,left=chipsLeft(),played=((S.tracker&&S.tracker.gw)||[]).filter(r=>r.chip).sort((a,b)=>a.event-b.event);
