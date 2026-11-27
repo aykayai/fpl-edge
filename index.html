@@ -1888,6 +1888,11 @@ svg.chart circle[data-tip]{cursor:pointer}
 @media(max-width:1100px){.tn-grid,.pw-g,.fo-g,.pm-g{grid-template-columns:1fr}.tn-t,.pw-t,.fo-t,.pm-t{grid-template-columns:repeat(3,minmax(0,1fr))}.wp .mbody{overflow:auto}}
 /* This Week batch 5 (22 Nov 2026): the live gameweek, from mock_live5 and mock_h2h3 */
 .pz-grid.lk{grid-template-columns:minmax(0,1fr) 470px}
+/* the phone (27 Nov 2026): one column, so the live week's pitch is not
+   squeezed to nothing beside a 470px Live panel; the league drops the
+   manager's name and tightens its columns to fit 380px */
+@media(max-width:760px){.pz-grid.lk{grid-template-columns:minmax(0,1fr)}
+.lg5{grid-template-columns:18px minmax(0,1fr) 24px 30px 30px 34px 36px;gap:4px}.lg5-r{padding:6px 4px}.lg5-h{padding:4px}.lg5-l1 .ds-sub{display:none}.lg5-l1 .ds-name{max-width:100%}}
 .lp-st{display:grid;place-items:center;height:16px;padding:0 4px;border-radius:4px;font:700 9px 'Geist Mono',monospace;color:#0B0B0B;min-width:18px;white-space:nowrap}.lp-st.ft{background:#8A8A8A}.lp-st.live{background:#FF5A6E;color:#2A0008}.lp-st.tp{background:#2A2A2A;color:#BDBDBD;font-size:8.5px}
 .pv-res.lpv{grid-template-columns:auto auto 1fr}
 .pz-c.lp-on .pz-n{box-shadow:inset 0 -2px 0 #FF5A6E}
@@ -2355,13 +2360,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.16.0"></script>
-<script src="./app-squad.js?v=14.16.0"></script>
-<script src="./app-render.js?v=14.16.0"></script>
-<script src="./app-odds.js?v=14.16.0"></script>
-<script src="./app-tracker.js?v=14.16.0"></script>
-<script src="./app-main.js?v=14.16.0"></script>
-<script src="./app-scout.js?v=14.16.0"></script>
+<script src="./app-core.js?v=14.16.1"></script>
+<script src="./app-squad.js?v=14.16.1"></script>
+<script src="./app-render.js?v=14.16.1"></script>
+<script src="./app-odds.js?v=14.16.1"></script>
+<script src="./app-tracker.js?v=14.16.1"></script>
+<script src="./app-main.js?v=14.16.1"></script>
+<script src="./app-scout.js?v=14.16.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
