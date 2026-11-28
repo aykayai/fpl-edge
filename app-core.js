@@ -281,7 +281,7 @@ function applyHash(){
   if(t&&t!==S.tab){closePops();S.tab=t;return true;}
   return false;
 }
-const APP_VERSION="14.20.1";
+const APP_VERSION="14.20.2";
 /* The Convergence mark (25 Nov 2026, Andy): three blades meeting at one point,
    in the UI green. Source and every size: design/brand/. */
 const LOGO=`<svg width="40" height="40" viewBox="0 0 40 40" style="flex:none" role="img" aria-label="FPL Signals"><g transform="translate(0.80 3.68) scale(0.19200)"><polygon points="56,6 100,6 198,84 148,79" fill="#2DDC87"/><polygon points="30,61 198,86 12,103" fill="#2DDC87"/><polygon points="0,164 58,164 192,92 114,99" fill="#2DDC87"/></g></svg>`;

@@ -3060,6 +3060,11 @@ const LK_EV={goals_scored:["Goal","G","#3DDC97"],assists:["Assist","A","#60A5FA"
   red_cards:["Red card","R","#FF5A6E"],saves:["Saves","S","#60A5FA"],clean_sheets:["Clean sheet","C","#3DDC97"],
   goals_conceded:["Conceded","GC","#FF8A3D"],bonus:["Bonus","B","#F5B33C"],defensive_contribution:["DefCon","D","#A78BFA"],
   subbed_off:["Subbed off","↓","#9A9A9A"],subbed_on:["Subbed on","↑","#3DDC97"],news:["Flag","!","#FF8A3D"]};
+/* 29 Nov 2026: each event's icon, from the Planner's own set */
+const LK_ARR=d=>`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d?"M12 5v14M6 13l6 6 6-6":"M12 19V5M6 11l6-6 6 6"}"/></svg>`;
+const lkEvIcon=e=>({goals_scored:EV_ICON.g,assists:EV_ICON.a,own_goals:EV_ICON.og,penalties_saved:EV_ICON.sv,penalties_missed:EV_ICON.pen,
+  yellow_cards:EV_ICON.card("#FFD23F"),red_cards:EV_ICON.card("#FF5A6E"),saves:EV_ICON.sv,clean_sheets:EV_ICON.cs,goals_conceded:EV_ICON.cs,
+  bonus:EV_ICON.b,defensive_contribution:EV_ICON.dc,subbed_off:LK_ARR(1),subbed_on:LK_ARR(0),news:lic("triangle-alert",13)})[e.k]||EV_ICON.mins;
 /* when an untimed event (one there before the server first looked) is placed:
    an hour after its match kicked off, so it sorts among that match's events */
 function lkFxTime(L,e){const f=(L.W.fixtures||[]).find(x=>x.id===e.fx),k=f&&f.ko?Date.parse(f.ko):NaN;return isNaN(k)?0:k+3600000;}
@@ -3084,10 +3089,14 @@ function lkFeed(L){
     .filter(e=>L.P(e.el)&&(owned.has(+e.el)||big.has(e.k))).map(e=>({...e,p:L.P(e.el),imp:e.dp*diff(+e.el)}))
     .map(e=>({...e,te:e.t??lkFxTime(L,e)}))
     .sort((a,b)=>(b.te??0)-(a.te??0)||(b.fx||0)-(a.fx||0));
-  let sofar=0,left=0;
-  owned.forEach(id=>{const d=diff(id);if(!d)return;sofar+=L.pts(id)*d;
-    const s=L.status(id),p=L.P(id),pr=p&&pastPred(p,g)?pastPred(p,g).v:0;
-    left+=d*(s.s==="tp"?pr:s.s==="in"?Math.max(0,pr-2)*Math.max(0,90-(s.min||0))/90:0);});
+  /* 29 Nov 2026: the two totals as LiveFPL counts them (Andy checked against
+     it). Points: your week's net score less the rest of the league's average
+     net score, hits included. Players left: your players still to finish
+     (playing or to start, the captain counted by his multiplier) less the
+     rest of the league's average. */
+  const leftOf=x=>x.picks.reduce((a,k,i)=>{const m=mOf(k,i),s=L.status(k.id).s;return a+(m>0&&(s==="tp"||s==="in")?m:0);},0);
+  const me=L.league.find(x=>x.mine),avgOf=f=>rivals.length?rivals.reduce((a,x)=>a+f(x),0)/rivals.length:0;
+  const sofar=me?me.live-avgOf(x=>x.live):0,left=me?leftOf(me)-avgOf(leftOf):0;
   return{rows,sofar,left};
 }
 function lkPanelHTML(g){
@@ -3133,9 +3142,9 @@ function lkPanelHTML(g){
     const lab=lost?"Clean sheet lost":e.k==="bonus"&&e.prov?"Bonus (prov.)":e.k==="news"?`<span class="fd-nw" title="${esc(e.txt||"")}">${esc(e.txt||"Flagged")}</span>`:d[0];
     return `<div class="fd-r${L.mult(+e.el)>0?" mine":""}"><span class="fd-t">${tm(e)}<i>${e.min!=null&&e.t?e.min+"′":""}</i></span>${dsFace(e.p)}
       <span class="fd-p"><span class="ds-name">${esc(e.p.web_name)}</span><span class="ds-sub">${esc(e.p.teamFull||e.p.teamName||"")}</span></span>
-      <span class="fd-ev" style="--ec:${col}"><span class="ic">${d[1]}</span>${lab}${e.dv>1&&["goals_scored","assists","own_goals","penalties_saved","penalties_missed"].includes(e.k)?" ×"+e.dv:""}${e.dp?`<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i>`:""}</span>
+      <span class="fd-ev" style="--ec:${col}"><span class="ic">${lkEvIcon(e)}</span><span class="fd-lb">${lab}</span>${e.dv>1&&["goals_scored","assists","own_goals","penalties_saved","penalties_missed"].includes(e.k)?" ×"+e.dv:""}${e.dp?`<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i>`:""}</span>
       <span class="fd-i ${e.imp>0.05?"up":e.imp<-0.05?"dn":"eq"}">${e.dp?`${e.imp>0.05?"+":e.imp<-0.05?"−":""}${Math.abs(e.imp).toFixed(1)}`:""}</span></div>`;};
-  const feed=`<div class="lv4-blk lvm-fd"><div class="lvm-h">${lic("activity",15)}<b>Feed</b><button class="fci" data-tip="Impact: the points times your share less the league average share." aria-label="About the Feed">i</button><span class="sp fd-sum">You vs league ${sg(Fd.sofar)} so far ${sg(Fd.left)} still to play</span></div>
+  const feed=`<div class="lv4-blk lvm-fd"><div class="lvm-h">${lic("activity",15)}<b>Feed</b><button class="fci" data-tip="Each event's impact: its points times your share less the league's average share." aria-label="About the Feed">i</button><span class="sp fd-sum" title="You against the rest of the league's average this week">Points ${sg(Fd.sofar)} · Players left ${sg(Fd.left)}</span></div>
     <div class="fd-list">${Fd.rows.map(fr).join("")||`<p class="ds-sub" style="padding:6px 0">Nothing yet: events appear here as they happen.</p>`}</div></div>`;
   /* Your Edge / Threats */
   const ET=S.lkE==="threats"?"threats":"edge";
@@ -3240,11 +3249,11 @@ function lkCentreHTML(g){
       const dc=k=>list("defensive_contribution",k).map(([el,v])=>({el,v,t:lkDcT((L.P(el)||{}).pos)})).filter(x=>x.t&&x.v>=x.t-4).sort((a,b)=>b.v/b.t-a.v/a.t).slice(0,3).map(x=>chip(x.el,`${x.v}/${x.t}`,{cls:x.v>=x.t?"up":"dc"}));
       const saves=k=>list("saves",k).slice().sort((a,b)=>b[1]-a[1]).slice(0,2).map(([el,v])=>chip(el,v));
       const none=`<span class="cx-none">–</span>`;
-      const row=(lbl,ic,fn,tag,always)=>{const h=fn("h"),a=fn("a");return h.length||a.length||always?`<div class="cx-r"><div class="h">${h.join("")||none}</div><span class="cx-l">${ic}${lbl}${tag?`<i>${tag}</i>`:""}</span><div class="a">${a.join("")||none}</div></div>`:"";};
+      const row=(lbl,ic,fn,tag,always,cls)=>{const h=fn("h"),a=fn("a");return h.length||a.length||always?`<div class="cx-r${cls?" "+cls:""}"><div class="h">${h.join("")||none}</div><span class="cx-l">${ic}${lbl}${tag?`<i>${tag}</i>`:""}</span><div class="a">${a.join("")||none}</div></div>`:"";};
       const oh=ours("h"),oa=ours("a");
       const band=x=>x?`<div class="cx-sec">${x}</div>`:"";
       const b1=oh.length||oa.length?`<div class="cx-sec cx-mine"><div class="cx-r"><div class="h">${oh.join("")||none}</div><span class="cx-l">${lic("shirt",13)}Your players</span><div class="a">${oa.join("")||none}</div></div></div>`:"";
-      const b2=band(row("Goals · Assists",EV_ICON.g,scoring)+row("Cards",EV_ICON.card("#FFD23F"),cards));
+      const b2=band(row("Goals · Assists",EV_ICON.g,scoring,"",false,"stk")+row("Cards",EV_ICON.card("#FFD23F"),cards));
       /* a finished match: only the players who earned the points, each marked */
       const done=f.done||f.fp;
       const bonusOnly=k=>Object.entries(bonusOf(k)).sort((a,b)=>b[1]-a[1]).map(([el,v])=>chip(el,null,{bn:v,prov:!!pv}));

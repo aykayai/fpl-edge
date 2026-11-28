@@ -724,6 +724,9 @@ try {
         const fr = doc.querySelector(".lv4 .lvm-fd .fd-r"), want = 6 * (myM - avgM);
         const got = fr ? Number((fr.querySelector(".fd-i").textContent || "").replace("−", "-").replace("+", "")) : NaN;
         check(!!fr && /Goal/.test(fr.textContent) && /63′/.test(fr.textContent) && Math.abs(got - want) < 0.051, "Feed: a goal shows its minute and its impact against the league's average share", `${got} vs ${want.toFixed(2)}`);
+        { const Fd = vm.runInContext("lkFeed", ctx)(g.lkCalc(LG)), me2 = L.league.find(x => x.mine), rv = L.league.filter(x => !x.mine);
+          const want2 = me2.live - rv.reduce((a, x) => a + x.live, 0) / (rv.length || 1);
+          check(Math.abs(Fd.sofar - want2) < 1e-9, "Feed: Points is your net score less the rest of the league's average net score, hits included (as LiveFPL)", Fd.sofar + " vs " + want2); }
         g.act("lke", "threats");
         check(/Threats/.test(doc.querySelector(".lvm-et .lvm-tg .on")?.textContent || ""), "Edge / Threats: the switch shows Threats");
         g.act("lke", "edge");
