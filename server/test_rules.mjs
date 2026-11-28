@@ -727,6 +727,14 @@ try {
         { const Fd = vm.runInContext("lkFeed", ctx)(g.lkCalc(LG)), me2 = L.league.find(x => x.mine), rv = L.league.filter(x => !x.mine);
           const want2 = me2.live - rv.reduce((a, x) => a + x.live, 0) / (rv.length || 1);
           check(Math.abs(Fd.sofar - want2) < 1e-9, "Feed: Points is your net score less the rest of the league's average net score, hits included (as LiveFPL)", Fd.sofar + " vs " + want2); }
+        { g.act("lkf", "rivals"); g.act("lke", "threats"); vm.runInContext("_lk={}", ctx); g.render();
+          const L2 = g.lkCalc(LG), rv = L2.league.filter(x => !x.mine), mine = new Set(row.picks.filter((k, i) => (k.multiplier != null ? k.multiplier : (i < 11 ? 1 : 0)) > 0).map(k => k.id));
+          const theirs = {}; rv.forEach(x => x.picks.forEach((k, i) => { const m = k.multiplier != null ? k.multiplier : (i < 11 ? 1 : 0); if (m > 0) theirs[k.id] = (theirs[k.id] || 0) + m * 100 / rv.length; }));
+          const only = Object.keys(theirs).map(Number).filter(id => !mine.has(id)).sort((a, b) => theirs[b] - theirs[a])[0];
+          const rows = [...doc.querySelectorAll(".lvm-et .rv4.ed4-r")], nm = only && S.model.players.find(p => p.id === only).web_name;
+          const r0 = rows.find(r => r.querySelector(".ds-name").textContent === nm);
+          check(!only || (!!r0 && r0.querySelector(".bar4 em").textContent === "−" + Math.round(theirs[only]) + "%"), "Rivals: a player only the rivals have is a threat at minus their average share", r0 ? r0.textContent : "none for " + nm);
+          g.act("lke", "edge"); }
         g.act("lke", "threats");
         check(/Threats/.test(doc.querySelector(".lvm-et .lvm-tg .on")?.textContent || ""), "Edge / Threats: the switch shows Threats");
         g.act("lke", "edge");

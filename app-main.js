@@ -41,7 +41,7 @@ function act(k,a,b,c){
     case"trh":S.trH=[1,3,5].includes(+a)?+a:1;break;
     /* batch 5: the live gameweek */
     case"ywf":S.ywF=["near","top10k","overall","rivals"].includes(a)?a:"near";break;
-    case"lkf":S.lkF=["near","top10k","overall"].includes(a)?a:"top10k";break;
+    case"lkf":S.lkF=["near","rivals","overall"].includes(a)?a:"rivals";break;
     case"lks":S.lkS=["gw","month"].includes(a)?a:"total";break;
     case"lkv":S.lkV=a==="season"?"season":"live";break;
     case"lke":S.lkE=a==="threats"?"threats":"edge";break;

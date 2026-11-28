@@ -2905,7 +2905,9 @@ let _lk={};
 function lkCalc(g){
   const W=weekLive(g),row=offRowOf(g);
   if(!W||!row||!W.players||!S.model)return null;
-  const filt=["near","top10k","overall"].includes(S.lkF)?S.lkF:"top10k";
+  /* 29 Nov 2026 (Andy): Rivals replaces Top 10k and is the default - the
+     field is the rest of the league, as LiveFPL shows it */
+  const filt=["near","rivals","overall"].includes(S.lkF)?S.lkF:"rivals";
   if(_lk.W===W&&_lk.g===g&&_lk.rf===S.rivalsFeed&&_lk.fd===S.field&&_lk.rb===S.rankBands&&_lk.f===filt&&_lk.tr===S.tracker)return _lk.v;
   const PM=new Map(S.model.players.map(p=>[p.id,p])),P=id=>PM.get(+id);
   const fxT={};W.fixtures.forEach(f=>{(fxT[f.h]=fxT[f.h]||[]).push(f);(fxT[f.a]=fxT[f.a]||[]).push(f);});
@@ -2952,7 +2954,12 @@ function lkCalc(g){
   /* the field: the sample around you, the top 10k, or FPL's own ownership */
   const F=S.field&&S.field.gws?(S.field.gws[g]||S.field.gws[S.field.latest])||null:null;
   const fs=f=>F&&F[f]?F[f]:null;
-  const eoOf=(f,id)=>f==="overall"?((P(id)||{}).owned||0):(((fs(f)||{}).eo||{})[id]||0);
+  /* the rivals' field: their average multiplier for him, as a percentage
+     (a captain counts 200) */
+  let rivEo=null;
+  const rivalsEo=()=>{if(rivEo)return rivEo;rivEo={};const rv=league.filter(x=>!x.mine),n=rv.length||1;
+    rv.forEach(x=>x.picks.forEach((k,i)=>{const m=k.multiplier!=null?k.multiplier:(i<11?1:0);if(m>0)rivEo[k.id]=(rivEo[k.id]||0)+m*100/n;}));return rivEo;};
+  const eoOf=(f,id)=>f==="overall"?((P(id)||{}).owned||0):f==="rivals"?(rivalsEo()[id]||0):(((fs(f)||{}).eo||{})[id]||0);
   const fieldScore=f=>{const x=fs(f);if(!x||!x.eo)return null;let s=0;for(const id in x.eo)s+=x.eo[id]/100*pts(id);return s-((x.avg&&x.avg.hits)||0);};
   S._lkShift=fieldScore("near")||0;
   const total=prevTotal+pre,totalPost=prevTotal+post.pts;
@@ -3148,15 +3155,30 @@ function lkPanelHTML(g){
     <div class="fd-list">${Fd.rows.map(fr).join("")||`<p class="ds-sub" style="padding:6px 0">Nothing yet: events appear here as they happen.</p>`}</div></div>`;
   /* Your Edge / Threats */
   const ET=S.lkE==="threats"?"threats":"edge";
-  const F=[["near","Near you","lkf"],["top10k","Top 10k","lkf"],["overall","Overall","lkf"]];
+  const F=[["near","Near you","lkf"],["rivals","Rivals","lkf"],["overall","Overall","lkf"]];
   const eh=`<div class="ed4 ed4-h ds-th"><span></span><span>Player</span><span></span><span>Pts</span><span>League starts</span><span>vs field</span><span>Ranks</span></div>`;
   const er=x=>`<div class="ed4 ed4-r">${dsFace(x.p)}<span class="ds-name">${esc(x.p.web_name)}</span>${lkSI(x.st.s)}
     ${dsFig(x.st.s==="tp"?"–":fmtPts(x.pts*Math.max(1,x.m)))}${x.lgd==null?`<span class="ds-sub">–</span>`:`<span class="bar4 ${x.lgd>=0?"up":"dn"}"><i style="width:${Math.min(100,Math.abs(Math.round(x.lgd)))}%"></i><em>${lkSg(Math.round(x.lgd))}%</em></span>`}
     ${dsFig(x.st.s==="tp"&&!x.pts?"–":sgn1(x.vf),x.vf>0.05?"up":x.vf<-0.05?"dn":"")}<span class="ds-fig rk4 ${x.rk>0.5?"up":x.rk<-0.5?"dn":""}">${Math.abs(x.rk)<0.5?"–":lkSg(x.rk,lkK)}</span></div>`;
   const ep=L.edge.filter(x=>x.vf>0).reduce((a,x)=>a+x.vf,0),tp=L.threats.reduce((a,x)=>a+x.vf,0),v=ET==="edge"?ep:tp;
-  const list=ET==="edge"?L.edge:L.threats;
-  const et=`<div class="lv4-blk lvm-et"><div class="lvm-h">${tg(ET,[["edge","Your edge","lke"],["threats","Threats","lke"]])}<b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Points against the field">${sgn1(v)}</b><b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Ranks against the field">${lkSg(v*L.rpp,lkK)}</b><span class="sp">${tg(L.filt,F)}</span></div>
-    ${eh}<div class="fd-list">${list.map(er).join("")||`<p class="ds-sub">${ET==="edge"?"No edge yet":"No threats against this field"}</p>`}</div></div>`;
+  let list=ET==="edge"?L.edge:L.threats,hdr=eh,rowF=er;
+  /* Rivals (as LiveFPL): every player you and they differ on, played or not -
+     yours above the league's share under Differential, theirs under
+     Threats - with his fixture, where his match is, his points and the gap */
+  if(L.filt==="rivals"){
+    const gap=x=>x.m*100-x.eo;
+    list=L.all.filter(x=>ET==="edge"?gap(x)>0.5:gap(x)<-0.5).sort((a,b)=>ET==="edge"?gap(b)-gap(a)||b.pts-a.pts:gap(a)-gap(b)||b.pts-a.pts);
+    const myT=p=>(S.model.teams||[]).find(t=>t.id===p.team);
+    const opp=x=>{const f=((S.model.byEv[g]||[]).find(f=>f.ht&&f.at&&(f.ht.id===x.p.team||f.at.id===x.p.team)));if(!f)return `<span class="ds-sub">–</span>`;
+      const home=f.ht.id===x.p.team,o=home?f.at:f.ht;return fxRun(fxChip(o.short,home,fdrOf(o,home,myT(x.p),x.p.pos<=2?"def":"att"),{cls:"sm"}));};
+    const stat=x=>{const s=x.st,f=s.fx&&s.fx[0],m=(L.W.players[x.id]||{}).m||0;
+      return s.s==="tp"?`<span class="rv-st">${esc(lkKo(s.ko))}</span>`:s.s==="in"?`<span class="rv-st in">${s.min||0}′</span>`:s.s==="bl"?`<span class="rv-st">No match</span>`:`<span class="rv-st dn">Done (${m})</span>`;};
+    hdr=`<div class="rv4 ed4-h ds-th"><span></span><span>Player</span><span>Opp</span><span>Status</span><span>Pts</span><span>Imp</span></div>`;
+    rowF=x=>{const d=Math.round(gap(x));return `<div class="rv4 ed4-r">${dsFace(x.p)}<span class="ds-name">${esc(x.p.web_name)}</span>${opp(x)}${stat(x)}${dsFig(x.st.s==="tp"?"–":fmtPts(x.pts))}
+      <span class="bar4 ${d>=0?"up":"dn"}"><i style="width:${Math.min(100,Math.abs(d))}%"></i><em>${d>0?"+":d<0?"−":""}${Math.abs(d)}%</em></span></div>`;};
+  }
+  const et=`<div class="lv4-blk lvm-et"><div class="lvm-h">${tg(ET,[["edge","Differential","lke"],["threats","Threats","lke"]])}<b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Points against the field">${sgn1(v)}</b><b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Ranks against the field">${lkSg(v*L.rpp,lkK)}</b><span class="sp">${tg(L.filt,F)}</span></div>
+    ${hdr}<div class="fd-list">${list.map(rowF).join("")||`<p class="ds-sub">${ET==="edge"?"No differentials yet":"No threats against this field"}</p>`}</div></div>`;
   return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","")}<div class="lv4-sc lvm">${league}${feed}${et}</div></div>`;
 }
 /* ---------- Rank and Match Centre, under the Planner ---------- */
@@ -3199,33 +3221,42 @@ function lkRankHTML(g){
   return `<section class="panel card4 lk-rank">${dsHead("trending-up","Rank",`<span class="ds-sub">GW${g} · live</span>`)}${hero}
     <div class="rk4-two">${ptsT}${rnT}</div>${bm}<div class="rk4-two">${tr}<div class="sf4s">${sfk("Star","st",star)}${sfk("Flop","fl",flop)}${sfk("Killer","kl",killer)}</div></div></section>`;
 }
-function lkCentreHTML(g){
-  const L=lkCalc(g);if(!L)return "";
-  const W=L.W,T=id=>(S.model.teams||[]).find(t=>t.id===id)||{},mode=S.mcM==="table"?"table":"matches";
-  const sw=`<span class="hz"><button class="${mode==="matches"?"on":""}" onclick="act('mcm','matches')">Matches</button><button class="${mode==="table"?"on":""}" onclick="act('mcm','table')">Table</button></span>`;
-  let body="";
-  if(mode==="matches"){
-    const rank=f=>f.started&&!f.done&&!f.fp?0:f.started?1:2;
-    const fx=W.fixtures.slice().sort((a,b)=>rank(a)-rank(b)||(rank(a)===1?String(b.ko).localeCompare(String(a.ko)):String(a.ko).localeCompare(String(b.ko))));
-    const mine=new Map(L.picks.map(k=>[k.id,k]));
-    {const f=fx.find(f=>rank(f)===0&&L.picks.some(k=>k.p&&(k.p.team===f.h||k.p.team===f.a)));S._mcAuto=f?f.id:0;}
-    const openId=S.mcOpen==null?S._mcAuto:S.mcOpen;
-    const nm=id=>{const p=L.P(id);return p?esc(p.web_name):"?";};
-    const pr=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="pr5${mine.has(+el)?" me":""}">${dsFace(p,"pr5-f")}<span class="ds-name">${nm(el)}</span>${v!=null?`<b class="ds-fig${o.cls?" "+o.cls:""}">${v}</b>`:""}</span>`;};
-    const side=l=>l.length?l.join(""):`<span class="pr5-none">–</span>`;
-    const evl=(f,k)=>{const out=[];[["goals_scored","g"],["assists","a"],["own_goals","og"]].forEach(([s,ic])=>((f.st&&f.st[s]&&f.st[s][k])||[]).forEach(([el,n])=>out.push(`<span class="${ic==="a"?"a":""}">${EV_ICON[ic]}${nm(el)}${n>1?` <i>×${n}</i>`:""}</span>`)));return `<span class="sc5 ${k}">${out.join("")}</span>`;};
-    /* the open match (28 Nov 2026, Andy approved the mock): three bands -
-       your players; goals, assists and cards; BPS with the bonus as a badge,
-       DefCon and saves - with players as chips side by side */
-    const chip=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="cp${mine.has(+el)?" me":""}${o.c?" "+o.c:""}">${o.ev?`<span class="ev">${o.ev}</span>`:""}${dsFace(p)}<span>${nm(el)}</span>${v!=null?`<b class="${o.cls||""}">${v}</b>`:""}${o.bn?`<span class="bn" title="Bonus${o.prov?", provisional":""}">+${o.bn}</span>`:""}</span>`;};
-    const open=f=>{const st=f.st||{},list=(s,k)=>(st[s]&&st[s][k])||[],team=k=>k==="h"?f.h:f.a;
-      const ours=k=>L.picks.filter(x=>x.p&&x.p.team===team(k)).map(x=>`<span class="cp me">${dsFace(x.p)}<span>${esc(x.p.web_name)}</span><b>${fmtPts(L.pts(x.id)*Math.max(1,x.m))}</b></span>`);
-      const pv=L.provFx[f.id],bonusOf=k=>{const m={};if(pv)Object.entries(pv).forEach(([el,v])=>{const p=L.P(el);if(p&&p.team===team(k))m[el]=v;});else list("bonus",k).forEach(([el,v])=>m[el]=v);return m;};
-      /* 29 Nov 2026: each goal with its assist on one chip. FPL never links
-         them; the Feed does when both land in the same minute's check (an
-         untimed pair counts only when the team has one goal and one assist) */
-      const feedFx=((L.W&&L.W.feed)||[]).filter(e=>e.fx===f.id);
-      const scoring=k=>{
+/* each goal with its assist (29 Nov 2026), shared by the open and the
+   collapsed match card. FPL never links them; see the rules inside. */
+/* a Premier League name to the FPL player of that team */
+function lkPlName(n,teamId){
+  if(!n)return null;const nz=x=>String(x||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
+  const d=nz(n.display),fl=nz((n.first||"")+" "+(n.last||"")),last=nz(n.last),dl=d.split(" ").pop();
+  let best=null,bs=0;
+  (S.model.players||[]).filter(p=>p.team===teamId).forEach(p=>{const full=nz((p.first||"")+" "+(p.last||"")),web=nz(p.web_name).replace(/^[a-z] /,""),pl=nz(p.last);
+    const sc=full&&(full===fl||full===d)?100:web&&(web===d||web===dl)?90:pl&&(pl===last||pl===dl)?80:pl&&(last.includes(pl)||d.includes(pl))?60:web.length>=4&&d.includes(web)?50:0;
+    if(sc>bs){bs=sc;best=p;}});
+  return bs>=50?best:null;
+}
+function lkGoalPairs(L,f,k){
+  const st=f.st||{},list=(s,kk)=>(st[s]&&st[s][kk])||[],team=kk=>kk==="h"?f.h:f.a;
+  /* the Premier League's own record, when it is here: each goal with its
+     assist and minute (own goals are shown with the side they count for) */
+  const PG=L.W&&L.W.goals&&L.W.goals[f.id];
+  if(PG&&PG.length){
+    const pairs=[],asts=[];
+    PG.filter(x=>x.side===k&&x.kind!=="og").sort((a,b)=>(a.secs||0)-(b.secs||0)).forEach(x=>{
+      const sp=lkPlName(x.scorer,team(k)),ap=lkPlName(x.assist,team(k));
+      if(sp)pairs.push({g:sp.id,a:ap?ap.id:null,min:x.min,pen:x.kind==="pen"});});
+    const want=list("goals_scored",k).reduce((a,[,n])=>a+n,0);
+    if(pairs.length===want){
+      /* FPL decides the points: keep a Premier League assist only where FPL
+         credits it too, then put FPL's other assists (a penalty won, a
+         deflection) on unassisted goals wherever only one fit is possible */
+      const fa=[];list("assists",k).forEach(([el,n])=>{for(let i=0;i<n;i++)fa.push({el:+el});});
+      pairs.forEach(p=>{if(p.a==null)return;const i=fa.findIndex(x=>x.el===p.a&&!x.used);if(i>=0)fa[i].used=1;else p.a=null;});
+      for(let moved=true;moved;){moved=false;const open=pairs.filter(p=>p.a==null),free=fa.filter(x=>!x.used);
+        if(!open.length||!free.length)break;
+        for(const x of free){const c=open.filter(p=>p.g!==x.el);if(c.length===1){c[0].a=x.el;x.used=1;moved=true;break;}}}
+      return{pairs,asts:fa};
+    }
+  }
+  const feedFx=((L.W&&L.W.feed)||[]).filter(e=>e.fx===f.id);
         const mineT=el=>{const p=L.P(el);return p&&p.team===team(k);};
         const goals=[],asts=[];
         list("goals_scored",k).forEach(([el,n])=>{for(let i=0;i<n;i++)goals.push({el:+el});});
@@ -3255,7 +3286,39 @@ function lkCentreHTML(g){
             if(!moved)for(const x of free){if(x.used)continue;const c=open.filter(p=>p.a==null&&p.g!==x.el);if(one(c.map(p=>({el:p.g})))){c[0].a=x.el;x.used=1;moved=true;break;}}
           }else if(open.length===1&&free.length===1&&free[0].el!==open[0].g){open[0].a=free[0].el;free[0].used=1;moved=true;}
         }
-        const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}</span>${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
+  return{pairs,asts};
+}
+function lkCentreHTML(g){
+  const L=lkCalc(g);if(!L)return "";
+  const W=L.W,T=id=>(S.model.teams||[]).find(t=>t.id===id)||{},mode=S.mcM==="table"?"table":"matches";
+  const sw=`<span class="hz"><button class="${mode==="matches"?"on":""}" onclick="act('mcm','matches')">Matches</button><button class="${mode==="table"?"on":""}" onclick="act('mcm','table')">Table</button></span>`;
+  let body="";
+  if(mode==="matches"){
+    const rank=f=>f.started&&!f.done&&!f.fp?0:f.started?1:2;
+    const fx=W.fixtures.slice().sort((a,b)=>rank(a)-rank(b)||(rank(a)===1?String(b.ko).localeCompare(String(a.ko)):String(a.ko).localeCompare(String(b.ko))));
+    const mine=new Map(L.picks.map(k=>[k.id,k]));
+    {const f=fx.find(f=>rank(f)===0&&L.picks.some(k=>k.p&&(k.p.team===f.h||k.p.team===f.a)));S._mcAuto=f?f.id:0;}
+    const openId=S.mcOpen==null?S._mcAuto:S.mcOpen;
+    const nm=id=>{const p=L.P(id);return p?esc(p.web_name):"?";};
+    const pr=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="pr5${mine.has(+el)?" me":""}">${dsFace(p,"pr5-f")}<span class="ds-name">${nm(el)}</span>${v!=null?`<b class="ds-fig${o.cls?" "+o.cls:""}">${v}</b>`:""}</span>`;};
+    const side=l=>l.length?l.join(""):`<span class="pr5-none">–</span>`;
+    const evl=(f,k)=>{const {pairs,asts}=lkGoalPairs(L,f,k),st=f.st||{},og=(st.own_goals&&st.own_goals[k])||[];
+      const out=[...pairs.map(p=>`<span class="gl">${EV_ICON.g}${nm(p.g)}${p.pen?" (pen)":""}${p.min?`<i>${esc(p.min)}</i>`:""}${p.a!=null?`<span class="a">${EV_ICON.a}${nm(p.a)}</span>`:""}</span>`),
+        ...og.map(([el,n])=>`<span>${EV_ICON.og}${nm(el)}${n>1?` <i>×${n}</i>`:""}</span>`),...asts.filter(x=>!x.used).map(x=>`<span class="a">${EV_ICON.a}${nm(x.el)}</span>`)];
+      return `<span class="sc5 ${k}">${out.join("")}</span>`;};
+    /* the open match (28 Nov 2026, Andy approved the mock): three bands -
+       your players; goals, assists and cards; BPS with the bonus as a badge,
+       DefCon and saves - with players as chips side by side */
+    const chip=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="cp${mine.has(+el)?" me":""}${o.c?" "+o.c:""}">${o.ev?`<span class="ev">${o.ev}</span>`:""}${dsFace(p)}<span>${nm(el)}</span>${v!=null?`<b class="${o.cls||""}">${v}</b>`:""}${o.bn?`<span class="bn" title="Bonus${o.prov?", provisional":""}">+${o.bn}</span>`:""}</span>`;};
+    const open=f=>{const st=f.st||{},list=(s,k)=>(st[s]&&st[s][k])||[],team=k=>k==="h"?f.h:f.a;
+      const ours=k=>L.picks.filter(x=>x.p&&x.p.team===team(k)).map(x=>`<span class="cp me">${dsFace(x.p)}<span>${esc(x.p.web_name)}</span><b>${fmtPts(L.pts(x.id)*Math.max(1,x.m))}</b></span>`);
+      const pv=L.provFx[f.id],bonusOf=k=>{const m={};if(pv)Object.entries(pv).forEach(([el,v])=>{const p=L.P(el);if(p&&p.team===team(k))m[el]=v;});else list("bonus",k).forEach(([el,v])=>m[el]=v);return m;};
+      /* 29 Nov 2026: each goal with its assist on one chip. FPL never links
+         them; the Feed does when both land in the same minute's check (an
+         untimed pair counts only when the team has one goal and one assist) */
+      const scoring=k=>{
+        const {pairs,asts}=lkGoalPairs(L,f,k);
+        const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}${p.pen?" (pen)":""}</span>${p.min?`<b class="gm">${esc(p.min)}</b>`:""}${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
         return [...pairs.map(gChip),...list("own_goals",k).map(([el])=>chip(el,"OG",{ev:EV_ICON.og,cls:"dn"})),...asts.filter(x=>!x.used).map(x=>chip(x.el,null,{ev:EV_ICON.a,c:"ast"}))];};
       const cards=k=>[...list("yellow_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FFD23F")})),...list("red_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FF5A6E")}))];
       const bps=k=>{const bn=bonusOf(k),top=list("bps",k).slice().sort((a,b)=>b[1]-a[1]).slice(0,3),ids=new Set(top.map(x=>String(x[0])));
