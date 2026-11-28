@@ -1796,6 +1796,37 @@ svg.chart circle[data-tip]{cursor:pointer}
 .mk-dot{position:absolute;top:2px;width:12px;height:12px;border-radius:50%;margin-left:-6px}.mk-dot.md{background:#0A0A0A;box-shadow:0 0 0 2px #8A8A8A}
 .mk-d>b{font:600 13px 'Geist Mono',ui-monospace,monospace;text-align:right}
 @media(max-width:1100px){.mk-mg{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* player card: Against, Next Match Odds and This Season (28 Nov 2026) */
+.pkag,.pkse{display:flex;flex-direction:column}.pkag .pkh,.pkse .pkh{margin-bottom:6px}
+.ag-sum{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 6px}.ag-sum span{font:600 10px 'Geist',sans-serif;padding:2px 7px;border-radius:99px;background:rgba(61,220,151,.14);color:#9BE7C4}.ag-sum span.lo{background:rgba(255,90,110,.12);color:#FF8FA0}
+.ag-r{display:grid;grid-template-columns:minmax(0,118px) minmax(40px,1fr) 44px 38px;gap:8px;align-items:center;padding:3px 0}
+.ag-r>span{font-size:12px;color:#DADADA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ag-t{position:relative;height:8px;border-radius:99px;background:linear-gradient(90deg,#3A1A22 0,#2A2A2A 45%,#2A2A2A 55%,#163A2A 100%)}.ag-t:before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:#444}
+.ag-t i{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);background:var(--c);box-shadow:0 0 0 3px #151515,0 0 12px var(--c)}
+.ag-r>b{font:700 13px 'Geist Mono',monospace;text-align:right;white-space:nowrap}
+.ag-k{font:700 10.5px 'Geist Mono',monospace;text-align:center;padding:3px 0;border-radius:7px;background:#1E1E1E;color:#9A9A9A}.ag-k.t{background:rgba(61,220,151,.16);color:var(--mint)}.ag-k.b{background:rgba(255,90,110,.12);color:#FF8FA0}
+.oc-h{display:flex;align-items:center;gap:8px;margin:6px 0 6px;padding-top:7px;border-top:1px solid rgba(255,255,255,.06)}.oc-h b{font:650 13.5px 'Geist',sans-serif}.oc-h>.ds-sub{margin-left:auto;font-size:10.5px}
+.oc{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.oc-x{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+.oc-x b{font:750 14px 'Geist Mono',monospace;line-height:1}.oc-x b.np{font-size:11px;color:#5A5A5A;font-weight:500}
+.oc-c{position:relative;width:100%;height:34px;border-radius:7px;background:#1C1C1C;overflow:hidden}
+.oc-c i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,color-mix(in srgb,var(--c) 45%,#1C1C1C),var(--c));border-radius:7px 7px 0 0}
+.oc-c u{position:absolute;left:-2px;right:-2px;height:2px;background:#EDEDED;box-shadow:0 0 0 1px #151515}
+.oc-c.np{background:repeating-linear-gradient(135deg,#1A1A1A 0 5px,#222 5px 10px)}
+.oc-x em{font-style:normal;font-size:10.5px;color:#9A9A9A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.od-e{font:700 9.5px 'Geist Mono',monospace;text-align:center;padding:1px 6px;border-radius:6px;white-space:nowrap}.od-e.up{background:rgba(61,220,151,.16);color:var(--mint)}.od-e.dn{background:rgba(255,90,110,.12);color:#FF8FA0}.od-e.eq{background:#1E1E1E;color:#8A8A8A}
+.ms-top{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;padding:8px 12px;border-radius:14px;background:linear-gradient(135deg,rgba(61,220,151,.16),rgba(61,220,151,.03));box-shadow:inset 0 0 0 1px rgba(61,220,151,.22)}
+.ms-big{font:800 34px/1 'Geist Mono',monospace;color:#fff;letter-spacing:-.03em}.ms-big small{display:block;font:500 11px 'Geist',sans-serif;color:#9BE7C4;letter-spacing:0;margin-top:4px}
+.ms-ts{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}.ms-ts div{display:flex;flex-direction:column;min-width:0}.ms-ts em{font-style:normal;font-size:10.5px;color:#8A8A8A;white-space:nowrap}.ms-ts b{font:700 15px 'Geist Mono',monospace}
+.ms-sec{font:600 10px 'Geist',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#6E6E6E;margin:8px 0 3px}
+.ms-xr{display:grid;grid-template-columns:58px 1fr 44px;gap:8px;align-items:center;margin:2px 0}
+.ms-xr>span{font-size:12px;color:#BDBDBD}.ms-xr>span b{display:block;font:750 18px/1 'Geist Mono',monospace;color:#fff}
+.ms-bar{position:relative;height:10px;border-radius:99px;background:#202020;margin-top:12px}.ms-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--c)}
+.ms-bar u{position:absolute;top:-4px;bottom:-4px;width:2px;background:#EDEDED;border-radius:2px;text-decoration:none}.ms-bar u:after{content:attr(data-l);position:absolute;top:-15px;left:50%;transform:translateX(-50%);font:600 9.5px 'Geist Mono',monospace;color:#9A9A9A;white-space:nowrap}
+.ms-d{font:700 12px 'Geist Mono',monospace;text-align:right}.ms-d.up{color:var(--mint)}.ms-d.dn{color:#FF8095}.ms-d em{display:block;font:500 9.5px 'Geist',sans-serif;color:#6E6E6E;font-style:normal}
+.ms-pr{display:grid;grid-template-columns:76px 1fr 38px;gap:8px;align-items:center;margin:3px 0}
+.ms-pr>span{font-size:12px;color:#BDBDBD;line-height:1.15}.ms-pr>span small{display:block;font-size:10px;color:#6E6E6E}.ms-pr>b{font:700 13px 'Geist Mono',monospace;text-align:right;white-space:nowrap}.ms-pr>b small{font-size:10px;color:#6E6E6E}
+.ms-pips{display:grid;gap:3px}.ms-pips i{height:14px;border-radius:4px;background:#1E1E1E}.ms-pips i.on{background:var(--c)}.ms-pips i.half{background:color-mix(in srgb,var(--c) 40%,#1E1E1E)}.ms-pips i.na{background:transparent;box-shadow:inset 0 0 0 1px #262626}
 /* player card Next Match Odds (26 Nov 2026) */
 .pk-odds{margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
 .pk-odh{font:600 13px 'Geist',sans-serif;color:#EDEDED;display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}.pk-odh span{font-weight:400;font-size:11px;color:#9A9A9A}
@@ -2384,13 +2415,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.17.3"></script>
-<script src="./app-squad.js?v=14.17.3"></script>
-<script src="./app-render.js?v=14.17.3"></script>
-<script src="./app-odds.js?v=14.17.3"></script>
-<script src="./app-tracker.js?v=14.17.3"></script>
-<script src="./app-main.js?v=14.17.3"></script>
-<script src="./app-scout.js?v=14.17.3"></script>
+<script src="./app-core.js?v=14.18.0"></script>
+<script src="./app-squad.js?v=14.18.0"></script>
+<script src="./app-render.js?v=14.18.0"></script>
+<script src="./app-odds.js?v=14.18.0"></script>
+<script src="./app-tracker.js?v=14.18.0"></script>
+<script src="./app-main.js?v=14.18.0"></script>
+<script src="./app-scout.js?v=14.18.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an

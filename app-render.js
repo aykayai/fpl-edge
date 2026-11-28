@@ -70,22 +70,95 @@ function pkLiveHTML(p){
 /* Next Match Odds on the player card (26 Nov 2026, Andy approved mock):
    the bookmakers' goal, assist, clean-sheet and booking chances for his next
    match, the model's figure under each; shown once anything is priced */
+/* Next Match Odds (28 Nov 2026, Andy approved the mock): five columns,
+   each the bookmakers' chance as a bar with our model's as a white line and
+   the gap in a box; a market not priced yet is hatched. The match is his next
+   one not kicked off: during a live week that can be this week's. */
+function pkNextMatch(p){
+  const lg=typeof liveGW==="function"?liveGW():null,now=Date.now();
+  if(lg){const fx=(S.model.byEv[lg]||[]).filter(f=>f.ht&&f.at&&(f.ht.id===p.team||f.at.id===p.team)&&f.kickoff&&Date.parse(f.kickoff)>now);
+    if(fx.length){const f=fx[0],home=f.ht.id===p.team;return{g:lg,live:true,home,opp:(home?f.at:f.ht).short,oppT:home?f.at:f.ht,ko:f.kickoff,xgf:null};}}
+  const g=S.model.next.id,f=((p.gw[g]||{}).fixtures||[])[0];if(!f)return null;
+  const fx=(S.model.byEv[g]||[]).find(x=>x.ht&&x.at&&(x.ht.id===p.team||x.at.id===p.team));
+  return{g,live:false,home:f.home,opp:f.opp,oppT:fx?(fx.ht.id===p.team?fx.at:fx.ht):null,ko:fx?fx.kickoff:null,xgf:f.xgf};
+}
 function pkOddsHTML(p){
   if(!S.model||S.oddsState!=="ok")return "";
-  const g=S.model.next.id,f=((p.gw[g]||{}).fixtures||[])[0];if(!f)return "";
+  const M=pkNextMatch(p);if(!M)return "";const g=M.g;
   let r={},cs=null,haul=null;try{r=(oddsPlayers(g)||{})[p.id]||{};cs=(marketCS(g)||{})[p.team]??null;haul=(marketHaul(g)||{})[p.team]??null;}catch(e){}
-  const goal=p.pos===1?null:r.goal??null,ast=r.assist??null,card=r.card??null;
+  const goal=r.goal??null,ast=r.assist??null,card=r.card??null;
   if(goal==null&&ast==null&&cs==null&&card==null&&haul==null)return "";
-  /* the model's own: Poisson on his team's expected goals in this fixture */
-  const lam=f.xgf||0,mHaul=f.xgf!=null?1-Math.exp(-lam)*(1+lam+lam*lam/2):null;
-  const pc=v=>v==null?"—":Math.round(v*100)+"%",br=banRisk(p,g);
-  const mCS=(()=>{try{return modelCS(p);}catch(e){return null;}})();
-  const od=(k,v,m,cls,tip)=>{const t=tip||(/^vs /.test(m)?`${k}: bookmakers ${pc(v)}, model ${m.slice(3)}`:"");
-    return `<div class="pk-od${cls?" "+cls:""}"${t?` title="${esc(t)}"`:""}><em>${k}</em><b>${pc(v)}</b><i>${m}</i></div>`;};
-  return `<div class="pk-odds"><div class="pk-odh">Next Match Odds<span>${f.home?"v ":"@ "}${esc(f.opp)} · ${esc((S.oddsBooks||[]).filter(b=>!/william/i.test(b))[0]||"bookmakers")}</span></div><div class="pk-odg">
-    ${od("Goal",goal,p.pos===1?"&nbsp;":"vs "+pc(modelChance(p,p.xg90||0)))}${od("Assist",ast,"vs "+pc(modelChance(p,p.xa90||0)))}
-    ${od("CS",cs,"vs "+pc(mCS))}${od("Booked",card,br?"ban risk":"&nbsp;",card!=null&&(card>=.2||br)?"bk":"",br?br.tip:"")}
-    ${od("Haul",haul,`vs ${pc(mHaul)}`,"hl",`${p.teamName} score 3 or more: the market ${pc(haul)}, the model ${pc(mHaul)}`)}</div></div>`;
+  /* the model's own: his per-90 chances; clean sheet and 3+ goals from his
+     team's expected goals in the fixture (next week only: the live week's
+     fixture has no model line) */
+  const lam=M.xgf||0,mHaul=M.xgf!=null?1-Math.exp(-lam)*(1+lam+lam*lam/2):null;
+  const mCS=M.live?null:(()=>{try{return modelCS(p);}catch(e){return null;}})();
+  const br=banRisk(p,g);
+  const cols=[["Goal",p.pos===1?null:goal,p.pos===1?null:modelChance(p,p.xg90||0),"#3DDC97",p.pos===1],["Assist",ast,modelChance(p,p.xa90||0),"#3DDC97"],
+    ["Clean sheet",cs,mCS,"#3DDC97"],["Booked",card,null,"#FACC15",false,br],["3+ goals",haul,mHaul,"#FF8A3D"]];
+  const top=Math.max(.3,...cols.flatMap(c=>[c[1],c[2]]).filter(v=>v!=null))*1.12;
+  const pc=v=>Math.round(v*100);
+  const col=([k,v,m,c,skip,ban])=>{
+    if(skip)return `<div class="oc-x"><b class="np">–</b><div class="oc-c np"></div><em>${k}</em><span class="od-e eq">n/a</span></div>`;
+    if(v==null)return `<div class="oc-x" title="${k}: the bookmaker has not priced this yet"><b class="np">–</b><div class="oc-c np"></div><em>${k}</em><span class="od-e eq">not yet</span></div>`;
+    const d=m==null?null:pc(v)-pc(m),t=`${k}: bookmakers ${pc(v)}%${m!=null?`, our model ${pc(m)}%`:""}${ban?` · ${ban.tip}`:""}`;
+    return `<div class="oc-x" title="${esc(t)}"><b>${pc(v)}%</b><div class="oc-c" style="--c:${c}"><i style="height:${Math.min(100,v/top*100)}%"></i>${m!=null?`<u style="bottom:${Math.min(100,m/top*100)}%"></u>`:""}</div><em>${k}</em>`
+      +(ban?`<span class="od-e dn">ban risk</span>`:d==null?`<span class="od-e eq">–</span>`:`<span class="od-e ${d>=2?"up":d<=-2?"dn":"eq"}">${d>0?"+":d<0?"−":""}${Math.abs(d)}</span>`)+`</div>`;};
+  const chip=M.oppT?fxChip(M.opp,M.home,fdrOf(M.oppT,M.home,(S.model.teams||S.teams).find(t=>t.id===p.team),p.pos<=2?"def":"att"),{cls:"sm"}):`<span class="ds-sub">${M.home?"v":"@"} ${esc(M.opp)}</span>`;
+  const book=esc((S.oddsBooks||[]).filter(b=>!/william/i.test(b))[0]||"bookmakers");
+  return `<div class="oc-h"><b>Next Match Odds</b><span class="fci" data-tip="Bar: the bookmakers' chance. White line: our model's. Box: the gap.">i</span>${fxRun(chip)}<span class="ds-sub">${M.ko?esc(lkKo(M.ko))+" · ":""}${book}</span></div>
+    <div class="oc">${cols.map(col).join("")}</div>`;
+}
+/* This Season (28 Nov 2026, Andy approved the mock): the points headline,
+   attack as actual against expected, and a block per gameweek for starts,
+   clean sheets and DefCon hits (goalkeepers: 3+ saves; midfielders and
+   forwards: goal or assist instead of clean sheets) */
+function pkSeasonHTML(p,s,G,opp){
+  const n=x=>+x||0,rows=((S.hist||{})[p.code]||[]).filter(r=>r.tag==="now");
+  const tot=n(s.total_points??p.total),starts=n(s.starts),mins=n(s.minutes);
+  const same=S.model.players.filter(x=>x.pos===p.pos),rank=1+same.filter(x=>n(x.total)>tot).length;
+  const apps=rows.filter(r=>n(r.mins)>0).length||null;
+  const posS=["","GK","DEF","MID","FWD"][p.pos];
+  const kv=(l,v)=>`<div><em>${l}</em><b>${v}</b></div>`;
+  const top=`<div class="ms-top"><div class="ms-big">${tot}<small>FPL points</small></div><div class="ms-ts">${kv("Per start",starts?(tot/starts).toFixed(1):"–")}${kv(`Rank (${posS})`,"#"+rank)}${kv("Bonus",n(s.bonus))}${p.pos<=2?kv("BPS",n(s.bps)):kv("Clean sheets",n(s.clean_sheets))}</div></div>`;
+  /* actual against expected: one scale for both rows */
+  const xr=(lbl,act,exp,c,lowGood)=>{const d=act-exp,good=lowGood?d<0:d>0,M=Math.max(1,act,exp)*1.2;
+    return `<div class="ms-xr"><span><b>${act}</b>${lbl}</span><div class="ms-bar" style="--c:${c}"><i style="width:${act/M*100}%"></i><u data-l="${lowGood?"xGC":lbl==="Goals"?"xG":"xA"} ${exp.toFixed(1)}" style="left:${exp/M*100}%"></u></div><span class="ms-d ${Math.abs(d)<0.05?"":good?"up":"dn"}">${d>0?"+":d<0?"−":""}${Math.abs(d).toFixed(1)}<em>vs ${lowGood?"xGC":lbl==="Goals"?"xG":"xA"}</em></span></div>`;};
+  const attack=p.pos===1
+    ?`<div class="ms-sec">Defence · actual vs expected</div>${xr("Conceded",n(s.goals_conceded),n(s.expected_goals_conceded),"#FF8A3D",true)}<div class="ms-xr"><span><b>${n(s.saves)}</b>Saves</span><div class="ms-bar" style="--c:#60A5FA"><i style="width:${Math.min(100,n(s.saves_per_90)/5*100)}%"></i></div><span class="ms-d">${n(s.saves_per_90).toFixed(1)}<em>per 90</em></span></div>`
+    :`<div class="ms-sec">Attack · actual vs expected</div>${xr("Goals",n(s.goals_scored),n(s.expected_goals),"#3DDC97")}${xr("Assists",n(s.assists),n(s.expected_assists),"#60A5FA")}`;
+  /* a block per gameweek: none where his team had no match */
+  const weeks=[];for(let e=1;e<G;e++){const ms=rows.filter(r=>r.gw===e);weeks.push({e,fx:!!opp(e)||ms.length>0,ms});}
+  const sm=(w,k)=>w.ms.reduce((a,r)=>a+n(r[k]),0);
+  const dcT=lkDcT(p.pos);
+  const pips=f=>`<div class="ms-pips" style="grid-template-columns:repeat(${weeks.length},1fr)">${weeks.map(w=>`<i class="${f(w)}" title="GW${w.e}"></i>`).join("")}</div>`;
+  const played=w=>sm(w,"mins")>0;
+  const pr=(lbl,sub,c,f,cnt,of)=>`<div class="ms-pr" style="--c:${c}"><span>${lbl}${sub?`<small>${sub}</small>`:""}</span>${pips(f)}<b>${cnt}<small>/${of}</small></b></div>`;
+  const csW=w=>w.ms.some(r=>n(r.mins)>=60&&!n(r.tgc));
+  const retW=w=>sm(w,"g")+sm(w,"a")>0;
+  const dcW=w=>dcT&&w.ms.some(r=>n(r.dc)>=dcT);
+  const svW=w=>w.ms.some(r=>n(r.sv)>=3);
+  const gws=weeks.filter(w=>w.fx).length,ap=weeks.filter(played);
+  const second=p.pos<=2?["Clean sheets","#A78BFA",csW]:["Goal or assist","#3DDC97",retW];
+  const third=p.pos===1?["3+ saves","#60A5FA",svW]:["DefCon hits","#F5B33C",dcW];
+  const out=(f)=>w=>!w.fx?"na":!played(w)?"":f(w)?"on":"";
+  const week=`<div class="ms-sec">Week by week · GW1–${G-1}</div>
+    ${pr("Starts",apps?`${Math.round(mins/apps)}′ a game`:"","#3DDC97",w=>!w.fx?"na":sm(w,"mins")>=60?"on":sm(w,"mins")>0?"half":"",starts,gws)}
+    ${pr(second[0],"",second[1],out(second[2]),ap.filter(second[2]).length,ap.length)}
+    ${pr(third[0],"",third[1],out(third[2]),ap.filter(third[2]).length,ap.length)}`;
+  return `<div class="pkh">This Season<span>GW1–${G-1}</span></div>${top}${attack}${week}`;
+}
+/* Against Other <position> (28 Nov 2026): a summary of where he stands out,
+   then each stat as a dot on a red-to-green track with its rank */
+function pkAgainstHTML(p,posN){
+  const keys=(CP_SETS[p.pos]||CP_SETS[0]).filter(k=>!/mk$/.test(k));
+  const rows=keys.map(k=>({k,r:cpPr(k,p),v:cpVal(k,p)}));
+  const pool=rows.find(x=>x.r)?.r.of;
+  const hi=rows.filter(x=>x.r&&x.r.pct>=90).map(x=>CP_ST[x.k][0]),lo=rows.filter(x=>x.r&&x.r.pct<20).map(x=>CP_ST[x.k][0]);
+  const col=x=>x>=90?"#3DDC97":x>=70?"#9BE7C4":x>=40?"#8A8A8A":"#FF5A6E";
+  const sum=(hi.length||lo.length)?`<div class="ag-sum">${hi.length?`<span>Top 10%: ${esc(hi.join(" · "))}</span>`:""}${lo.length?`<span class="lo">Bottom 20%: ${esc(lo.join(" · "))}</span>`:""}</div>`:"";
+  return `<div class="pkh">Against Other ${posN}s<span>${pool?pool+" starters · ":""}rank, 1 is best</span></div>${sum}
+    ${rows.map(({k,r,v})=>`<div class="ag-r"><span title="${esc(CP_ST[k][1])}">${CP_ST[k][0]}</span><div class="ag-t">${r?`<i style="left:${Math.max(3,Math.min(97,r.pct))}%;--c:${col(r.pct)}"></i>`:""}</div><b>${v==null?"–":CP_ST[k][2](v)}</b><span class="ag-k${r&&r.pct>=90?" t":r&&r.pct<20?" b":""}">${r?"#"+r.rank:"–"}</span></div>`).join("")}`;
 }
 function playerCardHTML(){
   const p=S.model.players.find(x=>x.id===S.cardId);
@@ -137,13 +210,6 @@ function playerCardHTML(){
   const pc2=v=>v==null?"#1C1C1C":v>=10?"#2BD47D":v>=6?"#1E7A4D":v>=3?"#3A3A3A":"#4A1F2B";
   const tl=past.map(x=>`<div class="c"><span class="bw"><span class="v">${x.v??"–"}</span><span class="b" style="height:${Math.max(2,100*(x.v||0)/mx)}%;background:${pc2(x.v)}"></span></span><span class="lab">${x.o?esc(x.o.short):"–"}</span><span class="lab">GW${x.e}</span></div>`).join("")
     +fut.map(x=>`<div class="c pred"><span class="bw"><span class="v">${x.v.toFixed(1)}</span><span class="b" style="height:${Math.max(2,100*x.v/mx)}%"></span></span><span class="sm">${fxGW(p,x.e)}</span><span class="lab">GW${x.e}</span></div>`).join("");
-  /* 26 Nov 2026: market odds sit in Next Match Odds, not among the season percentiles */
-  const keys=(CP_SETS[p.pos]||CP_SETS[0]).filter(k=>!/mk$/.test(k));
-  const pct=keys.map(k=>{const r=cpPr(k,p),v=cpVal(k,p),col=r?(r.pct>=90?"var(--mint)":r.pct>=70?"#9BE7C4":r.pct>=40?"#6E6E6E":"#FF8FAB"):"#333";
-    return `<span title="${esc(CP_ST[k][1])}">${CP_ST[k][0]}</span><span class="pkbar"><span style="width:${r?Math.max(3,r.pct):0}%;background:${col}"></span></span><b>${v==null?"–":CP_ST[k][2](v)}</b><em>${cpRk(r)}</em>`;}).join("");
-  const tot=[["Minutes",s.minutes],["Starts",s.starts],["Goals",s.goals_scored],["Assists",s.assists],["xG",(+s.expected_goals||0).toFixed(1)],["xA",(+s.expected_assists||0).toFixed(1)],
-    p.pos<=2?["Clean sheets",s.clean_sheets]:["Bonus",s.bonus],p.pos===1?["Saves",s.saves]:["DefCon",s.defensive_contribution],p.pos<=2?["Conceded",s.goals_conceded]:["BPS",s.bps]]
-    .map(([k,v])=>`<div><span>${k}</span><b>${v??"–"}</b></div>`).join("");
   /* every gameweek played this season, latest first (a double sums its two matches) */
   const hrows=[];
   for(let e=G-1;e>=1;e--){const ms=((S.hist||{})[p.code]||[]).filter(r=>r.tag==="now"&&r.gw===e),o=opp(e),v=pts(e);
@@ -160,8 +226,8 @@ function playerCardHTML(){
   const body=`<div class="pk2">${hero}<div class="pkright">
     <div class="pktiles">${tiles}</div>
     <div class="pkpanel pktlw"><div class="pkh">Points: Last ${past.length} Played, Next ${fut.length} Predicted<span>bars coloured by points · striped = predicted · chips = difficulty for him</span></div><div class="pktl" style="grid-template-columns:repeat(${past.length+fut.length},minmax(0,1fr))">${tl}</div></div>
-    <div class="pkrow3"><div class="pkpanel"><div class="pkh">Against Other ${posN}s<span>rank among regular starters · 1 is best</span></div><div class="pkpct">${pct}</div>${pkOddsHTML(p)}</div>
-      <div class="pkpanel"><div class="pkh">This Season<span>totals</span></div><div class="pkkv tot">${tot}</div></div>${hist}</div>
+    <div class="pkrow3"><div class="pkpanel pkag">${pkAgainstHTML(p,posN)}${pkOddsHTML(p)}</div>
+      <div class="pkpanel pkse">${pkSeasonHTML(p,s,G,opp)}</div>${hist}</div>
   </div></div>`;
   /* News tab (22 Nov 2026): the flag, his chance of starting, the one flag
      log, minutes by gameweek, and every story and post naming him */
