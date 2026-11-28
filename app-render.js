@@ -4296,12 +4296,13 @@ function pdValue(r){
   _pdVal={D,lab,v:{base,best}};return _pdVal.v;
 }
 /* a pale kit (Spurs, Fulham, Leeds: white) under white text is unreadable:
-   anything light is mixed 28% into a dark slate for the card's hero */
+   anything light is mixed into a dark slate for the card's hero */
 function pkTone(c){
   const h=/^#?([0-9a-f]{6})$/i.exec(c||"");if(!h)return c;
   const n=parseInt(h[1],16),r=n>>16,g=n>>8&255,b=n&255;
-  if((0.2126*r+0.7152*g+0.0722*b)/255<0.62)return c;
-  const m=(x,y)=>Math.round(x*.28+y*.72).toString(16).padStart(2,"0");
+  const L=(0.2126*r+0.7152*g+0.0722*b)/255;if(L<0.62)return c;
+  /* white keeps a hint (28%); a light colour such as City's sky blue keeps half */
+  const t=L>=0.85?.28:.5,m=(x,y)=>Math.round(x*t+y*(1-t)).toString(16).padStart(2,"0");
   return "#"+m(r,34)+m(g,40)+m(b,54);
 }
 function pdCols(){
