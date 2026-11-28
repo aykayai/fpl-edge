@@ -100,7 +100,9 @@ function pkOddsHTML(p){
   const pc=v=>Math.round(v*100);
   const col=([k,v,m,c,skip,ban])=>{
     if(skip)return `<div class="oc-x"><b class="np">–</b><div class="oc-c np"></div><em>${k}</em><span class="od-e eq">n/a</span></div>`;
-    if(v==null)return `<div class="oc-x" title="${k}: the bookmaker has not priced this yet"><b class="np">–</b><div class="oc-c np"></div><em>${k}</em><span class="od-e eq">not yet</span></div>`;
+    /* an injured or suspended player is simply not priced */
+    if(v==null)return (p.avail??1)<0.25?`<div class="oc-x" title="${k}: not priced, he is out (${esc(p.news||"unavailable")})"><b class="np">–</b><div class="oc-c np"></div><em>${k}</em><span class="od-e dn">out</span></div>`
+      :`<div class="oc-x" title="${k}: the bookmaker has not priced this yet"><b class="np">–</b><div class="oc-c np"></div><em>${k}</em><span class="od-e eq">not yet</span></div>`;
     const d=m==null?null:pc(v)-pc(m),t=`${k}: bookmakers ${pc(v)}%${m!=null?`, our model ${pc(m)}%`:""}${ban?` · ${ban.tip}`:""}`;
     return `<div class="oc-x" title="${esc(t)}"><b>${pc(v)}%</b><div class="oc-c" style="--c:${c}"><i style="height:${Math.min(100,v/top*100)}%"></i>${m!=null?`<u style="bottom:${Math.min(100,m/top*100)}%"></u>`:""}</div><em>${k}</em>`
       +(ban?`<span class="od-e dn">ban risk</span>`:d==null?`<span class="od-e eq">–</span>`:`<span class="od-e ${d>=2?"up":d<=-2?"dn":"eq"}">${d>0?"+":d<0?"−":""}${Math.abs(d)}</span>`)+`</div>`;};
