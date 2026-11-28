@@ -102,16 +102,16 @@ function playerCardHTML(){
   const opp=e=>{const f=(S.model.byEv[e]||[]).find(f=>f.ht===team||f.at===team);return f?(f.ht===team?f.at:f.ht):null;};
   const sp=setPieceText(p);
   const pcTxt=pc==null?"":`<span class="pkpc" style="color:${pc>0?"var(--mint)":pc<0?"#FF8FAB":"#BDBDBD"}">${pc>0?"▲":pc<0?"▼":""} ${Math.abs(Math.round(pc))}% to a ${pc>=0?"rise":"fall"} tonight</span>`;
-  const lvH=pkLiveHTML(p);
+  const lvH=pkLiveHTML(p),heroK=pkTone(kit);
   /* Spotlight (28 Nov 2026, Andy picked A with B's name behind): the surname
      twice in outline behind the photo */
   const wmN=esc(s.second_name||p.web_name),pkWm=`<span class="pkwm" aria-hidden="true">${wmN}<i>${wmN}</i></span>`;
-  const hero=lvH?`<div class="pkhero pklh" style="--k:${kit}">
+  const hero=lvH?`<div class="pkhero pklh" style="--k:${heroK}">
     ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
     <div class="pknm"><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
-    ${lvH}</div>`:`<div class="pkhero" style="--k:${kit}">
+    ${lvH}</div>`:`<div class="pkhero" style="--k:${heroK}">
     ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
     <div class="pknm"><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
@@ -4295,8 +4295,20 @@ function pdValue(r){
       best[id]=`Best value: ${POS[pos]} ${band}, ${(hPts(p,r.from,r.count)/p.price).toFixed(2)} pts per £1m over ${pdWinLabel(r)} (regular starters)`;});});
   _pdVal={D,lab,v:{base,best}};return _pdVal.v;
 }
+/* a pale kit (Spurs, Fulham, Leeds: white) under white text is unreadable:
+   anything light is mixed 28% into a dark slate for the card's hero */
+function pkTone(c){
+  const h=/^#?([0-9a-f]{6})$/i.exec(c||"");if(!h)return c;
+  const n=parseInt(h[1],16),r=n>>16,g=n>>8&255,b=n&255;
+  if((0.2126*r+0.7152*g+0.0722*b)/255<0.62)return c;
+  const m=(x,y)=>Math.round(x*.28+y*.72).toString(16).padStart(2,"0");
+  return "#"+m(r,34)+m(g,40)+m(b,54);
+}
 function pdCols(){
-  const g=VG(),r=lGwRange(),W=p=>ws(String(p.code||""),p.pos,dispWin(),p.price,teamMaxPrice(p.team))||{};
+  /* 28 Nov 2026: during a live week VG() is the week being played, which has
+     no forecast, so "next match" columns (Clean Sheet Chance) read blank on
+     the player card; they look at the next week at the earliest */
+  const g=Math.max(VG(),S.model.next.id),r=lGwRange(),W=p=>ws(String(p.code||""),p.pos,dispWin(),p.price,teamMaxPrice(p.team))||{};
   /* Season: FPL's own per-90 where FPL publishes one; Last N: match rows */
   const sv=(p,k)=>{const v=statVal(p,k,W(p));return v==null||!isFinite(v)?null:v;};
   const L6=p=>{const w=ws(String(p.code||""),p.pos,6,p.price,teamMaxPrice(p.team));return w?(w.xg90||0)+(w.xa90||0):null;};
