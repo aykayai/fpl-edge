@@ -3118,7 +3118,7 @@ function lkPanelHTML(g){
   const fr=e=>{const d=LK_EV[e.k]||[e.k,"·","#8A8A8A"],lost=e.k==="clean_sheets"&&e.dp<0,lab=lost?"Clean sheet lost":d[0],col=lost?"#FF5A6E":d[2];
     return `<div class="fd-r${L.mult(+e.el)>0?" mine":""}"><span class="fd-t">${tm(e)}<i>${e.min!=null&&e.t?e.min+"′":""}</i></span>${dsFace(e.p)}
       <span class="fd-p"><span class="ds-name">${esc(e.p.web_name)}</span><span class="ds-sub">${esc(e.p.teamFull||e.p.teamName||"")}</span></span>
-      <span class="fd-ev" style="--ec:${col}"><span class="ic">${d[1]}</span>${lab}<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i></span>
+      <span class="fd-ev" style="--ec:${col}"><span class="ic">${d[1]}</span>${lab}${e.dv>1&&["goals_scored","assists","own_goals","penalties_saved","penalties_missed"].includes(e.k)?" ×"+e.dv:""}<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i></span>
       <span class="fd-i ${e.imp>0.05?"up":e.imp<-0.05?"dn":"eq"}">${e.imp>0.05?"+":e.imp<-0.05?"−":""}${Math.abs(e.imp).toFixed(1)}</span></div>`;};
   const feed=`<div class="lv4-blk lvm-fd"><div class="lvm-h">${lic("activity",15)}<b>Feed</b><button class="fci" data-tip="Impact: the points times your share less the league average share." aria-label="About the Feed">i</button><span class="sp fd-sum">You vs league ${sg(Fd.sofar)} so far ${sg(Fd.left)} still to play</span></div>
     <div class="fd-list">${Fd.rows.map(fr).join("")||`<p class="ds-sub" style="padding:6px 0">Nothing yet: events appear here as they happen.</p>`}</div></div>`;
