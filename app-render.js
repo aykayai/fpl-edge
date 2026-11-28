@@ -2905,7 +2905,9 @@ let _lk={};
 function lkCalc(g){
   const W=weekLive(g),row=offRowOf(g);
   if(!W||!row||!W.players||!S.model)return null;
-  const filt=["near","top10k","overall"].includes(S.lkF)?S.lkF:"top10k";
+  /* 29 Nov 2026 (Andy): Rivals replaces Top 10k and is the default - the
+     field is the rest of the league, as LiveFPL shows it */
+  const filt=["near","rivals","overall"].includes(S.lkF)?S.lkF:"rivals";
   if(_lk.W===W&&_lk.g===g&&_lk.rf===S.rivalsFeed&&_lk.fd===S.field&&_lk.rb===S.rankBands&&_lk.f===filt&&_lk.tr===S.tracker)return _lk.v;
   const PM=new Map(S.model.players.map(p=>[p.id,p])),P=id=>PM.get(+id);
   const fxT={};W.fixtures.forEach(f=>{(fxT[f.h]=fxT[f.h]||[]).push(f);(fxT[f.a]=fxT[f.a]||[]).push(f);});
@@ -2952,7 +2954,12 @@ function lkCalc(g){
   /* the field: the sample around you, the top 10k, or FPL's own ownership */
   const F=S.field&&S.field.gws?(S.field.gws[g]||S.field.gws[S.field.latest])||null:null;
   const fs=f=>F&&F[f]?F[f]:null;
-  const eoOf=(f,id)=>f==="overall"?((P(id)||{}).owned||0):(((fs(f)||{}).eo||{})[id]||0);
+  /* the rivals' field: their average multiplier for him, as a percentage
+     (a captain counts 200) */
+  let rivEo=null;
+  const rivalsEo=()=>{if(rivEo)return rivEo;rivEo={};const rv=league.filter(x=>!x.mine),n=rv.length||1;
+    rv.forEach(x=>x.picks.forEach((k,i)=>{const m=k.multiplier!=null?k.multiplier:(i<11?1:0);if(m>0)rivEo[k.id]=(rivEo[k.id]||0)+m*100/n;}));return rivEo;};
+  const eoOf=(f,id)=>f==="overall"?((P(id)||{}).owned||0):f==="rivals"?(rivalsEo()[id]||0):(((fs(f)||{}).eo||{})[id]||0);
   const fieldScore=f=>{const x=fs(f);if(!x||!x.eo)return null;let s=0;for(const id in x.eo)s+=x.eo[id]/100*pts(id);return s-((x.avg&&x.avg.hits)||0);};
   S._lkShift=fieldScore("near")||0;
   const total=prevTotal+pre,totalPost=prevTotal+post.pts;
@@ -3148,15 +3155,30 @@ function lkPanelHTML(g){
     <div class="fd-list">${Fd.rows.map(fr).join("")||`<p class="ds-sub" style="padding:6px 0">Nothing yet: events appear here as they happen.</p>`}</div></div>`;
   /* Your Edge / Threats */
   const ET=S.lkE==="threats"?"threats":"edge";
-  const F=[["near","Near you","lkf"],["top10k","Top 10k","lkf"],["overall","Overall","lkf"]];
+  const F=[["near","Near you","lkf"],["rivals","Rivals","lkf"],["overall","Overall","lkf"]];
   const eh=`<div class="ed4 ed4-h ds-th"><span></span><span>Player</span><span></span><span>Pts</span><span>League starts</span><span>vs field</span><span>Ranks</span></div>`;
   const er=x=>`<div class="ed4 ed4-r">${dsFace(x.p)}<span class="ds-name">${esc(x.p.web_name)}</span>${lkSI(x.st.s)}
     ${dsFig(x.st.s==="tp"?"–":fmtPts(x.pts*Math.max(1,x.m)))}${x.lgd==null?`<span class="ds-sub">–</span>`:`<span class="bar4 ${x.lgd>=0?"up":"dn"}"><i style="width:${Math.min(100,Math.abs(Math.round(x.lgd)))}%"></i><em>${lkSg(Math.round(x.lgd))}%</em></span>`}
     ${dsFig(x.st.s==="tp"&&!x.pts?"–":sgn1(x.vf),x.vf>0.05?"up":x.vf<-0.05?"dn":"")}<span class="ds-fig rk4 ${x.rk>0.5?"up":x.rk<-0.5?"dn":""}">${Math.abs(x.rk)<0.5?"–":lkSg(x.rk,lkK)}</span></div>`;
   const ep=L.edge.filter(x=>x.vf>0).reduce((a,x)=>a+x.vf,0),tp=L.threats.reduce((a,x)=>a+x.vf,0),v=ET==="edge"?ep:tp;
-  const list=ET==="edge"?L.edge:L.threats;
-  const et=`<div class="lv4-blk lvm-et"><div class="lvm-h">${tg(ET,[["edge","Your edge","lke"],["threats","Threats","lke"]])}<b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Points against the field">${sgn1(v)}</b><b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Ranks against the field">${lkSg(v*L.rpp,lkK)}</b><span class="sp">${tg(L.filt,F)}</span></div>
-    ${eh}<div class="fd-list">${list.map(er).join("")||`<p class="ds-sub">${ET==="edge"?"No edge yet":"No threats against this field"}</p>`}</div></div>`;
+  let list=ET==="edge"?L.edge:L.threats,hdr=eh,rowF=er;
+  /* Rivals (as LiveFPL): every player you and they differ on, played or not -
+     yours above the league's share under Differential, theirs under
+     Threats - with his fixture, where his match is, his points and the gap */
+  if(L.filt==="rivals"){
+    const gap=x=>x.m*100-x.eo;
+    list=L.all.filter(x=>ET==="edge"?gap(x)>0.5:gap(x)<-0.5).sort((a,b)=>ET==="edge"?gap(b)-gap(a)||b.pts-a.pts:gap(a)-gap(b)||b.pts-a.pts);
+    const myT=p=>(S.model.teams||[]).find(t=>t.id===p.team);
+    const opp=x=>{const f=((S.model.byEv[g]||[]).find(f=>f.ht&&f.at&&(f.ht.id===x.p.team||f.at.id===x.p.team)));if(!f)return `<span class="ds-sub">–</span>`;
+      const home=f.ht.id===x.p.team,o=home?f.at:f.ht;return fxRun(fxChip(o.short,home,fdrOf(o,home,myT(x.p),x.p.pos<=2?"def":"att"),{cls:"sm"}));};
+    const stat=x=>{const s=x.st,f=s.fx&&s.fx[0],m=(L.W.players[x.id]||{}).m||0;
+      return s.s==="tp"?`<span class="rv-st">${esc(lkKo(s.ko))}</span>`:s.s==="in"?`<span class="rv-st in">${s.min||0}′</span>`:s.s==="bl"?`<span class="rv-st">No match</span>`:`<span class="rv-st dn">Done (${m})</span>`;};
+    hdr=`<div class="rv4 ed4-h ds-th"><span></span><span>Player</span><span>Opp</span><span>Status</span><span>Pts</span><span>Imp</span></div>`;
+    rowF=x=>{const d=Math.round(gap(x));return `<div class="rv4 ed4-r">${dsFace(x.p)}<span class="ds-name">${esc(x.p.web_name)}</span>${opp(x)}${stat(x)}${dsFig(x.st.s==="tp"?"–":fmtPts(x.pts))}
+      <span class="bar4 ${d>=0?"up":"dn"}"><i style="width:${Math.min(100,Math.abs(d))}%"></i><em>${d>0?"+":d<0?"−":""}${Math.abs(d)}%</em></span></div>`;};
+  }
+  const et=`<div class="lv4-blk lvm-et"><div class="lvm-h">${tg(ET,[["edge","Differential","lke"],["threats","Threats","lke"]])}<b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Points against the field">${sgn1(v)}</b><b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Ranks against the field">${lkSg(v*L.rpp,lkK)}</b><span class="sp">${tg(L.filt,F)}</span></div>
+    ${hdr}<div class="fd-list">${list.map(rowF).join("")||`<p class="ds-sub">${ET==="edge"?"No differentials yet":"No threats against this field"}</p>`}</div></div>`;
   return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","")}<div class="lv4-sc lvm">${league}${feed}${et}</div></div>`;
 }
 /* ---------- Rank and Match Centre, under the Planner ---------- */

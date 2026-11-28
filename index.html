@@ -1976,6 +1976,10 @@ svg.chart circle[data-tip]{cursor:pointer}
 .lvm-fd .fd-list,.lvm-et .fd-list{flex:1;min-height:0;overflow-y:auto;margin:0 -6px;padding:0 6px}
 .lvm-h{display:flex;align-items:center;gap:8px;margin-bottom:6px;min-width:0}.lvm-h>b{font:650 14px 'Geist',sans-serif;white-space:nowrap}.lvm-h>svg{color:var(--mute);flex:none}.lvm-h .sp{margin-left:auto}.lvm-h .ds-sub{white-space:nowrap}
 .lvm-h>.ds-fig{font-size:12.5px}
+/* Rivals rows (29 Nov 2026): face, name, opponent, status, points, the gap */
+.rv4{display:grid;grid-template-columns:26px minmax(0,1fr) 44px 76px 26px 78px;gap:8px;align-items:center;text-align:center}
+.rv4.ed4-r{min-height:34px}.rv4 .ds-face{width:22px;height:27px;border-radius:5px}.rv4 .ds-name{text-align:left}.rv4.ed4-h span:nth-child(2){text-align:left}
+.rv-st{font:500 11px 'Geist',sans-serif;color:#9A9A9A;white-space:nowrap}.rv-st.in{color:#FF8095;font-weight:700}.rv-st.dn{color:#3DDC97}
 .lvm-tg{display:inline-flex;background:#141414;border-radius:99px;padding:2px;box-shadow:inset 0 0 0 1px #262626;flex:none}.lvm-tg button{all:unset;cursor:pointer;font:600 11px 'Geist',sans-serif;color:#8A8A8A;padding:4px 10px;border-radius:99px;white-space:nowrap}.lvm-tg button.on{background:#EDEDED;color:#0B0B0B}
 .ls5{display:grid;grid-template-columns:22px minmax(0,1fr) 34px 62px 44px 32px 40px;gap:6px;align-items:center;text-align:center}
 .ls5-h{padding:4px 6px;align-items:end}.ls5-h span{line-height:1.15}.ls5-h span:nth-child(2){text-align:left}
@@ -2476,13 +2480,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.20.5"></script>
-<script src="./app-squad.js?v=14.20.5"></script>
-<script src="./app-render.js?v=14.20.5"></script>
-<script src="./app-odds.js?v=14.20.5"></script>
-<script src="./app-tracker.js?v=14.20.5"></script>
-<script src="./app-main.js?v=14.20.5"></script>
-<script src="./app-scout.js?v=14.20.5"></script>
+<script src="./app-core.js?v=14.21.0"></script>
+<script src="./app-squad.js?v=14.21.0"></script>
+<script src="./app-render.js?v=14.21.0"></script>
+<script src="./app-odds.js?v=14.21.0"></script>
+<script src="./app-tracker.js?v=14.21.0"></script>
+<script src="./app-main.js?v=14.21.0"></script>
+<script src="./app-scout.js?v=14.21.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
