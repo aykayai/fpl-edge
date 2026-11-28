@@ -3199,33 +3199,11 @@ function lkRankHTML(g){
   return `<section class="panel card4 lk-rank">${dsHead("trending-up","Rank",`<span class="ds-sub">GW${g} · live</span>`)}${hero}
     <div class="rk4-two">${ptsT}${rnT}</div>${bm}<div class="rk4-two">${tr}<div class="sf4s">${sfk("Star","st",star)}${sfk("Flop","fl",flop)}${sfk("Killer","kl",killer)}</div></div></section>`;
 }
-function lkCentreHTML(g){
-  const L=lkCalc(g);if(!L)return "";
-  const W=L.W,T=id=>(S.model.teams||[]).find(t=>t.id===id)||{},mode=S.mcM==="table"?"table":"matches";
-  const sw=`<span class="hz"><button class="${mode==="matches"?"on":""}" onclick="act('mcm','matches')">Matches</button><button class="${mode==="table"?"on":""}" onclick="act('mcm','table')">Table</button></span>`;
-  let body="";
-  if(mode==="matches"){
-    const rank=f=>f.started&&!f.done&&!f.fp?0:f.started?1:2;
-    const fx=W.fixtures.slice().sort((a,b)=>rank(a)-rank(b)||(rank(a)===1?String(b.ko).localeCompare(String(a.ko)):String(a.ko).localeCompare(String(b.ko))));
-    const mine=new Map(L.picks.map(k=>[k.id,k]));
-    {const f=fx.find(f=>rank(f)===0&&L.picks.some(k=>k.p&&(k.p.team===f.h||k.p.team===f.a)));S._mcAuto=f?f.id:0;}
-    const openId=S.mcOpen==null?S._mcAuto:S.mcOpen;
-    const nm=id=>{const p=L.P(id);return p?esc(p.web_name):"?";};
-    const pr=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="pr5${mine.has(+el)?" me":""}">${dsFace(p,"pr5-f")}<span class="ds-name">${nm(el)}</span>${v!=null?`<b class="ds-fig${o.cls?" "+o.cls:""}">${v}</b>`:""}</span>`;};
-    const side=l=>l.length?l.join(""):`<span class="pr5-none">–</span>`;
-    const evl=(f,k)=>{const out=[];[["goals_scored","g"],["assists","a"],["own_goals","og"]].forEach(([s,ic])=>((f.st&&f.st[s]&&f.st[s][k])||[]).forEach(([el,n])=>out.push(`<span class="${ic==="a"?"a":""}">${EV_ICON[ic]}${nm(el)}${n>1?` <i>×${n}</i>`:""}</span>`)));return `<span class="sc5 ${k}">${out.join("")}</span>`;};
-    /* the open match (28 Nov 2026, Andy approved the mock): three bands -
-       your players; goals, assists and cards; BPS with the bonus as a badge,
-       DefCon and saves - with players as chips side by side */
-    const chip=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="cp${mine.has(+el)?" me":""}${o.c?" "+o.c:""}">${o.ev?`<span class="ev">${o.ev}</span>`:""}${dsFace(p)}<span>${nm(el)}</span>${v!=null?`<b class="${o.cls||""}">${v}</b>`:""}${o.bn?`<span class="bn" title="Bonus${o.prov?", provisional":""}">+${o.bn}</span>`:""}</span>`;};
-    const open=f=>{const st=f.st||{},list=(s,k)=>(st[s]&&st[s][k])||[],team=k=>k==="h"?f.h:f.a;
-      const ours=k=>L.picks.filter(x=>x.p&&x.p.team===team(k)).map(x=>`<span class="cp me">${dsFace(x.p)}<span>${esc(x.p.web_name)}</span><b>${fmtPts(L.pts(x.id)*Math.max(1,x.m))}</b></span>`);
-      const pv=L.provFx[f.id],bonusOf=k=>{const m={};if(pv)Object.entries(pv).forEach(([el,v])=>{const p=L.P(el);if(p&&p.team===team(k))m[el]=v;});else list("bonus",k).forEach(([el,v])=>m[el]=v);return m;};
-      /* 29 Nov 2026: each goal with its assist on one chip. FPL never links
-         them; the Feed does when both land in the same minute's check (an
-         untimed pair counts only when the team has one goal and one assist) */
-      const feedFx=((L.W&&L.W.feed)||[]).filter(e=>e.fx===f.id);
-      const scoring=k=>{
+/* each goal with its assist (29 Nov 2026), shared by the open and the
+   collapsed match card. FPL never links them; see the rules inside. */
+function lkGoalPairs(L,f,k){
+  const st=f.st||{},list=(s,kk)=>(st[s]&&st[s][kk])||[],team=kk=>kk==="h"?f.h:f.a;
+  const feedFx=((L.W&&L.W.feed)||[]).filter(e=>e.fx===f.id);
         const mineT=el=>{const p=L.P(el);return p&&p.team===team(k);};
         const goals=[],asts=[];
         list("goals_scored",k).forEach(([el,n])=>{for(let i=0;i<n;i++)goals.push({el:+el});});
@@ -3255,6 +3233,38 @@ function lkCentreHTML(g){
             if(!moved)for(const x of free){if(x.used)continue;const c=open.filter(p=>p.a==null&&p.g!==x.el);if(one(c.map(p=>({el:p.g})))){c[0].a=x.el;x.used=1;moved=true;break;}}
           }else if(open.length===1&&free.length===1&&free[0].el!==open[0].g){open[0].a=free[0].el;free[0].used=1;moved=true;}
         }
+  return{pairs,asts};
+}
+function lkCentreHTML(g){
+  const L=lkCalc(g);if(!L)return "";
+  const W=L.W,T=id=>(S.model.teams||[]).find(t=>t.id===id)||{},mode=S.mcM==="table"?"table":"matches";
+  const sw=`<span class="hz"><button class="${mode==="matches"?"on":""}" onclick="act('mcm','matches')">Matches</button><button class="${mode==="table"?"on":""}" onclick="act('mcm','table')">Table</button></span>`;
+  let body="";
+  if(mode==="matches"){
+    const rank=f=>f.started&&!f.done&&!f.fp?0:f.started?1:2;
+    const fx=W.fixtures.slice().sort((a,b)=>rank(a)-rank(b)||(rank(a)===1?String(b.ko).localeCompare(String(a.ko)):String(a.ko).localeCompare(String(b.ko))));
+    const mine=new Map(L.picks.map(k=>[k.id,k]));
+    {const f=fx.find(f=>rank(f)===0&&L.picks.some(k=>k.p&&(k.p.team===f.h||k.p.team===f.a)));S._mcAuto=f?f.id:0;}
+    const openId=S.mcOpen==null?S._mcAuto:S.mcOpen;
+    const nm=id=>{const p=L.P(id);return p?esc(p.web_name):"?";};
+    const pr=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="pr5${mine.has(+el)?" me":""}">${dsFace(p,"pr5-f")}<span class="ds-name">${nm(el)}</span>${v!=null?`<b class="ds-fig${o.cls?" "+o.cls:""}">${v}</b>`:""}</span>`;};
+    const side=l=>l.length?l.join(""):`<span class="pr5-none">–</span>`;
+    const evl=(f,k)=>{const {pairs,asts}=lkGoalPairs(L,f,k),st=f.st||{},og=(st.own_goals&&st.own_goals[k])||[];
+      const out=[...pairs.map(p=>`<span class="gl">${EV_ICON.g}${nm(p.g)}${p.a!=null?`<span class="a">${EV_ICON.a}${nm(p.a)}</span>`:""}</span>`),
+        ...og.map(([el,n])=>`<span>${EV_ICON.og}${nm(el)}${n>1?` <i>×${n}</i>`:""}</span>`),...asts.filter(x=>!x.used).map(x=>`<span class="a">${EV_ICON.a}${nm(x.el)}</span>`)];
+      return `<span class="sc5 ${k}">${out.join("")}</span>`;};
+    /* the open match (28 Nov 2026, Andy approved the mock): three bands -
+       your players; goals, assists and cards; BPS with the bonus as a badge,
+       DefCon and saves - with players as chips side by side */
+    const chip=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="cp${mine.has(+el)?" me":""}${o.c?" "+o.c:""}">${o.ev?`<span class="ev">${o.ev}</span>`:""}${dsFace(p)}<span>${nm(el)}</span>${v!=null?`<b class="${o.cls||""}">${v}</b>`:""}${o.bn?`<span class="bn" title="Bonus${o.prov?", provisional":""}">+${o.bn}</span>`:""}</span>`;};
+    const open=f=>{const st=f.st||{},list=(s,k)=>(st[s]&&st[s][k])||[],team=k=>k==="h"?f.h:f.a;
+      const ours=k=>L.picks.filter(x=>x.p&&x.p.team===team(k)).map(x=>`<span class="cp me">${dsFace(x.p)}<span>${esc(x.p.web_name)}</span><b>${fmtPts(L.pts(x.id)*Math.max(1,x.m))}</b></span>`);
+      const pv=L.provFx[f.id],bonusOf=k=>{const m={};if(pv)Object.entries(pv).forEach(([el,v])=>{const p=L.P(el);if(p&&p.team===team(k))m[el]=v;});else list("bonus",k).forEach(([el,v])=>m[el]=v);return m;};
+      /* 29 Nov 2026: each goal with its assist on one chip. FPL never links
+         them; the Feed does when both land in the same minute's check (an
+         untimed pair counts only when the team has one goal and one assist) */
+      const scoring=k=>{
+        const {pairs,asts}=lkGoalPairs(L,f,k);
         const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}</span>${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
         return [...pairs.map(gChip),...list("own_goals",k).map(([el])=>chip(el,"OG",{ev:EV_ICON.og,cls:"dn"})),...asts.filter(x=>!x.used).map(x=>chip(x.el,null,{ev:EV_ICON.a,c:"ast"}))];};
       const cards=k=>[...list("yellow_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FFD23F")})),...list("red_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FF5A6E")}))];
