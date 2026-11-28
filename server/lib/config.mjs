@@ -49,7 +49,7 @@ export const CONFIG = {
   DATASET_POLL_MS: int(env.DATASET_POLL_MS, 15 * 60000),
   FPL_POLL_MS: int(env.FPL_POLL_MS, 15 * 60000),
   FPL_POLL_NEAR_MS: int(env.FPL_POLL_NEAR_MS, 5 * 60000),
-  FPL_LIVE_MS: int(env.FPL_LIVE_MS, 2 * 60000),
+  FPL_LIVE_MS: int(env.FPL_LIVE_MS, 60000),   /* 28 Nov 2026: every minute, so the live Feed's times are to the minute */
   NEWS_POLL_MS: int(env.NEWS_POLL_MS, 15 * 60000),
   ODDS_POLL_MS: int(env.ODDS_POLL_MS, 4 * 3600000),
   /* 0 disables the feeds child process (the gate uses that: the build

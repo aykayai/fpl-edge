@@ -2845,7 +2845,7 @@ function lkTick(){
 }
 /* keep the Live panel's and Match Centre's scroll through a repaint */
 function lkKeep(fn){
-  const sel=[".lv4-sc",".mc5-s",".hh-side"],pos=sel.map(s=>[...document.querySelectorAll(s)].map(e=>e.scrollTop));
+  const sel=[".lv4-sc",".mc5-s",".hh-side",".lvm-fd .fd-list",".lvm-et .fd-list"],pos=sel.map(s=>[...document.querySelectorAll(s)].map(e=>e.scrollTop));
   fn();
   S._lkRestore=()=>sel.forEach((s,i)=>[...document.querySelectorAll(s)].forEach((e,j)=>{if(pos[i][j])e.scrollTop=pos[i][j];}));
 }
@@ -2979,7 +2979,7 @@ function lkCalc(g){
     const mo=lkMonth(g),month=mo?rows.filter(x=>x.event>=mo.start&&x.event<g).reduce((a,x)=>a+(x.points||0)-(x.transferCost||0),0)+live:null;
     return{id,name:e.name||"",manager:e.manager||"",mine,live,total:before+live,before,oldRank:pr?(pr.overallRank??pr.orRank??null):null,
       cap:capK?P(capK.id):null,capS,inPlay,toStart,month,
-      used:chips.map(x=>x.name),act:(chips.find(x=>x.event===g)||{}).name||"",
+      used:chips.map(x=>x.name),chipsEv:chips.map(x=>({name:x.name,event:x.event})),act:(chips.find(x=>x.event===g)||{}).name||"",
       transfers:rows.filter(x=>x.event<=g).reduce((a,x)=>a+(x.transfers||0),0),value:r?r.value:null,picks:pk,cost:c,row:r};}).filter(Boolean);
   league.forEach(x=>x.rank=lkRankAt(x.total,g));
   const lgPct=(id,excl)=>{const n=nLg-(excl?1:0);if(n<=0)return null;return ((starts[id]||0)-(excl&&excl.has(+id)?1:0))/n*100;};
@@ -3051,36 +3051,86 @@ function lkLeagueRows(L){
   return lg;
 }
 /* ---------- the Live panel, where the Player Pool sits ---------- */
+/* ---------- the Live panel, where the Player Pool sits ----------
+   28 Nov 2026 (Andy approved the mock): the league in full at the top with
+   a Live / Season switch, the Feed below it, then Your Edge / Threats on one
+   switch filling the rest down to the bottom of the team. */
+const LK_EV={goals_scored:["Goal","G","#3DDC97"],assists:["Assist","A","#60A5FA"],own_goals:["Own goal","OG","#FF5A6E"],
+  penalties_saved:["Pen saved","P","#60A5FA"],penalties_missed:["Pen missed","P","#FF5A6E"],yellow_cards:["Yellow card","Y","#FACC15"],
+  red_cards:["Red card","R","#FF5A6E"],saves:["Saves","S","#60A5FA"],clean_sheets:["Clean sheet","C","#3DDC97"],
+  goals_conceded:["Conceded","GC","#FF8A3D"],bonus:["Bonus","B","#F5B33C"],defensive_contribution:["DefCon","D","#A78BFA"]};
+/* the Feed's rows and its two totals: impact is the points times your
+   multiplier less the rest of the league's average multiplier for him */
+function lkFeed(L){
+  const g=L.g,rivals=L.league.filter(x=>!x.mine),n=rivals.length||1;
+  const mOf=(k,i)=>k.multiplier!=null?k.multiplier:(i<11?1:0);
+  const avg={};rivals.forEach(x=>x.picks.forEach((k,i)=>{const m=mOf(k,i);if(m>0)avg[k.id]=(avg[k.id]||0)+m/n;}));
+  const owned=new Set([...Object.keys(avg).map(Number),...L.picks.filter(k=>k.m>0).map(k=>k.id)]);
+  const diff=id=>L.mult(id)-(avg[id]||0);
+  const rows=((L.W&&L.W.feed)||[]).filter(e=>owned.has(+e.el)&&L.P(e.el)).map(e=>({...e,p:L.P(e.el),imp:e.dp*diff(+e.el)}))
+    .sort((a,b)=>(b.t??-1)-(a.t??-1)||b.fx-a.fx);
+  let sofar=0,left=0;
+  owned.forEach(id=>{const d=diff(id);if(!d)return;sofar+=L.pts(id)*d;
+    const s=L.status(id),p=L.P(id),pr=p&&pastPred(p,g)?pastPred(p,g).v:0;
+    left+=d*(s.s==="tp"?pr:s.s==="in"?Math.max(0,pr-2)*Math.max(0,90-(s.min||0))/90:0);});
+  return{rows,sofar,left};
+}
 function lkPanelHTML(g){
-  const L=lkCalc(g);if(!L)return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","Your edge and threats as the week plays.")}<p class="note" style="padding:16px">Loading the live gameweek…</p></div>`;
-  const F=[["near","Near you"],["top10k","Top 10k"],["overall","Overall"]];
-  const fsw=`<span class="hz lv4-f">${F.map(([k,n])=>`<button class="${L.filt===k?"on":""}" onclick="act('lkf','${k}')">${n}</button>`).join("")}</span>`;
-  const lg=lkLeagueRows(L);
+  const L=lkCalc(g);if(!L)return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","")}<p class="note" style="padding:16px">Loading the live gameweek…</p></div>`;
+  const tg=(on,items)=>`<span class="lvm-tg">${items.map(([k,n,a])=>`<button class="${on===k?"on":""}" onclick="act('${a}','${k}')">${n}</button>`).join("")}</span>`;
+  const view=S.lkV==="season"?"season":"live";
   const lgName=(S.rivalsFeed&&S.rivalsFeed.leagueName)||"League",mo=lkMonth(g);
-  const key=["gw","month","total"].includes(S.lkS)?S.lkS:"total";
-  const th=(k,t)=>`<span class="srt${key===k?" on":""}" role="button" tabindex="0" onclick="act('lks','${k}')" onkeydown="if(event.key==='Enter')act('lks','${k}')">${t}${key===k?" ▾":""}</span>`;
   const C=`<span class="lg5-c">C</span>`,num=(v,c)=>`<span class="ds-fig lg5-n${v?"":" z"}">${c?C:""}${v}</span>`;
-  const mv=v=>key!=="total"||v==null?"":`<span class="lg5-mv ${v>0?"up":v<0?"dn":""}">${v>0?"▲"+v:v<0?"▼"+(-v):"–"}</span>`;
-  const league=`<div class="lv4-blk">${dsHead("trophy",esc(lgName),`<span class="ds-sub">GW${g}${mo?` · ${esc(mo.name)}`:""}</span>`)}
-    ${lg.length?`<div class="lg5 lg5-h ds-th"><span>#</span><span>Team · Captain</span><span>In<br>Play</span><span>To<br>Start</span>${th("gw","GW<br>Net")}${th("month","Month")}${th("total","Total")}</div>
-    ${lg.map(x=>`<div class="lg5 lg5-r${x.mine?" me":""}"${x.mine?"":` role="button" tabindex="0" title="Head to head with ${esc(x.name)}" onclick="act('h2h','${x.id}')" onkeydown="if(event.key==='Enter')act('h2h','${x.id}')"`}>
+  const rowAttr=x=>x.mine?"":` role="button" tabindex="0" title="Head to head with ${esc(x.name)}" onclick="act('h2h','${x.id}')" onkeydown="if(event.key==='Enter')act('h2h','${x.id}')"`;
+  let table;
+  if(view==="live"){
+    const lg=lkLeagueRows(L),key=["gw","month","total"].includes(S.lkS)?S.lkS:"total";
+    const th=(k,t)=>`<span class="srt${key===k?" on":""}" role="button" tabindex="0" onclick="act('lks','${k}')" onkeydown="if(event.key==='Enter')act('lks','${k}')">${t}${key===k?" ▾":""}</span>`;
+    const mv=v=>key!=="total"||v==null?"":`<span class="lg5-mv ${v>0?"up":v<0?"dn":""}">${v>0?"▲"+v:v<0?"▼"+(-v):"–"}</span>`;
+    table=lg.length?`<div class="lg5 lg5-h ds-th"><span>#</span><span>Team · Captain</span><span>In<br>Play</span><span>To<br>Start</span>${th("gw","GW<br>Net")}${th("month","Month")}${th("total","Total")}</div>
+    ${lg.map(x=>`<div class="lg5 lg5-r${x.mine?" me":""}"${rowAttr(x)}>
       <span class="lg5-pos"><span class="ds-fig">${x.pos}</span>${mv(x.move)}</span>
       <span class="lg5-tm"><span class="lg5-l1"><span class="ds-name">${esc(x.name)}</span><span class="ds-sub">${esc(x.manager)}</span></span>
         <span class="lg5-l2">${x.cap?`${C}<span class="lg5-cn">${esc(x.cap.web_name)}</span>${lkSI(x.capS)}`:`<span class="lg5-cn">No captain</span>`}${x.act?`<span class="lg5-chip" style="--tc:${(CHIP_UI[x.act]||{}).c||"#BDBDBD"}">${esc((DS_CHIPS.find(c=>c[0]===x.act)||[0,x.act])[1])}</span>`:""}</span></span>
       ${num(x.inPlay,x.capS==="in")}${num(x.toStart,x.capS==="tp")}
       <span class="lg5-gw"><span class="ds-fig">${fmtPts(x.live)}</span>${x.cost?`<i>−${x.cost}</i>`:""}</span>
-      <span class="ds-fig lg5-mo">${x.month==null?"–":fmtPts(x.month)}</span><span class="ds-fig lg5-tot">${fmtPts(x.total)}</span></div>`).join("")}`
-    :`<p class="ds-sub" style="padding:8px 0">The league's picks for GW${g} are not in yet.</p>`}</div>`;
+      <span class="ds-fig lg5-mo">${x.month==null?"–":fmtPts(x.month)}</span><span class="ds-fig lg5-tot">${fmtPts(x.total)}</span></div>`).join("")}`:"";
+  }else{
+    /* Season: chips used (numbered by half), season transfers, overall rank,
+       team value, this week's net and the total */
+    const lg=L.league.slice().sort((a,b)=>b.total-a.total);
+    lg.forEach((x,i)=>x.spos=i&&lg[i-1].total===x.total?lg[i-1].spos:i+1);
+    const chipTag=c=>{const k=c.name,u=CHIP_UI[k]||{},s=(DS_CHIPS.find(d=>d[0]===k)||[0,k])[1];return `<span style="--tc:${u.c||"#8A8A8A"}" title="${esc(u.n||k)} · GW${c.event}">${esc(s)}${c.event<=19?1:2}</span>`;};
+    table=lg.length?`<div class="ls5 ls5-h ds-th"><span>#</span><span>Team · Chips used</span><span>Trans-<br>fers</span><span>Overall<br>rank</span><span>Team<br>value</span><span>GW<br>Net</span><span>Total</span></div>
+    ${lg.map(x=>`<div class="ls5 ls5-r${x.mine?" me":""}"${rowAttr(x)}><span class="ds-fig">${x.spos}</span>
+      <span class="ls5-tm"><span class="lg5-l1"><span class="ds-name">${esc(x.name)}</span><span class="ds-sub">${esc(x.manager)}</span></span><span class="ls5-ch">${(x.chipsEv||[]).map(chipTag).join("")||`<span class="ls5-no">No chips used</span>`}</span></span>
+      <span class="ds-fig">${x.transfers}</span><span class="ds-fig ls5-m">${x.rank?x.rank.toLocaleString():"—"}</span><span class="ds-fig ls5-m">${x.value?"£"+(+x.value).toFixed(1):"—"}</span>
+      <span class="ds-fig">${fmtPts(x.live)}</span><span class="ds-fig lg5-tot">${fmtPts(x.total)}</span></div>`).join("")}`:"";
+  }
+  const league=`<div class="lv4-blk lvm-lg"><div class="lvm-h">${lic("trophy",15)}<b>${esc(lgName)}</b><span class="ds-sub">GW${g}${mo&&view==="live"?` · ${esc(mo.name)}`:""}</span><span class="sp">${tg(view,[["live","Live","lkv"],["season","Season","lkv"]])}</span></div>
+    ${table||`<p class="ds-sub" style="padding:8px 0">The league's picks for GW${g} are not in yet.</p>`}</div>`;
+  /* the Feed */
+  const Fd=lkFeed(L),sg=v=>`<b class="${v>0.05?"up":v<-0.05?"dn":""}">${v>0.05?"+":v<-0.05?"−":""}${Math.abs(v).toFixed(1)}</b>`;
+  const tm=e=>e.t?new Date(e.t).toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit"}):"earlier";
+  const fr=e=>{const d=LK_EV[e.k]||[e.k,"·","#8A8A8A"],lost=e.k==="clean_sheets"&&e.dp<0,lab=lost?"Clean sheet lost":d[0],col=lost?"#FF5A6E":d[2];
+    return `<div class="fd-r${L.mult(+e.el)>0?" mine":""}"><span class="fd-t">${tm(e)}<i>${e.min!=null&&e.t?e.min+"′":""}</i></span>${dsFace(e.p)}
+      <span class="fd-p"><span class="ds-name">${esc(e.p.web_name)}</span><span class="ds-sub">${esc(e.p.teamFull||e.p.teamName||"")}</span></span>
+      <span class="fd-ev" style="--ec:${col}"><span class="ic">${d[1]}</span>${lab}<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i></span>
+      <span class="fd-i ${e.imp>0.05?"up":e.imp<-0.05?"dn":"eq"}">${e.imp>0.05?"+":e.imp<-0.05?"−":""}${Math.abs(e.imp).toFixed(1)}</span></div>`;};
+  const feed=`<div class="lv4-blk lvm-fd"><div class="lvm-h">${lic("activity",15)}<b>Feed</b><button class="fci" data-tip="Impact: the points times your share less the league average share." aria-label="About the Feed">i</button><span class="sp fd-sum">You vs league ${sg(Fd.sofar)} so far ${sg(Fd.left)} still to play</span></div>
+    <div class="fd-list">${Fd.rows.map(fr).join("")||`<p class="ds-sub" style="padding:6px 0">Nothing yet: events appear here as they happen.</p>`}</div></div>`;
+  /* Your Edge / Threats */
+  const ET=S.lkE==="threats"?"threats":"edge";
+  const F=[["near","Near you","lkf"],["top10k","Top 10k","lkf"],["overall","Overall","lkf"]];
   const eh=`<div class="ed4 ed4-h ds-th"><span></span><span>Player</span><span></span><span>Pts</span><span>League starts</span><span>vs field</span><span>Ranks</span></div>`;
   const er=x=>`<div class="ed4 ed4-r">${dsFace(x.p)}<span class="ds-name">${esc(x.p.web_name)}</span>${lkSI(x.st.s)}
     ${dsFig(x.st.s==="tp"?"–":fmtPts(x.pts*Math.max(1,x.m)))}${x.lgd==null?`<span class="ds-sub">–</span>`:`<span class="bar4 ${x.lgd>=0?"up":"dn"}"><i style="width:${Math.min(100,Math.abs(Math.round(x.lgd)))}%"></i><em>${lkSg(Math.round(x.lgd))}%</em></span>`}
     ${dsFig(x.st.s==="tp"&&!x.pts?"–":sgn1(x.vf),x.vf>0.05?"up":x.vf<-0.05?"dn":"")}<span class="ds-fig rk4 ${x.rk>0.5?"up":x.rk<-0.5?"dn":""}">${Math.abs(x.rk)<0.5?"–":lkSg(x.rk,lkK)}</span></div>`;
-  const ep=L.edge.filter(x=>x.vf>0).reduce((a,x)=>a+x.vf,0),tp=L.threats.reduce((a,x)=>a+x.vf,0);
-  const tot=(v,tone)=>`<b class="ds-fig ${tone}">${sgn1(v)}</b><span class="ds-sub">pts</span><b class="ds-fig ${tone}">${lkSg(v*L.rpp,lkK)}</b><span class="ds-sub">ranks</span>`;
-  return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","Your edge and threats as the week plays.",`<span class="lv4-ph">${fsw}</span>`)}<div class="lv4-sc">
-    ${league}
-    <div class="lv4-blk">${dsHead("gem","Your edge",tot(ep,"up"))}${eh}${L.edge.slice(0,8).map(er).join("")}</div>
-    <div class="lv4-blk">${dsHead("triangle-alert","Threats",tot(tp,"dn"))}${eh}${L.threats.slice(0,6).map(er).join("")||`<p class="ds-sub">No threats against this field</p>`}</div></div></div>`;
+  const ep=L.edge.filter(x=>x.vf>0).reduce((a,x)=>a+x.vf,0),tp=L.threats.reduce((a,x)=>a+x.vf,0),v=ET==="edge"?ep:tp;
+  const list=ET==="edge"?L.edge:L.threats;
+  const et=`<div class="lv4-blk lvm-et"><div class="lvm-h">${tg(ET,[["edge","Your edge","lke"],["threats","Threats","lke"]])}<b class="ds-fig ${ET==="edge"?"up":"dn"}">${sgn1(v)}</b><span class="ds-sub">pts</span><b class="ds-fig ${ET==="edge"?"up":"dn"}">${lkSg(v*L.rpp,lkK)}</b><span class="ds-sub">ranks</span><span class="sp">${tg(L.filt,F)}</span></div>
+    ${eh}<div class="fd-list">${list.map(er).join("")||`<p class="ds-sub">${ET==="edge"?"No edge yet":"No threats against this field"}</p>`}</div></div>`;
+  return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","")}<div class="lv4-sc lvm">${league}${feed}${et}</div></div>`;
 }
 /* ---------- Rank and Match Centre, under the Planner ---------- */
 function lkRankHTML(g){
@@ -3137,23 +3187,35 @@ function lkCentreHTML(g){
     const pr=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="pr5${mine.has(+el)?" me":""}">${dsFace(p,"pr5-f")}<span class="ds-name">${nm(el)}</span>${v!=null?`<b class="ds-fig${o.cls?" "+o.cls:""}">${v}</b>`:""}</span>`;};
     const side=l=>l.length?l.join(""):`<span class="pr5-none">–</span>`;
     const evl=(f,k)=>{const out=[];[["goals_scored","g"],["assists","a"],["own_goals","og"]].forEach(([s,ic])=>((f.st&&f.st[s]&&f.st[s][k])||[]).forEach(([el,n])=>out.push(`<span class="${ic==="a"?"a":""}">${EV_ICON[ic]}${nm(el)}${n>1?` <i>×${n}</i>`:""}</span>`)));return `<span class="sc5 ${k}">${out.join("")}</span>`;};
-    const open=f=>{const st=f.st||{},list=(s,k)=>(st[s]&&st[s][k])||[];
-      const ours=k=>L.picks.filter(x=>x.p&&x.p.team===(k==="h"?f.h:f.a)).map(x=>`<span class="mn5">${dsFace(x.p,"mn5-f")}<span class="ds-name">${esc(x.p.web_name)}</span><b class="ds-fig">${fmtPts(L.pts(x.id)*Math.max(1,x.m))}</b></span>`);
-      const pv=L.provFx[f.id],bon=k=>pv?Object.entries(pv).filter(([el])=>{const p=L.P(el);return p&&p.team===(k==="h"?f.h:f.a);}).sort((a,b)=>b[1]-a[1]).map(([el,v])=>pr(el,v)):list("bonus",k).slice().sort((a,b)=>b[1]-a[1]).map(([el,v])=>pr(el,v));
-      const dc=k=>list("defensive_contribution",k).map(([el,v])=>({el,v,t:lkDcT((L.P(el)||{}).pos)})).filter(x=>x.t&&x.v>=x.t-4).sort((a,b)=>b.v/b.t-a.v/a.t).slice(0,3).map(x=>pr(x.el,`${x.v}/${x.t}`,{cls:x.v>=x.t?"up":"dc"}));
-      const top=(s,k,n)=>list(s,k).slice().sort((a,b)=>b[1]-a[1]).slice(0,n).map(([el,v])=>pr(el,v));
-      const cards=k=>[...list("yellow_cards",k).map(([el])=>pr(el,null)),...list("red_cards",k).map(([el])=>pr(el,EV_ICON.card("#FF5A6E")))];
-      const rows=[["Bonus","b",bon,pv?"prov.":""],["DefCon","dc",dc],["Saves","sv",k=>top("saves",k,2)],["Cards","card",cards],["BPS","b",k=>top("bps",k,3)]]
-        .map(([t,ic,fn,tag])=>{const h=fn("h"),a=fn("a");return h.length||a.length?`<div class="mx5-r"><div class="h">${side(h)}</div><span class="mx5-l">${ic==="card"?EV_ICON.card("#FFD23F"):EV_ICON[ic]}${t}${tag?`<i>${tag}</i>`:""}</span><div class="a">${side(a)}</div></div>`:"";}).join("");
+    /* the open match (28 Nov 2026, Andy approved the mock): three bands -
+       your players; goals, assists and cards; BPS with the bonus as a badge,
+       DefCon and saves - with players as chips side by side */
+    const chip=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="cp${mine.has(+el)?" me":""}${o.c?" "+o.c:""}">${o.ev?`<span class="ev">${o.ev}</span>`:""}${dsFace(p)}<span>${nm(el)}</span>${v!=null?`<b class="${o.cls||""}">${v}</b>`:""}${o.bn?`<span class="bn" title="Bonus${o.prov?", provisional":""}">+${o.bn}</span>`:""}</span>`;};
+    const open=f=>{const st=f.st||{},list=(s,k)=>(st[s]&&st[s][k])||[],team=k=>k==="h"?f.h:f.a;
+      const ours=k=>L.picks.filter(x=>x.p&&x.p.team===team(k)).map(x=>`<span class="cp me">${dsFace(x.p)}<span>${esc(x.p.web_name)}</span><b>${fmtPts(L.pts(x.id)*Math.max(1,x.m))}</b></span>`);
+      const pv=L.provFx[f.id],bonusOf=k=>{const m={};if(pv)Object.entries(pv).forEach(([el,v])=>{const p=L.P(el);if(p&&p.team===team(k))m[el]=v;});else list("bonus",k).forEach(([el,v])=>m[el]=v);return m;};
+      const scoring=k=>[...list("goals_scored",k).map(([el,n])=>chip(el,n>1?"×"+n:null,{ev:EV_ICON.g})),...list("own_goals",k).map(([el])=>chip(el,"OG",{ev:EV_ICON.og,cls:"dn"})),...list("assists",k).map(([el,n])=>chip(el,n>1?"×"+n:null,{ev:EV_ICON.a,c:"ast"}))];
+      const cards=k=>[...list("yellow_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FFD23F")})),...list("red_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FF5A6E")}))];
+      const bps=k=>{const bn=bonusOf(k),top=list("bps",k).slice().sort((a,b)=>b[1]-a[1]).slice(0,3),ids=new Set(top.map(x=>String(x[0])));
+        Object.keys(bn).forEach(el=>{if(!ids.has(String(el))){const r=list("bps",k).find(x=>String(x[0])===String(el));top.push([+el,r?r[1]:null]);}});
+        return top.sort((a,b)=>(bn[b[0]]||0)-(bn[a[0]]||0)||(b[1]||0)-(a[1]||0)).map(([el,v])=>chip(el,v,{bn:bn[el],prov:!!pv}));};
+      const dc=k=>list("defensive_contribution",k).map(([el,v])=>({el,v,t:lkDcT((L.P(el)||{}).pos)})).filter(x=>x.t&&x.v>=x.t-4).sort((a,b)=>b.v/b.t-a.v/a.t).slice(0,3).map(x=>chip(x.el,`${x.v}/${x.t}`,{cls:x.v>=x.t?"up":"dc"}));
+      const saves=k=>list("saves",k).slice().sort((a,b)=>b[1]-a[1]).slice(0,2).map(([el,v])=>chip(el,v));
+      const none=`<span class="cx-none">–</span>`;
+      const row=(lbl,ic,fn,tag,always)=>{const h=fn("h"),a=fn("a");return h.length||a.length||always?`<div class="cx-r"><div class="h">${h.join("")||none}</div><span class="cx-l">${ic}${lbl}${tag?`<i>${tag}</i>`:""}</span><div class="a">${a.join("")||none}</div></div>`:"";};
       const oh=ours("h"),oa=ours("a");
-      return `<div class="mx5"><div class="mx5-mine"><div class="h">${oh.join("")||`<span class="ds-sub">None of yours</span>`}</div><span class="mx5-ml">Your players</span><div class="a">${oa.join("")||`<span class="ds-sub">None of yours</span>`}</div></div>${rows||`<p class="ds-sub" style="text-align:center">No match stats yet</p>`}</div>`;};
+      const band=x=>x?`<div class="cx-sec">${x}</div>`:"";
+      const b1=oh.length||oa.length?`<div class="cx-sec cx-mine"><div class="cx-r"><div class="h">${oh.join("")||none}</div><span class="cx-l">${lic("shirt",13)}Your players</span><div class="a">${oa.join("")||none}</div></div></div>`:"";
+      const b2=band(row("Goals · Assists",EV_ICON.g,scoring)+row("Cards",EV_ICON.card("#FFD23F"),cards));
+      const b3=band(row("BPS · Bonus",EV_ICON.b,bps,pv?"prov.":"")+row("DefCon",EV_ICON.dc,dc)+row("Saves",EV_ICON.sv||EV_ICON.b,saves));
+      return `<div class="cx">${b1}${b2}${b3}${b2||b3?"":`<p class="ds-sub" style="text-align:center">No match stats yet</p>`}</div>`;};
     body=`<div class="m4s mc5-s">${fx.map(f=>{const lv=rank(f)===0,ft=rank(f)===1,o=openId===f.id,h=T(f.h),a=T(f.a);
       const ev=f.started&&f.st&&((f.st.goals_scored&&((f.st.goals_scored.h||[]).length||(f.st.goals_scored.a||[]).length))||(f.st.own_goals&&((f.st.own_goals.h||[]).length||(f.st.own_goals.a||[]).length)));
       return `<div class="m4${o?" open":""}${lv?" lv":""}"><div class="m5-r" role="button" tabindex="0" aria-expanded="${o}" onclick="act('mco',${f.id})" onkeydown="if(event.key==='Enter')act('mco',${f.id})">
         <span class="m4-t h"><span class="ds-name">${esc(h.name||h.short||"")}</span>${dsBadge(h,30)}</span>
         <span class="m4-sc ${ft?"ft":lv?"lv":"tp"}"><b>${f.started?`${f.hs??0} – ${f.as??0}`:lkKo(f.ko).split(" ")[1]||"TBC"}</b><i>${f.started?(ft?(f.done?"Full time":"Full time · prov."):`${f.min||0}′`):lkKo(f.ko).split(" ")[0]}</i></span>
         <span class="m4-t a">${dsBadge(a,30)}<span class="ds-name">${esc(a.name||a.short||"")}</span></span>${lic(o?"chevron-up":"chevron-down",15)}</div>
-        ${ev?`<div class="m5-ev">${evl(f,"h")}<span></span>${evl(f,"a")}<span></span></div>`:""}${o?open(f):""}</div>`;}).join("")}</div>`;
+        ${ev&&!o?`<div class="m5-ev">${evl(f,"h")}<span></span>${evl(f,"a")}<span></span></div>`:""}${o?open(f):""}</div>`;}).join("")}</div>`;
   }else{
     /* the Premier League table with this week's scores as they stand */
     const tb={};(S.model.teams||[]).forEach(t=>tb[t.id]={t,p:0,gf:0,ga:0,n:0,on:false});
