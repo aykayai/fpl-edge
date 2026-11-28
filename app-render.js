@@ -3223,8 +3223,29 @@ function lkRankHTML(g){
 }
 /* each goal with its assist (29 Nov 2026), shared by the open and the
    collapsed match card. FPL never links them; see the rules inside. */
+/* a Premier League name to the FPL player of that team */
+function lkPlName(n,teamId){
+  if(!n)return null;const nz=x=>String(x||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z ]/g,"").trim();
+  const d=nz(n.display),fl=nz((n.first||"")+" "+(n.last||"")),last=nz(n.last),dl=d.split(" ").pop();
+  let best=null,bs=0;
+  (S.model.players||[]).filter(p=>p.team===teamId).forEach(p=>{const full=nz((p.first||"")+" "+(p.last||"")),web=nz(p.web_name).replace(/^[a-z] /,""),pl=nz(p.last);
+    const sc=full&&(full===fl||full===d)?100:web&&(web===d||web===dl)?90:pl&&(pl===last||pl===dl)?80:pl&&(last.includes(pl)||d.includes(pl))?60:web.length>=4&&d.includes(web)?50:0;
+    if(sc>bs){bs=sc;best=p;}});
+  return bs>=50?best:null;
+}
 function lkGoalPairs(L,f,k){
   const st=f.st||{},list=(s,kk)=>(st[s]&&st[s][kk])||[],team=kk=>kk==="h"?f.h:f.a;
+  /* the Premier League's own record, when it is here: each goal with its
+     assist and minute (own goals are shown with the side they count for) */
+  const PG=L.W&&L.W.goals&&L.W.goals[f.id];
+  if(PG&&PG.length){
+    const pairs=[],asts=[];
+    PG.filter(x=>x.side===k&&x.kind!=="og").sort((a,b)=>(a.secs||0)-(b.secs||0)).forEach(x=>{
+      const sp=lkPlName(x.scorer,team(k)),ap=lkPlName(x.assist,team(k));
+      if(sp)pairs.push({g:sp.id,a:ap?ap.id:null,min:x.min,pen:x.kind==="pen"});});
+    const want=list("goals_scored",k).reduce((a,[,n])=>a+n,0);
+    if(pairs.length===want)return{pairs,asts};
+  }
   const feedFx=((L.W&&L.W.feed)||[]).filter(e=>e.fx===f.id);
         const mineT=el=>{const p=L.P(el);return p&&p.team===team(k);};
         const goals=[],asts=[];
@@ -3272,7 +3293,7 @@ function lkCentreHTML(g){
     const pr=(el,v,o)=>{const p=L.P(el);o=o||{};return `<span class="pr5${mine.has(+el)?" me":""}">${dsFace(p,"pr5-f")}<span class="ds-name">${nm(el)}</span>${v!=null?`<b class="ds-fig${o.cls?" "+o.cls:""}">${v}</b>`:""}</span>`;};
     const side=l=>l.length?l.join(""):`<span class="pr5-none">–</span>`;
     const evl=(f,k)=>{const {pairs,asts}=lkGoalPairs(L,f,k),st=f.st||{},og=(st.own_goals&&st.own_goals[k])||[];
-      const out=[...pairs.map(p=>`<span class="gl">${EV_ICON.g}${nm(p.g)}${p.a!=null?`<span class="a">${EV_ICON.a}${nm(p.a)}</span>`:""}</span>`),
+      const out=[...pairs.map(p=>`<span class="gl">${EV_ICON.g}${nm(p.g)}${p.pen?" (pen)":""}${p.min?`<i>${esc(p.min)}</i>`:""}${p.a!=null?`<span class="a">${EV_ICON.a}${nm(p.a)}</span>`:""}</span>`),
         ...og.map(([el,n])=>`<span>${EV_ICON.og}${nm(el)}${n>1?` <i>×${n}</i>`:""}</span>`),...asts.filter(x=>!x.used).map(x=>`<span class="a">${EV_ICON.a}${nm(x.el)}</span>`)];
       return `<span class="sc5 ${k}">${out.join("")}</span>`;};
     /* the open match (28 Nov 2026, Andy approved the mock): three bands -
@@ -3287,7 +3308,7 @@ function lkCentreHTML(g){
          untimed pair counts only when the team has one goal and one assist) */
       const scoring=k=>{
         const {pairs,asts}=lkGoalPairs(L,f,k);
-        const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}</span>${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
+        const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}${p.pen?" (pen)":""}</span>${p.min?`<b class="gm">${esc(p.min)}</b>`:""}${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
         return [...pairs.map(gChip),...list("own_goals",k).map(([el])=>chip(el,"OG",{ev:EV_ICON.og,cls:"dn"})),...asts.filter(x=>!x.used).map(x=>chip(x.el,null,{ev:EV_ICON.a,c:"ast"}))];};
       const cards=k=>[...list("yellow_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FFD23F")})),...list("red_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FF5A6E")}))];
       const bps=k=>{const bn=bonusOf(k),top=list("bps",k).slice().sort((a,b)=>b[1]-a[1]).slice(0,3),ids=new Set(top.map(x=>String(x[0])));

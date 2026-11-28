@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { CONFIG, UA } from "./config.mjs";
 import { log, fetchT, parseCSV, upstreamBlocked } from "./util.mjs";
 import { currentDir } from "./dataset.mjs";
+import { plGoals } from "./plgoals.mjs";
 
 const DIR = () => join(CONFIG.STATE_DIR, "fpl");
 
@@ -348,7 +349,13 @@ export async function fplWeekPayload(gwIn) {
       started: !!f.started, min: f.minutes ?? 0, ko: f.kickoff_time || null, st };
   });
   if (fresh && gw === cur) await feedRecordQ(gw, live, fx);
-  const body = { gw, players, fixtures, feed: (await feedLoad(gw)).events };
+  /* 29 Nov 2026: goals with their assists and minutes, for the week in play */
+  let goals = {};
+  if (gw === cur && !upstreamBlocked()) {
+    try { const b = JSON.parse(await readFile(join(DIR(), "bootstrap.json"), "utf8")), tn = {}; (b.teams || []).forEach(t => { tn[t.id] = t.name; }); goals = plGoals(Array.isArray(fx) ? fx : [], tn); }
+    catch { /* no bootstrap yet */ }
+  }
+  const body = { gw, players, fixtures, feed: (await feedLoad(gw)).events, goals };
   _week.set(gw, { at: Date.now(), body });
   return body;
 }
