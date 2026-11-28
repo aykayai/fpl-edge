@@ -697,6 +697,10 @@ async function main() {
     logicVersion: LOGIC_VERSION,
     leagueName: league?.league?.name ?? null,
     lastEvent,
+    /* FPL's months (27 Nov 2026): the Live league's Month column sums the
+       weeks from start to stop. Phase 1 is the whole season and is left out. */
+    phases: (bootstrap.phases || []).filter(p => p.id > 1)
+      .map(p => ({ name: p.name, start: p.start_event, stop: p.stop_event })),
     updated: new Date().toISOString(),
     standings: members,
     entries

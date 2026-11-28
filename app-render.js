@@ -103,14 +103,17 @@ function playerCardHTML(){
   const sp=setPieceText(p);
   const pcTxt=pc==null?"":`<span class="pkpc" style="color:${pc>0?"var(--mint)":pc<0?"#FF8FAB":"#BDBDBD"}">${pc>0?"▲":pc<0?"▼":""} ${Math.abs(Math.round(pc))}% to a ${pc>=0?"rise":"fall"} tonight</span>`;
   const lvH=pkLiveHTML(p);
+  /* Spotlight (28 Nov 2026, Andy picked A with B's name behind): the surname
+     twice in outline behind the photo */
+  const wmN=esc(s.second_name||p.web_name),pkWm=`<span class="pkwm" aria-hidden="true">${wmN}<i>${wmN}</i></span>`;
   const hero=lvH?`<div class="pkhero pklh" style="--k:${kit}">
-    <div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
-    <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
+    ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
+    <div class="pknm"><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
     ${lvH}</div>`:`<div class="pkhero" style="--k:${kit}">
-    <div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
-    <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
+    ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
+    <div class="pknm"><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
     ${sigHTML(p,G)?`<div>${sigHTML(p,G)}</div>`:""}
@@ -2734,7 +2737,7 @@ function ratingPopHTML(){
    summary bar under the scroller; the Live panel (league, your edge, threats)
    where the Player Pool sits; Rank and Match Centre below. A league name
    opens head to head. The week's figures come from /api/fpl-week/<gw>,
-   refetched every minute. Classes lp-, lv4-, lg4-, ed4-, rk4-, bm4-, tr4-,
+   refetched every minute. Classes lp-, lv4-, lg5-, ed4-, rk4-, bm4-, tr4-,
    sf4-, m4-/m5-/mx5-, hh-/hl-/hp-. */
 LUCIDE["chevron-up"]=LUCIDE["chevron-up"]||"<path d=\"m18 15-6-6-6 6\"/>";
 /* the gameweek being played: the last one past its deadline, with official
@@ -2819,6 +2822,16 @@ function lkTotalAt(R,g){
   for(let i=0;i<b.length-1;i++)if(R>=b[i].r&&R<=b[i+1].r)return seg(b[i],b[i+1]);
   return seg(b[b.length-2],b[b.length-1]);
 }
+/* FPL's month for a gameweek: the feed's phases (start..stop), else the
+   weeks whose deadline falls in the same London month */
+function lkMonth(g){
+  const ph=S.rivalsFeed&&S.rivalsFeed.phases;
+  if(Array.isArray(ph)&&ph.length){const p=ph.find(x=>g>=x.start&&g<=x.stop);if(p)return p;}
+  const mk=e=>{const d=e&&e.deadline?new Date(e.deadline):null;return d&&!isNaN(d)?d.toLocaleString("en-GB",{timeZone:"Europe/London",month:"long",year:"numeric"}):null;};
+  const evs=S.events||[],k=mk(evs.find(e=>e.id===g));if(!k)return null;
+  const ids=evs.filter(e=>mk(e)===k).map(e=>e.id);
+  return{name:k.split(" ")[0],start:Math.min(...ids),stop:Math.max(...ids)};
+}
 /* every live figure for one gameweek, kept until its inputs change */
 let _lk={};
 function lkCalc(g){
@@ -2890,7 +2903,14 @@ function lkCalc(g){
     const live=pk.reduce((a,k,i)=>a+pts(k.id)*(k.multiplier!=null?k.multiplier:(i<11?1:0)),0)-c;
     const before=pr&&pr.totalPoints!=null?pr.totalPoints:(mine?prevTotal:0);
     const chips=(e.chips||[]).filter(x=>x.event<=g);
+    /* LiveFPL's columns (27 Nov 2026): the captain and where his match is,
+       the counting players playing now and still to start, the month so far */
+    const mOf=(k,i)=>k.multiplier!=null?k.multiplier:(i<11?1:0),cnt=pk.filter((k,i)=>mOf(k,i)>0);
+    const capK=pk.find(k=>k.isC)||null,capS=capK?status(capK.id).s:null;
+    const inPlay=cnt.filter(k=>status(k.id).s==="in").length,toStart=cnt.filter(k=>status(k.id).s==="tp").length;
+    const mo=lkMonth(g),month=mo?rows.filter(x=>x.event>=mo.start&&x.event<g).reduce((a,x)=>a+(x.points||0)-(x.transferCost||0),0)+live:null;
     return{id,name:e.name||"",manager:e.manager||"",mine,live,total:before+live,before,oldRank:pr?(pr.overallRank??pr.orRank??null):null,
+      cap:capK?P(capK.id):null,capS,inPlay,toStart,month,
       used:chips.map(x=>x.name),act:(chips.find(x=>x.event===g)||{}).name||"",
       transfers:rows.filter(x=>x.event<=g).reduce((a,x)=>a+(x.transfers||0),0),value:r?r.value:null,picks:pk,cost:c,row:r};}).filter(Boolean);
   league.forEach(x=>x.rank=lkRankAt(x.total,g));
@@ -2951,20 +2971,37 @@ function lkSumHTML(g){
     ${cell("Average",L.avg??"—",L.avg?`<i class="${L.pre>=L.avg?"up":"dn"}">you ${lkSg(Math.round(L.pre-L.avg))}</i>`:"")}
     ${cell("Players",`${L.done} · ${L.playing} · ${L.toPlay}`,`<i>done · playing · to play</i>`)}</div>`;
 }
+/* the league in the chosen order (Total by default): positions share on a
+   tie, and on Total each row's move since the week began */
+function lkLeagueRows(L){
+  const key=["gw","month","total"].includes(S.lkS)?S.lkS:"total";
+  const v=x=>key==="gw"?x.live:key==="month"?(x.month??-1e9):x.total;
+  const lg=L.league.slice().sort((a,b)=>(v(b)-v(a))||(b.total-a.total)||(b.live-a.live));
+  lg.forEach((x,i)=>x.pos=i&&v(lg[i-1])===v(x)?lg[i-1].pos:i+1);
+  const was=L.league.slice().sort((a,b)=>b.before-a.before);
+  lg.forEach(x=>{const p=1+was.filter(y=>y.before>x.before).length;x.move=p-x.pos;});
+  return lg;
+}
 /* ---------- the Live panel, where the Player Pool sits ---------- */
 function lkPanelHTML(g){
   const L=lkCalc(g);if(!L)return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","Your edge and threats as the week plays.")}<p class="note" style="padding:16px">Loading the live gameweek…</p></div>`;
   const F=[["near","Near you"],["top10k","Top 10k"],["overall","Overall"]];
   const fsw=`<span class="hz lv4-f">${F.map(([k,n])=>`<button class="${L.filt===k?"on":""}" onclick="act('lkf','${k}')">${n}</button>`).join("")}</span>`;
-  const mode=S.lkL==="live"?"live":"season";
-  const lg=L.league.slice().sort((a,b)=>mode==="live"?(b.live-a.live)||(b.total-a.total):(b.total-a.total)||(b.live-a.live));
-  lg.forEach((x,i)=>x.pos=i&&(mode==="live"?lg[i-1].live===x.live:lg[i-1].total===x.total)?lg[i-1].pos:i+1);
-  const lgName=(S.rivalsFeed&&S.rivalsFeed.leagueName)||"League";
-  const league=`<div class="lv4-blk">${dsHead("trophy",esc(lgName),`<span class="hz lv4-t"><button class="${mode==="live"?"on":""}" onclick="act('lkl','live')">Live</button><button class="${mode==="season"?"on":""}" onclick="act('lkl','season')">Season</button></span>`)}
-    ${lg.length?`<div class="lg4 lg4-h ds-th"><span>#</span><span>Team</span><span>Chips</span><span>Overall</span><span>GW</span><span>Total</span></div>
-    ${lg.map(x=>`<div class="lg4 lg4-r${x.mine?" me":""}"${x.mine?"":` role="button" tabindex="0" title="Head to head with ${esc(x.name)}" onclick="act('h2h','${x.id}')" onkeydown="if(event.key==='Enter')act('h2h','${x.id}')"`}><span class="ds-fig">${x.pos}</span>
-      <span class="lg4-tm"><span class="ds-name">${esc(x.name)}</span><span class="ds-sub">${esc(x.manager)} · ${x.transfers} transfers${x.value?` · £${(+x.value).toFixed(1)}m`:""}</span></span>${dsChips(x.used,x.act)}
-      <span class="ds-fig lg4-or">${x.rank?x.rank.toLocaleString():"—"}</span>${dsFig(fmtPts(x.live))}${dsFig(fmtPts(x.total))}</div>`).join("")}`
+  const lg=lkLeagueRows(L);
+  const lgName=(S.rivalsFeed&&S.rivalsFeed.leagueName)||"League",mo=lkMonth(g);
+  const key=["gw","month","total"].includes(S.lkS)?S.lkS:"total";
+  const th=(k,t)=>`<span class="srt${key===k?" on":""}" role="button" tabindex="0" onclick="act('lks','${k}')" onkeydown="if(event.key==='Enter')act('lks','${k}')">${t}${key===k?" ▾":""}</span>`;
+  const C=`<span class="lg5-c">C</span>`,num=(v,c)=>`<span class="ds-fig lg5-n${v?"":" z"}">${c?C:""}${v}</span>`;
+  const mv=v=>key!=="total"||v==null?"":`<span class="lg5-mv ${v>0?"up":v<0?"dn":""}">${v>0?"▲"+v:v<0?"▼"+(-v):"–"}</span>`;
+  const league=`<div class="lv4-blk">${dsHead("trophy",esc(lgName),`<span class="ds-sub">GW${g}${mo?` · ${esc(mo.name)}`:""}</span>`)}
+    ${lg.length?`<div class="lg5 lg5-h ds-th"><span>#</span><span>Team · Captain</span><span>In<br>Play</span><span>To<br>Start</span>${th("gw","GW<br>Net")}${th("month","Month")}${th("total","Total")}</div>
+    ${lg.map(x=>`<div class="lg5 lg5-r${x.mine?" me":""}"${x.mine?"":` role="button" tabindex="0" title="Head to head with ${esc(x.name)}" onclick="act('h2h','${x.id}')" onkeydown="if(event.key==='Enter')act('h2h','${x.id}')"`}>
+      <span class="lg5-pos"><span class="ds-fig">${x.pos}</span>${mv(x.move)}</span>
+      <span class="lg5-tm"><span class="lg5-l1"><span class="ds-name">${esc(x.name)}</span><span class="ds-sub">${esc(x.manager)}</span></span>
+        <span class="lg5-l2">${x.cap?`${C}<span class="lg5-cn">${esc(x.cap.web_name)}</span>${lkSI(x.capS)}`:`<span class="lg5-cn">No captain</span>`}${x.act?`<span class="lg5-chip" style="--tc:${(CHIP_UI[x.act]||{}).c||"#BDBDBD"}">${esc((DS_CHIPS.find(c=>c[0]===x.act)||[0,x.act])[1])}</span>`:""}</span></span>
+      ${num(x.inPlay,x.capS==="in")}${num(x.toStart,x.capS==="tp")}
+      <span class="lg5-gw"><span class="ds-fig">${fmtPts(x.live)}</span>${x.cost?`<i>−${x.cost}</i>`:""}</span>
+      <span class="ds-fig lg5-mo">${x.month==null?"–":fmtPts(x.month)}</span><span class="ds-fig lg5-tot">${fmtPts(x.total)}</span></div>`).join("")}`
     :`<p class="ds-sub" style="padding:8px 0">The league's picks for GW${g} are not in yet.</p>`}</div>`;
   const eh=`<div class="ed4 ed4-h ds-th"><span></span><span>Player</span><span></span><span>Pts</span><span>League starts</span><span>vs field</span><span>Ranks</span></div>`;
   const er=x=>`<div class="ed4 ed4-r">${dsFace(x.p)}<span class="ds-name">${esc(x.p.web_name)}</span>${lkSI(x.st.s)}

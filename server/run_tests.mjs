@@ -43,7 +43,7 @@ const SUITES = [
 /* regression 17 -> 16 (22 Nov 2026): Rivals left the strict text comparison
    on purpose (folded into League); it is reported as changed by design */
 const FLOORS = { "gate": 35, "regression": 16, "planner history": 16, "signals": 42, "broken items": 84, "extra": 14,
-  "the scout": 26, "model": 45, "pages": 18, "test_rules.mjs": 186 };
+  "the scout": 26, "model": 45, "pages": 18, "test_rules.mjs": 195 };
 
 /* every suite but the gate (which picks its own) gets a port the OS says is
    free (25 Nov 2026): fixed ports collided when two runs went at once, and a

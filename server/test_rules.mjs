@@ -679,9 +679,33 @@ try {
         check(Math.abs(g.lkTotalAt(r1, LG) - 700) < 0.5, "Live rank: rank to total and back agree", String(g.lkTotalAt(r1, LG)));
       }
       S.startGW = LG; g.render();
-      check(!!doc.querySelector(".lp-sum") && !!doc.querySelector(".lv4 .lg4-r.me") && !!doc.querySelector(".lk-rank .rk4-hero") && !!doc.querySelector(".mc5 .m4.lv"),
+      check(!!doc.querySelector(".lp-sum") && !!doc.querySelector(".lv4 .lg5-r.me") && !!doc.querySelector(".lk-rank .rk4-hero") && !!doc.querySelector(".mc5 .m4.lv"),
         "Live: summary bar, Live panel with his row, Rank and Match Centre all draw");
       check(!doc.querySelector(".pz-in"), "Live: This Week's cards give way to Rank and Match Centre");
+      /* the Live league, LiveFPL's columns (27 Nov 2026) */
+      {
+        const me = L.league.find(x => x.mine), cntd = row.picks.filter((k, i) => (k.multiplier != null ? k.multiplier : (i < 11 ? 1 : 0)) > 0);
+        const onT0 = cntd.filter(k => pl(k.id) && [t0, other].includes(pl(k.id).team)).length;
+        check(!!me && me.inPlay === onT0 && me.toStart === 0, "Live league: In Play counts his counting players whose match is on; none left to start", me && me.inPlay + "/" + me.toStart + " vs " + onT0);
+        const cap = row.picks.find(k => k.isC);
+        check(!!me && (!cap || (me.cap && me.cap.id === cap.id)), "Live league: the captain shown is his official captain");
+        /* the month: FPL's phase for the week (or the weeks whose deadline is in
+           the same month), points less hits before this week, plus live */
+        const ph = (S.rivalsFeed && S.rivalsFeed.phases || []).find(x => LG >= x.start && LG <= x.stop);
+        const mon = e => { const d = new Date(e.deadline); return d.toLocaleString("en-GB", { timeZone: "Europe/London", month: "long", year: "numeric" }); };
+        const evG = (S.events || []).find(e => e.id === LG);
+        const first = ph ? ph.start : Math.min(...(S.events || []).filter(e => evG && mon(e) === mon(evG)).map(e => e.id));
+        const wantM = (S.tracker.gw || []).filter(r => r.event >= first && r.event < LG).reduce((a, r) => a + (r.points || 0) - (r.transferCost || 0), 0) + me.live;
+        check(Math.abs(me.month - wantM) < 1e-9, "Live league: Month is the month's earlier weeks less hits, plus this week live", me.month + " vs " + wantM);
+        const rowsOf = () => vm.runInContext("lkLeagueRows", ctx)(L), tot = rowsOf();
+        check(tot.every((x, i) => !i || tot[i - 1].total >= x.total) && tot[0].pos === 1, "Live league: Total is the default order");
+        check(tot.every(x => x.move === 1 + L.league.filter(y => y.before > x.before).length - x.pos), "Live league: each move is the place before the week less the place now");
+        g.act("lks", "gw");
+        const gw = rowsOf();
+        check(gw.every((x, i) => !i || (gw[i - 1].live >= x.live && (gw[i - 1].live !== x.live ? x.pos === i + 1 : x.pos === gw[i - 1].pos))), "Live league: GW Net sorts by the week's net points, ties sharing a place");
+        check(!!doc.querySelector(".lg5-h .srt.on") && /GW/.test(doc.querySelector(".lg5-h .srt.on").textContent), "Live league: the sorted column is marked");
+        g.act("lks", "total");
+      }
       const rival = L.league.find(x => !x.mine);
       if (rival) { g.act("h2h", rival.id); check(!!doc.querySelector(".modal .hh-g .hh-side.me") && doc.querySelectorAll(".modal .hh-side").length === 2, "Head to head: opens from a league row with both sides"); g.act("pop", null); }
       S.rankBands = keepB; vm.runInContext("liveGW=window.__lgOrig", ctx); S.wkLive[LG] = keepW; S.startGW = NEXT; g.render();
@@ -913,6 +937,24 @@ try {
       vm.runInContext("popFit()", ctx);
       check(box.classList.contains("mscroll") && pan.style.minHeight === "min-content", "Pop-up fit: a cut-off panel makes the pop-up scroll at natural heights instead", `${box.className} / ${pan.style.minHeight}`);
     } else check(false, "Pop-up fit: Captain has a panel to test");
+    S.pop = null; g.render();
+    /* player cards (28 Nov 2026): 4px of bottom padding over is not a cut;
+       when a card does scroll, a photo and a self-scrolling list keep their caps */
+    S.pop = "cap"; g.render();
+    const box2 = doc.querySelector(".mbox.mfull"), pan2 = box2 && box2.querySelector(".mbody .panel");
+    if (pan2) {
+      pan2.style.overflowY = "hidden"; pan2.style.paddingBottom = "14px"; pan2.style.minHeight = "0px"; pan2.parentElement.style.display = "flex";
+      Object.defineProperty(pan2, "clientHeight", { configurable: true, get: () => 297 });
+      Object.defineProperty(pan2, "scrollHeight", { configurable: true, get: () => 301 });
+      vm.runInContext("popFit()", ctx);
+      check(!box2.classList.contains("mscroll"), "Pop-up fit: content that fits, with only its bottom padding over, does not scroll the pop-up", box2.className);
+      Object.defineProperty(pan2, "scrollHeight", { configurable: true, get: () => 330 });
+      const fl = doc.createElement("div"); fl.style.display = "flex"; const img = doc.createElement("img"); img.style.minHeight = "0px";
+      const lst = doc.createElement("div"); lst.style.overflowY = "auto"; lst.style.minHeight = "0px"; fl.append(img, lst); pan2.parentElement.appendChild(fl);
+      vm.runInContext("popFit()", ctx);
+      check(box2.classList.contains("mscroll") && pan2.style.minHeight === "min-content" && !img.style.minHeight.includes("min-content") && !lst.style.minHeight.includes("min-content"),
+        "Pop-up fit: in scroll mode a photo and a list that scrolls itself keep their caps", `${img.style.minHeight} / ${lst.style.minHeight}`);
+    } else check(false, "Pop-up fit: Captain has a panel to test (cards)");
     S.pop = null; g.render();
   }
 

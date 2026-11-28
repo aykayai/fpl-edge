@@ -1117,18 +1117,32 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pkhero:after{content:"";position:absolute;inset:0;z-index:-1;background:repeating-linear-gradient(115deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px)}
 .pkpos{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75)}
 .pkfirst{font-size:18px;color:rgba(255,255,255,.85)}
-.pklast{font-size:34px;font-weight:750;letter-spacing:-.02em;line-height:1}
-.pkph{display:flex;justify-content:center;flex:1;min-height:90px;max-height:200px}
-.pkph img{height:100%;max-height:200px;filter:drop-shadow(0 12px 20px rgba(0,0,0,.5))}
-.pkph .pkfb{place-items:center}
+.pklast{font-size:40px;font-weight:750;letter-spacing:-.02em;line-height:1}
+/* Spotlight (28 Nov 2026): the photo is a layer top-right, twice its old
+   size, over a glow in the club's colour and fading out at the waist; the
+   surname sits behind it in outline; everything else rides on top */
+.pkhero>*{position:relative;z-index:1}
+.pkhero>.pkph{position:absolute;right:-34px;top:40px;width:270px;height:320px;z-index:0;pointer-events:none;display:flex;justify-content:flex-end}
+.pkph:before{content:"";position:absolute;inset:-20px -10px 40px 0;background:radial-gradient(circle at 58% 32%,color-mix(in srgb,var(--k) 55%,#fff) 0,color-mix(in srgb,var(--k) 40%,transparent) 28%,transparent 62%);opacity:.75;z-index:-1}
+.pkph img{height:320px;-webkit-mask-image:linear-gradient(to bottom,#000 60%,transparent 97%);mask-image:linear-gradient(to bottom,#000 60%,transparent 97%);filter:drop-shadow(0 16px 26px rgba(0,0,0,.55))}
+.pkph .pkfb{place-items:center;align-self:center;margin-right:40px}
+.pkhero>.pkwm{position:absolute;left:-8px;top:28px;z-index:0;font:900 118px/.86 'Geist',sans-serif;letter-spacing:-.05em;text-transform:uppercase;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.16);white-space:nowrap;pointer-events:none}
+.pkwm i{display:block;font-style:normal;-webkit-text-stroke:1.5px rgba(255,255,255,.09)}
+.pkhero .pklast{text-shadow:0 2px 18px rgba(0,0,0,.45);max-width:62%}.pkhero .pkfirst{max-width:60%}
+/* the name block holds the price down at the photo's waist, and gives the
+   room back when the card is full (an injury note, a long name) */
+.pkhero .pknm{flex:0 1 214px}
+.pkhero .pkpr{flex-direction:column;align-items:flex-start;gap:6px}
+.pkhero .pkprice{font-size:38px;text-shadow:0 3px 20px rgba(0,0,0,.6)}
+.pkhero .pkkv>div,.pkhero .pkl-card,.pkhero .pkl-by,.pkhero .pkwarn{-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .pkpr{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .pkprice{font:700 28px 'Geist Mono',monospace;letter-spacing:-.02em}
 .pkpc{font-size:12px;border-radius:999px;padding:3px 10px;background:rgba(0,0,0,.35)}
 .pkwarn{font-size:12.5px;border-radius:10px;padding:6px 10px;background:rgba(245,184,65,.14);color:#F5B841}
 .pkkv{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 /* the card in a live gameweek (23 Nov 2026) */
-.pklh{gap:10px}.pklh .pkph{max-height:140px}.pklh .pkph img{max-height:140px}
-.pkl-card{background:rgba(0,0,0,.28);border-radius:12px;padding:10px 12px;box-shadow:inset 0 0 0 1px rgba(255,90,110,.35)}
+.pklh{gap:10px}
+.pkl-card{background:rgba(12,12,12,.55);border-radius:12px;padding:10px 12px;box-shadow:inset 0 0 0 1px rgba(255,90,110,.35)}
 .pkl-h{display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08)}
 .pkl-live{display:inline-flex;align-items:center;gap:2px;font:700 11px 'Geist',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#FF8095}
 .pkl-live .lp-dot{animation:pklpulse 1.6s ease-in-out infinite}@keyframes pklpulse{50%{box-shadow:0 0 0 6px rgba(255,90,110,0)}}
@@ -1141,7 +1155,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pkl-p{font:700 12.5px 'Geist Mono',monospace;text-align:right}.pkl-p.up{color:var(--mint)}.pkl-p.dn{color:#FF8FAB}.pkl-p.z{color:rgba(255,255,255,.4)}
 .pkl-none{margin:8px 0 0;font:400 12.5px 'Geist',sans-serif;color:rgba(255,255,255,.6)}
 .pkl-kv{grid-template-columns:repeat(3,1fr)}
-.pkl-by{background:rgba(0,0,0,.28);border-radius:12px;padding:10px 12px 6px;flex:1;min-height:0;overflow:auto}
+.pkl-by{background:rgba(12,12,12,.55);border-radius:12px;padding:10px 12px 6px;flex:1;min-height:0;overflow:auto}
 .pkl-byh{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.6);margin-bottom:2px}.pkl-byh b{font:600 11px 'Geist Mono',monospace;color:rgba(255,255,255,.6)}
 .pkl-byh.sub{margin-top:5px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)}
 .pkl-br{display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid rgba(255,255,255,.06)}.pkl-byh+.pkl-br{border-top:0}
@@ -1152,7 +1166,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pkl-bn em{font:400 10.5px 'Geist',sans-serif;font-style:normal;color:rgba(255,255,255,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pkl-bn em::before{content:"· "}
 .pkl-bs{font:600 10px 'Geist',sans-serif;color:rgba(255,255,255,.65);background:rgba(255,255,255,.08);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .pkl-c{min-width:16px;height:16px;padding:0 3px;border-radius:999px;display:grid;place-items:center;background:#fff;color:#111;font:800 9px 'Geist',sans-serif}
-.pkkv>div{background:rgba(0,0,0,.28);border-radius:10px;padding:8px 10px;min-width:0}
+.pkkv>div{background:rgba(12,12,12,.55);border-radius:10px;padding:8px 10px;min-width:0}
 .pkkv>div.wide{grid-column:1/-1}
 .pkkv span{display:block;font-size:11px;color:rgba(255,255,255,.6)}
 .pkkv b{display:block;font:700 16px 'Geist Mono',monospace}.pkkv b.txt{font:600 12.5px 'Geist',sans-serif}
@@ -1190,7 +1204,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pkhist td:nth-child(-n+2){text-align:left;font-family:'Geist',sans-serif}
 .pkhist td.pp{font-weight:700}
 .pkhist tbody tr:hover td{background:rgba(255,255,255,.03)}
-.pkpct{display:grid;grid-template-columns:minmax(0,120px) minmax(40px,1fr) 46px 34px;gap:8px 12px;align-items:center;font-size:12.5px}
+.pkpct{display:grid;grid-template-columns:minmax(0,120px) minmax(40px,1fr) 46px 34px;gap:6px 12px;align-items:center;font-size:12.5px}
 .pkpct .pkbar{display:block;height:7px;border-radius:99px;background:#232323;overflow:hidden}.pkpct .pkbar span{display:block;height:100%;border-radius:99px}
 .pkpct b{font:600 12.5px 'Geist Mono',monospace;text-align:right}.pkpct em{font-style:normal;font-size:11px;color:#6E6E6E;text-align:right}
 @media(max-width:1100px){.pktiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -1773,7 +1787,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 .mk-d>b{font:600 13px 'Geist Mono',ui-monospace,monospace;text-align:right}
 @media(max-width:1100px){.mk-mg{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* player card Next Match Odds (26 Nov 2026) */
-.pk-odds{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
+.pk-odds{margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
 .pk-odh{font:600 13px 'Geist',sans-serif;color:#EDEDED;display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}.pk-odh span{font-weight:400;font-size:11px;color:#9A9A9A}
 .pk-odg{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .pk-od{background:#1A1A1A;border-radius:9px;padding:6px 7px;min-width:0}.pk-od em{display:block;font-style:normal;font-size:11px;color:#9A9A9A}
@@ -1888,6 +1902,11 @@ svg.chart circle[data-tip]{cursor:pointer}
 @media(max-width:1100px){.tn-grid,.pw-g,.fo-g,.pm-g{grid-template-columns:1fr}.tn-t,.pw-t,.fo-t,.pm-t{grid-template-columns:repeat(3,minmax(0,1fr))}.wp .mbody{overflow:auto}}
 /* This Week batch 5 (22 Nov 2026): the live gameweek, from mock_live5 and mock_h2h3 */
 .pz-grid.lk{grid-template-columns:minmax(0,1fr) 470px}
+/* the phone (27 Nov 2026): one column, so the live week's pitch is not
+   squeezed to nothing beside a 470px Live panel; the league drops the
+   manager's name and tightens its columns to fit 380px */
+@media(max-width:760px){.pz-grid.lk{grid-template-columns:minmax(0,1fr)}
+.lg5{grid-template-columns:18px minmax(0,1fr) 24px 30px 30px 34px 36px;gap:4px}.lg5-r{padding:6px 4px}.lg5-h{padding:4px}.lg5-l1 .ds-sub{display:none}.lg5-l1 .ds-name{max-width:100%}}
 .lp-st{display:grid;place-items:center;height:16px;padding:0 4px;border-radius:4px;font:700 9px 'Geist Mono',monospace;color:#0B0B0B;min-width:18px;white-space:nowrap}.lp-st.ft{background:#8A8A8A}.lp-st.live{background:#FF5A6E;color:#2A0008}.lp-st.tp{background:#2A2A2A;color:#BDBDBD;font-size:8.5px}
 .pv-res.lpv{grid-template-columns:auto auto 1fr}
 .pz-c.lp-on .pz-n{box-shadow:inset 0 -2px 0 #FF5A6E}
@@ -1901,10 +1920,24 @@ svg.chart circle[data-tip]{cursor:pointer}
 .lv4{gap:0}.lv4-ph{display:flex;align-items:center;justify-content:space-between}.lv4-f{transform:scale(.9);transform-origin:right}.lv4-t{transform:scale(.88);transform-origin:right}
 .lv4-sc{flex:1;min-height:0;overflow-y:auto}.lv4-sc::-webkit-scrollbar{width:6px}.lv4-sc::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
 .lv4-blk{padding:10px 14px 12px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:2px}
-.lg4{display:grid;grid-template-columns:14px minmax(0,1fr) 89px 66px 28px 34px;gap:8px;align-items:center;text-align:center}
-.lg4-h{padding:4px 6px 2px}.lg4-h span:nth-child(2){text-align:left}
-.lg4-r{padding:6px;border-radius:9px;min-height:40px}.lg4-r[role=button]{cursor:pointer}.lg4-r[role=button]:hover{background:#181818}.lg4-r.me{background:#14201A;box-shadow:inset 0 0 0 1px rgba(61,220,151,.4)}
-.lg4-tm{display:flex;flex-direction:column;text-align:left;min-width:0;gap:1px}.lg4-or{font-weight:600;color:#BDBDBD}
+/* the Live league, LiveFPL's columns in our style (27 Nov 2026) */
+.lg5{display:grid;grid-template-columns:22px minmax(0,1fr) 30px 34px 34px 40px 40px;gap:6px;align-items:center;text-align:center}
+.lg5-h{padding:4px 6px;align-items:end}.lg5-h span{line-height:1.15}.lg5-h span:nth-child(2){text-align:left}
+.lg5-h .srt{cursor:pointer}.lg5-h .srt:hover{color:#BDBDBD}.lg5-h .srt.on{color:#EDEDED;font-weight:600}
+.lg5-r{padding:6px;border-radius:9px;min-height:44px}.lg5-r+.lg5-r{margin-top:1px}.lg5-r[role=button]{cursor:pointer}.lg5-r[role=button]:hover{background:#181818}
+.lg5-r.me{background:#14201A;box-shadow:inset 0 0 0 1px rgba(61,220,151,.4)}
+.lg5-pos{display:flex;flex-direction:column;align-items:center;gap:1px}.lg5-pos .ds-fig{font-size:13px}
+.lg5-mv{font:700 9px 'Geist Mono',monospace;color:#5A5A5A;line-height:1}.lg5-mv.up{color:var(--mint)}.lg5-mv.dn{color:#FF8095}
+.lg5-tm{display:flex;flex-direction:column;gap:3px;text-align:left;min-width:0}
+.lg5-l1{display:flex;align-items:baseline;gap:6px;min-width:0}.lg5-l1 .ds-name{flex:none;max-width:70%}.lg5-l1 .ds-sub{min-width:0}
+.lg5-l2{display:flex;align-items:center;gap:5px;min-width:0;font:500 11.5px 'Geist',sans-serif;color:#BDBDBD}
+.lg5-l2 .ld-si{display:inline-flex}.lg5-l2 .ld-si svg{width:12px;height:12px}
+.lg5-c{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:#EDEDED;color:#0B0B0B;font:800 8.5px 'Geist',sans-serif;flex:none}
+.lg5-cn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.lg5-chip{font:700 9px 'Geist',sans-serif;padding:2px 5px;border-radius:5px;background:var(--tc);color:#0B0B0B;flex:none}
+.lg5-n{display:inline-flex;align-items:center;justify-content:center;gap:3px}.lg5-n .lg5-c{width:12px;height:12px;font-size:7.5px}.lg5-n.z{color:#5A5A5A}
+.lg5-gw{display:flex;flex-direction:column;align-items:center;line-height:1.1}.lg5-gw i{font:600 9px 'Geist Mono',monospace;font-style:normal;color:#FF8095}
+.lg5-mo{color:#BDBDBD}.lg5 .lg5-tot{font-size:14px}
 .ed4{display:grid;grid-template-columns:26px minmax(0,1fr) 14px 26px 76px 38px 40px;gap:7px;align-items:center;text-align:center}
 .ed4-h{padding:4px 0 2px}.ed4-h span:nth-child(2){text-align:left}.ed4-r{min-height:38px}.ed4-r .ds-name{text-align:left}
 .ld-si{display:grid;place-items:center}.rk4{font-weight:600;font-size:11px}
@@ -2341,13 +2374,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.15.5"></script>
-<script src="./app-squad.js?v=14.15.5"></script>
-<script src="./app-render.js?v=14.15.5"></script>
-<script src="./app-odds.js?v=14.15.5"></script>
-<script src="./app-tracker.js?v=14.15.5"></script>
-<script src="./app-main.js?v=14.15.5"></script>
-<script src="./app-scout.js?v=14.15.5"></script>
+<script src="./app-core.js?v=14.17.1"></script>
+<script src="./app-squad.js?v=14.17.1"></script>
+<script src="./app-render.js?v=14.17.1"></script>
+<script src="./app-odds.js?v=14.17.1"></script>
+<script src="./app-tracker.js?v=14.17.1"></script>
+<script src="./app-main.js?v=14.17.1"></script>
+<script src="./app-scout.js?v=14.17.1"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
