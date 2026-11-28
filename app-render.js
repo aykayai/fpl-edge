@@ -158,7 +158,7 @@ function pkAgainstHTML(p,posN){
   const pool=rows.find(x=>x.r)?.r.of;
   const hi=rows.filter(x=>x.r&&x.r.pct>=90).map(x=>CP_ST[x.k][0]),lo=rows.filter(x=>x.r&&x.r.pct<20).map(x=>CP_ST[x.k][0]);
   const col=x=>x>=90?"#3DDC97":x>=70?"#9BE7C4":x>=40?"#8A8A8A":"#FF5A6E";
-  const sum=(hi.length||lo.length)?`<div class="ag-sum">${hi.length?`<span>Top 10%: ${esc(hi.join(" · "))}</span>`:""}${lo.length?`<span class="lo">Bottom 20%: ${esc(lo.join(" · "))}</span>`:""}</div>`:"";
+  const sum=(hi.length||lo.length)?`<div class="ag-sum">${hi.length?`<span title="Top 10%: ${esc(hi.join(", "))}">Top 10%: ${esc(hi.join(" · "))}</span>`:""}${lo.length?`<span class="lo" title="Bottom 20%: ${esc(lo.join(", "))}">Bottom 20%: ${esc(lo.join(" · "))}</span>`:""}</div>`:"";
   return `<div class="pkh">Against Other ${posN}s<span>${pool?pool+" starters · ":""}rank, 1 is best</span></div>${sum}
     ${rows.map(({k,r,v})=>`<div class="ag-r"><span title="${esc(CP_ST[k][1])}">${CP_ST[k][0]}</span><div class="ag-t">${r?`<i style="left:${Math.max(3,Math.min(97,r.pct))}%;--c:${col(r.pct)}"></i>`:""}</div><b>${v==null?"–":CP_ST[k][2](v)}</b><span class="ag-k${r&&r.pct>=90?" t":r&&r.pct<20?" b":""}">${r?"#"+r.rank:"–"}</span></div>`).join("")}`;
 }
