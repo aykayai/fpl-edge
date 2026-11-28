@@ -3249,8 +3249,10 @@ function lkCentreHTML(g){
           const open=pairs.filter(p=>p.a==null),free=left.filter(x=>!x.used);
           if(!open.length||!free.length)break;
           if(open.length===free.length){
-            for(const p of open){const c=free.filter(x=>!x.used&&x.el!==p.g);if(c.length===1){p.a=c[0].el;c[0].used=1;moved=true;break;}}
-            if(!moved)for(const x of free){if(x.used)continue;const c=open.filter(p=>p.a==null&&p.g!==x.el);if(c.length===1){c[0].a=x.el;x.used=1;moved=true;break;}}
+            /* "one" means one player: two assists by the same man are one choice */
+            const one=c=>c.length&&new Set(c.map(x=>x.el??x.g)).size===1;
+            for(const p of open){const c=free.filter(x=>!x.used&&x.el!==p.g);if(one(c)){p.a=c[0].el;c[0].used=1;moved=true;break;}}
+            if(!moved)for(const x of free){if(x.used)continue;const c=open.filter(p=>p.a==null&&p.g!==x.el);if(one(c.map(p=>({el:p.g})))){c[0].a=x.el;x.used=1;moved=true;break;}}
           }else if(open.length===1&&free.length===1&&free[0].el!==open[0].g){open[0].a=free[0].el;free[0].used=1;moved=true;}
         }
         const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}</span>${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
