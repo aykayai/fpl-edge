@@ -729,6 +729,23 @@ try {
         g.act("lke", "edge");
         const mcOpen = doc.querySelector(".mc5 .m4.open");
         check(!mcOpen || !!mcOpen.querySelector(".cx"), "Match Centre: the open match shows its bands");
+        /* 29 Nov 2026: no 'earlier'; newest first; a goal with its assist on one chip; a finished match shows only earned points */
+        {
+          const W0 = S.wkLive[LG], fx0 = W0.fixtures[0], i0 = ids[0], i1 = S.model.players.find(p => p.team === t0 && p.id !== ids[0]).id;
+          fx0.st.goals_scored = { h: [[i0, 1]], a: [] }; fx0.st.assists = { h: [[i1, 1]], a: [] };
+          const t1 = Date.now() - 60000;
+          W0.feed = [{ t: null, min: null, el: i1, fx: fx0.id, k: "bonus", dv: 1, dp: 1 }, { t: t1, min: 20, el: i0, fx: fx0.id, k: "goals_scored", dv: 1, dp: 5 }, { t: t1, min: 20, el: i1, fx: fx0.id, k: "assists", dv: 1, dp: 3 }];
+          vm.runInContext("_lk={}", ctx); S.mcOpen = fx0.id; g.render();
+          const ft = [...doc.querySelectorAll(".lv4 .lvm-fd .fd-r .fd-t")].map(e => e.textContent);
+          check(!ft.some(t => /earlier/.test(t)) && ft.length >= 2 && ft[0] !== "", "Feed: no 'earlier', and the newest event comes first", ft.join(" | "));
+          const gp = doc.querySelector(".mc5 .m4.open .cp.gp");
+          const nmOf = id => S.model.players.find(p => p.id === id).web_name;
+          check(!!gp && gp.textContent.includes(nmOf(i0)) && gp.textContent.includes(nmOf(i1)), "Match Centre: the scorer and his assister share one chip", gp ? gp.textContent : "none");
+          fx0.done = true; vm.runInContext("_lk={}", ctx); g.render();
+          const labs = [...doc.querySelectorAll(".mc5 .m4.open .cx-l")].map(e => e.textContent);
+          check(!labs.some(t => /BPS/.test(t)) && labs.some(t => /Bonus/.test(t)), "Match Centre: a finished match lists bonus earners, not the BPS race", labs.join(" | "));
+          fx0.done = false; delete fx0.st.goals_scored; delete fx0.st.assists; S.mcOpen = null;
+        }
         S.wkLive[LG].feed = undefined; vm.runInContext("_lk={}", ctx);
       }
       /* the server's feed: a new goal is one timed event; a clean sheet FPL drops is a lost one */
@@ -738,6 +755,12 @@ try {
         const b = feedDiff(a.snap, { elements: [{ id: 1, explain: [{ fixture: 9, stats: [{ identifier: "minutes", value: 61, points: 2 }, { identifier: "goals_scored", value: 1, points: 6 }] }] }] }, [{ id: 9, minutes: 61 }], 2000);
         check(a.events.length === 1 && a.events[0].t === null && b.events.length === 2 && b.events.some(e => e.k === "goals_scored" && e.t === 2000 && e.min === 61 && e.dp === 6) && b.events.some(e => e.k === "clean_sheets" && e.dp === -4),
           "Feed server: first sight has no time; then each change is timed with the minute, and a dropped clean sheet is a loss", JSON.stringify(b.events));
+        const L1 = (m, extra) => ({ elements: [{ id: 1, explain: [{ fixture: 9, stats: [{ identifier: "minutes", value: m, points: 1 }] }] }, ...(extra || [])] });
+        let q = feedDiff(null, L1(10), [{ id: 9, minutes: 10 }], 1); q = feedDiff(q.snap, L1(20), [{ id: 9, minutes: 20 }], 2);
+        const off = feedDiff(q.snap, L1(20), [{ id: 9, minutes: 24 }], 3);
+        const on = feedDiff(off.snap, L1(20, [{ id: 2, explain: [{ fixture: 9, stats: [{ identifier: "minutes", value: 2, points: 1 }] }] }]), [{ id: 9, minutes: 26 }], 4);
+        check(off.events.some(e => e.k === "subbed_off" && e.el === 1 && e.min === 20) && on.events.some(e => e.k === "subbed_on" && e.el === 2 && e.min === 24),
+          "Feed server: a player whose minutes stop as the clock runs is subbed off; one who appears late came on", JSON.stringify([off.events, on.events]));
       }
       S.rankBands = keepB; vm.runInContext("liveGW=window.__lgOrig", ctx); S.wkLive[LG] = keepW; S.startGW = NEXT; g.render();
     }

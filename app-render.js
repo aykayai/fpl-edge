@@ -3058,7 +3058,11 @@ function lkLeagueRows(L){
 const LK_EV={goals_scored:["Goal","G","#3DDC97"],assists:["Assist","A","#60A5FA"],own_goals:["Own goal","OG","#FF5A6E"],
   penalties_saved:["Pen saved","P","#60A5FA"],penalties_missed:["Pen missed","P","#FF5A6E"],yellow_cards:["Yellow card","Y","#FACC15"],
   red_cards:["Red card","R","#FF5A6E"],saves:["Saves","S","#60A5FA"],clean_sheets:["Clean sheet","C","#3DDC97"],
-  goals_conceded:["Conceded","GC","#FF8A3D"],bonus:["Bonus","B","#F5B33C"],defensive_contribution:["DefCon","D","#A78BFA"]};
+  goals_conceded:["Conceded","GC","#FF8A3D"],bonus:["Bonus","B","#F5B33C"],defensive_contribution:["DefCon","D","#A78BFA"],
+  subbed_off:["Subbed off","↓","#9A9A9A"],subbed_on:["Subbed on","↑","#3DDC97"],news:["Flag","!","#FF8A3D"]};
+/* when an untimed event (one there before the server first looked) is placed:
+   an hour after its match kicked off, so it sorts among that match's events */
+function lkFxTime(L,e){const f=(L.W.fixtures||[]).find(x=>x.id===e.fx),k=f&&f.ko?Date.parse(f.ko):NaN;return isNaN(k)?0:k+3600000;}
 /* the Feed's rows and its two totals: impact is the points times your
    multiplier less the rest of the league's average multiplier for him */
 function lkFeed(L){
@@ -3071,7 +3075,8 @@ function lkFeed(L){
      card in the week, and everything for a player anyone in the league owns */
   const big=new Set(["goals_scored","assists","own_goals","penalties_saved","penalties_missed","red_cards"]);
   const rows=((L.W&&L.W.feed)||[]).filter(e=>L.P(e.el)&&(owned.has(+e.el)||big.has(e.k))).map(e=>({...e,p:L.P(e.el),imp:e.dp*diff(+e.el)}))
-    .sort((a,b)=>(b.t??-1)-(a.t??-1)||b.fx-a.fx);
+    .map(e=>({...e,te:e.t??lkFxTime(L,e)}))
+    .sort((a,b)=>(b.te??0)-(a.te??0)||(b.fx||0)-(a.fx||0));
   let sofar=0,left=0;
   owned.forEach(id=>{const d=diff(id);if(!d)return;sofar+=L.pts(id)*d;
     const s=L.status(id),p=L.P(id),pr=p&&pastPred(p,g)?pastPred(p,g).v:0;
@@ -3089,7 +3094,8 @@ function lkPanelHTML(g){
   if(view==="live"){
     const lg=lkLeagueRows(L),key=["gw","month","total"].includes(S.lkS)?S.lkS:"total";
     const th=(k,t)=>`<span class="srt${key===k?" on":""}" role="button" tabindex="0" onclick="act('lks','${k}')" onkeydown="if(event.key==='Enter')act('lks','${k}')">${t}${key===k?" ▾":""}</span>`;
-    const mv=v=>key!=="total"||v==null?"":`<span class="lg5-mv ${v>0?"up":v<0?"dn":""}">${v>0?"▲"+v:v<0?"▼"+(-v):"–"}</span>`;
+    /* 29 Nov 2026: a subtle arrow only when the team has moved since the week began */
+    const mv=v=>key!=="total"||!v?"":`<span class="lg5-mv ${v>0?"up":"dn"}" title="${v>0?"Up":"Down"} ${Math.abs(v)} since the week began">${v>0?"▲":"▼"}${Math.abs(v)}</span>`;
     table=lg.length?`<div class="lg5 lg5-h ds-th"><span>#</span><span>Team · Captain</span><span>In<br>Play</span><span>To<br>Start</span>${th("gw","GW<br>Net")}${th("month","Month")}${th("total","Total")}</div>
     ${lg.map(x=>`<div class="lg5 lg5-r${x.mine?" me":""}"${rowAttr(x)}>
       <span class="lg5-pos"><span class="ds-fig">${x.pos}</span>${mv(x.move)}</span>
@@ -3103,9 +3109,10 @@ function lkPanelHTML(g){
        team value, this week's net and the total */
     const lg=L.league.slice().sort((a,b)=>b.total-a.total);
     lg.forEach((x,i)=>x.spos=i&&lg[i-1].total===x.total?lg[i-1].spos:i+1);
+    const was=L.league.slice().sort((a,b)=>b.before-a.before);lg.forEach(x=>{x.smv=1+was.filter(y=>y.before>x.before).length-x.spos;});
     const chipTag=c=>{const k=c.name,u=CHIP_UI[k]||{},s=(DS_CHIPS.find(d=>d[0]===k)||[0,k])[1];return `<span style="--tc:${u.c||"#8A8A8A"}" title="${esc(u.n||k)} · GW${c.event}">${esc(s)}${c.event<=19?1:2}</span>`;};
     table=lg.length?`<div class="ls5 ls5-h ds-th"><span>#</span><span>Team · Chips used</span><span>Trans-<br>fers</span><span>Overall<br>rank</span><span>Team<br>value</span><span>GW<br>Net</span><span>Total</span></div>
-    ${lg.map(x=>`<div class="ls5 ls5-r${x.mine?" me":""}"${rowAttr(x)}><span class="ds-fig">${x.spos}</span>
+    ${lg.map(x=>`<div class="ls5 ls5-r${x.mine?" me":""}"${rowAttr(x)}><span class="lg5-pos"><span class="ds-fig">${x.spos}</span>${x.smv?`<span class="lg5-mv ${x.smv>0?"up":"dn"}" title="${x.smv>0?"Up":"Down"} ${Math.abs(x.smv)} since the week began">${x.smv>0?"▲":"▼"}${Math.abs(x.smv)}</span>`:""}</span>
       <span class="ls5-tm"><span class="lg5-l1"><span class="ds-name">${esc(x.name)}</span><span class="ds-sub">${esc(x.manager)}</span></span><span class="ls5-ch">${(x.chipsEv||[]).map(chipTag).join("")||`<span class="ls5-no">No chips used</span>`}</span></span>
       <span class="ds-fig">${x.transfers}</span><span class="ds-fig ls5-m">${x.rank?x.rank.toLocaleString():"—"}</span><span class="ds-fig ls5-m">${x.value?"£"+(+x.value).toFixed(1):"—"}</span>
       <span class="ds-fig">${fmtPts(x.live)}</span><span class="ds-fig lg5-tot">${fmtPts(x.total)}</span></div>`).join("")}`:"";
@@ -3114,12 +3121,13 @@ function lkPanelHTML(g){
     ${table||`<p class="ds-sub" style="padding:8px 0">The league's picks for GW${g} are not in yet.</p>`}</div>`;
   /* the Feed */
   const Fd=lkFeed(L),sg=v=>`<b class="${v>0.05?"up":v<-0.05?"dn":""}">${v>0.05?"+":v<-0.05?"−":""}${Math.abs(v).toFixed(1)}</b>`;
-  const tm=e=>e.t?new Date(e.t).toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit"}):"earlier";
-  const fr=e=>{const d=LK_EV[e.k]||[e.k,"·","#8A8A8A"],lost=e.k==="clean_sheets"&&e.dp<0,lab=lost?"Clean sheet lost":d[0],col=lost?"#FF5A6E":d[2];
+  const tm=e=>e.t?new Date(e.t).toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit"}):"";
+  const fr=e=>{const d=LK_EV[e.k]||[e.k,"·","#8A8A8A"],lost=e.k==="clean_sheets"&&e.dp<0,col=lost?"#FF5A6E":d[2];
+    const lab=lost?"Clean sheet lost":e.k==="news"?`<span class="fd-nw" title="${esc(e.txt||"")}">${esc(e.txt||"Flagged")}</span>`:d[0];
     return `<div class="fd-r${L.mult(+e.el)>0?" mine":""}"><span class="fd-t">${tm(e)}<i>${e.min!=null&&e.t?e.min+"′":""}</i></span>${dsFace(e.p)}
       <span class="fd-p"><span class="ds-name">${esc(e.p.web_name)}</span><span class="ds-sub">${esc(e.p.teamFull||e.p.teamName||"")}</span></span>
-      <span class="fd-ev" style="--ec:${col}"><span class="ic">${d[1]}</span>${lab}${e.dv>1&&["goals_scored","assists","own_goals","penalties_saved","penalties_missed"].includes(e.k)?" ×"+e.dv:""}<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i></span>
-      <span class="fd-i ${e.imp>0.05?"up":e.imp<-0.05?"dn":"eq"}">${e.imp>0.05?"+":e.imp<-0.05?"−":""}${Math.abs(e.imp).toFixed(1)}</span></div>`;};
+      <span class="fd-ev" style="--ec:${col}"><span class="ic">${d[1]}</span>${lab}${e.dv>1&&["goals_scored","assists","own_goals","penalties_saved","penalties_missed"].includes(e.k)?" ×"+e.dv:""}${e.dp?`<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i>`:""}</span>
+      <span class="fd-i ${e.imp>0.05?"up":e.imp<-0.05?"dn":"eq"}">${e.dp?`${e.imp>0.05?"+":e.imp<-0.05?"−":""}${Math.abs(e.imp).toFixed(1)}`:""}</span></div>`;};
   const feed=`<div class="lv4-blk lvm-fd"><div class="lvm-h">${lic("activity",15)}<b>Feed</b><button class="fci" data-tip="Impact: the points times your share less the league average share." aria-label="About the Feed">i</button><span class="sp fd-sum">You vs league ${sg(Fd.sofar)} so far ${sg(Fd.left)} still to play</span></div>
     <div class="fd-list">${Fd.rows.map(fr).join("")||`<p class="ds-sub" style="padding:6px 0">Nothing yet: events appear here as they happen.</p>`}</div></div>`;
   /* Your Edge / Threats */
@@ -3197,7 +3205,27 @@ function lkCentreHTML(g){
     const open=f=>{const st=f.st||{},list=(s,k)=>(st[s]&&st[s][k])||[],team=k=>k==="h"?f.h:f.a;
       const ours=k=>L.picks.filter(x=>x.p&&x.p.team===team(k)).map(x=>`<span class="cp me">${dsFace(x.p)}<span>${esc(x.p.web_name)}</span><b>${fmtPts(L.pts(x.id)*Math.max(1,x.m))}</b></span>`);
       const pv=L.provFx[f.id],bonusOf=k=>{const m={};if(pv)Object.entries(pv).forEach(([el,v])=>{const p=L.P(el);if(p&&p.team===team(k))m[el]=v;});else list("bonus",k).forEach(([el,v])=>m[el]=v);return m;};
-      const scoring=k=>[...list("goals_scored",k).map(([el,n])=>chip(el,n>1?"×"+n:null,{ev:EV_ICON.g})),...list("own_goals",k).map(([el])=>chip(el,"OG",{ev:EV_ICON.og,cls:"dn"})),...list("assists",k).map(([el,n])=>chip(el,n>1?"×"+n:null,{ev:EV_ICON.a,c:"ast"}))];
+      /* 29 Nov 2026: each goal with its assist on one chip. FPL never links
+         them; the Feed does when both land in the same minute's check (an
+         untimed pair counts only when the team has one goal and one assist) */
+      const feedFx=((L.W&&L.W.feed)||[]).filter(e=>e.fx===f.id);
+      const scoring=k=>{
+        const mineT=el=>{const p=L.P(el);return p&&p.team===team(k);};
+        const goals=[],asts=[];
+        list("goals_scored",k).forEach(([el,n])=>{for(let i=0;i<n;i++)goals.push({el:+el});});
+        list("assists",k).forEach(([el,n])=>{for(let i=0;i<n;i++)asts.push({el:+el});});
+        const fe=feedFx.filter(e=>mineT(e.el));
+        const take=(arr,el)=>{const i=arr.findIndex(x=>x.el===+el&&!x.used);if(i>=0)arr[i].used=1;return i>=0;};
+        const pairs=[];
+        fe.filter(e=>e.k==="goals_scored"&&e.dv>0).forEach(g=>{for(let i=0;i<g.dv;i++){if(!take(goals,g.el))return;
+          const a=fe.find(x=>x.k==="assists"&&x.dv>0&&x.t===g.t&&!x._u);let ael=null;
+          if(a&&g.t!=null&&take(asts,a.el)){ael=a.el;a._u=1;}
+          pairs.push({g:g.el,a:ael});}});
+        goals.filter(x=>!x.used).forEach(x=>{x.used=1;pairs.push({g:x.el,a:null});});
+        const left=asts.filter(x=>!x.used);
+        if(pairs.filter(p=>!p.a).length===1&&left.length===1){pairs.find(p=>!p.a).a=left[0].el;left[0].used=1;}
+        const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}</span>${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
+        return [...pairs.map(gChip),...list("own_goals",k).map(([el])=>chip(el,"OG",{ev:EV_ICON.og,cls:"dn"})),...asts.filter(x=>!x.used).map(x=>chip(x.el,null,{ev:EV_ICON.a,c:"ast"}))];};
       const cards=k=>[...list("yellow_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FFD23F")})),...list("red_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FF5A6E")}))];
       const bps=k=>{const bn=bonusOf(k),top=list("bps",k).slice().sort((a,b)=>b[1]-a[1]).slice(0,3),ids=new Set(top.map(x=>String(x[0])));
         Object.keys(bn).forEach(el=>{if(!ids.has(String(el))){const r=list("bps",k).find(x=>String(x[0])===String(el));top.push([+el,r?r[1]:null]);}});
@@ -3210,7 +3238,13 @@ function lkCentreHTML(g){
       const band=x=>x?`<div class="cx-sec">${x}</div>`:"";
       const b1=oh.length||oa.length?`<div class="cx-sec cx-mine"><div class="cx-r"><div class="h">${oh.join("")||none}</div><span class="cx-l">${lic("shirt",13)}Your players</span><div class="a">${oa.join("")||none}</div></div></div>`:"";
       const b2=band(row("Goals · Assists",EV_ICON.g,scoring)+row("Cards",EV_ICON.card("#FFD23F"),cards));
-      const b3=band(row("BPS · Bonus",EV_ICON.b,bps,pv?"prov.":"")+row("DefCon",EV_ICON.dc,dc)+row("Saves",EV_ICON.sv||EV_ICON.b,saves));
+      /* a finished match: only the players who earned the points, each marked */
+      const done=f.done||f.fp;
+      const bonusOnly=k=>Object.entries(bonusOf(k)).sort((a,b)=>b[1]-a[1]).map(([el,v])=>chip(el,null,{bn:v,prov:!!pv}));
+      const dcHit=k=>list("defensive_contribution",k).map(([el,v])=>({el,v,t:lkDcT((L.P(el)||{}).pos)})).filter(x=>x.t&&x.v>=x.t).sort((a,b)=>b.v-a.v).map(x=>chip(x.el,`${x.v}/${x.t}`,{cls:"up",bn:2,c:"dcp"}));
+      const svHit=k=>list("saves",k).filter(([,v])=>v>=3).sort((a,b)=>b[1]-a[1]).map(([el,v])=>chip(el,v,{bn:Math.floor(v/3),c:"svp"}));
+      const b3=done?band(row("Bonus",EV_ICON.b,bonusOnly,pv?"prov.":"")+row("DefCon",EV_ICON.dc,dcHit)+row("Save points",EV_ICON.sv||EV_ICON.b,svHit))
+        :band(row("BPS · Bonus",EV_ICON.b,bps,pv?"prov.":"")+row("DefCon",EV_ICON.dc,dc)+row("Saves",EV_ICON.sv||EV_ICON.b,saves));
       return `<div class="cx">${b1}${b2}${b3}${b2||b3?"":`<p class="ds-sub" style="text-align:center">No match stats yet</p>`}</div>`;};
     body=`<div class="m4s mc5-s">${fx.map(f=>{const lv=rank(f)===0,ft=rank(f)===1,o=openId===f.id,h=T(f.h),a=T(f.a);
       const ev=f.started&&f.st&&((f.st.goals_scored&&((f.st.goals_scored.h||[]).length||(f.st.goals_scored.a||[]).length))||(f.st.own_goals&&((f.st.own_goals.h||[]).length||(f.st.own_goals.a||[]).length)));

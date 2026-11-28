@@ -2005,6 +2005,11 @@ svg.chart circle[data-tip]{cursor:pointer}
 .cp .bn{display:inline-grid;place-items:center;min-width:18px;height:16px;padding:0 4px;border-radius:5px;background:#F5B33C;color:#0B0B0B;font:800 9.5px 'Geist Mono',monospace}
 .cp .ev{display:inline-flex;width:14px;height:14px}.cp .ev svg{width:14px;height:14px}
 .cx-none{color:#4A4A4A;font-size:11px}
+/* 29 Nov 2026: a goal and its assist on one chip; earned-points badges */
+.cp.gp .ev.ast{margin-left:4px}.cp.gp .as{color:#9A9A9A;font-weight:500}
+.cx-r .h .cp.gp{flex-direction:row}.cx-r .h .cp.gp{padding:0 8px 0 4px}
+.cp.dcp .bn{background:#A78BFA}.cp.svp .bn{background:#60A5FA}
+.fd-nw{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;font-weight:500;color:#FFB27A}
 .cx-mine .cp{height:28px;font-size:12.5px}.cx-mine .cp b{font-size:12.5px;color:#fff}
 @media(max-width:760px){.lv4-sc.lvm{overflow:visible}.lvm-fd .fd-list{max-height:320px}.lvm-et .fd-list{max-height:280px}.cx-r{grid-template-columns:minmax(0,1fr) 72px minmax(0,1fr)}.cx-l{white-space:normal;text-align:center}}
 /* the Live league, LiveFPL's columns in our style (27 Nov 2026) */
@@ -2465,13 +2470,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.19.3"></script>
-<script src="./app-squad.js?v=14.19.3"></script>
-<script src="./app-render.js?v=14.19.3"></script>
-<script src="./app-odds.js?v=14.19.3"></script>
-<script src="./app-tracker.js?v=14.19.3"></script>
-<script src="./app-main.js?v=14.19.3"></script>
-<script src="./app-scout.js?v=14.19.3"></script>
+<script src="./app-core.js?v=14.20.0"></script>
+<script src="./app-squad.js?v=14.20.0"></script>
+<script src="./app-render.js?v=14.20.0"></script>
+<script src="./app-odds.js?v=14.20.0"></script>
+<script src="./app-tracker.js?v=14.20.0"></script>
+<script src="./app-main.js?v=14.20.0"></script>
+<script src="./app-scout.js?v=14.20.0"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
