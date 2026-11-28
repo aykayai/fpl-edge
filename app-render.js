@@ -103,13 +103,16 @@ function playerCardHTML(){
   const sp=setPieceText(p);
   const pcTxt=pc==null?"":`<span class="pkpc" style="color:${pc>0?"var(--mint)":pc<0?"#FF8FAB":"#BDBDBD"}">${pc>0?"▲":pc<0?"▼":""} ${Math.abs(Math.round(pc))}% to a ${pc>=0?"rise":"fall"} tonight</span>`;
   const lvH=pkLiveHTML(p);
+  /* Spotlight (28 Nov 2026, Andy picked A with B's name behind): the surname
+     twice in outline behind the photo */
+  const wmN=esc(s.second_name||p.web_name),pkWm=`<span class="pkwm" aria-hidden="true">${wmN}<i>${wmN}</i></span>`;
   const hero=lvH?`<div class="pkhero pklh" style="--k:${kit}">
-    <div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
+    ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
     <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
     ${lvH}</div>`:`<div class="pkhero" style="--k:${kit}">
-    <div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
+    ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
     <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
