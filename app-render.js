@@ -3244,7 +3244,17 @@ function lkGoalPairs(L,f,k){
       const sp=lkPlName(x.scorer,team(k)),ap=lkPlName(x.assist,team(k));
       if(sp)pairs.push({g:sp.id,a:ap?ap.id:null,min:x.min,pen:x.kind==="pen"});});
     const want=list("goals_scored",k).reduce((a,[,n])=>a+n,0);
-    if(pairs.length===want)return{pairs,asts};
+    if(pairs.length===want){
+      /* FPL decides the points: keep a Premier League assist only where FPL
+         credits it too, then put FPL's other assists (a penalty won, a
+         deflection) on unassisted goals wherever only one fit is possible */
+      const fa=[];list("assists",k).forEach(([el,n])=>{for(let i=0;i<n;i++)fa.push({el:+el});});
+      pairs.forEach(p=>{if(p.a==null)return;const i=fa.findIndex(x=>x.el===p.a&&!x.used);if(i>=0)fa[i].used=1;else p.a=null;});
+      for(let moved=true;moved;){moved=false;const open=pairs.filter(p=>p.a==null),free=fa.filter(x=>!x.used);
+        if(!open.length||!free.length)break;
+        for(const x of free){const c=open.filter(p=>p.g!==x.el);if(c.length===1){c[0].a=x.el;x.used=1;moved=true;break;}}}
+      return{pairs,asts:fa};
+    }
   }
   const feedFx=((L.W&&L.W.feed)||[]).filter(e=>e.fx===f.id);
         const mineT=el=>{const p=L.P(el);return p&&p.team===team(k);};
