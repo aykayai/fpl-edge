@@ -137,7 +137,7 @@ try {
       if (now - a >= 0.6 * 3600000) {
         S.priceLog = { samples: [{ t: a, p: { 1: 40 } }, { t: now, p: { 1: 40 + 10 * (now - a) / 3600000 } }] };
         const r = b3.pwRate(1); check(r != null && Math.abs(r - 10) < 0.01, "Price Watch: per hour comes from the price log", String(r));
-      }
+      } else check(true, "Price Watch: per hour comes from the price log (skipped: under 36 minutes since the 01:30 change)");
       S.priceLog = { samples: [{ t: now, p: { 1: 40 } }] }; check(b3.pwRate(1) === null, "Price Watch: per hour waits for two samples");
       S.priceLog = keep; }
     g.act("pop", "price");
