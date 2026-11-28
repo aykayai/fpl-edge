@@ -1155,7 +1155,7 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pkl-p{font:700 12.5px 'Geist Mono',monospace;text-align:right}.pkl-p.up{color:var(--mint)}.pkl-p.dn{color:#FF8FAB}.pkl-p.z{color:rgba(255,255,255,.4)}
 .pkl-none{margin:8px 0 0;font:400 12.5px 'Geist',sans-serif;color:rgba(255,255,255,.6)}
 .pkl-kv{grid-template-columns:repeat(3,1fr)}
-.pkl-by{background:rgba(12,12,12,.55);border-radius:12px;padding:10px 12px 6px;flex:1;min-height:0;overflow:auto}
+.pkl-by{background:rgba(12,12,12,.55);border-radius:12px;padding:10px 12px 6px;flex:1;min-height:112px;overflow:auto}
 .pkl-byh{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.6);margin-bottom:2px}.pkl-byh b{font:600 11px 'Geist Mono',monospace;color:rgba(255,255,255,.6)}
 .pkl-byh.sub{margin-top:5px;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)}
 .pkl-br{display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid rgba(255,255,255,.06)}.pkl-byh+.pkl-br{border-top:0}
@@ -1194,6 +1194,16 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pktl .c .sm .fxc{width:100%;min-width:30px}
 .pkrow3{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr) minmax(0,1.45fr);gap:14px}
 .pkrow3>.pkpanel{overflow:hidden}
+/* short windows (28 Nov 2026): tighter tiles, timeline and rows so the card
+   fits without scrolling; a panel still over scrolls itself */
+@media (max-height:760px) and (min-width:761px){
+.pktile{padding:8px 12px;border-radius:12px}.pktile b{font-size:19px;margin:2px 0 1px}
+.pktlw{height:clamp(150px,23vh,280px)}.pkpanel{padding:12px 14px}
+.pkpct{gap:4px 12px}.pk-odds{margin-top:6px;padding-top:6px}
+.pkrow3>.pkpanel:not(.pkhistw){overflow-y:auto;scrollbar-width:thin}}
+/* if a card must scroll after all, its rows grow with it, so the hero runs
+   the full height beside them */
+.mbox.mscroll .pk2{height:auto;min-height:100%}
 .pkhistw{display:flex;flex-direction:column}
 .pkhs{flex:1;min-height:0;overflow:auto;margin:0 -6px;padding:0 6px}
 .pkhist{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -2374,13 +2384,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.17.1"></script>
-<script src="./app-squad.js?v=14.17.1"></script>
-<script src="./app-render.js?v=14.17.1"></script>
-<script src="./app-odds.js?v=14.17.1"></script>
-<script src="./app-tracker.js?v=14.17.1"></script>
-<script src="./app-main.js?v=14.17.1"></script>
-<script src="./app-scout.js?v=14.17.1"></script>
+<script src="./app-core.js?v=14.17.3"></script>
+<script src="./app-squad.js?v=14.17.3"></script>
+<script src="./app-render.js?v=14.17.3"></script>
+<script src="./app-odds.js?v=14.17.3"></script>
+<script src="./app-tracker.js?v=14.17.3"></script>
+<script src="./app-main.js?v=14.17.3"></script>
+<script src="./app-scout.js?v=14.17.3"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
