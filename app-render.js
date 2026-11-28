@@ -3131,7 +3131,7 @@ function lkPanelHTML(g){
     ${dsFig(x.st.s==="tp"&&!x.pts?"–":sgn1(x.vf),x.vf>0.05?"up":x.vf<-0.05?"dn":"")}<span class="ds-fig rk4 ${x.rk>0.5?"up":x.rk<-0.5?"dn":""}">${Math.abs(x.rk)<0.5?"–":lkSg(x.rk,lkK)}</span></div>`;
   const ep=L.edge.filter(x=>x.vf>0).reduce((a,x)=>a+x.vf,0),tp=L.threats.reduce((a,x)=>a+x.vf,0),v=ET==="edge"?ep:tp;
   const list=ET==="edge"?L.edge:L.threats;
-  const et=`<div class="lv4-blk lvm-et"><div class="lvm-h">${tg(ET,[["edge","Your edge","lke"],["threats","Threats","lke"]])}<b class="ds-fig ${ET==="edge"?"up":"dn"}">${sgn1(v)}</b><span class="ds-sub">pts</span><b class="ds-fig ${ET==="edge"?"up":"dn"}">${lkSg(v*L.rpp,lkK)}</b><span class="ds-sub">ranks</span><span class="sp">${tg(L.filt,F)}</span></div>
+  const et=`<div class="lv4-blk lvm-et"><div class="lvm-h">${tg(ET,[["edge","Your edge","lke"],["threats","Threats","lke"]])}<b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Points against the field">${sgn1(v)}</b><b class="ds-fig ${ET==="edge"?"up":"dn"}" title="Ranks against the field">${lkSg(v*L.rpp,lkK)}</b><span class="sp">${tg(L.filt,F)}</span></div>
     ${eh}<div class="fd-list">${list.map(er).join("")||`<p class="ds-sub">${ET==="edge"?"No edge yet":"No threats against this field"}</p>`}</div></div>`;
   return `<div class="panel pv-rev lv4">${pnlHead("activity","Live","")}<div class="lv4-sc lvm">${league}${feed}${et}</div></div>`;
 }
