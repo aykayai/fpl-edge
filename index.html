@@ -1804,8 +1804,6 @@ svg.chart circle[data-tip]{cursor:pointer}
 .pkag .pkh{white-space:nowrap}
 .ag-sum{flex-wrap:nowrap!important;overflow:hidden}.ag-sum span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
 .oc-h{flex-wrap:nowrap;white-space:nowrap}.oc-h>.ds-sub{overflow:hidden;text-overflow:ellipsis;min-width:0}
-/* under 700px tall (1600x683): a notch tighter still, so the panels fit */
-@media (max-height:700px) and (min-width:761px){.ms-top{padding:6px 10px}.ms-big{font-size:28px}.ms-big small{margin-top:2px}.ms-ts{gap:2px 10px}.ms-ts b{font-size:13.5px}.ms-pips i{height:11px}.ms-pr{margin:2px 0}.ms-sec{margin:6px 0 2px}.ms-bar{margin-top:11px}.ms-xr>span b{font-size:16px}.ag-r{padding:2px 0}.oc-c{height:28px}.oc-h{margin:4px 0 5px;padding-top:6px}.pkag .pkh,.pkse .pkh{margin-bottom:4px}}
 .ag-sum{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 6px}.ag-sum span{font:600 10px 'Geist',sans-serif;padding:2px 7px;border-radius:99px;background:rgba(61,220,151,.14);color:#9BE7C4}.ag-sum span.lo{background:rgba(255,90,110,.12);color:#FF8FA0}
 .ag-r{display:grid;grid-template-columns:minmax(0,118px) minmax(40px,1fr) 44px 38px;gap:8px;align-items:center;padding:3px 0}
 .ag-r>span{font-size:12px;color:#DADADA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1835,6 +1833,8 @@ svg.chart circle[data-tip]{cursor:pointer}
 .ms-pr{display:grid;grid-template-columns:76px 1fr 38px;gap:8px;align-items:center;margin:3px 0}
 .ms-pr>span{font-size:12px;color:#BDBDBD;line-height:1.15}.ms-pr>span small{display:block;font-size:10px;color:#6E6E6E}.ms-pr>b{font:700 13px 'Geist Mono',monospace;text-align:right;white-space:nowrap}.ms-pr>b small{font-size:10px;color:#6E6E6E}
 .ms-pips{display:grid;gap:3px}.ms-pips i{height:14px;border-radius:4px;background:#1E1E1E}.ms-pips i.on{background:var(--c)}.ms-pips i.half{background:color-mix(in srgb,var(--c) 40%,#1E1E1E)}.ms-pips i.na{background:transparent;box-shadow:inset 0 0 0 1px #262626}
+/* under 700px tall (1600x683): a notch tighter still, so the panels fit */
+@media (max-height:700px) and (min-width:761px){.ms-top{padding:6px 10px}.ms-big{font-size:28px}.ms-big small{margin-top:2px}.ms-ts{gap:2px 10px}.ms-ts b{font-size:13.5px}.ms-pips i{height:11px}.ms-pr{margin:2px 0}.ms-sec{margin:6px 0 2px}.ms-bar{margin-top:11px}.ms-xr>span b{font-size:16px}.ag-r{padding:2px 0}.oc-c{height:28px}.oc-h{margin:4px 0 5px;padding-top:6px}.pkag .pkh,.pkse .pkh{margin-bottom:4px}}
 /* player card Next Match Odds (26 Nov 2026) */
 .pk-odds{margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
 .pk-odh{font:600 13px 'Geist',sans-serif;color:#EDEDED;display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}.pk-odh span{font-weight:400;font-size:11px;color:#9A9A9A}
@@ -2423,13 +2423,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.18.3"></script>
-<script src="./app-squad.js?v=14.18.3"></script>
-<script src="./app-render.js?v=14.18.3"></script>
-<script src="./app-odds.js?v=14.18.3"></script>
-<script src="./app-tracker.js?v=14.18.3"></script>
-<script src="./app-main.js?v=14.18.3"></script>
-<script src="./app-scout.js?v=14.18.3"></script>
+<script src="./app-core.js?v=14.18.4"></script>
+<script src="./app-squad.js?v=14.18.4"></script>
+<script src="./app-render.js?v=14.18.4"></script>
+<script src="./app-odds.js?v=14.18.4"></script>
+<script src="./app-tracker.js?v=14.18.4"></script>
+<script src="./app-main.js?v=14.18.4"></script>
+<script src="./app-scout.js?v=14.18.4"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
