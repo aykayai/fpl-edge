@@ -4,7 +4,7 @@
    new version deployed to the server is picked up on the next load rather than
    being pinned to a stale cache. The API and /data are never cached here: the
    server is the source of truth and the app handles its own waiting states. */
-const CACHE = "fpl-signals-v14.17.3";
+const CACHE = "fpl-signals-v14.18.4";
 const IMG_CACHE = "fpl-signals-img";
 const SHELL = [
   "./",

@@ -186,9 +186,9 @@ try {
     check(!!md && !!p && md.querySelector(".pklast")?.textContent.length > 0, "a Planner shirt opens the full-screen Dossier card", p && p.web_name);
     /* the market rows (csmk, retmk) live in Next Match Odds, not the percentiles */
     const keys = vm.runInContext("CP_SETS", ctx)[p.pos].filter(k => !/mk$/.test(k));
-    check(md?.querySelectorAll(".pktile").length === 6 && md.querySelectorAll(".pktl .c.pred").length >= 1 && md.querySelectorAll(".pkpct .pkbar").length === keys.length && md.querySelectorAll(".pkhist tbody tr").length >= 1 && md.querySelectorAll(".pkkv.tot>div").length === 9,
+    check(md?.querySelectorAll(".pktile").length === 6 && md.querySelectorAll(".pktl .c.pred").length >= 1 && md.querySelectorAll(".pkag .ag-r").length === keys.length && md.querySelectorAll(".pkhist tbody tr").length >= 1 && md.querySelectorAll(".pkse .ms-pr").length === 3 && !!md.querySelector(".pkse .ms-big"),
       "the card shows figures, the points timeline, percentiles for his position, season totals and game history");
-    const ranks = [...md.querySelectorAll(".pkpct em")].map(e => e.textContent.trim()).filter(Boolean);
+    const ranks = [...md.querySelectorAll(".pkag .ag-k")].map(e => e.textContent.trim()).filter(Boolean);
     check(ranks.length > 0 && ranks.every(t => /^#\d+$/.test(t)), "the card shows ranks (1 is best), not percentiles", ranks.join(" "));
     const owned = (S.squad || []).includes(id);
     check(!owned || (/Bought/.test(md.textContent) && /Sells for/.test(md.textContent)), "a squad player's card shows what he cost and sells for");
