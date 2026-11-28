@@ -108,12 +108,12 @@ function playerCardHTML(){
   const wmN=esc(s.second_name||p.web_name),pkWm=`<span class="pkwm" aria-hidden="true">${wmN}<i>${wmN}</i></span>`;
   const hero=lvH?`<div class="pkhero pklh" style="--k:${kit}">
     ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
-    <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
+    <div class="pknm"><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
     ${lvH}</div>`:`<div class="pkhero" style="--k:${kit}">
     ${pkWm}<div class="pkpos">${posN} · ${esc(p.teamFull||p.teamName)}</div>
-    <div><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
+    <div class="pknm"><div class="pkfirst">${esc(s.first_name||p.first||"")}</div><div class="pklast">${esc(s.second_name||p.web_name)}</div></div>
     <span class="pkph"><img alt="" src="${imgSrc("player",p.code)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="pkfb" style="display:none">${shirtSVG(p.teamName.toUpperCase(),p.pos===1,120)}</span></span>
     <div class="pkpr"><span class="pkprice">£${p.price.toFixed(1)}m</span>${pcTxt}</div>
     ${sigHTML(p,G)?`<div>${sigHTML(p,G)}</div>`:""}
