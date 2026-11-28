@@ -3074,7 +3074,14 @@ function lkFeed(L){
   /* like LiveFPL's My Feed: every goal, assist, own goal, penalty and red
      card in the week, and everything for a player anyone in the league owns */
   const big=new Set(["goals_scored","assists","own_goals","penalties_saved","penalties_missed","red_cards"]);
-  const rows=((L.W&&L.W.feed)||[]).filter(e=>L.P(e.el)&&(owned.has(+e.el)||big.has(e.k))).map(e=>({...e,p:L.P(e.el),imp:e.dp*diff(+e.el)}))
+  /* FPL moves provisional bonus as the BPS changes: each player's bonus in a
+     match is one row, his current total, at the time of its last change */
+  const src=[],bon={};
+  ((L.W&&L.W.feed)||[]).forEach(e=>{if(e.k!=="bonus"){src.push(e);return;}const key=e.el+":"+e.fx,b=bon[key];
+    if(!b){bon[key]={...e};src.push(bon[key]);}else{b.dp+=e.dp;b.dv+=e.dv;if((e.t??0)>=(b.t??0)){b.t=e.t;b.min=e.min;}}});
+  const fxDone=id=>{const f=(L.W.fixtures||[]).find(x=>x.id===id);return !!(f&&(f.done||f.fp));};
+  const rows=src.filter(e=>e.k!=="bonus"||e.dp).map(e=>e.k==="bonus"?{...e,prov:!fxDone(e.fx)}:e)
+    .filter(e=>L.P(e.el)&&(owned.has(+e.el)||big.has(e.k))).map(e=>({...e,p:L.P(e.el),imp:e.dp*diff(+e.el)}))
     .map(e=>({...e,te:e.t??lkFxTime(L,e)}))
     .sort((a,b)=>(b.te??0)-(a.te??0)||(b.fx||0)-(a.fx||0));
   let sofar=0,left=0;
@@ -3123,7 +3130,7 @@ function lkPanelHTML(g){
   const Fd=lkFeed(L),sg=v=>`<b class="${v>0.05?"up":v<-0.05?"dn":""}">${v>0.05?"+":v<-0.05?"−":""}${Math.abs(v).toFixed(1)}</b>`;
   const tm=e=>e.t?new Date(e.t).toLocaleTimeString("en-GB",{timeZone:"Europe/London",hour:"2-digit",minute:"2-digit"}):"";
   const fr=e=>{const d=LK_EV[e.k]||[e.k,"·","#8A8A8A"],lost=e.k==="clean_sheets"&&e.dp<0,col=lost?"#FF5A6E":d[2];
-    const lab=lost?"Clean sheet lost":e.k==="news"?`<span class="fd-nw" title="${esc(e.txt||"")}">${esc(e.txt||"Flagged")}</span>`:d[0];
+    const lab=lost?"Clean sheet lost":e.k==="bonus"&&e.prov?"Bonus (prov.)":e.k==="news"?`<span class="fd-nw" title="${esc(e.txt||"")}">${esc(e.txt||"Flagged")}</span>`:d[0];
     return `<div class="fd-r${L.mult(+e.el)>0?" mine":""}"><span class="fd-t">${tm(e)}<i>${e.min!=null&&e.t?e.min+"′":""}</i></span>${dsFace(e.p)}
       <span class="fd-p"><span class="ds-name">${esc(e.p.web_name)}</span><span class="ds-sub">${esc(e.p.teamFull||e.p.teamName||"")}</span></span>
       <span class="fd-ev" style="--ec:${col}"><span class="ic">${d[1]}</span>${lab}${e.dv>1&&["goals_scored","assists","own_goals","penalties_saved","penalties_missed"].includes(e.k)?" ×"+e.dv:""}${e.dp?`<i>${e.dp>0?"+":"−"}${Math.abs(e.dp)}</i>`:""}</span>
