@@ -3233,13 +3233,26 @@ function lkCentreHTML(g){
         const fe=feedFx.filter(e=>mineT(e.el));
         const take=(arr,el)=>{const i=arr.findIndex(x=>x.el===+el&&!x.used);if(i>=0)arr[i].used=1;return i>=0;};
         const pairs=[];
+        /* timed: the assist nearest the goal within 3 minutes (FPL often posts
+           the assist a check after the goal); never his own goal */
+        const fa=fe.filter(x=>x.k==="assists"&&x.dv>0&&x.t!=null).map(x=>({...x,left:x.dv}));
         fe.filter(e=>e.k==="goals_scored"&&e.dv>0).forEach(g=>{for(let i=0;i<g.dv;i++){if(!take(goals,g.el))return;
-          const a=fe.find(x=>x.k==="assists"&&x.dv>0&&x.t===g.t&&!x._u);let ael=null;
-          if(a&&g.t!=null&&take(asts,a.el)){ael=a.el;a._u=1;}
+          let ael=null;
+          if(g.t!=null){const c=fa.filter(x=>x.left>0&&x.el!==g.el&&Math.abs(x.t-g.t)<=180000).sort((a,b)=>Math.abs(a.t-g.t)-Math.abs(b.t-g.t))[0];
+            if(c&&take(asts,c.el)){ael=c.el;c.left--;}}
           pairs.push({g:g.el,a:ael});}});
         goals.filter(x=>!x.used).forEach(x=>{x.used=1;pairs.push({g:x.el,a:null});});
+        /* untimed: pair wherever only one assignment fits (a player never
+           assists his own goal), repeating until nothing more is certain */
         const left=asts.filter(x=>!x.used);
-        if(pairs.filter(p=>!p.a).length===1&&left.length===1){pairs.find(p=>!p.a).a=left[0].el;left[0].used=1;}
+        for(let moved=true;moved;){moved=false;
+          const open=pairs.filter(p=>p.a==null),free=left.filter(x=>!x.used);
+          if(!open.length||!free.length)break;
+          if(open.length===free.length){
+            for(const p of open){const c=free.filter(x=>!x.used&&x.el!==p.g);if(c.length===1){p.a=c[0].el;c[0].used=1;moved=true;break;}}
+            if(!moved)for(const x of free){if(x.used)continue;const c=open.filter(p=>p.a==null&&p.g!==x.el);if(c.length===1){c[0].a=x.el;x.used=1;moved=true;break;}}
+          }else if(open.length===1&&free.length===1&&free[0].el!==open[0].g){open[0].a=free[0].el;free[0].used=1;moved=true;}
+        }
         const gChip=p=>`<span class="cp gp${mine.has(+p.g)||mine.has(+p.a)?" me":""}"><span class="ev">${EV_ICON.g}</span>${dsFace(L.P(p.g))}<span>${nm(p.g)}</span>${p.a!=null?`<span class="ev ast">${EV_ICON.a}</span><span class="as">${nm(p.a)}</span>`:""}</span>`;
         return [...pairs.map(gChip),...list("own_goals",k).map(([el])=>chip(el,"OG",{ev:EV_ICON.og,cls:"dn"})),...asts.filter(x=>!x.used).map(x=>chip(x.el,null,{ev:EV_ICON.a,c:"ast"}))];};
       const cards=k=>[...list("yellow_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FFD23F")})),...list("red_cards",k).map(([el])=>chip(el,null,{ev:EV_ICON.card("#FF5A6E")}))];
