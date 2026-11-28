@@ -708,6 +708,37 @@ try {
       }
       const rival = L.league.find(x => !x.mine);
       if (rival) { g.act("h2h", rival.id); check(!!doc.querySelector(".modal .hh-g .hh-side.me") && doc.querySelectorAll(".modal .hh-side").length === 2, "Head to head: opens from a league row with both sides"); g.act("pop", null); }
+      /* the Live panel (28 Nov 2026): Season view, the Feed, Edge / Threats, the open match */
+      {
+        g.act("lkv", "season");
+        const srows = doc.querySelectorAll(".lv4 .ls5-r");
+        check(srows.length === L.league.length && !!doc.querySelector(".lv4 .ls5-r.me"), "Live panel: Season view lists every team with his row marked", srows.length + " vs " + L.league.length);
+        g.act("lkv", "live");
+        check(doc.querySelectorAll(".lv4 .lg5-r").length === L.league.length, "Live panel: the Live view is back on the switch");
+        /* an invented event for his first counted player: impact is the points
+           times his multiplier less the rivals' average multiplier */
+        const k0 = row.picks.find((k, i) => (k.multiplier != null ? k.multiplier : (i < 11 ? 1 : 0)) > 0), myM = k0.multiplier != null ? k0.multiplier : 1;
+        const rivalsL = L.league.filter(x => !x.mine), avgM = rivalsL.reduce((a, x) => { const i = x.picks.findIndex(k => k.id === k0.id); const k = x.picks[i]; return a + (k ? (k.multiplier != null ? k.multiplier : (i < 11 ? 1 : 0)) : 0); }, 0) / (rivalsL.length || 1);
+        S.wkLive[LG].feed = [{ t: Date.now(), min: 63, el: k0.id, fx: 9901, k: "goals_scored", dv: 1, dp: 6 }];
+        vm.runInContext("_lk={}", ctx); g.render();
+        const fr = doc.querySelector(".lv4 .lvm-fd .fd-r"), want = 6 * (myM - avgM);
+        const got = fr ? Number((fr.querySelector(".fd-i").textContent || "").replace("−", "-").replace("+", "")) : NaN;
+        check(!!fr && /Goal/.test(fr.textContent) && /63′/.test(fr.textContent) && Math.abs(got - want) < 0.051, "Feed: a goal shows its minute and its impact against the league's average share", `${got} vs ${want.toFixed(2)}`);
+        g.act("lke", "threats");
+        check(/Threats/.test(doc.querySelector(".lvm-et .lvm-tg .on")?.textContent || ""), "Edge / Threats: the switch shows Threats");
+        g.act("lke", "edge");
+        const mcOpen = doc.querySelector(".mc5 .m4.open");
+        check(!mcOpen || !!mcOpen.querySelector(".cx"), "Match Centre: the open match shows its bands");
+        S.wkLive[LG].feed = undefined; vm.runInContext("_lk={}", ctx);
+      }
+      /* the server's feed: a new goal is one timed event; a clean sheet FPL drops is a lost one */
+      {
+        const { feedDiff } = await import("./lib/fpl.mjs");
+        const a = feedDiff(null, { elements: [{ id: 1, explain: [{ fixture: 9, stats: [{ identifier: "minutes", value: 30, points: 1 }, { identifier: "clean_sheets", value: 1, points: 4 }] }] }] }, [{ id: 9, minutes: 30 }], 1000);
+        const b = feedDiff(a.snap, { elements: [{ id: 1, explain: [{ fixture: 9, stats: [{ identifier: "minutes", value: 61, points: 2 }, { identifier: "goals_scored", value: 1, points: 6 }] }] }] }, [{ id: 9, minutes: 61 }], 2000);
+        check(a.events.length === 1 && a.events[0].t === null && b.events.length === 2 && b.events.some(e => e.k === "goals_scored" && e.t === 2000 && e.min === 61 && e.dp === 6) && b.events.some(e => e.k === "clean_sheets" && e.dp === -4),
+          "Feed server: first sight has no time; then each change is timed with the minute, and a dropped clean sheet is a loss", JSON.stringify(b.events));
+      }
       S.rankBands = keepB; vm.runInContext("liveGW=window.__lgOrig", ctx); S.wkLive[LG] = keepW; S.startGW = NEXT; g.render();
     }
   }

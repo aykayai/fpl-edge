@@ -93,6 +93,7 @@ export async function fetchLive() {
     await mkdir(DIR(), { recursive: true });
     await writeFile(weekFile("live", gw), JSON.stringify(d));
     state.liveFetchedAt = new Date().toISOString();
+    await feedRecordQ(gw, d, await readWeek("fixtures", gw));
     log("fpl.live", "ok gw=" + gw, Date.now() - t0);
   } catch (e) {
     log("fpl.live", "fail " + e.message, Date.now() - t0);
@@ -209,6 +210,55 @@ async function readWeek(kind, gw) {
   if (upstreamBlocked()) { try { return JSON.parse(await readFile(join(DIR(), `${kind}-gw${gw}.json`), "utf8")); } catch { /* none */ } }
   return null;
 }
+/* The live Feed (28 Nov 2026, Andy approved the mock). FPL's live data has
+   running totals, not a timeline, so each fresh copy is compared with the
+   last: every change in a player's points for a fixture (a goal, an assist,
+   a card, a save point, DefCon, a clean sheet won or lost, goals conceded,
+   bonus) is one event, timed when it was first seen, with the match minute.
+   What was already there the first time a week is seen has no time. Kept
+   per week in feed-<season>-gw<n>.json so a restart neither loses nor
+   repeats anything. */
+const FEED_SKIP = new Set(["minutes", "bps"]);
+const FEED_VALUE = new Set(["goals_scored", "assists", "own_goals", "penalties_saved", "penalties_missed", "yellow_cards", "red_cards"]);
+export function feedDiff(prev, live, fixtures, now) {
+  const snap = {}, events = [], fmin = {};
+  for (const f of Array.isArray(fixtures) ? fixtures : []) fmin[f.id] = f.minutes ?? null;
+  const at = fx => (prev ? { t: now, min: fmin[fx] ?? null } : { t: null, min: null });
+  for (const e of (live && live.elements) || []) for (const f of e.explain || []) for (const y of f.stats || []) {
+    if (FEED_SKIP.has(y.identifier)) continue;
+    const key = `${e.id}:${f.fixture}:${y.identifier}`, v = y.value ?? 0, p = y.points ?? 0;
+    snap[key] = [v, p];
+    const [pv, pp] = (prev && prev[key]) || [0, 0];
+    if (p !== pp || (v !== pv && FEED_VALUE.has(y.identifier)))
+      events.push({ ...at(f.fixture), el: e.id, fx: f.fixture, k: y.identifier, dv: v - pv, dp: p - pp });
+  }
+  /* a line FPL drops (a clean sheet lost) is an event too */
+  if (prev) for (const key in prev) if (!(key in snap) && prev[key][1]) {
+    const [el, fx, k] = key.split(":");
+    events.push({ ...at(+fx), el: +el, fx: +fx, k, dv: -prev[key][0], dp: -prev[key][1] });
+  }
+  return { snap, events };
+}
+let _feed = null, _feedQ = Promise.resolve();
+async function feedLoad(gw) {
+  if (_feed && _feed.gw === gw) return _feed;
+  try { const d = JSON.parse(await readFile(weekFile("feed", gw), "utf8")); _feed = { gw, snap: d.snap || null, events: d.events || [] }; }
+  catch { _feed = { gw, snap: null, events: [] }; }
+  return _feed;
+}
+async function feedRecord(gw, live, fixtures) {
+  if (!live || !Array.isArray(live.elements) || !live.elements.length) return;
+  const F = await feedLoad(gw), { snap, events } = feedDiff(F.snap, live, fixtures, Date.now());
+  F.snap = snap;
+  if (!events.length) return;
+  F.events.push(...events);
+  if (F.events.length > 4000) F.events = F.events.slice(-4000);
+  try { await mkdir(DIR(), { recursive: true }); await writeFile(weekFile("feed", gw), JSON.stringify({ snap: F.snap, events: F.events })); }
+  catch (e) { log("fpl.feed", "write fail gw=" + gw + " " + e.message, 0); }
+}
+/* one at a time: two fetches landing together must not both count a goal */
+function feedRecordQ(gw, live, fixtures) { _feedQ = _feedQ.then(() => feedRecord(gw, live, fixtures)).catch(() => {}); return _feedQ; }
+
 const _week = new Map();
 export async function fplWeekPayload(gwIn) {
   const gw = Math.round(+gwIn), cur = state.currentGw || state.gw || 0;
@@ -218,9 +268,10 @@ export async function fplWeekPayload(gwIn) {
   const lp = weekFile("live", gw), fp = weekFile("fixtures", gw);
   let live = null, fx = null;
   live = await readWeek("live", gw);
+  let fresh = false;
   /* batch 5: the week in play is fetched again; a finished one is kept */
   if ((!live || (cur && gw >= cur)) && (!cur || gw <= cur)) {
-    try { live = await getJson(`/event/${gw}/live/`); await mkdir(DIR(), { recursive: true }); await writeFile(lp, JSON.stringify(live)); }
+    try { live = await getJson(`/event/${gw}/live/`); fresh = true; await mkdir(DIR(), { recursive: true }); await writeFile(lp, JSON.stringify(live)); }
     catch (e) { log("fpl.week", "live fail gw=" + gw + " " + e.message, 0); }
   }
   fx = await readWeek("fixtures", gw);
@@ -251,7 +302,8 @@ export async function fplWeekPayload(gwIn) {
     return { id: f.id, h: f.team_h, a: f.team_a, hs: f.team_h_score, as: f.team_a_score, done: !!f.finished, fp: !!f.finished_provisional,
       started: !!f.started, min: f.minutes ?? 0, ko: f.kickoff_time || null, st };
   });
-  const body = { gw, players, fixtures };
+  if (fresh && gw === cur) await feedRecordQ(gw, live, fx);
+  const body = { gw, players, fixtures, feed: (await feedLoad(gw)).events };
   _week.set(gw, { at: Date.now(), body });
   return body;
 }
