@@ -3067,7 +3067,10 @@ function lkFeed(L){
   const avg={};rivals.forEach(x=>x.picks.forEach((k,i)=>{const m=mOf(k,i);if(m>0)avg[k.id]=(avg[k.id]||0)+m/n;}));
   const owned=new Set([...Object.keys(avg).map(Number),...L.picks.filter(k=>k.m>0).map(k=>k.id)]);
   const diff=id=>L.mult(id)-(avg[id]||0);
-  const rows=((L.W&&L.W.feed)||[]).filter(e=>owned.has(+e.el)&&L.P(e.el)).map(e=>({...e,p:L.P(e.el),imp:e.dp*diff(+e.el)}))
+  /* like LiveFPL's My Feed: every goal, assist, own goal, penalty and red
+     card in the week, and everything for a player anyone in the league owns */
+  const big=new Set(["goals_scored","assists","own_goals","penalties_saved","penalties_missed","red_cards"]);
+  const rows=((L.W&&L.W.feed)||[]).filter(e=>L.P(e.el)&&(owned.has(+e.el)||big.has(e.k))).map(e=>({...e,p:L.P(e.el),imp:e.dp*diff(+e.el)}))
     .sort((a,b)=>(b.t??-1)-(a.t??-1)||b.fx-a.fx);
   let sofar=0,left=0;
   owned.forEach(id=>{const d=diff(id);if(!d)return;sofar+=L.pts(id)*d;
