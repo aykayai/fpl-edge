@@ -2064,6 +2064,10 @@ svg.chart circle[data-tip]{cursor:pointer}
 .ld-ib{position:relative;height:18px;border-radius:5px;background:#1E1E1E;overflow:hidden}.ld-ib i{position:absolute;left:0;top:0;bottom:0}.ld-ib.up i{background:rgba(61,220,151,.5)}.ld-ib.dn i{background:rgba(255,90,110,.5)}
 .ld-ib em{position:absolute;inset:0;display:grid;place-items:center;font:700 10px 'Geist Mono',monospace;font-style:normal;color:#fff}
 .hh-sep{font-size:10.5px;color:var(--mute);border-top:1px solid rgba(255,255,255,.08);padding-top:4px;margin-top:2px}
+/* both full teams without scrolling (28 Nov 2026): rows close up and
+   shrink to 21px on a short window; they still stretch to fill a tall one */
+.hh-g .hh-side{gap:1px}.hh-g .hl-r{min-height:21px}.hh-g .hh-tl{margin:8px 0 6px}
+@media (max-height:700px) and (min-width:761px){.hh-g .hh-tl .ds-tile{padding-top:5px;padding-bottom:5px}.hh-g .hh-side{padding:10px 12px}.hh-g .hl-r .ds-face{width:18px;height:22px}}
 .hh-sp{margin:0;padding:14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
 .hh-big{display:flex;flex-direction:column;align-items:center;padding:12px;border-radius:12px;background:linear-gradient(150deg,#123524,#151515 75%);box-shadow:inset 0 0 0 1px rgba(61,220,151,.3)}
 .hh-big.dn{background:linear-gradient(150deg,#3A1219,#151515 75%);box-shadow:inset 0 0 0 1px rgba(255,90,110,.3)}
@@ -2423,13 +2427,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.18.4"></script>
-<script src="./app-squad.js?v=14.18.4"></script>
-<script src="./app-render.js?v=14.18.4"></script>
-<script src="./app-odds.js?v=14.18.4"></script>
-<script src="./app-tracker.js?v=14.18.4"></script>
-<script src="./app-main.js?v=14.18.4"></script>
-<script src="./app-scout.js?v=14.18.4"></script>
+<script src="./app-core.js?v=14.18.5"></script>
+<script src="./app-squad.js?v=14.18.5"></script>
+<script src="./app-render.js?v=14.18.5"></script>
+<script src="./app-odds.js?v=14.18.5"></script>
+<script src="./app-tracker.js?v=14.18.5"></script>
+<script src="./app-main.js?v=14.18.5"></script>
+<script src="./app-scout.js?v=14.18.5"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
