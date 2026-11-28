@@ -1983,12 +1983,15 @@ svg.chart circle[data-tip]{cursor:pointer}
 .ls5-tm{display:flex;flex-direction:column;gap:4px;text-align:left;min-width:0}.ls5-m{color:#BDBDBD;font-size:11.5px}
 .ls5-ch{display:flex;gap:3px;flex-wrap:wrap}.ls5-ch span{font:700 8.5px 'Geist',sans-serif;padding:2px 4px;border-radius:4px;color:#0B0B0B;background:var(--tc)}.ls5-ch .ls5-no{background:none;color:#5A5A5A;font-weight:500;padding:0}
 .fd-sum{display:flex;gap:6px;font-size:11px;color:#8A8A8A;align-items:baseline;white-space:nowrap}.fd-sum b{font:700 12px 'Geist Mono',monospace;color:#BDBDBD}.fd-sum b.up{color:var(--mint)}.fd-sum b.dn{color:#FF8095}
-.fd-r{display:grid;grid-template-columns:40px 26px minmax(0,1fr) 124px 40px;gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)}
+/* 29 Nov 2026: time, face, name, the event right beside it, impact at the end */
+.fd-r{display:grid;grid-template-columns:38px 24px minmax(0,118px) minmax(0,1fr) 44px;gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)}
 .fd-r .ds-face{width:22px;height:27px;border-radius:5px}
 .fd-t{font:600 11px 'Geist Mono',monospace;color:#8A8A8A;line-height:1.15}.fd-t i{display:block;font-style:normal;font-size:9.5px;color:#5A5A5A}
 .fd-p{display:flex;flex-direction:column;min-width:0}.fd-p .ds-name{font-size:12px}.fd-p .ds-sub{font-size:10px}
 .fd-ev{white-space:nowrap;display:flex;align-items:center;gap:5px;font:600 11.5px 'Geist',sans-serif;color:#DADADA;min-width:0;overflow:hidden}.fd-ev i{font:700 10px 'Geist Mono',monospace;font-style:normal;color:#8A8A8A}
-.fd-ev .ic{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 2px;border-radius:5px;background:color-mix(in srgb,var(--ec) 18%,#151515);color:var(--ec);font:800 9.5px 'Geist',sans-serif;flex:none}
+.fd-ev .ic{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:color-mix(in srgb,var(--ec) 18%,#151515);color:var(--ec);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ec) 35%,transparent);flex:none}
+.fd-ev .ic svg{width:14px;height:14px}.fd-ev .fd-lb{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.cx-r.stk .h{flex-direction:column;align-items:flex-end}.cx-r.stk .a{flex-direction:column;align-items:flex-start}
 .fd-i{font:700 12px 'Geist Mono',monospace;text-align:right}.fd-i.up{color:var(--mint)}.fd-i.dn{color:#FF8095}.fd-i.eq{color:#6E6E6E}
 .fd-r.mine .ds-name{color:var(--mint)}
 /* the open match, in bands (28 Nov 2026) */
@@ -2005,6 +2008,11 @@ svg.chart circle[data-tip]{cursor:pointer}
 .cp .bn{display:inline-grid;place-items:center;min-width:18px;height:16px;padding:0 4px;border-radius:5px;background:#F5B33C;color:#0B0B0B;font:800 9.5px 'Geist Mono',monospace}
 .cp .ev{display:inline-flex;width:14px;height:14px}.cp .ev svg{width:14px;height:14px}
 .cx-none{color:#4A4A4A;font-size:11px}
+/* 29 Nov 2026: a goal and its assist on one chip; earned-points badges */
+.cp.gp .ev.ast{margin-left:4px}.cp.gp .as{color:#9A9A9A;font-weight:500}
+.cx-r .h .cp.gp{flex-direction:row}.cx-r .h .cp.gp{padding:0 8px 0 4px}
+.cp.dcp .bn{background:#A78BFA}.cp.svp .bn{background:#60A5FA}
+.fd-nw{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;font-weight:500;color:#FFB27A}
 .cx-mine .cp{height:28px;font-size:12.5px}.cx-mine .cp b{font-size:12.5px;color:#fff}
 @media(max-width:760px){.lv4-sc.lvm{overflow:visible}.lvm-fd .fd-list{max-height:320px}.lvm-et .fd-list{max-height:280px}.cx-r{grid-template-columns:minmax(0,1fr) 72px minmax(0,1fr)}.cx-l{white-space:normal;text-align:center}}
 /* the Live league, LiveFPL's columns in our style (27 Nov 2026) */
@@ -2465,13 +2473,13 @@ svg.chart circle[data-tip]{cursor:pointer}
      Audit follow-up (22 Nov 2026): served from this server (the same unpkg 1.0.3
      file, same hash), so the page needs no third-party script and tests load it. -->
 <script defer onload="if(typeof render==='function'&&typeof S!=='undefined'&&S.model)render()" src="./lp-solver-1.0.3.js" integrity="sha384-Q+ELCKvULJjT7zbB1YXDDi4B2AxbghvC5D3l12ZMQNKtRWvsCSvsHLMDrrhmXwSH"></script>
-<script src="./app-core.js?v=14.19.3"></script>
-<script src="./app-squad.js?v=14.19.3"></script>
-<script src="./app-render.js?v=14.19.3"></script>
-<script src="./app-odds.js?v=14.19.3"></script>
-<script src="./app-tracker.js?v=14.19.3"></script>
-<script src="./app-main.js?v=14.19.3"></script>
-<script src="./app-scout.js?v=14.19.3"></script>
+<script src="./app-core.js?v=14.20.4"></script>
+<script src="./app-squad.js?v=14.20.4"></script>
+<script src="./app-render.js?v=14.20.4"></script>
+<script src="./app-odds.js?v=14.20.4"></script>
+<script src="./app-tracker.js?v=14.20.4"></script>
+<script src="./app-main.js?v=14.20.4"></script>
+<script src="./app-scout.js?v=14.20.4"></script>
 
 <script>
 /* Registering a service worker is what turns this from a bookmark into an
