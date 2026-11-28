@@ -863,10 +863,15 @@ function render(){
    window their panels were squeezed and cut off (Andy, 25 Nov 2026). After
    every render, any pop-up with a clipped panel lets its parts take their
    natural height and scrolls instead; one that fits keeps the filled layout. */
+/* 28 Nov 2026: scrollHeight counts the bottom padding, so a panel whose
+   content fits but whose padding ran 4px over read as cut; that sent every
+   player card into scroll mode and its photo over the stats. Only content
+   past the padding counts now. */
 function popClipped(body){
   return [...body.querySelectorAll("*")].some(el=>{
     if(el.clientHeight<=20||el.scrollHeight<=el.clientHeight+3)return false;
-    const o=getComputedStyle(el).overflowY;return o==="hidden"||o==="clip";});
+    const cs=getComputedStyle(el),o=cs.overflowY;if(o!=="hidden"&&o!=="clip")return false;
+    return el.scrollHeight-(parseFloat(cs.paddingBottom)||0)>el.clientHeight+3;});
 }
 function popFit(){
   document.querySelectorAll("#app .mbox.mfull").forEach(box=>{
@@ -876,8 +881,14 @@ function popFit(){
     body.querySelectorAll("*").forEach(el=>{
       const p=el.parentElement&&getComputedStyle(el.parentElement).display;
       if(!/flex|grid/.test(p||""))return;
+      /* never an image: min-height beats max-height, so a capped photo grew to
+         its full size over the stats (player cards, 28 Nov 2026) */
+      if(/^(IMG|SVG|CANVAS|VIDEO|PICTURE)$/i.test(el.tagName))return;
       /* min-content, not auto: a panel that hides its overflow may still shrink to 0 under auto */
       const cs=getComputedStyle(el);
+      /* a list that scrolls itself keeps its height (the card's Started By ran
+         the left column past the screen) */
+      if(/auto|scroll/.test(cs.overflowY))return;
       if(cs.minHeight==="0px"||(cs.minHeight==="auto"&&cs.overflowY!=="visible"))el.style.minHeight="min-content";});
   });
 }

@@ -938,6 +938,24 @@ try {
       check(box.classList.contains("mscroll") && pan.style.minHeight === "min-content", "Pop-up fit: a cut-off panel makes the pop-up scroll at natural heights instead", `${box.className} / ${pan.style.minHeight}`);
     } else check(false, "Pop-up fit: Captain has a panel to test");
     S.pop = null; g.render();
+    /* player cards (28 Nov 2026): 4px of bottom padding over is not a cut;
+       when a card does scroll, a photo and a self-scrolling list keep their caps */
+    S.pop = "cap"; g.render();
+    const box2 = doc.querySelector(".mbox.mfull"), pan2 = box2 && box2.querySelector(".mbody .panel");
+    if (pan2) {
+      pan2.style.overflowY = "hidden"; pan2.style.paddingBottom = "14px"; pan2.style.minHeight = "0px"; pan2.parentElement.style.display = "flex";
+      Object.defineProperty(pan2, "clientHeight", { configurable: true, get: () => 297 });
+      Object.defineProperty(pan2, "scrollHeight", { configurable: true, get: () => 301 });
+      vm.runInContext("popFit()", ctx);
+      check(!box2.classList.contains("mscroll"), "Pop-up fit: content that fits, with only its bottom padding over, does not scroll the pop-up", box2.className);
+      Object.defineProperty(pan2, "scrollHeight", { configurable: true, get: () => 330 });
+      const fl = doc.createElement("div"); fl.style.display = "flex"; const img = doc.createElement("img"); img.style.minHeight = "0px";
+      const lst = doc.createElement("div"); lst.style.overflowY = "auto"; lst.style.minHeight = "0px"; fl.append(img, lst); pan2.parentElement.appendChild(fl);
+      vm.runInContext("popFit()", ctx);
+      check(box2.classList.contains("mscroll") && pan2.style.minHeight === "min-content" && !img.style.minHeight.includes("min-content") && !lst.style.minHeight.includes("min-content"),
+        "Pop-up fit: in scroll mode a photo and a list that scrolls itself keep their caps", `${img.style.minHeight} / ${lst.style.minHeight}`);
+    } else check(false, "Pop-up fit: Captain has a panel to test (cards)");
+    S.pop = null; g.render();
   }
 
   /* ---------- F60 best combination ---------- */
